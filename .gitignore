@@ -10,3 +10,4 @@ coverage
 *.lock
 src/utils/vendor/
 .build
+claude-code
