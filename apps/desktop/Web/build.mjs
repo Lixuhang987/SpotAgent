@@ -8,6 +8,7 @@ await build({
   bundle: true,
   format: "esm",
   platform: "browser",
+  nodePaths: ["node_modules"],
   target: ["safari15"],
   outfile: "dist/app.js",
   jsx: "automatic",

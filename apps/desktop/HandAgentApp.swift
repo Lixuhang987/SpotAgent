@@ -23,14 +23,9 @@ private struct BubblePayload: Codable {
 struct HandAgentApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
-    init() {
-        NSApplication.shared.setActivationPolicy(.regular)
-        NSApplication.shared.activate(ignoringOtherApps: true)
-    }
-
     var body: some Scene {
-        WindowGroup {
-            WebContainerView(controller: appDelegate.controller)
+        Settings {
+            EmptyView()
         }
     }
 }
@@ -40,16 +35,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let controller = DesktopController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.setActivationPolicy(.accessory)
         controller.start()
     }
 }
 
 @MainActor
-final class DesktopController: NSObject {
+final class DesktopController: NSObject, NSWindowDelegate, WKNavigationDelegate {
     private let hotkeyMonitor = HotkeyMonitor()
-    private weak var webView: WKWebView?
+    private var window: NSPanel?
+    private let webView = WKWebView(frame: .zero)
     private var pendingPrefill: String?
     private var isWebViewReady = false
     private var hostStatus = HostStatusPayload(
@@ -62,14 +57,10 @@ final class DesktopController: NSObject {
             self?.handleHotkey()
         }
 
+        ensureWindow()
         let isHotkeyRegistered = hotkeyMonitor.start()
         hostStatus = makeHostStatus(isHotkeyRegistered: isHotkeyRegistered)
-    }
-
-    func attach(webView: WKWebView) {
-        self.webView = webView
-        isWebViewReady = false
-        flushPendingPrompt()
+        publishHostStatus()
     }
 
     func webViewDidFinishLoading() {
@@ -79,20 +70,10 @@ final class DesktopController: NSObject {
     }
 
     func handleHotkey() {
-        guard webView != nil else {
-            pendingPrefill = ""
-            return
-        }
-
-        presentPrompt(prefill: "")
+        toggleWindow()
     }
 
     private func presentPrompt(prefill: String) {
-        guard let webView else {
-            pendingPrefill = prefill
-            return
-        }
-
         guard isWebViewReady else {
             pendingPrefill = prefill
             return
@@ -116,6 +97,62 @@ final class DesktopController: NSObject {
         """)
     }
 
+    private func ensureWindow() {
+        guard window == nil else { return }
+
+        webView.navigationDelegate = self
+        loadBootstrapHTML(into: webView)
+
+        let panel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 720, height: 520),
+            styleMask: [.titled, .closable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        panel.isReleasedWhenClosed = false
+        panel.isFloatingPanel = true
+        panel.level = .floating
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.titleVisibility = .hidden
+        panel.titlebarAppearsTransparent = true
+        panel.isMovableByWindowBackground = true
+        panel.hidesOnDeactivate = true
+        panel.standardWindowButton(.closeButton)?.isHidden = true
+        panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
+        panel.standardWindowButton(.zoomButton)?.isHidden = true
+        panel.delegate = self
+        panel.contentView = webView
+        panel.orderOut(nil)
+
+        window = panel
+    }
+
+    private func showWindow() {
+        ensureWindow()
+        guard let window else { return }
+
+        NSApp.activate(ignoringOtherApps: true)
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    private func hideWindow() {
+        window?.orderOut(nil)
+    }
+
+    private func toggleWindow() {
+        ensureWindow()
+        guard let window else { return }
+
+        if window.isVisible {
+            hideWindow()
+            return
+        }
+
+        showWindow()
+        presentPrompt(prefill: "")
+    }
+
     private func flushPendingPrompt() {
         guard let pendingPrefill else { return }
         self.pendingPrefill = nil
@@ -123,8 +160,7 @@ final class DesktopController: NSObject {
     }
 
     private func publishHostStatus() {
-        guard let webView,
-              let data = try? JSONEncoder().encode(hostStatus),
+        guard let data = try? JSONEncoder().encode(hostStatus),
               let json = String(data: data, encoding: .utf8) else {
             return
         }
@@ -135,8 +171,7 @@ final class DesktopController: NSObject {
     }
 
     private func publishBubble(id: String, text: String) {
-        guard let webView,
-              let data = try? JSONEncoder().encode(BubblePayload(id: id, text: text)),
+        guard let data = try? JSONEncoder().encode(BubblePayload(id: id, text: text)),
               let json = String(data: data, encoding: .utf8) else {
             return
         }
@@ -159,6 +194,26 @@ final class DesktopController: NSObject {
             message: "全局热键注册失败，请检查快捷键冲突。"
         )
     }
+    
+    func windowWillClose(_ notification: Notification) {
+        hideWindow()
+    }
+
+    func windowDidResignKey(_ notification: Notification) {
+        hideWindow()
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        webViewDidFinishLoading()
+    }
+
+    private func loadBootstrapHTML(into webView: WKWebView) {
+        guard let url = Bundle.module.url(forResource: "index", withExtension: "html") else {
+            return
+        }
+
+        webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
+    }
 }
 
 final class HotkeyMonitor {
@@ -167,7 +222,7 @@ final class HotkeyMonitor {
     private var eventHandlerRef: EventHandlerRef?
 
     private let targetKeyCode: UInt32 = UInt32(kVK_Space)
-    private let targetModifiers: UInt32 = UInt32(cmdKey | optionKey)
+    private let targetModifiers: UInt32 = UInt32(cmdKey | shiftKey)
     private let hotKeyID = EventHotKeyID(signature: OSType(0x48414754), id: 1)
 
     func start() -> Bool {
@@ -243,43 +298,5 @@ final class HotkeyMonitor {
             RemoveEventHandler(eventHandlerRef)
             self.eventHandlerRef = nil
         }
-    }
-}
-
-struct WebContainerView: NSViewRepresentable {
-    let controller: DesktopController
-
-    func makeNSView(context: Context) -> WKWebView {
-        let webView = WKWebView()
-        webView.navigationDelegate = context.coordinator
-        controller.attach(webView: webView)
-        loadBootstrapHTML(into: webView)
-        return webView
-    }
-
-    func updateNSView(_ nsView: WKWebView, context: Context) {}
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(controller: controller)
-    }
-
-    final class Coordinator: NSObject, WKNavigationDelegate {
-        private let controller: DesktopController
-
-        init(controller: DesktopController) {
-            self.controller = controller
-        }
-
-        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            controller.webViewDidFinishLoading()
-        }
-    }
-
-    private func loadBootstrapHTML(into webView: WKWebView) {
-        guard let url = Bundle.module.url(forResource: "index", withExtension: "html") else {
-            return
-        }
-
-        webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
     }
 }
