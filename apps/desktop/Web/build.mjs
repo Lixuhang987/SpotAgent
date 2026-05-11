@@ -6,7 +6,7 @@ await mkdir("dist", { recursive: true });
 await build({
   entryPoints: ["main.tsx"],
   bundle: true,
-  format: "esm",
+  format: "iife",
   platform: "browser",
   nodePaths: ["node_modules"],
   target: ["safari15"],
