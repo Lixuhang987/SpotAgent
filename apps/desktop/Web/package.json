@@ -1,0 +1,17 @@
+{
+  "name": "handagent-desktop-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "test:hotkey": "vitest run"
+  },
+  "dependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.9",
+    "vitest": "^3.2.4"
+  }
+}

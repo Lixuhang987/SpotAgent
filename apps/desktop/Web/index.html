@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HandAgent Desktop</title>
+    <style>
+      :root { color-scheme: light; }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+        background: #f6f7fb;
+        color: #111827;
+      }
+      #root {
+        min-height: 100vh;
+      }
+      main {
+        min-height: 100vh;
+        display: grid;
+        align-content: center;
+        gap: 16px;
+        padding: 32px;
+        box-sizing: border-box;
+        width: min(560px, 100%);
+        margin: 0 auto;
+      }
+      h1, p {
+        margin: 0;
+      }
+      section[aria-label="bubbles"] ul {
+        margin: 0;
+        padding-left: 20px;
+        color: #4b5563;
+      }
+      label {
+        display: grid;
+        gap: 8px;
+      }
+      input {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid #d1d5db;
+        border-radius: 12px;
+        padding: 12px 14px;
+        font: inherit;
+        background: white;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./dist/app.js"></script>
+  </body>
+</html>
