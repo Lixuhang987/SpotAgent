@@ -1,26 +1,44 @@
-import { useEffect, useState } from "react";
-import { BubbleList, type BubbleItem } from "./BubbleList";
+import { useEffect, useRef, useState } from "react";
+import { BubbleList } from "./BubbleList";
+import { PromptBox } from "./PromptBox";
 import {
   HOST_STATUS_EVENT,
   OPEN_PROMPT_EVENT,
   openPrompt,
+  readAgentServerUrl,
   type HostStatus,
   type PromptState,
 } from "./bridge";
-import { AgentRuntime } from "../../../packages/core/src/runtime/AgentRuntime";
-import { AgentSession } from "../../../packages/core/src/runtime/AgentSession";
-import { ToolRegistry } from "../../../packages/core/src/tools/ToolRegistry";
-import { VercelClient } from "../../../packages/core/src/llm/VercelClient";
+import {
+  createEmptyConversationState,
+  reduceSessionMessage,
+  toBubbleItems,
+  type ConversationState,
+} from "./sessionState";
+import type { SessionMessage } from "../../../packages/core/src/protocol/SessionMessage.ts";
+
+function createSessionId() {
+  return `session-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
+}
+
+function createMessageId() {
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
 
 export function App() {
+  const socketRef = useRef<WebSocket | null>(null);
   const [promptState, setPromptState] = useState<PromptState>(() => openPrompt());
   const [draft, setDraft] = useState(promptState.prefill);
-  const [bubbles, setBubbles] = useState<BubbleItem[]>([]);
-  const [isRunning, setIsRunning] = useState(false);
+  const [conversation, setConversation] = useState<ConversationState>(() =>
+    createEmptyConversationState(createSessionId()),
+  );
   const [hostStatus, setHostStatus] = useState<HostStatus>({
     hotkeyAvailable: false,
     message: "正在检查全局热键权限…",
   });
+  const [socketStatus, setSocketStatus] = useState<"connecting" | "open" | "closed" | "error">(
+    "connecting",
+  );
 
   useEffect(() => {
     const handleOpenPrompt = (event: Event) => {
@@ -32,6 +50,7 @@ export function App() {
       setPromptState(nextState);
       setDraft(nextState.prefill);
     };
+
     const handleHostStatus = (event: Event) => {
       const customEvent = event as CustomEvent<HostStatus>;
       setHostStatus(customEvent.detail);
@@ -45,73 +64,96 @@ export function App() {
     };
   }, []);
 
-  const submitPrompt = async () => {
+  useEffect(() => {
+    const socket = new WebSocket(readAgentServerUrl());
+    socketRef.current = socket;
+    setSocketStatus("connecting");
+
+    socket.addEventListener("open", () => {
+      setSocketStatus("open");
+      socket.send(
+        JSON.stringify({
+          type: "open_session",
+          sessionId: conversation.sessionId,
+          messageId: createMessageId(),
+          timestamp: new Date().toISOString(),
+          payload: {},
+        } satisfies SessionMessage),
+      );
+    });
+
+    socket.addEventListener("close", () => {
+      setSocketStatus("closed");
+    });
+
+    socket.addEventListener("error", () => {
+      setSocketStatus("error");
+    });
+
+    socket.addEventListener("message", (event) => {
+      if (typeof event.data !== "string") {
+        return;
+      }
+
+      try {
+        const message = JSON.parse(event.data) as SessionMessage;
+        setConversation((current) => reduceSessionMessage(current, message));
+      } catch {
+        // Ignore malformed websocket payloads.
+      }
+    });
+
+    return () => {
+      socketRef.current = null;
+      socket.close();
+    };
+  }, []);
+
+  const submitPrompt = () => {
     const nextPrompt = draft.trim();
-    if (!nextPrompt || isRunning) {
+    const socket = socketRef.current;
+
+    if (!nextPrompt || socket?.readyState !== WebSocket.OPEN) {
       return;
     }
 
-    const session = await AgentSession.open({ prompt: nextPrompt });
-    setBubbles((current) => [
-      ...current,
-      {
-        id: `user-${current.length + 1}`,
-        text: session.prompt,
-        kind: "user",
+    const message: SessionMessage = {
+      type: "user_message",
+      sessionId: conversation.sessionId,
+      messageId: createMessageId(),
+      timestamp: new Date().toISOString(),
+      payload: {
+        text: nextPrompt,
+        selection: null,
       },
-    ]);
+    };
+
+    setConversation((current) => reduceSessionMessage(current, message));
+    socket.send(JSON.stringify(message));
     setPromptState({ visible: false, prefill: "" });
     setDraft("");
-    setIsRunning(true);
-
-    try {
-      const runtime = new AgentRuntime(new VercelClient(), new ToolRegistry());
-      const result = await runtime.run(session.buildInitialUserMessage());
-      setBubbles((current) => [
-        ...current,
-        ...result.bubbles.map((bubble) => ({
-          ...bubble,
-          kind: "assistant" as const,
-        })),
-      ]);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "运行失败";
-      setBubbles((current) => [
-        ...current,
-        {
-          id: `assistant-error-${current.length + 1}`,
-          text: message,
-          kind: "assistant",
-        },
-      ]);
-    } finally {
-      setIsRunning(false);
-    }
   };
+
+  const bubbles = toBubbleItems(conversation);
+  const statusMessage =
+    conversation.status === "running"
+      ? "正在运行任务…"
+      : conversation.status === "failed" && conversation.error
+        ? conversation.error
+        : hostStatus.message;
 
   return (
     <main aria-label="desktop agent shell">
       <h1>Desktop Agent</h1>
-      <p>{isRunning ? "正在运行任务…" : hostStatus.message}</p>
-      <BubbleList items={bubbles.length > 0 ? bubbles : [{ id: "prompt-state", text: "按全局热键可唤起输入框" }]} />
+      <p>{statusMessage}</p>
+      <BubbleList items={bubbles} />
       {promptState.visible ? (
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            void submitPrompt();
-          }}
-        >
-          <label>
-            <span>Prompt</span>
-            <input
-              autoFocus
-              placeholder="输入你要 Agent 执行的任务"
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              disabled={isRunning}
-            />
-          </label>
-        </form>
+        <PromptBox
+          value={draft}
+          onChange={setDraft}
+          onSubmit={submitPrompt}
+          disabled={socketStatus !== "open"}
+        />
       ) : null}
     </main>
   );

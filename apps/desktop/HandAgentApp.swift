@@ -38,15 +38,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
         controller.start()
     }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        controller.stop()
+    }
 }
 
 @MainActor
 final class DesktopController: NSObject, NSWindowDelegate, WKNavigationDelegate {
-    private let agentPort: Int = 4317
     private let hotkeyMonitor = HotkeyMonitor()
-    private var agentProcess: Process?
+    private let agentServerRelativePath = "apps/agent-server/src/server.ts"
+    private let agentServerURL = URL(string: "ws://127.0.0.1:4317/api/session")!
+    private var agentServerProcess: Process?
+    private var agentServerOutputPipe: Pipe?
     private var window: NSPanel?
-    private let webView = WKWebView(frame: .zero)
+    private lazy var webView: WKWebView = {
+        let configuration = WKWebViewConfiguration()
+        let userContentController = WKUserContentController()
+        let serverURLLiteral = (try? JSONEncoder().encode(agentServerURL.absoluteString))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "\"\(agentServerURL.absoluteString)\""
+
+        userContentController.addUserScript(
+            WKUserScript(
+                source: "window.__HANDAGENT_SERVER_URL__ = \(serverURLLiteral);",
+                injectionTime: .atDocumentStart,
+                forMainFrameOnly: true
+            )
+        )
+        configuration.userContentController = userContentController
+
+        let webView = WKWebView(frame: .zero, configuration: configuration)
+        webView.navigationDelegate = self
+        return webView
+    }()
     private var pendingPrefill: String?
     private var isWebViewReady = false
     private var hostStatus = HostStatusPayload(
@@ -55,11 +79,11 @@ final class DesktopController: NSObject, NSWindowDelegate, WKNavigationDelegate 
     )
 
     func start() {
+        startAgentServer()
         hotkeyMonitor.onTrigger = { [weak self] in
             self?.handleHotkey()
         }
 
-        startAgentServer()
         ensureWindow()
         let isHotkeyRegistered = hotkeyMonitor.start()
         hostStatus = makeHostStatus(isHotkeyRegistered: isHotkeyRegistered)
@@ -68,9 +92,13 @@ final class DesktopController: NSObject, NSWindowDelegate, WKNavigationDelegate 
 
     func webViewDidFinishLoading() {
         isWebViewReady = true
-        publishAgentEndpoint()
         publishHostStatus()
         flushPendingPrompt()
+    }
+
+    func stop() {
+        hotkeyMonitor.stop()
+        stopAgentServer()
     }
 
     func handleHotkey() {
@@ -104,7 +132,6 @@ final class DesktopController: NSObject, NSWindowDelegate, WKNavigationDelegate 
     private func ensureWindow() {
         guard window == nil else { return }
 
-        webView.navigationDelegate = self
         loadBootstrapHTML(into: webView)
 
         let panel = NSPanel(
@@ -174,18 +201,6 @@ final class DesktopController: NSObject, NSWindowDelegate, WKNavigationDelegate 
         """)
     }
 
-    private func publishAgentEndpoint() {
-        let endpoint = "ws://127.0.0.1:\(agentPort)/api/session"
-        guard let data = try? JSONEncoder().encode(endpoint),
-              let json = String(data: data, encoding: .utf8) else {
-            return
-        }
-
-        webView.evaluateJavaScript("""
-        window.__HANDAGENT_SERVER_URL__ = \(json);
-        """)
-    }
-
     private func publishBubble(id: String, text: String) {
         guard let data = try? JSONEncoder().encode(BubblePayload(id: id, text: text)),
               let json = String(data: data, encoding: .utf8) else {
@@ -212,33 +227,118 @@ final class DesktopController: NSObject, NSWindowDelegate, WKNavigationDelegate 
     }
 
     private func startAgentServer() {
-        guard agentProcess == nil else { return }
+        guard agentServerProcess == nil else { return }
 
-        let repoRoot = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let agentServerDirectory = repoRoot.appendingPathComponent("apps/agent-server")
-        let serverScriptURL = agentServerDirectory.appendingPathComponent("src/server.ts")
+        guard let repoRoot = locateRepositoryRoot() else {
+            return
+        }
+
+        let serverURL = repoRoot.appendingPathComponent(agentServerRelativePath)
+        guard FileManager.default.fileExists(atPath: serverURL.path) else {
+            return
+        }
 
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = [
-            "node",
-            "--experimental-strip-types",
-            serverScriptURL.path,
+        process.currentDirectoryURL = repoRoot
+        let nodeArguments = [
+            "--experimental-transform-types",
+            "--experimental-specifier-resolution=node",
+            serverURL.path
         ]
-        process.currentDirectoryURL = agentServerDirectory
-        process.environment = ProcessInfo.processInfo.environment
+
+        if let nodeExecutable = locateNodeExecutable() {
+            process.executableURL = URL(fileURLWithPath: nodeExecutable)
+            process.arguments = nodeArguments
+        } else {
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            process.arguments = ["node"] + nodeArguments
+        }
+
+        let pipe = Pipe()
+        pipe.fileHandleForReading.readabilityHandler = { handle in
+            if handle.availableData.isEmpty {
+                handle.readabilityHandler = nil
+            }
+        }
+        process.standardOutput = pipe
+        process.standardError = pipe
 
         do {
             try process.run()
-            agentProcess = process
+            agentServerProcess = process
+            agentServerOutputPipe = pipe
         } catch {
-            hostStatus = HostStatusPayload(
-                hotkeyAvailable: false,
-                message: "本地 Agent Server 启动失败，请检查 Node 环境。"
-            )
+            pipe.fileHandleForReading.readabilityHandler = nil
         }
+    }
+
+    private func stopAgentServer() {
+        agentServerOutputPipe?.fileHandleForReading.readabilityHandler = nil
+        agentServerOutputPipe = nil
+        agentServerProcess?.terminate()
+        agentServerProcess = nil
+    }
+
+    private func locateRepositoryRoot() -> URL? {
+        let fileManager = FileManager.default
+        let candidates: [URL] = [
+            Bundle.main.executableURL,
+            Bundle.main.resourceURL,
+            Bundle.main.bundleURL,
+            URL(fileURLWithPath: fileManager.currentDirectoryPath)
+        ].compactMap { $0 }
+
+        for candidate in candidates {
+            if let root = findRepositoryRoot(startingAt: candidate) {
+                return root
+            }
+        }
+
+        return nil
+    }
+
+    private func findRepositoryRoot(startingAt url: URL) -> URL? {
+        let fileManager = FileManager.default
+        var current = url.standardizedFileURL
+
+        while true {
+            let packageManifest = current.appendingPathComponent("Package.swift")
+            let serverPath = current.appendingPathComponent(agentServerRelativePath)
+
+            if fileManager.fileExists(atPath: packageManifest.path),
+               fileManager.fileExists(atPath: serverPath.path) {
+                return current
+            }
+
+            let parent = current.deletingLastPathComponent()
+            if parent.path == current.path {
+                return nil
+            }
+
+            current = parent
+        }
+    }
+
+    private func locateNodeExecutable() -> String? {
+        let fileManager = FileManager.default
+        let searchDirectories = (
+            ProcessInfo.processInfo.environment["PATH"]?
+                .split(separator: ":")
+                .map(String.init) ?? []
+        ) + [
+            "/opt/homebrew/bin",
+            "/usr/local/bin",
+            "/usr/bin"
+        ]
+
+        for directory in searchDirectories {
+            let candidate = URL(fileURLWithPath: directory).appendingPathComponent("node").path
+            if fileManager.isExecutableFile(atPath: candidate) {
+                return candidate
+            }
+        }
+
+        return nil
     }
     
     func windowWillClose(_ notification: Notification) {

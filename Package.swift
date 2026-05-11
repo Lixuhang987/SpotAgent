@@ -23,6 +23,8 @@ let package = Package(
                 "Web/PromptBox.tsx",
                 "Web/package-lock.json",
                 "Web/package.json",
+                "Web/sessionState.test.ts",
+                "Web/sessionState.ts",
                 "Web/tsconfig.json",
                 "Web/bridge.ts",
                 "Web/vitest.config.ts",
