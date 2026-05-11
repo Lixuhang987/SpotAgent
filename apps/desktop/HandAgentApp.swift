@@ -42,7 +42,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 @MainActor
 final class DesktopController: NSObject, NSWindowDelegate, WKNavigationDelegate {
+    private let agentPort: Int = 4317
     private let hotkeyMonitor = HotkeyMonitor()
+    private var agentProcess: Process?
     private var window: NSPanel?
     private let webView = WKWebView(frame: .zero)
     private var pendingPrefill: String?
@@ -57,6 +59,7 @@ final class DesktopController: NSObject, NSWindowDelegate, WKNavigationDelegate 
             self?.handleHotkey()
         }
 
+        startAgentServer()
         ensureWindow()
         let isHotkeyRegistered = hotkeyMonitor.start()
         hostStatus = makeHostStatus(isHotkeyRegistered: isHotkeyRegistered)
@@ -65,6 +68,7 @@ final class DesktopController: NSObject, NSWindowDelegate, WKNavigationDelegate 
 
     func webViewDidFinishLoading() {
         isWebViewReady = true
+        publishAgentEndpoint()
         publishHostStatus()
         flushPendingPrompt()
     }
@@ -170,6 +174,18 @@ final class DesktopController: NSObject, NSWindowDelegate, WKNavigationDelegate 
         """)
     }
 
+    private func publishAgentEndpoint() {
+        let endpoint = "ws://127.0.0.1:\(agentPort)/api/session"
+        guard let data = try? JSONEncoder().encode(endpoint),
+              let json = String(data: data, encoding: .utf8) else {
+            return
+        }
+
+        webView.evaluateJavaScript("""
+        window.__HANDAGENT_SERVER_URL__ = \(json);
+        """)
+    }
+
     private func publishBubble(id: String, text: String) {
         guard let data = try? JSONEncoder().encode(BubblePayload(id: id, text: text)),
               let json = String(data: data, encoding: .utf8) else {
@@ -193,6 +209,36 @@ final class DesktopController: NSObject, NSWindowDelegate, WKNavigationDelegate 
             hotkeyAvailable: false,
             message: "全局热键注册失败，请检查快捷键冲突。"
         )
+    }
+
+    private func startAgentServer() {
+        guard agentProcess == nil else { return }
+
+        let repoRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let agentServerDirectory = repoRoot.appendingPathComponent("apps/agent-server")
+        let serverScriptURL = agentServerDirectory.appendingPathComponent("src/server.ts")
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = [
+            "node",
+            "--experimental-strip-types",
+            serverScriptURL.path,
+        ]
+        process.currentDirectoryURL = agentServerDirectory
+        process.environment = ProcessInfo.processInfo.environment
+
+        do {
+            try process.run()
+            agentProcess = process
+        } catch {
+            hostStatus = HostStatusPayload(
+                hotkeyAvailable: false,
+                message: "本地 Agent Server 启动失败，请检查 Node 环境。"
+            )
+        }
     }
     
     func windowWillClose(_ notification: Notification) {

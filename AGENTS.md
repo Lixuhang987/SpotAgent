@@ -80,3 +80,8 @@ flowchart TD
 - `./apps/desktop/Web/node_modules/.bin/vitest run packages/core/tests/runtime.test.ts packages/core/tests/selection.test.ts packages/core/tests/context-tools.test.ts packages/core/tests/file-tools.test.ts`
 - `swift build`
 
+### 开发流程
+
+- 使用 worktree skill 创建新的工作树（单纯文档工作或者只读工作不需要），浏览代码结构，重点浏览文件夹下同名的架构文档
+- 代码修改
+- 校验通过，commit 后总结改动文档，并对现有文档更新
