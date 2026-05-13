@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./scripts/codex/stop-verify.sh",
+            "statusMessage": "运行 handAgent 完成前校验"
+          }
+        ]
+      }
+    ]
+  }
+}

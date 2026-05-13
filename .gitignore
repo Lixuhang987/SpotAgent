@@ -11,3 +11,4 @@ coverage
 src/utils/vendor/
 .build
 claude-code
+.worktrees

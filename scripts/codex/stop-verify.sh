@@ -1,0 +1,50 @@
+#!/bin/zsh
+
+set -u
+
+ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+WEB_DIR="$ROOT_DIR/apps/desktop/Web"
+
+verify_commands=(
+  "cd \"$WEB_DIR\" && npm run build"
+  "cd \"$WEB_DIR\" && npm run test:hotkey"
+  "cd \"$ROOT_DIR\" && ./apps/desktop/Web/node_modules/.bin/vitest run packages/core/tests/runtime.test.ts packages/core/tests/selection.test.ts packages/core/tests/context-tools.test.ts packages/core/tests/file-tools.test.ts"
+)
+
+json_escape() {
+  python3 -c 'import json, sys; print(json.dumps(sys.stdin.read()))'
+}
+
+emit_block_json() {
+  local reason="$1"
+  local system_message="$2"
+
+  local reason_json
+  local system_message_json
+  reason_json="$(printf "%s" "$reason" | json_escape)"
+  system_message_json="$(printf "%s" "$system_message" | json_escape)"
+
+  cat <<EOF
+{"continue":true,"decision":"block","reason":$reason_json,"systemMessage":$system_message_json}
+EOF
+}
+
+if [ ! -x "$WEB_DIR/node_modules/.bin/vitest" ]; then
+  emit_block_json \
+    "当前 worktree 还没有完成独立初始化。先在该 worktree 中安装 Web 依赖，再重新执行收尾校验。" \
+    "缺少可执行文件: $WEB_DIR/node_modules/.bin/vitest；建议先执行: cd $WEB_DIR && npm install"
+  exit 0
+fi
+
+for command in "${verify_commands[@]}"; do
+  output="$(zsh -lc "$command" 2>&1)"
+  exit_code=$?
+  if [ "$exit_code" -ne 0 ]; then
+    emit_block_json \
+      "完成前校验失败。请先修复失败项，重新运行相关校验，再结束本次任务。" \
+      "失败命令: $command"$'\n\n'"$output"
+    exit 0
+  fi
+done
+
+exit 0
