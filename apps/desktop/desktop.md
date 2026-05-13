@@ -14,7 +14,7 @@
 
 - `HandAgentApp`：SwiftUI 程序入口。
 - `AppDelegate`：应用启动后初始化宿主控制器。
-- `DesktopController`：窗口、WebView、宿主状态、事件分发的中心控制器。
+- `DesktopController`：窗口、WebView、原生拖拽区、宿主状态、事件分发的中心控制器。
 - `HotkeyMonitor`：注册全局热键并触发 `onTrigger` 回调。
 
 ## 宿主调用链路

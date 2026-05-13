@@ -1,6 +1,21 @@
-import { describe, expect, it } from "vitest";
-import { toVercelMessages, toVercelTools } from "../src/llm/VercelClient";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  resolveOpenAIApiKey,
+  toVercelMessages,
+  toVercelTools,
+} from "../src/llm/VercelClient";
 import type { AgentMessage } from "../src/runtime/AgentMessage";
+
+const originalOpenAIKey = process.env.OPENAI_API_KEY;
+
+afterEach(() => {
+  if (originalOpenAIKey === undefined) {
+    delete process.env.OPENAI_API_KEY;
+    return;
+  }
+
+  process.env.OPENAI_API_KEY = originalOpenAIKey;
+});
 
 describe("VercelClient adapters", () => {
   it("converts agent messages to AI SDK model messages", () => {
@@ -105,5 +120,20 @@ describe("VercelClient adapters", () => {
         required: ["path"],
       },
     });
+  });
+
+  it("prefers explicit apiKey and falls back to OPENAI_API_KEY", () => {
+    process.env.OPENAI_API_KEY = "env-key";
+
+    expect(resolveOpenAIApiKey({ apiKey: "explicit-key" })).toBe("explicit-key");
+    expect(resolveOpenAIApiKey({})).toBe("env-key");
+  });
+
+  it("throws a clear error when no OpenAI API key is configured", () => {
+    delete process.env.OPENAI_API_KEY;
+
+    expect(() => resolveOpenAIApiKey({})).toThrow(
+      "Missing OPENAI_API_KEY. Set it before starting HandAgent."
+    );
   });
 });

@@ -19,6 +19,17 @@ export type VercelClientOptions = OpenAIProviderSettings & {
   model?: VercelModelId;
 };
 
+export function resolveOpenAIApiKey(
+  options: Pick<OpenAIProviderSettings, "apiKey">
+): string {
+  const apiKey = options.apiKey ?? process.env.OPENAI_API_KEY;
+  if (apiKey) {
+    return apiKey;
+  }
+
+  throw new Error("Missing OPENAI_API_KEY. Set it before starting HandAgent.");
+}
+
 export function toVercelMessages(messages: AgentMessage[]): ModelMessage[] {
   return messages.map((message) => {
     switch (message.role) {
@@ -93,8 +104,11 @@ export class VercelClient implements LLMClient {
   private readonly model: VercelModelId;
 
   constructor(options: VercelClientOptions = {}) {
-    const { model = "gpt-5-mini", ...providerSettings } = options;
-    this.provider = createOpenAI(providerSettings);
+    const { model = "gpt-5-mini", apiKey, ...providerSettings } = options;
+    this.provider = createOpenAI({
+      ...providerSettings,
+      apiKey: resolveOpenAIApiKey({ apiKey }),
+    });
     this.model = model;
   }
 

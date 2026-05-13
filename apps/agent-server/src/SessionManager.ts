@@ -53,15 +53,36 @@ export class SessionManager {
 
     this.sessions.set(message.sessionId, { messages: nextMessages });
 
-    const result = await this.runtime.runWithMessages(nextMessages, (event) => {
-      const push = pushMessage ?? this.pushMessage;
-      push(toSessionMessage(message.sessionId, event, this.now()));
-    });
+    try {
+      const result = await this.runtime.runWithMessages(nextMessages, (event) => {
+        const push = pushMessage ?? this.pushMessage;
+        push(toSessionMessage(message.sessionId, event, this.now()));
+      });
 
-    this.sessions.set(message.sessionId, {
-      messages: result.messages,
-    });
+      this.sessions.set(message.sessionId, {
+        messages: result.messages,
+      });
+    } catch (error) {
+      const push = pushMessage ?? this.pushMessage;
+      push({
+        type: "error",
+        sessionId: message.sessionId,
+        messageId: `${message.sessionId}-error`,
+        timestamp: this.now(),
+        payload: {
+          message: toErrorMessage(error),
+        },
+      });
+    }
   }
+}
+
+function toErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return "Agent runtime failed.";
 }
 
 function toSessionMessage(

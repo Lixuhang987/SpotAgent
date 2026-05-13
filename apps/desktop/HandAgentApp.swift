@@ -19,6 +19,12 @@ private struct BubblePayload: Codable {
     let text: String
 }
 
+private final class WindowDragHandleView: NSView {
+    override var mouseDownCanMoveWindow: Bool {
+        true
+    }
+}
+
 @main
 struct HandAgentApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
@@ -46,6 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 @MainActor
 final class DesktopController: NSObject, NSWindowDelegate, WKNavigationDelegate {
+    private let dragHandleHeight: CGFloat = 36
     private let hotkeyMonitor = HotkeyMonitor()
     private let agentServerRelativePath = "apps/agent-server/src/server.ts"
     private let agentServerURL = URL(string: "ws://127.0.0.1:4317/api/session")!
@@ -152,10 +159,39 @@ final class DesktopController: NSObject, NSWindowDelegate, WKNavigationDelegate 
         panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
         panel.standardWindowButton(.zoomButton)?.isHidden = true
         panel.delegate = self
-        panel.contentView = webView
+        panel.contentView = makePanelContentView()
         panel.orderOut(nil)
 
         window = panel
+    }
+
+    private func makePanelContentView() -> NSView {
+        let contentView = NSView()
+        contentView.wantsLayer = true
+
+        let dragHandle = WindowDragHandleView()
+        dragHandle.translatesAutoresizingMaskIntoConstraints = false
+        dragHandle.wantsLayer = true
+        dragHandle.layer?.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.001).cgColor
+
+        webView.translatesAutoresizingMaskIntoConstraints = false
+
+        contentView.addSubview(dragHandle)
+        contentView.addSubview(webView)
+
+        NSLayoutConstraint.activate([
+            dragHandle.topAnchor.constraint(equalTo: contentView.topAnchor),
+            dragHandle.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            dragHandle.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            dragHandle.heightAnchor.constraint(equalToConstant: dragHandleHeight),
+
+            webView.topAnchor.constraint(equalTo: dragHandle.bottomAnchor),
+            webView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            webView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            webView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
+        ])
+
+        return contentView
     }
 
     private func showWindow() {

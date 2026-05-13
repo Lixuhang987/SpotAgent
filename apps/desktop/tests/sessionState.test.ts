@@ -139,6 +139,26 @@ describe("sessionState reducer", () => {
     expect(state.status).toBe("failed");
   });
 
+  it("shows runtime errors as an assistant bubble", () => {
+    const state = reduceSessionMessage(createEmptyConversationState("s1"), {
+      type: "error",
+      sessionId: "s1",
+      messageId: "error-1",
+      timestamp: "2026-05-11T00:00:00.000Z",
+      payload: { message: "Missing OPENAI_API_KEY. Set it before starting HandAgent." },
+    });
+
+    expect(state.status).toBe("failed");
+    expect(state.error).toBe("Missing OPENAI_API_KEY. Set it before starting HandAgent.");
+    expect(toBubbleItems(state)).toEqual([
+      {
+        id: "error-1",
+        text: "Missing OPENAI_API_KEY. Set it before starting HandAgent.",
+        kind: "assistant",
+      },
+    ]);
+  });
+
   it("resets state on open session", () => {
     const state = reduceSessionMessage(
       {

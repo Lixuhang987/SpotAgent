@@ -262,4 +262,41 @@ describe("SessionManager", () => {
       }),
     ]);
   });
+
+  it("pushes an error message when runtime execution fails", async () => {
+    const pushed: SessionMessage[] = [];
+    const manager = new SessionManager(
+      {
+        async runWithMessages() {
+          throw new Error("Missing OPENAI_API_KEY. 请先配置 API key。");
+        },
+      },
+      (message) => {
+        pushed.push(message);
+      },
+      {
+        now: () => "2026-05-11T00:00:00.000Z",
+      },
+    );
+
+    await manager.receive(createUserMessage("session-4", "你好", "user-1"));
+
+    expect(pushed).toEqual([
+      {
+        type: "error",
+        sessionId: "session-4",
+        messageId: "session-4-error",
+        timestamp: "2026-05-11T00:00:00.000Z",
+        payload: {
+          message: "Missing OPENAI_API_KEY. 请先配置 API key。",
+        },
+      },
+    ]);
+    expect(manager.getSessionMessages("session-4")).toEqual([
+      {
+        role: "user",
+        content: "你好",
+      },
+    ]);
+  });
 });

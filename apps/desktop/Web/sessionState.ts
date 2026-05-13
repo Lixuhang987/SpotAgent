@@ -141,6 +141,17 @@ export function reduceSessionMessage(
       ...state,
       status: "failed",
       error: message.payload.message,
+      messages: [
+        ...state.messages,
+        {
+          id: message.messageId,
+          role: "assistant",
+          text: message.payload.message,
+          status: "completed",
+          createdAt: message.timestamp,
+          updatedAt: message.timestamp,
+        },
+      ],
     };
   }
 

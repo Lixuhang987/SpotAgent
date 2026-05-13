@@ -2,20 +2,39 @@
 
 ## 启动项目
 
-1. 构建 Web 资源。
+1. 先配置 `OPENAI_API_KEY`。
+
+```bash
+export OPENAI_API_KEY="你的 OpenAI API key"
+```
+
+如果希望长期生效，可写入 `~/.zshrc`：
+
+```bash
+echo 'export OPENAI_API_KEY="你的 OpenAI API key"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+2. 构建 Web 资源。
 
 ```bash
 cd apps/desktop/Web
 pnpm run build
 ```
 
-2. 启动桌面宿主。
+3. 启动桌面宿主。
 
 ```bash
 swift run HandAgentDesktop
 ```
 
-3. 如果 `swift run` 在当前机器报错，优先用匹配的 Xcode / Command Line Tools 重新打开工程，再执行同样流程。
+4. 如果 `swift run` 在当前机器报错，优先用匹配的 Xcode / Command Line Tools 重新打开工程，再执行同样流程。
+
+### API key 排查
+
+- `OPENAI_API_KEY` 由宿主启动出来的本地 `apps/agent-server/src/server.ts` 进程读取，不是由 Web 页面读取。
+- 如果提交 prompt 后看到 `Missing OPENAI_API_KEY. Set it before starting HandAgent.`，说明桌面宿主启动时没有拿到该环境变量。
+- 这时先在当前 shell 里配置变量，再重新执行 `swift run HandAgentDesktop`。
 
 ## 调试方式
 
@@ -52,6 +71,7 @@ swift build
 
 - 如果需要观察窗口与热键行为，优先用宿主侧状态文案和 WebView 事件桥来定位问题。
 - 热键相关问题先确认辅助功能权限是否已授权。
+- `command + shift + space` 唤起的面板顶部保留原生拖拽区，手工验收时要确认用户可以拖动整个窗口。
 
 ### 端到端
 
