@@ -6,9 +6,9 @@ ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 WEB_DIR="$ROOT_DIR/apps/desktop/Web"
 
 verify_commands=(
-  "cd \"$WEB_DIR\" && npm run build"
-  "cd \"$WEB_DIR\" && npm run test:hotkey"
-  "cd \"$ROOT_DIR\" && ./apps/desktop/Web/node_modules/.bin/vitest run packages/core/tests/runtime.test.ts packages/core/tests/selection.test.ts packages/core/tests/context-tools.test.ts packages/core/tests/file-tools.test.ts"
+  "cd \"$WEB_DIR\" && pnpm run build"
+  "cd \"$WEB_DIR\" && pnpm run test:hotkey"
+  "cd \"$WEB_DIR\" && pnpm exec vitest run ../../../packages/core/tests/runtime.test.ts ../../../packages/core/tests/selection.test.ts ../../../packages/core/tests/context-tools.test.ts ../../../packages/core/tests/file-tools.test.ts"
 )
 
 json_escape() {
@@ -32,7 +32,7 @@ EOF
 if [ ! -x "$WEB_DIR/node_modules/.bin/vitest" ]; then
   emit_block_json \
     "当前 worktree 还没有完成独立初始化。先在该 worktree 中安装 Web 依赖，再重新执行收尾校验。" \
-    "缺少可执行文件: $WEB_DIR/node_modules/.bin/vitest；建议先执行: cd $WEB_DIR && npm install"
+    "缺少可执行文件: $WEB_DIR/node_modules/.bin/vitest；建议先执行: cd $WEB_DIR && pnpm install"
   exit 0
 fi
 

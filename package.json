@@ -2,8 +2,5 @@
   "name": "handagent",
   "private": true,
   "type": "module",
-  "workspaces": [
-    "apps/agent-server",
-    "apps/desktop/Web"
-  ]
+  "packageManager": "pnpm@10.5.2"
 }

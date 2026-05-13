@@ -98,15 +98,15 @@ flowchart TD
 
 ### 提交前检查
 
-- `cd apps/desktop/Web && npm run build`
-- `cd apps/desktop/Web && npm run test:hotkey`
-- `./apps/desktop/Web/node_modules/.bin/vitest run packages/core/tests/runtime.test.ts packages/core/tests/selection.test.ts packages/core/tests/context-tools.test.ts packages/core/tests/file-tools.test.ts`
+- `cd apps/desktop/Web && pnpm run build`
+- `cd apps/desktop/Web && pnpm run test:hotkey`
+- `cd apps/desktop/Web && pnpm exec vitest run ../../../packages/core/tests/runtime.test.ts ../../../packages/core/tests/selection.test.ts ../../../packages/core/tests/context-tools.test.ts ../../../packages/core/tests/file-tools.test.ts`
 - `swift build`
 
 ### 开发流程
 
 - 代码修改前在当前项目根目录下创建新的 worktree，路径固定放在 `.worktrees/<task-name>/`；单纯文档工作或者只读工作不需要创建 worktree
-- 新建 worktree 后先完成项目初始化，至少保证当前 worktree 具备独立运行能力；本仓库默认先执行 `cd apps/desktop/Web && npm install`，再根据需要补充其他依赖初始化
+- 新建 worktree 后先完成项目初始化，至少保证当前 worktree 具备独立运行能力；本仓库默认先执行 `cd apps/desktop/Web && pnpm install`，再根据需要补充其他依赖初始化
 - 初始化完成后执行一轮基线校验，确认 worktree 本身可用，再开始浏览代码结构；重点浏览目标文件夹下同名的架构文档
 - 代码修改
 - 每次代码修改后执行 `git commit`，不要把本轮已完成的代码改动长时间停留在未提交状态

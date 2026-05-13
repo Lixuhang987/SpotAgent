@@ -6,7 +6,7 @@
 
 ```bash
 cd apps/desktop/Web
-npm run build
+pnpm run build
 ```
 
 2. 启动桌面宿主。
@@ -25,18 +25,19 @@ swift run HandAgentDesktop
 
 ```bash
 cd apps/desktop/Web
-npm run build
-npm run test:hotkey
+pnpm run build
+pnpm run test:hotkey
 ```
 
 - `packages/core` 的测试可直接用仓库内的 Vitest 运行器：
 
 ```bash
-./apps/desktop/Web/node_modules/.bin/vitest run \
-  packages/core/tests/runtime.test.ts \
-  packages/core/tests/selection.test.ts \
-  packages/core/tests/context-tools.test.ts \
-  packages/core/tests/file-tools.test.ts
+cd apps/desktop/Web
+pnpm exec vitest run \
+  ../../../packages/core/tests/runtime.test.ts \
+  ../../../packages/core/tests/selection.test.ts \
+  ../../../packages/core/tests/context-tools.test.ts \
+  ../../../packages/core/tests/file-tools.test.ts
 ```
 
 - 调试 React 页面时，优先看浏览器 / WebView 控制台输出，必要时在 `App.tsx` 里临时加日志。
@@ -90,17 +91,17 @@ swift build
 
 ```bash
 # Web 资源构建
-cd apps/desktop/Web && npm run build
+cd apps/desktop/Web && pnpm run build
 
 # Web 热键测试
-cd apps/desktop/Web && npm run test:hotkey
+cd apps/desktop/Web && pnpm run test:hotkey
 
 # Core 测试
-./apps/desktop/Web/node_modules/.bin/vitest run \
-  packages/core/tests/runtime.test.ts \
-  packages/core/tests/selection.test.ts \
-  packages/core/tests/context-tools.test.ts \
-  packages/core/tests/file-tools.test.ts
+cd apps/desktop/Web && pnpm exec vitest run \
+  ../../../packages/core/tests/runtime.test.ts \
+  ../../../packages/core/tests/selection.test.ts \
+  ../../../packages/core/tests/context-tools.test.ts \
+  ../../../packages/core/tests/file-tools.test.ts
 
 # 桌面宿主构建
 swift build

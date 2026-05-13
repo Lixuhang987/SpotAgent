@@ -1,0 +1,3 @@
+packages:
+  - apps/agent-server
+  - apps/desktop/Web

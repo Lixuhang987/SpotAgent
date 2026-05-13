@@ -19,9 +19,9 @@ HandAgent 是一个 macOS 优先的桌面 Agent Runtime MVP。当前版本采用
 
 ## 本地验证
 
-- Web bundle：`cd apps/desktop/Web && npm run build`
-- Web hotkey test：`cd apps/desktop/Web && npm run test:hotkey`
-- Core tests：`./apps/desktop/Web/node_modules/.bin/vitest run packages/core/tests/runtime.test.ts packages/core/tests/selection.test.ts packages/core/tests/context-tools.test.ts packages/core/tests/file-tools.test.ts`
+- Web bundle：`cd apps/desktop/Web && pnpm run build`
+- Web hotkey test：`cd apps/desktop/Web && pnpm run test:hotkey`
+- Core tests：`cd apps/desktop/Web && pnpm exec vitest run ../../../packages/core/tests/runtime.test.ts ../../../packages/core/tests/selection.test.ts ../../../packages/core/tests/context-tools.test.ts ../../../packages/core/tests/file-tools.test.ts`
 - Root build：`swift build`
 
 ## 说明

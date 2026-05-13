@@ -96,7 +96,7 @@ describe("sessionState reducer", () => {
 
 - [ ] **Step 2: 运行测试并确认失败**
 
-Run: `cd /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/apps/desktop/Web && npm run test:hotkey -- sessionState.test.ts`
+Run: `cd /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/apps/desktop/Web && pnpm run test:hotkey -- sessionState.test.ts`
 
 Expected: FAIL with `Cannot find module '../sessionState'` or missing exported members
 
@@ -223,7 +223,7 @@ export function reduceSessionMessage(
 
 - [ ] **Step 5: 运行测试确认仍然失败但失败原因正确**
 
-Run: `cd /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/apps/desktop/Web && npm run test:hotkey -- sessionState.test.ts`
+Run: `cd /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/apps/desktop/Web && pnpm run test:hotkey -- sessionState.test.ts`
 
 Expected: FAIL because text is `""` instead of `"你好"`
 
@@ -272,7 +272,7 @@ export function reduceSessionMessage(
 
 - [ ] **Step 7: 运行测试确认通过**
 
-Run: `cd /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/apps/desktop/Web && npm run test:hotkey -- sessionState.test.ts`
+Run: `cd /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/apps/desktop/Web && pnpm run test:hotkey -- sessionState.test.ts`
 
 Expected: PASS
 
@@ -325,7 +325,7 @@ describe("AgentRuntime stream mode", () => {
 
 - [ ] **Step 2: 运行测试并确认失败**
 
-Run: `cd /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/apps/desktop/Web && ./node_modules/.bin/vitest run /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/packages/core/tests/runtime-stream.test.ts`
+Run: `cd /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/apps/desktop/Web && pnpm exec vitest run /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/packages/core/tests/runtime-stream.test.ts`
 
 Expected: FAIL with `runtime.runWithMessages is not a function`
 
@@ -355,7 +355,7 @@ async runWithMessages(
 
 - [ ] **Step 4: 运行测试确认通过**
 
-Run: `cd /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/apps/desktop/Web && ./node_modules/.bin/vitest run /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/packages/core/tests/runtime-stream.test.ts`
+Run: `cd /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/apps/desktop/Web && pnpm exec vitest run /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/packages/core/tests/runtime-stream.test.ts`
 
 Expected: PASS
 
@@ -412,7 +412,7 @@ describe("SessionManager", () => {
 
 - [ ] **Step 2: 运行测试并确认失败**
 
-Run: `cd /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/apps/desktop/Web && ./node_modules/.bin/vitest run /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/apps/agent-server/src/SessionManager.test.ts`
+Run: `cd /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/apps/desktop/Web && pnpm exec vitest run /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/apps/agent-server/src/SessionManager.test.ts`
 
 Expected: FAIL with missing file or missing class
 
@@ -508,7 +508,7 @@ wss.on("connection", (socket) => {
 
 - [ ] **Step 5: 运行测试确认通过**
 
-Run: `cd /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/apps/desktop/Web && ./node_modules/.bin/vitest run /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/apps/agent-server/src/SessionManager.test.ts`
+Run: `cd /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/apps/desktop/Web && pnpm exec vitest run /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/apps/agent-server/src/SessionManager.test.ts`
 
 Expected: PASS
 
@@ -567,7 +567,7 @@ describe("session snapshot handling", () => {
 
 - [ ] **Step 2: 运行测试并确认失败**
 
-Run: `cd /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/apps/desktop/Web && npm run test:hotkey -- sessionState.test.ts`
+Run: `cd /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/apps/desktop/Web && pnpm run test:hotkey -- sessionState.test.ts`
 
 Expected: FAIL because `session_snapshot` is not handled
 
@@ -624,7 +624,7 @@ const bubbleItems = state.messages
 
 - [ ] **Step 6: 运行 Web 侧测试确认通过**
 
-Run: `cd /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/apps/desktop/Web && npm run test:hotkey`
+Run: `cd /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/apps/desktop/Web && pnpm run test:hotkey`
 
 Expected: PASS
 
@@ -688,15 +688,15 @@ export function readAgentServerUrl(): string {
 
 - [ ] **Step 5: 运行仓库要求的最小验证**
 
-Run: `cd /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/apps/desktop/Web && npm run build`
+Run: `cd /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/apps/desktop/Web && pnpm run build`
 
 Expected: PASS
 
-Run: `cd /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/apps/desktop/Web && npm run test:hotkey`
+Run: `cd /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/apps/desktop/Web && pnpm run test:hotkey`
 
 Expected: PASS
 
-Run: `cd /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key && ./apps/desktop/Web/node_modules/.bin/vitest run packages/core/tests/runtime.test.ts packages/core/tests/selection.test.ts packages/core/tests/context-tools.test.ts packages/core/tests/file-tools.test.ts packages/core/tests/runtime-stream.test.ts`
+Run: `cd /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/apps/desktop/Web && pnpm exec vitest run /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/packages/core/tests/runtime.test.ts /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/packages/core/tests/selection.test.ts /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/packages/core/tests/context-tools.test.ts /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/packages/core/tests/file-tools.test.ts /Users/mu9/.config/superpowers/worktrees/handAgent/codex-use-env-openai-key/packages/core/tests/runtime-stream.test.ts`
 
 Expected: PASS
 

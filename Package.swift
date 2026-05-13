@@ -21,7 +21,6 @@ let package = Package(
                 "Web/main.tsx",
                 "Web/node_modules",
                 "Web/PromptBox.tsx",
-                "Web/package-lock.json",
                 "Web/package.json",
                 "Web/sessionState.test.ts",
                 "Web/sessionState.ts",
