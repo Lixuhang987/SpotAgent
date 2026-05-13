@@ -240,6 +240,7 @@ final class DesktopController: NSObject, NSWindowDelegate, WKNavigationDelegate 
 
         let process = Process()
         process.currentDirectoryURL = repoRoot
+        process.environment = makeAgentServerEnvironment(repoRoot: repoRoot)
         let nodeArguments = [
             "--experimental-transform-types",
             "--experimental-specifier-resolution=node",
@@ -270,6 +271,19 @@ final class DesktopController: NSObject, NSWindowDelegate, WKNavigationDelegate 
         } catch {
             pipe.fileHandleForReading.readabilityHandler = nil
         }
+    }
+
+    private func makeAgentServerEnvironment(repoRoot: URL) -> [String: String] {
+        var environment = ProcessInfo.processInfo.environment
+        let separator = ":"
+        let extraNodePaths = [
+            repoRoot.appendingPathComponent("apps/agent-server/node_modules").path,
+            repoRoot.appendingPathComponent("apps/desktop/Web/node_modules").path
+        ]
+        let existingNodePath = environment["NODE_PATH"].flatMap { $0.isEmpty ? nil : $0 }
+        let combinedNodePath = (extraNodePaths + [existingNodePath].compactMap { $0 }).joined(separator: separator)
+        environment["NODE_PATH"] = combinedNodePath
+        return environment
     }
 
     private func stopAgentServer() {

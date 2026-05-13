@@ -1,5 +1,5 @@
-import type { AgentTool } from "../AgentTool";
-import type { PlatformAdapter } from "../../platform/PlatformAdapter";
+import type { AgentTool } from "../AgentTool.ts";
+import type { PlatformAdapter } from "../../platform/PlatformAdapter.ts";
 
 export type ClipboardReadToolInput = Record<string, never>;
 

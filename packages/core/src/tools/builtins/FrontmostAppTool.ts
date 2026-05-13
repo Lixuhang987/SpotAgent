@@ -1,5 +1,5 @@
-import type { AgentTool } from "../AgentTool";
-import type { PlatformAdapter } from "../../platform/PlatformAdapter";
+import type { AgentTool } from "../AgentTool.ts";
+import type { PlatformAdapter } from "../../platform/PlatformAdapter.ts";
 
 export type FrontmostAppToolInput = Record<string, never>;
 export type FrontmostAppToolOutput = Awaited<ReturnType<PlatformAdapter["frontmostAppInfo"]>>;

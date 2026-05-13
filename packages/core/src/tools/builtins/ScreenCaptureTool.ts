@@ -1,5 +1,9 @@
-import type { AgentTool } from "../AgentTool";
-import type { PlatformAdapter, ScreenCaptureRequest, ScreenCaptureResult } from "../../platform/PlatformAdapter";
+import type { AgentTool } from "../AgentTool.ts";
+import type {
+  PlatformAdapter,
+  ScreenCaptureRequest,
+  ScreenCaptureResult,
+} from "../../platform/PlatformAdapter.ts";
 
 export type ScreenCaptureToolInput = ScreenCaptureRequest;
 export type ScreenCaptureToolOutput = ScreenCaptureResult;

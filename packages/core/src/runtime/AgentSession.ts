@@ -1,7 +1,7 @@
 import {
   normalizeSelectedText,
   type SelectionCaptureResult,
-} from "../selection/SelectionCapture";
+} from "../selection/SelectionCapture.ts";
 
 export type AgentSessionInput = {
   prompt: string;

@@ -1,5 +1,5 @@
-import type { AgentTool } from "../AgentTool";
-import type { OCRRequest, OCRResult, PlatformAdapter } from "../../platform/PlatformAdapter";
+import type { AgentTool } from "../AgentTool.ts";
+import type { OCRRequest, OCRResult, PlatformAdapter } from "../../platform/PlatformAdapter.ts";
 
 export type OCRToolInput = OCRRequest;
 export type OCRToolOutput = OCRResult;

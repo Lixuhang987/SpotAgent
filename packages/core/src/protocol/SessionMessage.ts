@@ -1,7 +1,7 @@
 import type {
   ConversationMessage,
   ToolMessageStatus,
-} from "../conversation/ConversationMessage";
+} from "../conversation/ConversationMessage.ts";
 
 export type SessionMessage =
   | {

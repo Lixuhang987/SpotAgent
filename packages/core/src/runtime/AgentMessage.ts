@@ -1,4 +1,4 @@
-import type { ToolCallEnvelope } from "./ToolCallEnvelope";
+import type { ToolCallEnvelope } from "./ToolCallEnvelope.ts";
 
 export type AgentMessage =
   | {

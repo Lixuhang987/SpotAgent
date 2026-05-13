@@ -1,6 +1,6 @@
 import { realpath, readFile } from "node:fs/promises";
 import { basename, dirname, join, resolve, relative, isAbsolute, sep } from "node:path";
-import type { AgentTool } from "../AgentTool";
+import type { AgentTool } from "../AgentTool.ts";
 
 export type FileReadToolInput = {
   path: string;

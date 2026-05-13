@@ -1,9 +1,9 @@
-import type { AgentTool } from "../AgentTool";
+import type { AgentTool } from "../AgentTool.ts";
 import type {
   AccessibilityNodeSnapshot,
   AccessibilitySnapshotTarget,
   PlatformAdapter,
-} from "../../platform/PlatformAdapter";
+} from "../../platform/PlatformAdapter.ts";
 
 export type AccessibilitySnapshotToolInput = AccessibilitySnapshotTarget;
 export type AccessibilitySnapshotToolOutput = AccessibilityNodeSnapshot;

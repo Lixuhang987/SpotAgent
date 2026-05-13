@@ -1,6 +1,6 @@
-import type { AgentMessage } from "../runtime/AgentMessage";
-import type { ToolCallEnvelope } from "../runtime/ToolCallEnvelope";
-import type { RegisteredTool } from "../tools/ToolRegistry";
+import type { AgentMessage } from "../runtime/AgentMessage.ts";
+import type { ToolCallEnvelope } from "../runtime/ToolCallEnvelope.ts";
+import type { RegisteredTool } from "../tools/ToolRegistry.ts";
 
 export type LLMCompletion = {
   message: Extract<AgentMessage, { role: "assistant" }>;

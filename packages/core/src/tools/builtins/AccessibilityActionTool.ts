@@ -1,9 +1,9 @@
-import type { AgentTool } from "../AgentTool";
+import type { AgentTool } from "../AgentTool.ts";
 import type {
   AccessibilityActionRequest,
   AccessibilityActionResult,
   PlatformAdapter,
-} from "../../platform/PlatformAdapter";
+} from "../../platform/PlatformAdapter.ts";
 
 export type AccessibilityActionToolInput = AccessibilityActionRequest;
 export type AccessibilityActionToolOutput = AccessibilityActionResult;

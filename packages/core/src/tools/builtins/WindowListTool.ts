@@ -1,5 +1,5 @@
-import type { AgentTool } from "../AgentTool";
-import type { PlatformAdapter } from "../../platform/PlatformAdapter";
+import type { AgentTool } from "../AgentTool.ts";
+import type { PlatformAdapter } from "../../platform/PlatformAdapter.ts";
 
 export type WindowListToolInput = Record<string, never>;
 export type WindowListToolOutput = Awaited<ReturnType<PlatformAdapter["frontmostWindowList"]>>;

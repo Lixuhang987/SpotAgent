@@ -6,6 +6,39 @@
 - 如果某些内容必须使用英文，应当有明确理由，例如引用外部协议字段、API 原始名称或行业通用专有名词。
 - 新增文档时，优先保证中文表达清晰、边界明确、术语一致。
 
+## 文档索引
+
+以下索引仅覆盖仓库自有文档，不包含 `node_modules/` 等依赖目录中的第三方 `md` 文件。
+
+### 根目录
+
+- `README.md`：项目简介、当前能力、本地验证命令。
+- `handAgent.md`：仓库级架构总览、调用链路和分层 DTO 索引。
+- `AGENTS.md`：仓库工作约定、架构边界与文档导航。
+
+### `apps/`
+
+- `apps/apps.md`：应用层总览，说明桌面入口与 Web 交互壳的职责。
+- `apps/desktop/desktop.md`：macOS 宿主层说明，覆盖热键、窗口和 WebView 桥接。
+- `apps/desktop/Web/Web.md`：Web 交互层说明，覆盖 prompt、气泡和 runtime 调用。
+
+### `packages/`
+
+- `packages/packages.md`：包级总览，说明 `core` 与 `platform-macos` 的边界。
+- `packages/core/core.md`：core 包总览，说明会话、runtime、tool、platform 抽象。
+- `packages/core/src/src.md`：core 源码目录说明，按子模块解释数据流与 DTO。
+- `packages/platform-macos/platform-macos.md`：macOS 平台实现总览。
+- `packages/platform-macos/src/src.md`：macOS 平台源码目录说明，覆盖系统能力实现细节。
+
+### `docs/`
+
+- `docs/dev.md`：开发说明，通常用于开发约束和实现规则补充。
+- `docs/manual-qa.md`：手工验收说明，记录人工验证步骤与关注点。
+- `docs/superpowers/specs/`：设计稿。
+- `docs/superpowers/plans/`：实施计划。
+
+### `claude-code/`: 一个本地code agent的参考项目，可以参考权限系统，tool系统，UI流式展示，子agent系统等
+
 ## 当前产品边界
 
 - 产品目标是一个可由全局快捷键随时唤起的桌面 Agent。
@@ -49,16 +82,6 @@ flowchart TD
 
 ## 开发规范
 
-### 代码边界
-
-- `apps/desktop/HandAgentApp.swift` 只放 macOS 宿主、窗口、热键和 WebView 桥接逻辑，不放业务编排。
-- `apps/desktop/Web/` 只放 React UI、前端事件桥和用户交互状态，不直接写平台 API。
-- `packages/core/` 只放跨平台 runtime、tool 协议、会话和通用测试，不直接依赖 AppKit。
-- `packages/platform-macos/` 只放 macOS 平台实现，不把 macOS 细节泄漏回 core。
-- `packages/core/src/runtime/AgentRuntime.ts` 只负责 LLM/tool 循环，不负责 UI 状态或窗口控制。
-- `packages/core/src/runtime/AgentSession.ts` 只负责把用户主动输入和选区组装成首轮消息，不负责额外上下文抓取。
-- `packages/core/src/tools/ToolRegistry.ts` 只负责注册、查询和导出 tool schema，不负责 tool 执行以外的编排。
-
 ### 输入边界
 
 - 只有用户主动输入和用户主动选区可以作为初始上下文。
@@ -79,9 +102,3 @@ flowchart TD
 - `cd apps/desktop/Web && npm run test:hotkey`
 - `./apps/desktop/Web/node_modules/.bin/vitest run packages/core/tests/runtime.test.ts packages/core/tests/selection.test.ts packages/core/tests/context-tools.test.ts packages/core/tests/file-tools.test.ts`
 - `swift build`
-
-### 开发流程
-
-- 使用 worktree skill 创建新的工作树（单纯文档工作或者只读工作不需要），浏览代码结构，重点浏览文件夹下同名的架构文档
-- 代码修改
-- 校验通过，commit 后总结改动文档，并对现有文档更新

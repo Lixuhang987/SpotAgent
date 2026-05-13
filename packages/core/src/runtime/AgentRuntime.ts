@@ -1,7 +1,7 @@
-import type { AgentMessage } from "./AgentMessage";
-import type { ToolCallEnvelope } from "./ToolCallEnvelope";
-import type { LLMClient } from "../llm/LLMClient";
-import { ToolRegistry } from "../tools/ToolRegistry";
+import type { AgentMessage } from "./AgentMessage.ts";
+import type { ToolCallEnvelope } from "./ToolCallEnvelope.ts";
+import type { LLMClient } from "../llm/LLMClient.ts";
+import { ToolRegistry } from "../tools/ToolRegistry.ts";
 
 export type AgentBubble = {
   id: string;

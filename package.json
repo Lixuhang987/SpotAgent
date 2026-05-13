@@ -1,0 +1,9 @@
+{
+  "name": "handagent",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/agent-server",
+    "apps/desktop/Web"
+  ]
+}

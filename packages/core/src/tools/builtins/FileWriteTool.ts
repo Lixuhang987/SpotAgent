@@ -1,10 +1,10 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import type { AgentTool } from "../AgentTool";
+import type { AgentTool } from "../AgentTool.ts";
 import {
   normalizeWorkspaceRelativePath,
   resolveWritePathWithinWorkspace,
-} from "./FileReadTool";
+} from "./FileReadTool.ts";
 
 export type FileWriteToolInput = {
   path: string;

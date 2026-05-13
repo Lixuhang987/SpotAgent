@@ -6,9 +6,9 @@ import {
   type ToolSet,
 } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
-import type { AgentMessage } from "../runtime/AgentMessage";
-import type { LLMClient, LLMCompletion } from "./LLMClient";
-import type { RegisteredTool } from "../tools/ToolRegistry";
+import type { AgentMessage } from "../runtime/AgentMessage.ts";
+import type { LLMClient, LLMCompletion } from "./LLMClient.ts";
+import type { RegisteredTool } from "../tools/ToolRegistry.ts";
 
 type VercelModelId = Parameters<ReturnType<typeof createOpenAI>>[0];
 type OpenAIProviderSettings = NonNullable<Parameters<typeof createOpenAI>[0]>;
