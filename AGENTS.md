@@ -105,7 +105,7 @@ flowchart TD
 
 ### 提交前检查
 
-- `pnpm exec vitest run apps/agent-server/src/SessionManager.test.ts packages/core/tests/runtime.test.ts packages/core/tests/selection.test.ts packages/core/tests/context-tools.test.ts packages/core/tests/file-tools.test.ts`
+- `bash ./scripts/test.sh`
 - `bash ./scripts/swiftw test`
 - `bash ./scripts/swiftw build`
 
@@ -114,11 +114,11 @@ flowchart TD
 - Codex 的 `Stop` hook 当前只执行 TypeScript 侧 `vitest` 校验，不执行 Swift 校验；原因是 hook 运行环境会以 `zsh -lc` 方式触发命令，`swift test/build` 在该环境下会稳定报 `sandbox-exec: sandbox_apply: Operation not permitted`，与线程内直接执行结果不一致。
 - 因此，涉及 Swift 或桌面宿主改动时，结束任务前仍必须在当前线程环境手动执行 `bash ./scripts/swiftw test` 与 `bash ./scripts/swiftw build`，不要只依赖 hook 结果。
 
-### 开发流程
+### Development Workflow
 
-- 代码修改前在当前项目根目录下创建新的 worktree，路径固定放在 `.worktrees/<task-name>/`；单纯文档工作或者只读工作不需要创建 worktree
-- 新建 worktree 后先完成项目初始化，至少保证当前 worktree 具备独立运行能力；当前仓库默认先执行 `pnpm install`，再根据需要补充其他依赖初始化
-- 初始化完成后执行一轮基线校验，确认 worktree 本身可用，再开始浏览代码结构；重点浏览目标文件夹下同名的架构文档
-- 代码修改
-- 每次代码修改后执行 `git commit`，不要把本轮已完成的代码改动长时间停留在未提交状态
-- 校验通过，commit 后总结改动文档，并对现有文档更新
+- Before making code changes, create a new worktree from the project root at `.worktrees/<task-name>/`. Pure documentation work or read-only work does not require a worktree.
+- After creating the worktree, finish project initialization first. At minimum, ensure the worktree can run independently. For this repo, run `pnpm install` by default, then add any other dependency initialization as needed.
+- After initialization, run a baseline verification once to confirm the worktree is usable, then start browsing the codebase. Focus on the architecture docs with the same name under the target folder.
+- Make code changes.
+- After each code change, run `git commit`. Do not leave completed work uncommitted for a long time.
+- After verification passes, summarize the change docs after the commit and update existing docs.

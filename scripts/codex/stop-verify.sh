@@ -35,6 +35,13 @@ main() {
   local root_dir
   root_dir="$(resolve_root_dir)"
 
+  if [ ! -f "$root_dir/scripts/test.sh" ]; then
+    emit_block_json \
+      "缺少统一测试脚本，无法执行收尾校验。" \
+      "找不到文件: $root_dir/scripts/test.sh；请先同步仓库脚本后重试。"
+    exit 0
+  fi
+
   if [ ! -x "$root_dir/node_modules/.bin/vitest" ]; then
     emit_block_json \
       "当前 worktree 还没有完成独立初始化。先在仓库根目录安装依赖，再重新执行收尾校验。" \
@@ -43,9 +50,9 @@ main() {
   fi
 
   run_verify_command \
-    "cd \"$root_dir\" && pnpm exec vitest run apps/agent-server/src/SessionManager.test.ts packages/core/tests/runtime.test.ts packages/core/tests/selection.test.ts packages/core/tests/context-tools.test.ts packages/core/tests/file-tools.test.ts" \
+    "cd \"$root_dir\" && bash ./scripts/test.sh" \
     "$root_dir" \
-    pnpm exec vitest run apps/agent-server/src/SessionManager.test.ts packages/core/tests/runtime.test.ts packages/core/tests/selection.test.ts packages/core/tests/context-tools.test.ts packages/core/tests/file-tools.test.ts
+    bash ./scripts/test.sh
 }
 
 run_verify_command() {

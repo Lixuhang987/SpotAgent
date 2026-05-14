@@ -46,12 +46,7 @@ bash ./scripts/swiftw run HandAgentDesktop
 - 修改 `apps/agent-server/` 或 `packages/core/` 后，先跑：
 
 ```bash
-pnpm exec vitest run \
-  apps/agent-server/src/SessionManager.test.ts \
-  packages/core/tests/runtime.test.ts \
-  packages/core/tests/selection.test.ts \
-  packages/core/tests/context-tools.test.ts \
-  packages/core/tests/file-tools.test.ts
+bash ./scripts/test.sh
 ```
 
 ### Swift 宿主
@@ -103,12 +98,7 @@ bash ./scripts/swiftw build
 
 ```bash
 # Agent-server + Core 测试
-pnpm exec vitest run \
-  apps/agent-server/src/SessionManager.test.ts \
-  packages/core/tests/runtime.test.ts \
-  packages/core/tests/selection.test.ts \
-  packages/core/tests/context-tools.test.ts \
-  packages/core/tests/file-tools.test.ts
+bash ./scripts/test.sh
 
 # 桌面宿主测试与构建
 bash ./scripts/swiftw test

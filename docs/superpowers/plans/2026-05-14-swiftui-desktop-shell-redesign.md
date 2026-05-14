@@ -748,15 +748,14 @@ rm apps/desktop/Web/dist/app.js
 - [ ] **Step 3: 更新提交前验证命令**
 
 ```md
-- `pnpm exec vitest run apps/agent-server/src/SessionManager.test.ts`
-- `pnpm exec vitest run packages/core/tests/runtime.test.ts packages/core/tests/selection.test.ts packages/core/tests/context-tools.test.ts packages/core/tests/file-tools.test.ts`
-- `swift test`
-- `swift build`
+- `bash ./scripts/test.sh`
+- `bash ./scripts/swiftw test`
+- `bash ./scripts/swiftw build`
 ```
 
 - [ ] **Step 4: 运行全量验证**
 
-Run: `pnpm exec vitest run apps/agent-server/src/SessionManager.test.ts packages/core/tests/runtime.test.ts packages/core/tests/selection.test.ts packages/core/tests/context-tools.test.ts packages/core/tests/file-tools.test.ts && swift test && swift build`
+Run: `bash ./scripts/test.sh && bash ./scripts/swiftw test && bash ./scripts/swiftw build`
 Expected: 全部 PASS；若某条失败，先修复失败项再继续。
 
 - [ ] **Step 5: Commit**

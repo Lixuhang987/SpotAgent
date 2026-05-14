@@ -19,7 +19,7 @@ HandAgent 是一个 macOS 优先的桌面 Agent Runtime MVP。当前桌面壳使
 
 ## 本地验证
 
-- Agent-server + Core tests：`pnpm exec vitest run apps/agent-server/src/SessionManager.test.ts packages/core/tests/runtime.test.ts packages/core/tests/selection.test.ts packages/core/tests/context-tools.test.ts packages/core/tests/file-tools.test.ts`
+- Agent-server + Core tests：`bash ./scripts/test.sh`
 - Swift tests：`bash ./scripts/swiftw test`
 - Swift build：`bash ./scripts/swiftw build`
 

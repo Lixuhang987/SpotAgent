@@ -7,7 +7,7 @@
 ## 验收前提
 
 - 已完成依赖安装
-- 已通过 `pnpm exec vitest run apps/agent-server/src/SessionManager.test.ts packages/core/tests/runtime.test.ts packages/core/tests/selection.test.ts packages/core/tests/context-tools.test.ts packages/core/tests/file-tools.test.ts`
+- 已通过 `bash ./scripts/test.sh`
 - 已通过 `bash ./scripts/swiftw test`
 - 已通过 `bash ./scripts/swiftw build`
 
