@@ -1,5 +1,10 @@
 import Foundation
 
+enum PromptAttachmentResult: Equatable {
+    case noAttachment
+    case textToken(String)
+}
+
 struct PromptAction: Identifiable {
     let id: String
     let title: String

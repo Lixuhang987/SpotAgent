@@ -3,6 +3,8 @@ import SwiftUI
 
 @MainActor
 final class PromptPanelController {
+    var onSubmit: ((String, [PromptAttachmentResult]) -> Void)?
+
     private var actions: [PromptAction] = []
     private var panel: NSPanel?
 
@@ -24,6 +26,14 @@ final class PromptPanelController {
 
     func hide() {
         panel?.orderOut(nil)
+    }
+
+    func submit(draft: String, attachments: [PromptAttachmentResult]) {
+        let trimmedDraft = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedDraft.isEmpty else { return }
+
+        onSubmit?(trimmedDraft, attachments)
+        hide()
     }
 
     private func ensurePanel() {
@@ -59,10 +69,16 @@ final class PromptPanelController {
 
     private func makeContentView() -> NSView {
         NSHostingView(
-            rootView: PromptPanelView(actions: actions) { [weak self] action in
-                action.perform()
-                self?.hide()
-            }
+            rootView: PromptPanelView(
+                actions: actions,
+                onSubmitDraft: { [weak self] draft in
+                    self?.submit(draft: draft, attachments: [])
+                },
+                onSubmitAction: { [weak self] action in
+                    action.perform()
+                    self?.hide()
+                }
+            )
         )
     }
 }

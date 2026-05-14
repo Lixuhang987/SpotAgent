@@ -37,11 +37,17 @@ struct HandAgentApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let services = AppServices()
+    private let agentServerURL = URL(string: "ws://127.0.0.1:4317/api/session")!
     private let controller = DesktopController()
     private let promptPanelController = PromptPanelController()
+    private var sessionWindows: [String: SessionWindowController] = [:]
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+
+        promptPanelController.onSubmit = { [weak self] draft, attachments in
+            self?.openSessionWindow(for: draft, attachments: attachments)
+        }
 
         services.hotkeyService.onTrigger = { [promptPanelController] in
             promptPanelController.show()
@@ -55,7 +61,60 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         services.hotkeyService.stop()
         services.agentServerService.stop()
+        sessionWindows.values.forEach { $0.close() }
+        sessionWindows.removeAll()
         controller.stop()
+    }
+
+    private func openSessionWindow(for draft: String, attachments: [PromptAttachmentResult]) {
+        let trimmedDraft = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedDraft.isEmpty else { return }
+
+        let attachmentText = attachments.compactMap { attachment -> String? in
+            switch attachment {
+            case .noAttachment:
+                return nil
+            case .textToken(let token):
+                return token
+            }
+        }
+
+        let composedPrompt = ([trimmedDraft] + attachmentText).joined(separator: "\n\n")
+        let sessionID = UUID().uuidString
+        let viewModel = SessionViewModel(
+            sessionID: sessionID,
+            socketClient: SessionSocketClient(serverURL: agentServerURL)
+        )
+        let windowController = SessionWindowController(viewModel: viewModel)
+
+        windowController.onClose = { [weak self, weak viewModel] in
+            guard let self else { return }
+
+            self.sessionWindows[sessionID] = nil
+            self.services.sessionRegistry.upsert(
+                SessionSummary(
+                    sessionId: sessionID,
+                    isRunning: viewModel?.status == "running",
+                    latestSummary: viewModel?.messages.last?.text ?? trimmedDraft,
+                    lastActiveAt: .now,
+                    windowIsOpen: false
+                )
+            )
+        }
+
+        sessionWindows[sessionID] = windowController
+        services.sessionRegistry.upsert(
+            SessionSummary(
+                sessionId: sessionID,
+                isRunning: true,
+                latestSummary: composedPrompt,
+                lastActiveAt: .now,
+                windowIsOpen: true
+            )
+        )
+
+        windowController.showWindow(nil)
+        viewModel.start(initialPrompt: composedPrompt)
     }
 }
 

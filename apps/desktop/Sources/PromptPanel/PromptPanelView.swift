@@ -2,23 +2,24 @@ import SwiftUI
 
 struct PromptPanelView: View {
     let actions: [PromptAction]
-    let onSubmit: ((PromptAction) -> Void)?
+    let onSubmitDraft: ((String) -> Void)?
+    let onSubmitAction: ((PromptAction) -> Void)?
 
-    @State private var query = ""
+    @State private var draft = ""
     @FocusState private var isQueryFocused: Bool
 
     private var filteredActions: [PromptAction] {
-        PromptAction.filter(actions, query: query)
+        PromptAction.filter(actions, query: draft)
     }
 
     var body: some View {
         VStack(spacing: 16) {
-            TextField("Search actions", text: $query)
+            TextField("输入你的请求", text: $draft)
                 .textFieldStyle(.plain)
                 .font(.system(size: 20, weight: .semibold))
                 .focused($isQueryFocused)
                 .onSubmit {
-                    submitFirstFilteredAction()
+                    submitDraft()
                 }
 
             Divider()
@@ -33,7 +34,7 @@ struct PromptPanelView: View {
                     } else {
                         ForEach(filteredActions) { action in
                             Button {
-                                submit(action)
+                                submitAction(action)
                             } label: {
                                 HStack(spacing: 12) {
                                     Text(action.title)
@@ -63,16 +64,17 @@ struct PromptPanelView: View {
         }
     }
 
-    private func submit(_ action: PromptAction) {
-        if let onSubmit {
-            onSubmit(action)
+    private func submitAction(_ action: PromptAction) {
+        if let onSubmitAction {
+            onSubmitAction(action)
         } else {
             action.perform()
         }
     }
 
-    private func submitFirstFilteredAction() {
-        guard let action = filteredActions.first else { return }
-        submit(action)
+    private func submitDraft() {
+        let trimmedDraft = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedDraft.isEmpty else { return }
+        onSubmitDraft?(trimmedDraft)
     }
 }

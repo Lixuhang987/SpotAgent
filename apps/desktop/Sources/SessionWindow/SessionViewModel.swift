@@ -1,0 +1,94 @@
+import Combine
+import Foundation
+
+struct SessionBubble: Identifiable, Equatable {
+    let id: String
+    let role: String
+    var text: String
+}
+
+@MainActor
+final class SessionViewModel: ObservableObject {
+    @Published private(set) var messages: [SessionBubble] = []
+    @Published private(set) var status: String = "idle"
+    @Published private(set) var error: String?
+
+    let sessionID: String
+    let socketClient: SessionSocketClient
+
+    init(sessionID: String, socketClient: SessionSocketClient) {
+        self.sessionID = sessionID
+        self.socketClient = socketClient
+    }
+
+    func start(initialPrompt: String) {
+        socketClient.onEvent = { [weak self] event in
+            Task { @MainActor in
+                self?.handle(event)
+            }
+        }
+
+        socketClient.connect(sessionID: sessionID)
+        sendPrompt(initialPrompt)
+    }
+
+    func stop() {
+        socketClient.disconnect()
+    }
+
+    func sendPrompt(_ text: String) {
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty else { return }
+
+        let messageID = UUID().uuidString
+        let timestamp = Self.timestamp()
+        handle(.userMessage(messageID: messageID, text: trimmedText, timestamp: timestamp))
+        socketClient.sendUserMessage(
+            sessionID: sessionID,
+            messageID: messageID,
+            text: trimmedText,
+            timestamp: timestamp
+        )
+    }
+
+    func handle(_ event: SessionEvent) {
+        switch event {
+        case .userMessage(let messageID, let text, _):
+            status = "running"
+            error = nil
+            messages.append(SessionBubble(id: messageID, role: "user", text: text))
+        case .assistantMessageStart(let messageID, _):
+            status = "running"
+            error = nil
+            messages.append(SessionBubble(id: messageID, role: "assistant", text: ""))
+        case .assistantMessageDelta(let messageID, let text, _):
+            guard let index = messages.firstIndex(where: { $0.id == messageID }) else { return }
+            messages[index].text += text
+        case .assistantMessageEnd(_, let status, _):
+            if status == "completed" {
+                self.status = "idle"
+            } else {
+                self.status = status
+            }
+        case .toolMessage(let messageID, let name, let text, _, _):
+            messages.append(SessionBubble(id: messageID, role: "tool", text: "\(name): \(text)"))
+        case .status(let value):
+            status = value
+            if value != "failed" {
+                error = nil
+            }
+        case .error(let messageID, let message, _):
+            status = "failed"
+            error = message
+            messages.append(SessionBubble(id: messageID, role: "assistant", text: message))
+        case .sessionSnapshot(let messages, let status):
+            self.messages = messages
+            self.status = status
+            error = nil
+        }
+    }
+
+    private static func timestamp() -> String {
+        ISO8601DateFormatter().string(from: Date())
+    }
+}
