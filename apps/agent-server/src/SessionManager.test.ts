@@ -3,6 +3,7 @@ import type { AgentMessage } from "../../../packages/core/src/runtime/AgentMessa
 import type { AgentRuntimeEvent } from "../../../packages/core/src/runtime/AgentRuntime.ts";
 import type { SessionMessage } from "../../../packages/core/src/protocol/SessionMessage.ts";
 import { SessionManager } from "./SessionManager.ts";
+import { InMemorySessionStore } from "./SessionStore.ts";
 import { handleSocketMessage } from "./server.ts";
 
 function createUserMessage(
@@ -20,6 +21,59 @@ function createUserMessage(
 }
 
 describe("SessionManager", () => {
+  it("lists sessions and returns history through the store abstraction", () => {
+    const store = new InMemorySessionStore();
+    store.save({
+      sessionId: "session-1",
+      messages: [{ role: "user", content: "hello" }],
+      updatedAt: "2026-05-14T00:00:00.000Z",
+    });
+
+    expect(store.listSessions()).toEqual([
+      {
+        sessionId: "session-1",
+        updatedAt: "2026-05-14T00:00:00.000Z",
+      },
+    ]);
+    expect(store.getSessionHistory("session-1")).toEqual([
+      { role: "user", content: "hello" },
+    ]);
+  });
+
+  it("exposes stored session history through SessionManager", async () => {
+    const store = new InMemorySessionStore();
+    const manager = new SessionManager(
+      {
+        async runWithMessages(messages: AgentMessage[]) {
+          return {
+            messages,
+            bubbles: [],
+          };
+        },
+      },
+      () => {},
+      {
+        now: () => "2026-05-14T00:00:00.000Z",
+        store,
+      },
+    );
+
+    await manager.receive(createUserMessage("session-store", "hello", "user-1"));
+
+    expect(manager.listSessions()).toEqual([
+      {
+        sessionId: "session-store",
+        updatedAt: "2026-05-14T00:00:00.000Z",
+      },
+    ]);
+    expect(manager.getSessionHistory("session-store")).toEqual([
+      {
+        role: "user",
+        content: "hello",
+      },
+    ]);
+  });
+
   it("pushes assistant delta events and persists final user + assistant messages", async () => {
     const pushed: SessionMessage[] = [];
     const runtimeCalls: AgentMessage[][] = [];
