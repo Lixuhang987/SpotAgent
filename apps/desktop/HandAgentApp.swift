@@ -17,12 +17,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let services = AppServices()
     private let agentServerURL = URL(string: "ws://127.0.0.1:4317/api/session")!
     private let promptPanelController = PromptPanelController()
+    private let activationPolicyCoordinator = AppActivationPolicyCoordinator()
     private lazy var statusBubbleController = StatusBubbleController(registry: services.sessionRegistry)
     private var sessionWindows: [String: SessionWindowController] = [:]
     private var agentServerStartupError: String?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.accessory)
+        NSApp.setActivationPolicy(
+            activationPolicyCoordinator.policyAfterUpdatingOpenSessionWindows(by: 0)
+        )
 
         promptPanelController.onSubmit = { [weak self] draft, attachments in
             self?.openSessionWindow(for: draft, attachments: attachments)
@@ -74,11 +77,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             socketClient: SessionSocketClient(serverURL: agentServerURL)
         )
         let windowController = SessionWindowController(viewModel: viewModel)
+        NSApp.setActivationPolicy(
+            activationPolicyCoordinator.policyAfterUpdatingOpenSessionWindows(by: 1)
+        )
 
         windowController.onClose = { [weak self, weak viewModel] in
             guard let self else { return }
 
             self.sessionWindows[sessionID] = nil
+            NSApp.setActivationPolicy(
+                self.activationPolicyCoordinator.policyAfterUpdatingOpenSessionWindows(by: -1)
+            )
             self.services.sessionRegistry.upsert(
                 SessionSummary(
                     sessionId: sessionID,

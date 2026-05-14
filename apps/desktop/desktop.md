@@ -9,7 +9,7 @@
 ### `HandAgentApp.swift`
 
 - `HandAgentApp`：SwiftUI 程序入口。
-- `AppDelegate`：应用启动后初始化服务、面板、会话窗口和状态气泡。
+- `AppDelegate`：应用启动后初始化服务、面板、会话窗口和状态气泡，并根据是否存在打开中的 `SessionWindow` 在 `.accessory` / `.regular` 激活策略之间切换，确保有会话窗口时可通过 `Command+Tab` 回到应用。
 
 ### `Sources/AppServices`
 
