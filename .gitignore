@@ -10,5 +10,6 @@ coverage
 *.lock
 src/utils/vendor/
 .build
+.cache
 claude-code
 .worktrees

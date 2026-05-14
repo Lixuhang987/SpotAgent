@@ -43,6 +43,7 @@
 
 - 产品目标是一个可由全局快捷键随时唤起的桌面 Agent。
 - 第一版平台以 macOS 为优先，但架构设计需要为后续多平台扩展预留抽象。
+- 当前桌面端最低支持版本固定为 `macOS 15+`，本仓库内新增桌面能力默认不为 `macOS 15` 以下系统提供 fallback。
 - 只有用户主动提供的输入可以作为初始上下文提交给 LLM，例如用户 prompt、用户主动选区。
 - 屏幕、窗口、文件、剪贴板、App 状态等上下文信息不应默认注入模型，必须由 LLM 通过 tool 按需读取。
 - 热键、输入框、用户选区属于用户触发入口，不属于 tool。
@@ -96,12 +97,23 @@ flowchart TD
 - tool 输出要尽量可序列化，错误语义要明确。
 - 新 tool 优先保持单一职责，输入和输出都要小。
 
+### macOS 15+ 能力策略
+
+- 桌面端默认直接面向 `macOS 15+` 能力设计，不再为了旧系统保留 `if #available` 分支或命令行 fallback。
+- 屏幕与窗口采集优先使用 `ScreenCaptureKit`，包括窗口/应用/显示器级过滤、截图与后续可扩展的流式采集能力。
+- 与系统控制相关的能力优先使用原生 macOS API，例如 `Accessibility`、`NSWorkspace`、`ScreenCaptureKit`、`AppKit/SwiftUI` 提供的窗口分享与内容选择接口。
+- 只有在原生 API 明确无法覆盖需求时，才退回 `osascript` 或其他兼容性方案；若采用退回方案，必须在设计或实现文档中说明原因。
+- 新增桌面能力时，默认目标是“尽可能支持系统已提供的高能力接口”，例如系统级内容选择器、窗口级共享、录制或更完整的 accessibility 读写能力。
+
 ### 提交前检查
 
 - `cd apps/desktop/Web && pnpm run build`
 - `cd apps/desktop/Web && pnpm run test:hotkey`
 - `cd apps/desktop/Web && pnpm exec vitest run ../../../packages/core/tests/runtime.test.ts ../../../packages/core/tests/selection.test.ts ../../../packages/core/tests/context-tools.test.ts ../../../packages/core/tests/file-tools.test.ts`
-- `swift build`
+- `bash ./scripts/swiftw build`
+
+说明：
+- Swift 相关命令默认通过 `bash ./scripts/swiftw` 执行，把模块缓存固定到仓库内 `.cache/swift/`，避免依赖用户目录下的全局缓存写权限。
 
 ### 开发流程
 

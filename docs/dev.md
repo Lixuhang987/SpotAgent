@@ -25,16 +25,16 @@ pnpm run build
 3. 启动桌面宿主。
 
 ```bash
-swift run HandAgentDesktop
+bash ./scripts/swiftw run HandAgentDesktop
 ```
 
-4. 如果 `swift run` 在当前机器报错，优先用匹配的 Xcode / Command Line Tools 重新打开工程，再执行同样流程。
+4. 如果 `swiftw run` 在当前机器报错，优先检查 Xcode 版本与 `xcode-select` 是否指向完整 Xcode，再执行同样流程。
 
 ### API key 排查
 
 - `OPENAI_API_KEY` 由宿主启动出来的本地 `apps/agent-server/src/server.ts` 进程读取，不是由 Web 页面读取。
 - 如果提交 prompt 后看到 `Missing OPENAI_API_KEY. Set it before starting HandAgent.`，说明桌面宿主启动时没有拿到该环境变量。
-- 这时先在当前 shell 里配置变量，再重新执行 `swift run HandAgentDesktop`。
+- 这时先在当前 shell 里配置变量，再重新执行 `bash ./scripts/swiftw run HandAgentDesktop`。
 
 ## 调试方式
 
@@ -66,7 +66,7 @@ pnpm exec vitest run \
 - 修改 `apps/desktop/HandAgentApp.swift` 后，先跑：
 
 ```bash
-swift build
+bash ./scripts/swiftw build
 ```
 
 - 如果需要观察窗口与热键行为，优先用宿主侧状态文案和 WebView 事件桥来定位问题。
@@ -124,5 +124,5 @@ cd apps/desktop/Web && pnpm exec vitest run \
   ../../../packages/core/tests/file-tools.test.ts
 
 # 桌面宿主构建
-swift build
+bash ./scripts/swiftw build
 ```

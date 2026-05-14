@@ -413,7 +413,7 @@ final class DesktopController: NSObject, NSWindowDelegate, WKNavigationDelegate 
 }
 
 final class HotkeyMonitor {
-    var onTrigger: (() -> Void)?
+    var onTrigger: (@MainActor @Sendable () -> Void)?
     private var hotKeyRef: EventHotKeyRef?
     private var eventHandlerRef: EventHandlerRef?
 
@@ -452,8 +452,9 @@ final class HotkeyMonitor {
                     return noErr
                 }
 
-                DispatchQueue.main.async { [weak monitor] in
-                    monitor?.onTrigger?()
+                let onTrigger = monitor.onTrigger
+                Task { @MainActor in
+                    onTrigger?()
                 }
 
                 return noErr
