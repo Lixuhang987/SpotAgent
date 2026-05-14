@@ -27,4 +27,39 @@ final class SessionRegistryTests: XCTestCase {
 
         XCTAssertEqual(registry.primarySessionID, "s2")
     }
+
+    @MainActor
+    func testRanksByLastActiveAtInsteadOfInsertionOrder() {
+        let registry = SessionRegistry()
+
+        registry.upsert(
+            SessionSummary(
+                sessionId: "s1",
+                isRunning: true,
+                latestSummary: "older",
+                lastActiveAt: .distantPast,
+                windowIsOpen: true
+            )
+        )
+        registry.upsert(
+            SessionSummary(
+                sessionId: "s2",
+                isRunning: true,
+                latestSummary: "newer",
+                lastActiveAt: .now,
+                windowIsOpen: true
+            )
+        )
+        registry.upsert(
+            SessionSummary(
+                sessionId: "s1",
+                isRunning: true,
+                latestSummary: "older refresh",
+                lastActiveAt: .distantPast,
+                windowIsOpen: true
+            )
+        )
+
+        XCTAssertEqual(registry.primarySessionID, "s2")
+    }
 }

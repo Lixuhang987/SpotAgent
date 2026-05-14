@@ -16,8 +16,9 @@ final class SessionRegistry: ObservableObject {
 
     func upsert(_ summary: SessionSummary) {
         summaries[summary.sessionId] = summary
-        recentSessionIDs.removeAll { $0 == summary.sessionId }
-        recentSessionIDs.insert(summary.sessionId, at: 0)
+        recentSessionIDs = summaries.values
+            .sorted { $0.lastActiveAt > $1.lastActiveAt }
+            .map(\.sessionId)
     }
 
     var primarySessionID: String? {

@@ -16,11 +16,13 @@ let package = Package(
             path: "apps/desktop",
             exclude: [
                 "TestsSwift",
+                "desktop.md",
                 "Web/App.tsx",
                 "Web/BubbleList.tsx",
                 "Web/build.mjs",
                 "Web/main.tsx",
                 "Web/node_modules",
+                "Web/Web.md",
                 "Web/PromptBox.tsx",
                 "Web/package.json",
                 "Web/sessionState.test.ts",

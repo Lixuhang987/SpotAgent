@@ -46,9 +46,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             controller?.handleHotkey()
         }
 
+        try? services.agentServerService.start()
         controller.start()
         controller.updateHostStatus(isHotkeyRegistered: services.hotkeyService.start())
-        try? services.agentServerService.start()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
