@@ -47,6 +47,12 @@ pnpm install
 bash ./scripts/swiftw run HandAgentDesktop
 ```
 
+注意：
+
+- `OPENAI_API_KEY` 和 `OPENAI_BASE_URL` 只会在桌面宿主启动时从当前 shell 继承。
+- 如果你是先打开 HandAgent，再在另一个 `zsh` 里执行 `export`，当前已运行的桌面宿主不会自动拿到新变量；需要回到同一个 shell 重新执行 `bash ./scripts/swiftw run HandAgentDesktop`。
+- 如果对话里看到 `Could not connect to the server`，优先排查本地 `agent-server` 是否启动成功；这类错误发生在连接本地会话服务阶段，通常早于模型 API key 校验。
+
 ## 说明
 
 - 默认不会把屏幕、窗口、文件、剪贴板、App 状态等上下文预注入模型。

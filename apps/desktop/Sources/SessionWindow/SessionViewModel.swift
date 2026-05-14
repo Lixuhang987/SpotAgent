@@ -21,7 +21,19 @@ final class SessionViewModel: ObservableObject {
         self.socketClient = socketClient
     }
 
-    func start(initialPrompt: String) {
+    func start(initialPrompt: String, startupError: String? = nil) {
+        if let startupError,
+           !startupError.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            handle(
+                .error(
+                    messageID: UUID().uuidString,
+                    message: startupError,
+                    timestamp: Self.timestamp()
+                )
+            )
+            return
+        }
+
         socketClient.onEvent = { [weak self] event in
             Task { @MainActor in
                 self?.handle(event)
@@ -80,6 +92,10 @@ final class SessionViewModel: ObservableObject {
         case .error(let messageID, let message, _):
             status = "failed"
             error = message
+            if messages.last?.role == "assistant",
+               messages.last?.text == message {
+                return
+            }
             messages.append(SessionBubble(id: messageID, role: "assistant", text: message))
         case .sessionSnapshot(let messages, let status):
             self.messages = messages

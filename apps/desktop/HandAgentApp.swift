@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let promptPanelController = PromptPanelController()
     private lazy var statusBubbleController = StatusBubbleController(registry: services.sessionRegistry)
     private var sessionWindows: [String: SessionWindowController] = [:]
+    private var agentServerStartupError: String?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -34,7 +35,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.handleStatusBubbleTap(sessionID: sessionID)
         }
 
-        try? services.agentServerService.start()
+        do {
+            try services.agentServerService.start()
+            agentServerStartupError = nil
+        } catch {
+            agentServerStartupError =
+                services.agentServerService.lastStartupError
+                ?? error.localizedDescription
+        }
         _ = services.hotkeyService.start()
         statusBubbleController.show()
     }
@@ -94,7 +102,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         windowController.showWindow(nil)
-        viewModel.start(initialPrompt: composedPrompt)
+        viewModel.start(
+            initialPrompt: composedPrompt,
+            startupError: agentServerStartupError
+        )
     }
 
     private func handleStatusBubbleTap(sessionID: String?) {

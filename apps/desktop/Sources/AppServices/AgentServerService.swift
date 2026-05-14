@@ -1,17 +1,40 @@
 import Foundation
 
+enum AgentServerServiceError: LocalizedError {
+    case repositoryRootNotFound
+    case serverEntryNotFound(path: String)
+    case nodeExecutableNotFound
+
+    var errorDescription: String? {
+        switch self {
+        case .repositoryRootNotFound:
+            return "无法定位仓库根目录，agent-server 未启动。"
+        case .serverEntryNotFound(let path):
+            return "找不到 agent-server 入口文件：\(path)"
+        case .nodeExecutableNotFound:
+            return "未找到 Node.js 可执行文件，agent-server 未启动。"
+        }
+    }
+}
+
 final class AgentServerService {
     private let agentServerRelativePath = "apps/agent-server/src/server.ts"
 
     private(set) var process: Process?
+    private(set) var lastStartupError: String?
     private var outputPipe: Pipe?
 
     func start() throws {
         guard process == nil else { return }
-        guard let repoRoot = locateRepositoryRoot() else { return }
+        lastStartupError = nil
+        guard let repoRoot = locateRepositoryRoot() else {
+            throw AgentServerServiceError.repositoryRootNotFound
+        }
 
         let serverURL = repoRoot.appendingPathComponent(agentServerRelativePath)
-        guard FileManager.default.fileExists(atPath: serverURL.path) else { return }
+        guard FileManager.default.fileExists(atPath: serverURL.path) else {
+            throw AgentServerServiceError.serverEntryNotFound(path: serverURL.path)
+        }
 
         let process = Process()
         process.currentDirectoryURL = repoRoot
@@ -23,13 +46,11 @@ final class AgentServerService {
             serverURL.path
         ]
 
-        if let nodeExecutable = locateNodeExecutable() {
-            process.executableURL = URL(fileURLWithPath: nodeExecutable)
-            process.arguments = nodeArguments
-        } else {
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-            process.arguments = ["node"] + nodeArguments
+        guard let nodeExecutable = locateNodeExecutable() else {
+            throw AgentServerServiceError.nodeExecutableNotFound
         }
+        process.executableURL = URL(fileURLWithPath: nodeExecutable)
+        process.arguments = nodeArguments
 
         let pipe = Pipe()
         pipe.fileHandleForReading.readabilityHandler = { handle in
@@ -46,6 +67,7 @@ final class AgentServerService {
             outputPipe = pipe
         } catch {
             pipe.fileHandleForReading.readabilityHandler = nil
+            lastStartupError = error.localizedDescription
             throw error
         }
     }
@@ -55,6 +77,7 @@ final class AgentServerService {
         outputPipe = nil
         process?.terminate()
         process = nil
+        lastStartupError = nil
     }
 
     private func makeEnvironment(repoRoot: URL) -> [String: String] {

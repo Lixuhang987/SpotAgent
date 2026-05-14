@@ -36,6 +36,8 @@ bash ./scripts/swiftw run HandAgentDesktop
 - `OPENAI_API_KEY` 由宿主启动出来的本地 `apps/agent-server/src/server.ts` 进程读取。
 - `OPENAI_BASE_URL` 也由同一个本地 `agent-server` 进程读取，用于覆盖默认 OpenAI provider 入口。
 - 如果提交 prompt 后看到 `Missing OPENAI_API_KEY. Set it before starting HandAgent.`，说明桌面宿主启动时没有拿到该环境变量。
+- 如果是先启动桌面宿主，再在另一个 shell 里 `export OPENAI_*`，当前已运行的宿主不会自动更新环境；必须回到启动它的同一个 shell 重新执行 `bash ./scripts/swiftw run HandAgentDesktop`。
+- 如果提交 prompt 后看到 `Could not connect to the server`，优先检查本地 `agent-server` 是否成功启动，而不要先把问题归因到 API key。
 - 如果模型请求打到了错误的 provider 地址，先检查 `OPENAI_BASE_URL` 是否与目标服务要求的 OpenAI 兼容入口一致。
 - 这时先在当前 shell 里配置变量，再重新执行 `bash ./scripts/swiftw run HandAgentDesktop`。
 
