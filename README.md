@@ -1,6 +1,6 @@
 # HandAgent
 
-HandAgent 是一个 macOS 优先的桌面 Agent Runtime MVP。当前版本采用 Swift 宿主承载 `WKWebView`，Web 侧运行 React UI，Agent Core 负责会话与工具编排，LLM 按需调用 context tools 和 action tools。
+HandAgent 是一个 macOS 优先的桌面 Agent Runtime MVP。当前桌面壳正从 `WKWebView` 迁移到 `AppKit + SwiftUI`，Agent Core 负责会话与工具编排，LLM 按需调用 context tools 和 action tools。
 
 ## 当前能力
 
@@ -12,17 +12,17 @@ HandAgent 是一个 macOS 优先的桌面 Agent Runtime MVP。当前版本采用
 
 ## 目录
 
-- `apps/desktop/HandAgentApp.swift`：macOS 宿主与热键入口
-- `apps/desktop/Web/App.tsx`：桌面 UI、会话提交与气泡渲染
+- `apps/desktop/HandAgentApp.swift`：macOS 宿主、PromptPanel、SessionWindow 与状态气泡入口
+- `apps/desktop/Web/`：旧 WebView 交互壳残留与当前 TS 测试工具链承载目录
 - `packages/core`：跨平台 Agent Core、工具与会话逻辑
+- `apps/agent-server`：本地 session server 与流式消息桥
 - `packages/platform-macos`：macOS 选区捕获实现
 
 ## 本地验证
 
-- Web bundle：`cd apps/desktop/Web && pnpm run build`
-- Web hotkey test：`cd apps/desktop/Web && pnpm run test:hotkey`
-- Core tests：`cd apps/desktop/Web && pnpm exec vitest run ../../../packages/core/tests/runtime.test.ts ../../../packages/core/tests/selection.test.ts ../../../packages/core/tests/context-tools.test.ts ../../../packages/core/tests/file-tools.test.ts`
-- Root build：`bash ./scripts/swiftw build`
+- Agent-server + Core tests：`apps/desktop/Web/node_modules/.bin/vitest run apps/agent-server/src/SessionManager.test.ts packages/core/tests/runtime.test.ts packages/core/tests/selection.test.ts packages/core/tests/context-tools.test.ts packages/core/tests/file-tools.test.ts`
+- Swift tests：`bash ./scripts/swiftw test`
+- Swift build：`bash ./scripts/swiftw build`
 
 ## API key 配置
 

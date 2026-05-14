@@ -25,13 +25,11 @@ let package = Package(
                 "Web/Web.md",
                 "Web/PromptBox.tsx",
                 "Web/package.json",
-                "Web/sessionState.test.ts",
                 "Web/sessionState.ts",
                 "Web/tsconfig.json",
                 "Web/bridge.ts",
                 "Web/vitest.config.ts",
-                "tests",
-                "tests/hotkey.test.ts"
+                "tests"
             ],
             resources: [
                 .process("Web/index.html"),
