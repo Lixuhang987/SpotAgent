@@ -120,5 +120,5 @@ flowchart TD
 - After creating the worktree, finish project initialization first. At minimum, ensure the worktree can run independently. For this repo, run `pnpm install` by default, then add any other dependency initialization as needed.
 - After initialization, run a baseline verification once to confirm the worktree is usable, then start browsing the codebase. Focus on the architecture docs with the same name under the target folder.
 - Make code changes.
-- After each code change, run `git commit`. Do not leave completed work uncommitted for a long time.
-- After verification passes, summarize the change docs after the commit and update existing docs.
+- After verification passes, update existing docs.
+- run `git commit` and summarize the changes in commit message. Do not leave completed work uncommitted for a long time.
