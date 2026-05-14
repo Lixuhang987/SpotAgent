@@ -2,16 +2,18 @@
 
 ## 启动项目
 
-1. 先配置 `OPENAI_API_KEY`。
+1. 先配置模型环境变量。
 
 ```bash
 export OPENAI_API_KEY="你的 OpenAI API key"
+export OPENAI_BASE_URL="https://你的模型提供商兼容 OpenAI 的入口/v1"
 ```
 
-如果希望长期生效，可写入 `~/.zshrc`：
+如果使用官方 OpenAI，`OPENAI_BASE_URL` 可以不配。若希望长期生效，可写入 `~/.zshrc`：
 
 ```bash
 echo 'export OPENAI_API_KEY="你的 OpenAI API key"' >> ~/.zshrc
+echo 'export OPENAI_BASE_URL="https://你的模型提供商兼容 OpenAI 的入口/v1"' >> ~/.zshrc
 source ~/.zshrc
 ```
 
@@ -29,10 +31,12 @@ bash ./scripts/swiftw run HandAgentDesktop
 
 4. 如果 `swiftw run` 在当前机器报错，优先检查 Xcode 版本与 `xcode-select` 是否指向完整 Xcode，再执行同样流程。
 
-### API key 排查
+### 模型环境变量排查
 
 - `OPENAI_API_KEY` 由宿主启动出来的本地 `apps/agent-server/src/server.ts` 进程读取。
+- `OPENAI_BASE_URL` 也由同一个本地 `agent-server` 进程读取，用于覆盖默认 OpenAI provider 入口。
 - 如果提交 prompt 后看到 `Missing OPENAI_API_KEY. Set it before starting HandAgent.`，说明桌面宿主启动时没有拿到该环境变量。
+- 如果模型请求打到了错误的 provider 地址，先检查 `OPENAI_BASE_URL` 是否与目标服务要求的 OpenAI 兼容入口一致。
 - 这时先在当前 shell 里配置变量，再重新执行 `bash ./scripts/swiftw run HandAgentDesktop`。
 
 ## 调试方式

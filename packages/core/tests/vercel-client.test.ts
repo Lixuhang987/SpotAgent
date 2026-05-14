@@ -1,9 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   resolveOpenAIApiKey,
-  toVercelMessages,
-  toVercelTools,
-} from "../src/llm/VercelClient";
+} from "../src/llm/OpenAIConfig";
+import { toVercelMessages, toVercelTools } from "../src/llm/VercelAdapters";
 import type { AgentMessage } from "../src/runtime/AgentMessage";
 
 const originalOpenAIKey = process.env.OPENAI_API_KEY;

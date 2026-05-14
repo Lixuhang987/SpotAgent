@@ -23,17 +23,18 @@ HandAgent 是一个 macOS 优先的桌面 Agent Runtime MVP。当前桌面壳使
 - Swift tests：`bash ./scripts/swiftw test`
 - Swift build：`bash ./scripts/swiftw build`
 
-## API key 配置
+## 模型配置
 
-当前本地 Node agent-server 会从启动进程环境读取 `OPENAI_API_KEY`。如果没有配置，提交 prompt 后会返回明确错误提示，且不会产生模型回复。
+当前本地 Node agent-server 会从启动进程环境读取 `OPENAI_API_KEY`，并可选读取 `OPENAI_BASE_URL`。如果没有配置 API key，提交 prompt 后会返回明确错误提示，且不会产生模型回复。
 
 建议在当前 shell 里先执行：
 
 ```bash
 export OPENAI_API_KEY="你的 OpenAI API key"
+export OPENAI_BASE_URL="https://你的模型提供商兼容 OpenAI 的入口/v1"
 ```
 
-如果希望每次打开终端都自动生效，可以把同一行追加到你的 shell 配置文件，例如 `~/.zshrc`，然后重新打开终端或执行：
+如果你使用的是官方 OpenAI，通常不需要配置 `OPENAI_BASE_URL`。如果希望每次打开终端都自动生效，可以把同样的 `export` 语句追加到你的 shell 配置文件，例如 `~/.zshrc`，然后重新打开终端或执行：
 
 ```bash
 source ~/.zshrc

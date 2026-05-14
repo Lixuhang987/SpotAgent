@@ -4,6 +4,8 @@
   "type": "module",
   "packageManager": "pnpm@10.5.2",
   "devDependencies": {
+    "@ai-sdk/openai": "^3.0.63",
+    "ai": "^6.0.177",
     "vitest": "^3.2.4"
   }
 }

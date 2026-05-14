@@ -22,11 +22,14 @@
 ### `llm`
 
 - `LLMClient.ts`
+- `OpenAIConfig.ts`
+- `VercelAdapters.ts`
 - `VercelClient.ts`
 
 职责：
 
 - 定义统一的 LLM provider 接口。
+- 解析 `OPENAI_API_KEY` 与可选的 `OPENAI_BASE_URL` 环境配置。
 - 把内部消息结构转换为 Vercel AI SDK 所需格式。
 
 ### `tools`
