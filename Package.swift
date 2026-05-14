@@ -15,6 +15,7 @@ let package = Package(
             name: "HandAgentDesktop",
             path: "apps/desktop",
             exclude: [
+                "TestsSwift",
                 "Web/App.tsx",
                 "Web/BubbleList.tsx",
                 "Web/build.mjs",
@@ -34,6 +35,11 @@ let package = Package(
                 .process("Web/index.html"),
                 .process("Web/dist")
             ]
+        ),
+        .testTarget(
+            name: "HandAgentDesktopTests",
+            dependencies: ["HandAgentDesktop"],
+            path: "apps/desktop/TestsSwift"
         )
     ]
 )

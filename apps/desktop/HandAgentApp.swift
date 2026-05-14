@@ -1,6 +1,4 @@
 import AppKit
-import ApplicationServices
-import Carbon.HIToolbox
 import SwiftUI
 import WebKit
 
@@ -38,14 +36,24 @@ struct HandAgentApp: App {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    let controller = DesktopController()
+    private let services = AppServices()
+    private let controller = DesktopController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+
+        services.hotkeyService.onTrigger = { [weak controller] in
+            controller?.handleHotkey()
+        }
+
         controller.start()
+        controller.updateHostStatus(isHotkeyRegistered: services.hotkeyService.start())
+        try? services.agentServerService.start()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        services.hotkeyService.stop()
+        services.agentServerService.stop()
         controller.stop()
     }
 }
@@ -53,11 +61,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @MainActor
 final class DesktopController: NSObject, NSWindowDelegate, WKNavigationDelegate {
     private let dragHandleHeight: CGFloat = 36
-    private let hotkeyMonitor = HotkeyMonitor()
-    private let agentServerRelativePath = "apps/agent-server/src/server.ts"
     private let agentServerURL = URL(string: "ws://127.0.0.1:4317/api/session")!
-    private var agentServerProcess: Process?
-    private var agentServerOutputPipe: Pipe?
     private var window: NSPanel?
     private lazy var webView: WKWebView = {
         let configuration = WKWebViewConfiguration()
@@ -86,14 +90,7 @@ final class DesktopController: NSObject, NSWindowDelegate, WKNavigationDelegate 
     )
 
     func start() {
-        startAgentServer()
-        hotkeyMonitor.onTrigger = { [weak self] in
-            self?.handleHotkey()
-        }
-
         ensureWindow()
-        let isHotkeyRegistered = hotkeyMonitor.start()
-        hostStatus = makeHostStatus(isHotkeyRegistered: isHotkeyRegistered)
         publishHostStatus()
     }
 
@@ -104,12 +101,16 @@ final class DesktopController: NSObject, NSWindowDelegate, WKNavigationDelegate 
     }
 
     func stop() {
-        hotkeyMonitor.stop()
-        stopAgentServer()
+        hideWindow()
     }
 
     func handleHotkey() {
         toggleWindow()
+    }
+
+    func updateHostStatus(isHotkeyRegistered: Bool) {
+        hostStatus = makeHostStatus(isHotkeyRegistered: isHotkeyRegistered)
+        publishHostStatus()
     }
 
     private func presentPrompt(prefill: String) {
@@ -262,135 +263,6 @@ final class DesktopController: NSObject, NSWindowDelegate, WKNavigationDelegate 
         )
     }
 
-    private func startAgentServer() {
-        guard agentServerProcess == nil else { return }
-
-        guard let repoRoot = locateRepositoryRoot() else {
-            return
-        }
-
-        let serverURL = repoRoot.appendingPathComponent(agentServerRelativePath)
-        guard FileManager.default.fileExists(atPath: serverURL.path) else {
-            return
-        }
-
-        let process = Process()
-        process.currentDirectoryURL = repoRoot
-        process.environment = makeAgentServerEnvironment(repoRoot: repoRoot)
-        let nodeArguments = [
-            "--experimental-transform-types",
-            "--experimental-specifier-resolution=node",
-            serverURL.path
-        ]
-
-        if let nodeExecutable = locateNodeExecutable() {
-            process.executableURL = URL(fileURLWithPath: nodeExecutable)
-            process.arguments = nodeArguments
-        } else {
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-            process.arguments = ["node"] + nodeArguments
-        }
-
-        let pipe = Pipe()
-        pipe.fileHandleForReading.readabilityHandler = { handle in
-            if handle.availableData.isEmpty {
-                handle.readabilityHandler = nil
-            }
-        }
-        process.standardOutput = pipe
-        process.standardError = pipe
-
-        do {
-            try process.run()
-            agentServerProcess = process
-            agentServerOutputPipe = pipe
-        } catch {
-            pipe.fileHandleForReading.readabilityHandler = nil
-        }
-    }
-
-    private func makeAgentServerEnvironment(repoRoot: URL) -> [String: String] {
-        var environment = ProcessInfo.processInfo.environment
-        let separator = ":"
-        let extraNodePaths = [
-            repoRoot.appendingPathComponent("apps/agent-server/node_modules").path,
-            repoRoot.appendingPathComponent("apps/desktop/Web/node_modules").path
-        ]
-        let existingNodePath = environment["NODE_PATH"].flatMap { $0.isEmpty ? nil : $0 }
-        let combinedNodePath = (extraNodePaths + [existingNodePath].compactMap { $0 }).joined(separator: separator)
-        environment["NODE_PATH"] = combinedNodePath
-        return environment
-    }
-
-    private func stopAgentServer() {
-        agentServerOutputPipe?.fileHandleForReading.readabilityHandler = nil
-        agentServerOutputPipe = nil
-        agentServerProcess?.terminate()
-        agentServerProcess = nil
-    }
-
-    private func locateRepositoryRoot() -> URL? {
-        let fileManager = FileManager.default
-        let candidates: [URL] = [
-            Bundle.main.executableURL,
-            Bundle.main.resourceURL,
-            Bundle.main.bundleURL,
-            URL(fileURLWithPath: fileManager.currentDirectoryPath)
-        ].compactMap { $0 }
-
-        for candidate in candidates {
-            if let root = findRepositoryRoot(startingAt: candidate) {
-                return root
-            }
-        }
-
-        return nil
-    }
-
-    private func findRepositoryRoot(startingAt url: URL) -> URL? {
-        let fileManager = FileManager.default
-        var current = url.standardizedFileURL
-
-        while true {
-            let packageManifest = current.appendingPathComponent("Package.swift")
-            let serverPath = current.appendingPathComponent(agentServerRelativePath)
-
-            if fileManager.fileExists(atPath: packageManifest.path),
-               fileManager.fileExists(atPath: serverPath.path) {
-                return current
-            }
-
-            let parent = current.deletingLastPathComponent()
-            if parent.path == current.path {
-                return nil
-            }
-
-            current = parent
-        }
-    }
-
-    private func locateNodeExecutable() -> String? {
-        let fileManager = FileManager.default
-        let searchDirectories = (
-            ProcessInfo.processInfo.environment["PATH"]?
-                .split(separator: ":")
-                .map(String.init) ?? []
-        ) + [
-            "/opt/homebrew/bin",
-            "/usr/local/bin",
-            "/usr/bin"
-        ]
-
-        for directory in searchDirectories {
-            let candidate = URL(fileURLWithPath: directory).appendingPathComponent("node").path
-            if fileManager.isExecutableFile(atPath: candidate) {
-                return candidate
-            }
-        }
-
-        return nil
-    }
-    
     func windowWillClose(_ notification: Notification) {
         hideWindow()
     }
@@ -409,91 +281,5 @@ final class DesktopController: NSObject, NSWindowDelegate, WKNavigationDelegate 
         }
 
         webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
-    }
-}
-
-final class HotkeyMonitor {
-    var onTrigger: (@MainActor @Sendable () -> Void)?
-    private var hotKeyRef: EventHotKeyRef?
-    private var eventHandlerRef: EventHandlerRef?
-
-    private let targetKeyCode: UInt32 = UInt32(kVK_Space)
-    private let targetModifiers: UInt32 = UInt32(cmdKey | shiftKey)
-    private let hotKeyID = EventHotKeyID(signature: OSType(0x48414754), id: 1)
-
-    func start() -> Bool {
-        stop()
-
-        let eventType = EventTypeSpec(
-            eventClass: UInt32(kEventClassKeyboard),
-            eventKind: UInt32(kEventHotKeyPressed)
-        )
-
-        let installStatus = InstallEventHandler(
-            GetApplicationEventTarget(),
-            { _, event, userData in
-                guard let userData else { return noErr }
-
-                let monitor = Unmanaged<HotkeyMonitor>.fromOpaque(userData).takeUnretainedValue()
-                guard let event else { return noErr }
-
-                var pressedHotKeyID = EventHotKeyID()
-                let parameterStatus = GetEventParameter(
-                    event,
-                    EventParamName(kEventParamDirectObject),
-                    EventParamType(typeEventHotKeyID),
-                    nil,
-                    MemoryLayout<EventHotKeyID>.size,
-                    nil,
-                    &pressedHotKeyID
-                )
-
-                guard parameterStatus == noErr, pressedHotKeyID.id == monitor.hotKeyID.id else {
-                    return noErr
-                }
-
-                let onTrigger = monitor.onTrigger
-                Task { @MainActor in
-                    onTrigger?()
-                }
-
-                return noErr
-            },
-            1,
-            [eventType],
-            Unmanaged.passUnretained(self).toOpaque(),
-            &eventHandlerRef
-        )
-
-        guard installStatus == noErr else {
-            return false
-        }
-
-        let registerStatus = RegisterEventHotKey(
-            targetKeyCode,
-            targetModifiers,
-            hotKeyID,
-            GetApplicationEventTarget(),
-            0,
-            &hotKeyRef
-        )
-
-        if registerStatus != noErr {
-            stop()
-            return false
-        }
-
-        return true
-    }
-
-    func stop() {
-        if let hotKeyRef {
-            UnregisterEventHotKey(hotKeyRef)
-            self.hotKeyRef = nil
-        }
-        if let eventHandlerRef {
-            RemoveEventHandler(eventHandlerRef)
-            self.eventHandlerRef = nil
-        }
     }
 }
