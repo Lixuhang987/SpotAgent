@@ -40,6 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let agentServerURL = URL(string: "ws://127.0.0.1:4317/api/session")!
     private let controller = DesktopController()
     private let promptPanelController = PromptPanelController()
+    private lazy var statusBubbleController = StatusBubbleController(registry: services.sessionRegistry)
     private var sessionWindows: [String: SessionWindowController] = [:]
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -52,10 +53,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         services.hotkeyService.onTrigger = { [promptPanelController] in
             promptPanelController.show()
         }
+        statusBubbleController.onTap = { [weak self] sessionID in
+            self?.handleStatusBubbleTap(sessionID: sessionID)
+        }
 
         try? services.agentServerService.start()
         controller.start()
         controller.updateHostStatus(isHotkeyRegistered: services.hotkeyService.start())
+        statusBubbleController.show()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -115,6 +120,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         windowController.showWindow(nil)
         viewModel.start(initialPrompt: composedPrompt)
+    }
+
+    private func handleStatusBubbleTap(sessionID: String?) {
+        if let sessionID {
+            focusSessionWindow(with: sessionID)
+            return
+        }
+
+        promptPanelController.show()
+    }
+
+    private func focusSessionWindow(with sessionID: String) {
+        if let windowController = sessionWindows[sessionID] {
+            windowController.showWindow(nil)
+        } else {
+            promptPanelController.show()
+        }
     }
 }
 

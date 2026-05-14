@@ -62,4 +62,30 @@ final class SessionRegistryTests: XCTestCase {
 
         XCTAssertEqual(registry.primarySessionID, "s2")
     }
+
+    @MainActor
+    func testFallsBackToMostRecentWindowWhenNoRunningSessionExists() {
+        let registry = SessionRegistry()
+
+        registry.upsert(
+            SessionSummary(
+                sessionId: "s1",
+                isRunning: false,
+                latestSummary: "older",
+                lastActiveAt: .distantPast,
+                windowIsOpen: true
+            )
+        )
+        registry.upsert(
+            SessionSummary(
+                sessionId: "s2",
+                isRunning: false,
+                latestSummary: "newer",
+                lastActiveAt: .now,
+                windowIsOpen: true
+            )
+        )
+
+        XCTAssertEqual(registry.primarySessionID, "s2")
+    }
 }
