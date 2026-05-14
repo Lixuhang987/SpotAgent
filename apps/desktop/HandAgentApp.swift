@@ -38,12 +38,13 @@ struct HandAgentApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let services = AppServices()
     private let controller = DesktopController()
+    private let promptPanelController = PromptPanelController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
 
-        services.hotkeyService.onTrigger = { [weak controller] in
-            controller?.handleHotkey()
+        services.hotkeyService.onTrigger = { [promptPanelController] in
+            promptPanelController.show()
         }
 
         try? services.agentServerService.start()
