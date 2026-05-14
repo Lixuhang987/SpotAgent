@@ -19,8 +19,7 @@
 ### `apps/`
 
 - `apps/apps.md`：应用层总览，说明桌面入口与交互壳职责。
-- `apps/desktop/desktop.md`：macOS 宿主层说明，覆盖热键、PromptPanel、SessionWindow、状态气泡与遗留 WebView 边界。
-- `apps/desktop/Web/Web.md`：旧 Web 交互层说明，当前主要用于说明遗留链路与清理边界。
+- `apps/desktop/desktop.md`：macOS 宿主层说明，覆盖热键、PromptPanel、SessionWindow 与状态气泡。
 
 ### `packages/`
 
@@ -52,8 +51,8 @@
 
 ## 当前架构概览
 
-- `apps/desktop/HandAgentApp.swift` 是 macOS 宿主入口，负责应用生命周期、全局热键、`PromptPanel`、`SessionWindow`、状态气泡，以及遗留 WebView 壳的收敛。
-- `apps/desktop/Web/` 当前只保留遗留 WebView 链路与 TS 工具链承载，主交互壳正在迁移到 SwiftUI。
+- `apps/desktop/HandAgentApp.swift` 是 macOS 宿主入口，负责应用生命周期、全局热键、`PromptPanel`、`SessionWindow` 与状态气泡。
+- `apps/desktop/Sources/` 按 `AppServices`、`PromptPanel`、`SessionWindow`、`StatusBubble` 划分宿主实现。
 - `packages/core/` 是跨平台核心层，负责会话模型、LLM 循环、tool 协议、tool 注册、平台抽象和通用测试。
 - `packages/platform-macos/` 是 macOS 平台实现层，负责把平台能力落到具体系统 API 或 AppleScript。
 - `docs/` 里的设计稿和开发说明只描述规则和约束，不作为运行时依赖。
@@ -78,7 +77,7 @@ flowchart TD
 
 - 已实现：热键唤起、PromptPanel、SessionWindow、状态气泡、`AgentRuntime` 循环、工具协议、文件工具、平台抽象、macOS 选区捕获。
 - 已预留：screen / OCR / accessibility / file / app 类 tool 的统一协议与平台适配入口。
-- 待收尾：移除遗留 `WKWebView` 链路、迁移剩余 TS 工具链、把选区采集接入 PromptPanel attachment 流程。
+- 待收尾：把选区采集接入 PromptPanel attachment 流程，并继续补齐更多桌面能力。
 
 ## 开发规范
 
@@ -106,7 +105,7 @@ flowchart TD
 
 ### 提交前检查
 
-- `apps/desktop/Web/node_modules/.bin/vitest run apps/agent-server/src/SessionManager.test.ts packages/core/tests/runtime.test.ts packages/core/tests/selection.test.ts packages/core/tests/context-tools.test.ts packages/core/tests/file-tools.test.ts`
+- `pnpm exec vitest run apps/agent-server/src/SessionManager.test.ts packages/core/tests/runtime.test.ts packages/core/tests/selection.test.ts packages/core/tests/context-tools.test.ts packages/core/tests/file-tools.test.ts`
 - `bash ./scripts/swiftw test`
 - `bash ./scripts/swiftw build`
 
@@ -116,7 +115,7 @@ flowchart TD
 ### 开发流程
 
 - 代码修改前在当前项目根目录下创建新的 worktree，路径固定放在 `.worktrees/<task-name>/`；单纯文档工作或者只读工作不需要创建 worktree
-- 新建 worktree 后先完成项目初始化，至少保证当前 worktree 具备独立运行能力；当前仓库默认先执行 `cd apps/desktop/Web && pnpm install` 以提供遗留 TS 工具链，再根据需要补充其他依赖初始化
+- 新建 worktree 后先完成项目初始化，至少保证当前 worktree 具备独立运行能力；当前仓库默认先执行 `pnpm install`，再根据需要补充其他依赖初始化
 - 初始化完成后执行一轮基线校验，确认 worktree 本身可用，再开始浏览代码结构；重点浏览目标文件夹下同名的架构文档
 - 代码修改
 - 每次代码修改后执行 `git commit`，不要把本轮已完成的代码改动长时间停留在未提交状态

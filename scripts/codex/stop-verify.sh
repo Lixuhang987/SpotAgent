@@ -3,12 +3,11 @@
 set -u
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-WEB_DIR="$ROOT_DIR/apps/desktop/Web"
 
 verify_commands=(
-  "cd \"$WEB_DIR\" && pnpm run build"
-  "cd \"$WEB_DIR\" && pnpm run test:hotkey"
-  "cd \"$WEB_DIR\" && pnpm exec vitest run ../../../packages/core/tests/runtime.test.ts ../../../packages/core/tests/selection.test.ts ../../../packages/core/tests/context-tools.test.ts ../../../packages/core/tests/file-tools.test.ts"
+  "cd \"$ROOT_DIR\" && pnpm exec vitest run apps/agent-server/src/SessionManager.test.ts packages/core/tests/runtime.test.ts packages/core/tests/selection.test.ts packages/core/tests/context-tools.test.ts packages/core/tests/file-tools.test.ts"
+  "cd \"$ROOT_DIR\" && bash ./scripts/swiftw test"
+  "cd \"$ROOT_DIR\" && bash ./scripts/swiftw build"
 )
 
 json_escape() {
@@ -29,10 +28,10 @@ emit_block_json() {
 EOF
 }
 
-if [ ! -x "$WEB_DIR/node_modules/.bin/vitest" ]; then
+if [ ! -x "$ROOT_DIR/node_modules/.bin/vitest" ]; then
   emit_block_json \
-    "当前 worktree 还没有完成独立初始化。先在该 worktree 中安装 Web 依赖，再重新执行收尾校验。" \
-    "缺少可执行文件: $WEB_DIR/node_modules/.bin/vitest；建议先执行: cd $WEB_DIR && pnpm install"
+    "当前 worktree 还没有完成独立初始化。先在仓库根目录安装依赖，再重新执行收尾校验。" \
+    "缺少可执行文件: $ROOT_DIR/node_modules/.bin/vitest；建议先执行: cd $ROOT_DIR && pnpm install"
   exit 0
 fi
 

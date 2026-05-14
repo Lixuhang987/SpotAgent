@@ -20,15 +20,15 @@
 
 ```mermaid
 flowchart TD
-  A[apps/desktop<br/>macOS 宿主与 Web 容器] --> B[apps/desktop/Web<br/>React UI 与事件桥]
+  A[apps/desktop<br/>macOS 宿主与 SwiftUI 交互壳] --> B[apps/agent-server<br/>本地会话桥与 runtime 驱动]
   B --> C[packages/core<br/>会话、消息、LLM/tool 循环]
   C --> D[packages/platform-macos<br/>macOS 平台实现]
 ```
 
 ### 分层职责
 
-- `apps/desktop`：负责宿主生命周期、热键、窗口、`WKWebView` 容器和宿主事件桥。
-- `apps/desktop/Web`：负责 prompt 输入、气泡渲染、提交会话、调用 `AgentRuntime`。
+- `apps/desktop`：负责宿主生命周期、热键、PromptPanel、SessionWindow 与状态气泡。
+- `apps/agent-server`：负责本地 WebSocket session 桥、`SessionManager` 和 runtime 驱动。
 - `packages/core`：负责会话输入归一化、消息模型、tool 注册、LLM/tool 循环。
 - `packages/platform-macos`：负责把平台能力映射到 macOS 的系统命令或 AppleScript。
 
@@ -36,50 +36,23 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  A[用户按下全局热键] --> B[DesktopController.toggleWindow]
-  B --> C[Swift 发布 PromptPayload]
-  C --> D[Web App 收到 PromptState]
-  D --> E[用户提交 prompt]
-  E --> F[AgentSession.open]
-  F --> G[buildInitialUserMessage]
-  G --> H[AgentRuntime.run]
-  H --> I[LLMClient.complete]
-  I --> J{返回 toolCalls?}
-  J -- 否 --> K[生成 AgentBubble 列表]
-  J -- 是 --> L[ToolRegistry.get]
-  L --> M[AgentTool.call]
-  M --> N[PlatformAdapter 或文件系统]
-  N --> I
+  A[用户按下全局热键] --> B[PromptPanelController.show]
+  B --> C[用户提交 prompt]
+  C --> D[Swift 创建 SessionWindow 与 SessionSocketClient]
+  D --> E[agent-server 接收 SessionMessage]
+  E --> F[AgentRuntime.run]
+  F --> G[LLMClient.complete]
+  G --> H{返回 toolCalls?}
+  H -- 否 --> I[SwiftUI 渲染消息列表]
+  H -- 是 --> J[ToolRegistry.get]
+  J --> K[AgentTool.call]
+  K --> L[PlatformAdapter 或文件系统]
+  L --> G
 ```
 
 ## 主链路阶段 DTO
 
-### 1. 宿主到 Web
-
-- `PromptPayload`
-  - `visible: boolean`
-  - `prefill: string`
-- `HostStatusPayload`
-  - `hotkeyAvailable: boolean`
-  - `message: string`
-- `BubblePayload`
-  - `id: string`
-  - `text: string`
-
-### 2. Web 侧本地状态
-
-- `PromptState`
-  - `visible: boolean`
-  - `prefill: string`
-- `HostStatus`
-  - `hotkeyAvailable: boolean`
-  - `message: string`
-- `BubbleItem`
-  - `id: string`
-  - `text: string`
-  - `kind?: "user" | "assistant"`
-
-### 3. 会话输入与首轮消息
+### 1. Prompt 与会话输入
 
 - `AgentSessionInput`
   - `prompt: string`
@@ -92,7 +65,16 @@ flowchart TD
   - `prompt: string`
   - `selectedText: string | null`
 
-### 4. Runtime 与 LLM
+### 2. Swift 宿主聚合状态
+
+- `SessionSummary`
+  - `sessionId: string`
+  - `isRunning: boolean`
+  - `latestSummary: string`
+  - `lastActiveAt: Date`
+  - `windowIsOpen: boolean`
+
+### 3. Runtime 与 LLM
 
 - `AgentMessage`
   - `user`
@@ -110,7 +92,7 @@ flowchart TD
   - `messages: AgentMessage[]`
   - `bubbles: AgentBubble[]`
 
-### 5. Tool 与平台
+### 4. Tool 与平台
 
 - `RegisteredTool`
   - `name`
@@ -129,8 +111,8 @@ flowchart TD
 
 ## 当前实现状态
 
-- 当前 Web 提交链路已经直接调用 `AgentSession` 与 `AgentRuntime`。
-- `ToolRegistry` 在 Web 侧已经接入，但当前实例仍为空，真实 tool 集合待接入。
+- 当前桌面壳已经切到 `PromptPanel + SessionWindow + StatusBubble`。
+- `agent-server` 通过 `SessionManager + SessionStore` 管理会话并驱动 runtime。
 - `packages/core` 已经定义完整的 tool、platform DTO。
 - `packages/platform-macos` 当前实现了选区捕获、前台 App、窗口列表、剪贴板、区域截图；OCR 与 accessibility 仍未完成。
 

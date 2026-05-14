@@ -15,11 +15,10 @@ echo 'export OPENAI_API_KEY="你的 OpenAI API key"' >> ~/.zshrc
 source ~/.zshrc
 ```
 
-2. 构建 Web 资源。
+2. 安装 workspace 依赖。
 
 ```bash
-cd apps/desktop/Web
-pnpm run build
+pnpm install
 ```
 
 3. 启动桌面宿主。
@@ -32,34 +31,24 @@ bash ./scripts/swiftw run HandAgentDesktop
 
 ### API key 排查
 
-- `OPENAI_API_KEY` 由宿主启动出来的本地 `apps/agent-server/src/server.ts` 进程读取，不是由 Web 页面读取。
+- `OPENAI_API_KEY` 由宿主启动出来的本地 `apps/agent-server/src/server.ts` 进程读取。
 - 如果提交 prompt 后看到 `Missing OPENAI_API_KEY. Set it before starting HandAgent.`，说明桌面宿主启动时没有拿到该环境变量。
 - 这时先在当前 shell 里配置变量，再重新执行 `bash ./scripts/swiftw run HandAgentDesktop`。
 
 ## 调试方式
 
-### Web 侧
+### TypeScript 侧
 
-- 修改 `apps/desktop/Web/App.tsx`、`bridge.ts`、`BubbleList.tsx` 后，先跑：
-
-```bash
-cd apps/desktop/Web
-pnpm run build
-pnpm run test:hotkey
-```
-
-- `packages/core` 的测试可直接用仓库内的 Vitest 运行器：
+- 修改 `apps/agent-server/` 或 `packages/core/` 后，先跑：
 
 ```bash
-cd apps/desktop/Web
 pnpm exec vitest run \
-  ../../../packages/core/tests/runtime.test.ts \
-  ../../../packages/core/tests/selection.test.ts \
-  ../../../packages/core/tests/context-tools.test.ts \
-  ../../../packages/core/tests/file-tools.test.ts
+  apps/agent-server/src/SessionManager.test.ts \
+  packages/core/tests/runtime.test.ts \
+  packages/core/tests/selection.test.ts \
+  packages/core/tests/context-tools.test.ts \
+  packages/core/tests/file-tools.test.ts
 ```
-
-- 调试 React 页面时，优先看浏览器 / WebView 控制台输出，必要时在 `App.tsx` 里临时加日志。
 
 ### Swift 宿主
 
@@ -69,22 +58,21 @@ pnpm exec vitest run \
 bash ./scripts/swiftw build
 ```
 
-- 如果需要观察窗口与热键行为，优先用宿主侧状态文案和 WebView 事件桥来定位问题。
+- 如果需要观察窗口与热键行为，优先用 PromptPanel、SessionWindow 和状态气泡的可见状态来定位问题。
 - 热键相关问题先确认辅助功能权限是否已授权。
-- `command + shift + space` 唤起的面板顶部保留原生拖拽区，手工验收时要确认用户可以拖动整个窗口。
 
 ### 端到端
 
-- 文本链路：热键唤起 -> 输入 prompt -> 进入 Agent Core -> bubble 输出结果。
-- 选区链路：先选中内容 -> 热键唤起 -> 预填 prompt -> 提交。
-- 工具链路：先通过 `packages/core/tests/*` 里对应测试验证，再考虑接到 UI。
+- 文本链路：热键唤起 -> PromptPanel 输入 prompt -> 新建 SessionWindow -> bubble 输出结果。
+- 状态链路：状态气泡展示 -> 点击后回到 running session 或最近活跃窗口。
+- 工具链路：先通过 `packages/core/tests/*` 里对应测试验证，再考虑接到 SessionWindow。
 
 ## 代码规范
 
 ### 目录边界
 
-- `apps/desktop/HandAgentApp.swift` 只放 macOS 宿主与桥接逻辑。
-- `apps/desktop/Web/` 只放 Web UI 和前端事件桥。
+- `apps/desktop/HandAgentApp.swift` 只放 macOS 宿主入口与顶层协调逻辑。
+- `apps/desktop/Sources/` 按 `AppServices`、`PromptPanel`、`SessionWindow`、`StatusBubble` 分目录放 Swift 实现。
 - `packages/core/` 只放跨平台的 Agent Core、tool 协议和通用测试。
 - `packages/platform-macos/` 只放 macOS 平台实现。
 
@@ -110,19 +98,15 @@ bash ./scripts/swiftw build
 ## 常用命令
 
 ```bash
-# Web 资源构建
-cd apps/desktop/Web && pnpm run build
+# Agent-server + Core 测试
+pnpm exec vitest run \
+  apps/agent-server/src/SessionManager.test.ts \
+  packages/core/tests/runtime.test.ts \
+  packages/core/tests/selection.test.ts \
+  packages/core/tests/context-tools.test.ts \
+  packages/core/tests/file-tools.test.ts
 
-# Web 热键测试
-cd apps/desktop/Web && pnpm run test:hotkey
-
-# Core 测试
-cd apps/desktop/Web && pnpm exec vitest run \
-  ../../../packages/core/tests/runtime.test.ts \
-  ../../../packages/core/tests/selection.test.ts \
-  ../../../packages/core/tests/context-tools.test.ts \
-  ../../../packages/core/tests/file-tools.test.ts
-
-# 桌面宿主构建
+# 桌面宿主测试与构建
+bash ./scripts/swiftw test
 bash ./scripts/swiftw build
 ```

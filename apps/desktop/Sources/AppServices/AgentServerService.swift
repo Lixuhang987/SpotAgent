@@ -61,8 +61,8 @@ final class AgentServerService {
         var environment = ProcessInfo.processInfo.environment
         let separator = ":"
         let extraNodePaths = [
+            repoRoot.appendingPathComponent("node_modules").path,
             repoRoot.appendingPathComponent("apps/agent-server/node_modules").path,
-            repoRoot.appendingPathComponent("apps/desktop/Web/node_modules").path
         ]
         let existingNodePath = environment["NODE_PATH"].flatMap { $0.isEmpty ? nil : $0 }
         environment["NODE_PATH"] = (extraNodePaths + [existingNodePath].compactMap { $0 })
