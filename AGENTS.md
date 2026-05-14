@@ -111,6 +111,8 @@ flowchart TD
 
 说明：
 - Swift 相关命令默认通过 `bash ./scripts/swiftw` 执行，把模块缓存固定到仓库内 `.cache/swift/`，避免依赖用户目录下的全局缓存写权限。
+- Codex 的 `Stop` hook 当前只执行 TypeScript 侧 `vitest` 校验，不执行 Swift 校验；原因是 hook 运行环境会以 `zsh -lc` 方式触发命令，`swift test/build` 在该环境下会稳定报 `sandbox-exec: sandbox_apply: Operation not permitted`，与线程内直接执行结果不一致。
+- 因此，涉及 Swift 或桌面宿主改动时，结束任务前仍必须在当前线程环境手动执行 `bash ./scripts/swiftw test` 与 `bash ./scripts/swiftw build`，不要只依赖 hook 结果。
 
 ### 开发流程
 
