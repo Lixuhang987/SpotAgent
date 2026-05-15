@@ -51,6 +51,8 @@ final class AgentSettingsStore: ObservableObject {
 
     private let fileManager: FileManager
     private let homeDirectoryURL: URL
+    private var lastLoadedData: Data?
+    private var pollingTask: Task<Void, Never>?
 
     init(
         fileManager: FileManager = .default,
@@ -58,7 +60,14 @@ final class AgentSettingsStore: ObservableObject {
     ) {
         self.fileManager = fileManager
         self.homeDirectoryURL = homeDirectoryURL
-        self.settings = Self.loadSettings(fileManager: fileManager, homeDirectoryURL: homeDirectoryURL)
+        let loadedState = Self.loadState(fileManager: fileManager, homeDirectoryURL: homeDirectoryURL)
+        self.settings = loadedState.settings
+        self.lastLoadedData = loadedState.data
+        startPolling()
+    }
+
+    deinit {
+        pollingTask?.cancel()
     }
 
     func update(_ mutate: (inout AgentSettings) -> Void) {
@@ -68,21 +77,32 @@ final class AgentSettingsStore: ObservableObject {
         persist()
     }
 
+    func reloadFromDisk() {
+        let loadedState = Self.loadState(fileManager: fileManager, homeDirectoryURL: homeDirectoryURL)
+        guard loadedState.data != lastLoadedData else { return }
+        settings = loadedState.settings
+        lastLoadedData = loadedState.data
+        saveErrorMessage = nil
+    }
+
     static func settingsFileURL(homeDirectoryURL: URL) -> URL {
         homeDirectoryURL
             .appendingPathComponent(".spotAgent", isDirectory: true)
             .appendingPathComponent("settings.json")
     }
 
-    private static func loadSettings(fileManager: FileManager, homeDirectoryURL: URL) -> AgentSettings {
+    private static func loadState(fileManager: FileManager, homeDirectoryURL: URL) -> (
+        settings: AgentSettings,
+        data: Data?
+    ) {
         let fileURL = settingsFileURL(homeDirectoryURL: homeDirectoryURL)
         guard let data = try? Data(contentsOf: fileURL),
               let persisted = try? JSONDecoder().decode(AgentSettingsFile.self, from: data)
         else {
-            return .defaultValue
+            return (.defaultValue, nil)
         }
 
-        return persisted.llm
+        return (persisted.llm, data)
     }
 
     private func persist() {
@@ -95,9 +115,20 @@ final class AgentSettingsStore: ObservableObject {
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             let data = try encoder.encode(AgentSettingsFile(llm: settings))
             try data.write(to: fileURL, options: .atomic)
+            lastLoadedData = data
             saveErrorMessage = nil
         } catch {
             saveErrorMessage = "保存设置失败：\(error.localizedDescription)"
+        }
+    }
+
+    private func startPolling() {
+        pollingTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(500))
+                guard let self else { return }
+                self.reloadFromDisk()
+            }
         }
     }
 }

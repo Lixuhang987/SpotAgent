@@ -39,6 +39,60 @@ final class AgentSettingsStoreTests: XCTestCase {
         XCTAssertEqual(llm?["api"] as? String, "chat")
     }
 
+    @MainActor
+    func testReloadsSettingsFromDiskAfterExternalChange() throws {
+        let homeURL = makeTemporaryHomeDirectory()
+        defer { try? FileManager.default.removeItem(at: homeURL) }
+
+        let fileURL = homeURL
+            .appendingPathComponent(".spotAgent", isDirectory: true)
+            .appendingPathComponent("settings.json")
+        try FileManager.default.createDirectory(
+            at: fileURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Data(
+            """
+            {
+              "llm": {
+                "model": "gpt-5-mini",
+                "apiKey": "old-key",
+                "baseUrl": "https://old.example/v1",
+                "api": "responses"
+              }
+            }
+            """.utf8
+        ).write(to: fileURL)
+
+        let store = AgentSettingsStore(homeDirectoryURL: homeURL)
+        XCTAssertEqual(store.settings.apiKey, "old-key")
+
+        try Data(
+            """
+            {
+              "llm": {
+                "model": "gpt-4.1",
+                "apiKey": "new-key",
+                "baseUrl": "https://new.example/v1",
+                "api": "chat"
+              }
+            }
+            """.utf8
+        ).write(to: fileURL)
+
+        store.reloadFromDisk()
+
+        XCTAssertEqual(
+            store.settings,
+            AgentSettings(
+                model: "gpt-4.1",
+                apiKey: "new-key",
+                baseURL: "https://new.example/v1",
+                api: .chat
+            )
+        )
+    }
+
     private func makeTemporaryHomeDirectory() -> URL {
         let root = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
         let directory = root.appendingPathComponent(UUID().uuidString, isDirectory: true)

@@ -9,6 +9,7 @@ cd "$PROJECT_ROOT"
 
 pnpm exec vitest run \
   apps/agent-server/src/SessionManager.test.ts \
+  apps/agent-server/src/SettingsBackedLLMClient.test.ts \
   packages/core/tests/model-settings.test.ts \
   packages/core/tests/openai-config.test.ts \
   packages/core/tests/runtime.test.ts \

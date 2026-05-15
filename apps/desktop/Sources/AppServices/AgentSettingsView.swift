@@ -34,13 +34,15 @@ struct AgentSettingsView: View {
                 }
 
                 GroupBox("认证") {
-                    SecureField(
+                    TextField(
                         "sk-...",
                         text: binding(
                             get: \.apiKey,
                             set: { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                         )
                     )
+                    .privacySensitive()
+                    .textFieldStyle(.roundedBorder)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
 

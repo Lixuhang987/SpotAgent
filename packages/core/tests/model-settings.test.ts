@@ -54,6 +54,45 @@ describe("ModelSettings", () => {
     });
   });
 
+  it("re-reads the settings file on every call", () => {
+    const homeDir = mkdtempSync(join(tmpdir(), "spot-agent-settings-"));
+    tempRoots.push(homeDir);
+    const settingsDir = join(homeDir, ".spotAgent");
+    mkdirSync(settingsDir, { recursive: true });
+    const filePath = join(settingsDir, "settings.json");
+
+    writeFileSync(
+      filePath,
+      JSON.stringify({
+        llm: {
+          model: "gpt-5-mini",
+          apiKey: "first-key",
+          baseUrl: "https://first.example/v1",
+          api: "responses",
+        },
+      }),
+    );
+    expect(loadModelSettings(homeDir).apiKey).toBe("first-key");
+
+    writeFileSync(
+      filePath,
+      JSON.stringify({
+        llm: {
+          model: "gpt-4.1",
+          apiKey: "second-key",
+          baseUrl: "https://second.example/v1",
+          api: "chat",
+        },
+      }),
+    );
+    expect(loadModelSettings(homeDir)).toEqual({
+      model: "gpt-4.1",
+      apiKey: "second-key",
+      baseUrl: "https://second.example/v1",
+      api: "chat",
+    });
+  });
+
   it("throws a clear error when settings JSON is invalid", () => {
     const homeDir = mkdtempSync(join(tmpdir(), "spot-agent-settings-"));
     tempRoots.push(homeDir);
