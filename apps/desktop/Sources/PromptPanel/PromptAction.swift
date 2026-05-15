@@ -9,8 +9,18 @@ struct PromptAction: Identifiable {
     let id: String
     let title: String
     let keywords: [String]
-    let shortcut: String?
+    let defaultShortcut: KeyShortcut?
     let perform: () -> Void
+
+    @MainActor
+    func shortcut(using store: ShortcutSettingsStore) -> KeyShortcut? {
+        store.shortcut(forActionID: id) ?? defaultShortcut
+    }
+
+    @MainActor
+    func shortcutDisplay(using store: ShortcutSettingsStore) -> String? {
+        shortcut(using: store)?.displayString
+    }
 
     static func filter(_ actions: [PromptAction], query: String) -> [PromptAction] {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)

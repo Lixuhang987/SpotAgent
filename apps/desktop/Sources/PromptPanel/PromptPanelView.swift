@@ -2,6 +2,9 @@ import SwiftUI
 
 struct PromptPanelView: View {
     let actions: [PromptAction]
+    let shortcutLabelProvider: (PromptAction) -> String?
+    let focusSeed: Int
+    let onOpenSettings: () -> Void
     let onSubmitDraft: ((String) -> Void)?
     let onSubmitAction: ((PromptAction) -> Void)?
 
@@ -14,6 +17,17 @@ struct PromptPanelView: View {
 
     var body: some View {
         VStack(spacing: 16) {
+            HStack {
+                Spacer()
+                Button {
+                    onOpenSettings()
+                } label: {
+                    Image(systemName: "gearshape")
+                }
+                .buttonStyle(.plain)
+                .help("打开设置 (⌘,)")
+            }
+
             TextField("输入你的请求", text: $draft)
                 .textFieldStyle(.plain)
                 .font(.system(size: 20, weight: .semibold))
@@ -42,7 +56,7 @@ struct PromptPanelView: View {
 
                                     Spacer()
 
-                                    if let shortcut = action.shortcut {
+                                    if let shortcut = shortcutLabelProvider(action) {
                                         Text(shortcut)
                                             .foregroundStyle(.secondary)
                                     }
@@ -60,6 +74,9 @@ struct PromptPanelView: View {
         .frame(minWidth: 640, minHeight: 420)
         .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
+            isQueryFocused = true
+        }
+        .onChange(of: focusSeed) { _, _ in
             isQueryFocused = true
         }
     }

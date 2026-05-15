@@ -14,7 +14,7 @@ let package = Package(
         .executableTarget(
             name: "HandAgentDesktop",
             path: "apps/desktop",
-            exclude: ["TestsSwift", "desktop.md", "tests"]
+            exclude: ["TestsSwift", "desktop.md"]
         ),
         .testTarget(
             name: "HandAgentDesktopTests",

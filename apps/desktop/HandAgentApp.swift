@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import SwiftUI
 
 @main
@@ -9,6 +10,15 @@ struct HandAgentApp: App {
     var body: some Scene {
         Settings {
             AgentSettingsView(store: settingsStore)
+            appDelegate.makeSettingsView()
+        }
+        .commands {
+            CommandGroup(replacing: .appSettings) {
+                Button("设置…") {
+                    appDelegate.openSettingsWindow()
+                }
+                .keyboardShortcut(",", modifiers: .command)
+            }
         }
     }
 }
@@ -17,23 +27,46 @@ struct HandAgentApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let services = AppServices()
     private let agentServerURL = URL(string: "ws://127.0.0.1:4317/api/session")!
-    private let promptPanelController = PromptPanelController()
+    private lazy var promptPanelController = PromptPanelController(
+        shortcutSettingsStore: services.shortcutSettingsStore
+    )
     private let activationPolicyCoordinator = AppActivationPolicyCoordinator()
     private lazy var statusBubbleController = StatusBubbleController(registry: services.sessionRegistry)
     private var sessionWindows: [String: SessionWindowController] = [:]
     private var agentServerStartupError: String?
+    private lazy var promptActions: [PromptAction] = [
+        PromptAction(
+            id: "open-settings",
+            title: "打开设置",
+            keywords: ["settings", "preferences", "shortcut", "hotkey"],
+            defaultShortcut: .init(keyCode: UInt16(kVK_ANSI_Comma), modifiers: [.command]),
+            perform: { [weak self] in
+                self?.openSettingsWindow()
+            }
+        )
+    ]
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(
             activationPolicyCoordinator.policyAfterUpdatingOpenSessionWindows(by: 0)
         )
 
+        promptPanelController.register(actions: promptActions)
         promptPanelController.onSubmit = { [weak self] draft, attachments in
             self?.openSessionWindow(for: draft, attachments: attachments)
+        }
+        promptPanelController.onOpenSettings = { [weak self] in
+            self?.openSettingsWindow()
         }
 
         services.hotkeyService.onTrigger = { [promptPanelController] in
             promptPanelController.show()
+        }
+        services.shortcutSettingsStore.onGlobalShortcutChanged = { [weak self] shortcut in
+            _ = self?.services.hotkeyService.setShortcut(shortcut)
+        }
+        services.shortcutSettingsStore.onActionShortcutsChanged = { [weak self] in
+            self?.promptPanelController.register(actions: self?.promptActions ?? [])
         }
         statusBubbleController.onTap = { [weak self] sessionID in
             self?.handleStatusBubbleTap(sessionID: sessionID)
@@ -49,6 +82,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         _ = services.hotkeyService.start()
         statusBubbleController.show()
+    }
+
+    func makeSettingsView() -> some View {
+        ShortcutSettingsView(
+            store: services.shortcutSettingsStore,
+            actions: promptActions
+        )
+    }
+
+    func openSettingsWindow() {
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     func applicationWillTerminate(_ notification: Notification) {

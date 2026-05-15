@@ -5,6 +5,8 @@ HandAgent 是一个 macOS 优先的桌面 Agent Runtime MVP。当前桌面壳使
 ## 当前能力
 
 - 全局热键唤起 `PromptPanel`
+- `PromptPanel` 右上角按钮和 `Command+,` 打开快捷键设置页
+- 设置页支持配置全局热键和已注册 `PromptAction` 的快捷键
 - 提交 prompt 后创建 `SessionWindow`
 - `SessionWindow` 流式展示 user / assistant / tool 消息
 - `agent-server` 驱动 `AgentRuntime` 与 tool 调用
@@ -13,6 +15,7 @@ HandAgent 是一个 macOS 优先的桌面 Agent Runtime MVP。当前桌面壳使
 ## 目录
 
 - `apps/desktop/HandAgentApp.swift`：macOS 宿主、PromptPanel、SessionWindow 与状态气泡入口
+- `apps/desktop/Sources/Settings`：快捷键设置页与录制控件
 - `packages/core`：跨平台 Agent Core、工具与会话逻辑
 - `apps/agent-server`：本地 session server 与流式消息桥
 - `packages/platform-macos`：macOS 选区捕获实现

@@ -24,8 +24,13 @@
 ### `Sources/PromptPanel`
 
 - `PromptPanelController`：管理面板生命周期与 prompt 提交。
-- `PromptPanelView`：渲染输入框和 action 列表。
+- `PromptPanelView`：渲染输入框、设置入口和 action 列表。
 - `PromptAction`：定义 action 数据结构与过滤逻辑。
+
+### `Sources/Settings`
+
+- `ShortcutSettingsView`：渲染全局热键与 `PromptAction` 快捷键配置页。
+- `ShortcutRecorderView`：负责录制和清空快捷键。
 
 ### `Sources/SessionWindow`
 
@@ -50,6 +55,8 @@ sequenceDiagram
 
   User->>Hotkey: 按下全局热键
   Hotkey->>Panel: show()
+  User->>Panel: 点击设置按钮或按下 Command+,
+  Panel->>Panel: 打开 Settings 并隐藏面板
   User->>Panel: 输入 prompt 并提交
   Panel->>Window: 创建 SessionWindow
   Window->>Server: 发送 SessionMessage
@@ -75,3 +82,4 @@ sequenceDiagram
 - 宿主层只通过 `WebSocket + SessionMessage` 与 TS 边界通信。
 - 宿主层不组装 LLM 消息，不读取 runtime 内部状态。
 - 宿主层不直接执行 tool 编排。
+- 快捷键配置只保存在宿主层本地，不下沉到 runtime。

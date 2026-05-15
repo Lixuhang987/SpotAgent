@@ -8,14 +8,14 @@ final class PromptActionTests: XCTestCase {
                 id: "open",
                 title: "Open File",
                 keywords: ["file", "document"],
-                shortcut: "⌘O",
+                defaultShortcut: .init(keyCode: 31, modifiers: [.command]),
                 perform: {}
             ),
             PromptAction(
                 id: "new",
                 title: "New Session",
                 keywords: ["workspace"],
-                shortcut: "⌘N",
+                defaultShortcut: .init(keyCode: 45, modifiers: [.command]),
                 perform: {}
             )
         ]

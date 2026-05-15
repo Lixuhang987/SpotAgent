@@ -7,10 +7,13 @@ final class HotkeyService {
 
     private var hotKeyRef: EventHotKeyRef?
     private var eventHandlerRef: EventHandlerRef?
+    private var configuredShortcut: KeyShortcut
 
-    private let targetKeyCode: UInt32 = UInt32(kVK_Space)
-    private let targetModifiers: UInt32 = UInt32(cmdKey | shiftKey)
     private let hotKeyID = EventHotKeyID(signature: OSType(0x48414754), id: 1)
+
+    init(configuredShortcut: KeyShortcut = .init(keyCode: UInt16(kVK_Space), modifiers: [.command, .shift])) {
+        self.configuredShortcut = configuredShortcut
+    }
 
     func start() -> Bool {
         stop()
@@ -61,8 +64,8 @@ final class HotkeyService {
         }
 
         let registerStatus = RegisterEventHotKey(
-            targetKeyCode,
-            targetModifiers,
+            UInt32(configuredShortcut.keyCode),
+            configuredShortcut.carbonModifiers,
             hotKeyID,
             GetApplicationEventTarget(),
             0,
@@ -75,6 +78,12 @@ final class HotkeyService {
         }
 
         return true
+    }
+
+    @discardableResult
+    func setShortcut(_ shortcut: KeyShortcut) -> Bool {
+        configuredShortcut = shortcut
+        return start()
     }
 
     func stop() {
