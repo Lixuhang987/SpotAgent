@@ -65,6 +65,10 @@ struct KeyShortcut: Codable, Equatable, Hashable, Sendable {
     }
 
     private var keyDisplay: String {
+        if let display = Self.keyDisplays[keyCode] {
+            return display
+        }
+
         switch Int(keyCode) {
         case kVK_Space:
             return "Space"
@@ -76,32 +80,6 @@ struct KeyShortcut: Codable, Equatable, Hashable, Sendable {
             return "Delete"
         case kVK_Escape:
             return "Esc"
-        case kVK_ANSI_A...kVK_ANSI_Z:
-            return String(UnicodeScalar(Int(keyCode) - kVK_ANSI_A + 65)!)
-        case kVK_ANSI_0...kVK_ANSI_9:
-            return String(UnicodeScalar(Int(keyCode) - kVK_ANSI_0 + 48)!)
-        case kVK_ANSI_Comma:
-            return ","
-        case kVK_ANSI_Period:
-            return "."
-        case kVK_ANSI_Minus:
-            return "-"
-        case kVK_ANSI_Equal:
-            return "="
-        case kVK_ANSI_Semicolon:
-            return ";"
-        case kVK_ANSI_Quote:
-            return "'"
-        case kVK_ANSI_Slash:
-            return "/"
-        case kVK_ANSI_Backslash:
-            return "\\"
-        case kVK_ANSI_LeftBracket:
-            return "["
-        case kVK_ANSI_RightBracket:
-            return "]"
-        case kVK_ANSI_Grave:
-            return "`"
         default:
             return "Key \(keyCode)"
         }
@@ -110,4 +88,54 @@ struct KeyShortcut: Codable, Equatable, Hashable, Sendable {
     private static func normalize(_ modifiers: NSEvent.ModifierFlags) -> NSEvent.ModifierFlags {
         modifiers.intersection([.command, .shift, .option, .control])
     }
+
+    private static let keyDisplays: [UInt16: String] = [
+        UInt16(kVK_ANSI_A): "A",
+        UInt16(kVK_ANSI_B): "B",
+        UInt16(kVK_ANSI_C): "C",
+        UInt16(kVK_ANSI_D): "D",
+        UInt16(kVK_ANSI_E): "E",
+        UInt16(kVK_ANSI_F): "F",
+        UInt16(kVK_ANSI_G): "G",
+        UInt16(kVK_ANSI_H): "H",
+        UInt16(kVK_ANSI_I): "I",
+        UInt16(kVK_ANSI_J): "J",
+        UInt16(kVK_ANSI_K): "K",
+        UInt16(kVK_ANSI_L): "L",
+        UInt16(kVK_ANSI_M): "M",
+        UInt16(kVK_ANSI_N): "N",
+        UInt16(kVK_ANSI_O): "O",
+        UInt16(kVK_ANSI_P): "P",
+        UInt16(kVK_ANSI_Q): "Q",
+        UInt16(kVK_ANSI_R): "R",
+        UInt16(kVK_ANSI_S): "S",
+        UInt16(kVK_ANSI_T): "T",
+        UInt16(kVK_ANSI_U): "U",
+        UInt16(kVK_ANSI_V): "V",
+        UInt16(kVK_ANSI_W): "W",
+        UInt16(kVK_ANSI_X): "X",
+        UInt16(kVK_ANSI_Y): "Y",
+        UInt16(kVK_ANSI_Z): "Z",
+        UInt16(kVK_ANSI_0): "0",
+        UInt16(kVK_ANSI_1): "1",
+        UInt16(kVK_ANSI_2): "2",
+        UInt16(kVK_ANSI_3): "3",
+        UInt16(kVK_ANSI_4): "4",
+        UInt16(kVK_ANSI_5): "5",
+        UInt16(kVK_ANSI_6): "6",
+        UInt16(kVK_ANSI_7): "7",
+        UInt16(kVK_ANSI_8): "8",
+        UInt16(kVK_ANSI_9): "9",
+        UInt16(kVK_ANSI_Comma): ",",
+        UInt16(kVK_ANSI_Period): ".",
+        UInt16(kVK_ANSI_Minus): "-",
+        UInt16(kVK_ANSI_Equal): "=",
+        UInt16(kVK_ANSI_Semicolon): ";",
+        UInt16(kVK_ANSI_Quote): "'",
+        UInt16(kVK_ANSI_Slash): "/",
+        UInt16(kVK_ANSI_Backslash): "\\",
+        UInt16(kVK_ANSI_LeftBracket): "[",
+        UInt16(kVK_ANSI_RightBracket): "]",
+        UInt16(kVK_ANSI_Grave): "`"
+    ]
 }

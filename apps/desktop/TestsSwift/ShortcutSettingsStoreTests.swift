@@ -73,4 +73,29 @@ final class ShortcutSettingsStoreTests: XCTestCase {
             KeyShortcut(keyCode: 43, modifiers: [.command])
         )
     }
+
+    @MainActor
+    func testRegisteringDefaultActionShortcutsDoesNotTriggerChangeCallback() {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+        let store = ShortcutSettingsStore(
+            defaults: defaults,
+            defaultGlobalShortcut: .init(keyCode: 49, modifiers: [.command, .shift]),
+            defaultActionShortcuts: [:]
+        )
+        var callbackCount = 0
+        store.onActionShortcutsChanged = {
+            callbackCount += 1
+        }
+
+        store.registerDefaultActionShortcuts([
+            "open-settings": .init(keyCode: 43, modifiers: [.command])
+        ])
+
+        XCTAssertEqual(callbackCount, 0)
+        XCTAssertEqual(
+            store.shortcut(forActionID: "open-settings"),
+            KeyShortcut(keyCode: 43, modifiers: [.command])
+        )
+    }
 }

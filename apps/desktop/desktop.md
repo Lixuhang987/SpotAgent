@@ -24,13 +24,14 @@
 ### `Sources/PromptPanel`
 
 - `PromptPanelController`：管理面板生命周期与 prompt 提交。
-- `PromptPanelView`：渲染输入框、设置入口和 action 列表。
+- `PromptPanelView`：渲染输入框、设置入口和 action 列表，并展示当前配置生效的 action 快捷键。
 - `PromptAction`：定义 action 数据结构与过滤逻辑。
 
 ### `Sources/Settings`
 
 - `ShortcutSettingsView`：渲染全局热键与 `PromptAction` 快捷键配置页。
 - `ShortcutRecorderView`：负责录制和清空快捷键。
+- 快捷键展示文案由宿主层按显式 keyCode 映射生成，避免把 Carbon 键码误当作连续区间导致显示或渲染异常。
 
 ### `Sources/SessionWindow`
 

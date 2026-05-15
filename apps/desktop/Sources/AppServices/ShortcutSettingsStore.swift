@@ -50,7 +50,6 @@ final class ShortcutSettingsStore: ObservableObject {
     func registerDefaultActionShortcuts(_ shortcuts: [String: KeyShortcut]) {
         defaultActionShortcuts.merge(shortcuts) { _, new in new }
         objectWillChange.send()
-        onActionShortcutsChanged?()
     }
 
     func setShortcut(_ shortcut: KeyShortcut?, forActionID actionID: String) {

@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import XCTest
 @testable import HandAgentDesktop
 
@@ -7,6 +8,33 @@ final class KeyShortcutTests: XCTestCase {
         let shortcut = KeyShortcut(keyCode: 49, modifiers: [.command, .shift])
 
         XCTAssertEqual(shortcut.displayString, "⇧⌘Space")
+    }
+
+    func testFormatsPunctuationShortcutDisplayString() {
+        let shortcut = KeyShortcut(
+            keyCode: UInt16(kVK_ANSI_Comma),
+            modifiers: [.command]
+        )
+
+        XCTAssertEqual(shortcut.displayString, "⌘,")
+    }
+
+    func testFormatsDigitShortcutDisplayString() {
+        let shortcut = KeyShortcut(
+            keyCode: UInt16(kVK_ANSI_0),
+            modifiers: [.command]
+        )
+
+        XCTAssertEqual(shortcut.displayString, "⌘0")
+    }
+
+    func testFormatsNonContiguousLetterShortcutDisplayString() {
+        let shortcut = KeyShortcut(
+            keyCode: UInt16(kVK_ANSI_M),
+            modifiers: [.command]
+        )
+
+        XCTAssertEqual(shortcut.displayString, "⌘M")
     }
 
     func testMatchesEvent() {
