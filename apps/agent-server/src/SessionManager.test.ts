@@ -322,7 +322,7 @@ describe("SessionManager", () => {
     const manager = new SessionManager(
       {
         async runWithMessages() {
-          throw new Error("Missing OPENAI_API_KEY. 请先配置 API key。");
+          throw new Error("Missing apiKey in ~/.spotAgent/settings.json. 请先在设置页完成模型配置。");
         },
       },
       (message) => {
@@ -342,7 +342,7 @@ describe("SessionManager", () => {
         messageId: "session-4-error",
         timestamp: "2026-05-11T00:00:00.000Z",
         payload: {
-          message: "Missing OPENAI_API_KEY. 请先配置 API key。",
+          message: "Missing apiKey in ~/.spotAgent/settings.json. 请先在设置页完成模型配置。",
         },
       },
     ]);

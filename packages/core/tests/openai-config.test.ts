@@ -1,54 +1,28 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
+  defaultOpenAIBaseURL,
   resolveOpenAIApiKey,
   resolveOpenAIBaseURL,
 } from "../src/llm/OpenAIConfig";
 
-const originalOpenAIKey = process.env.OPENAI_API_KEY;
-const originalOpenAIBaseURL = process.env.OPENAI_BASE_URL;
-
-afterEach(() => {
-  if (originalOpenAIKey === undefined) {
-    delete process.env.OPENAI_API_KEY;
-  } else {
-    process.env.OPENAI_API_KEY = originalOpenAIKey;
-  }
-
-  if (originalOpenAIBaseURL === undefined) {
-    delete process.env.OPENAI_BASE_URL;
-  } else {
-    process.env.OPENAI_BASE_URL = originalOpenAIBaseURL;
-  }
-});
-
 describe("OpenAIConfig", () => {
-  it("prefers explicit apiKey and falls back to OPENAI_API_KEY", () => {
-    process.env.OPENAI_API_KEY = "env-key";
-
+  it("returns the explicit apiKey without reading environment variables", () => {
     expect(resolveOpenAIApiKey({ apiKey: "explicit-key" })).toBe("explicit-key");
-    expect(resolveOpenAIApiKey({})).toBe("env-key");
   });
 
   it("throws a clear error when no OpenAI API key is configured", () => {
-    delete process.env.OPENAI_API_KEY;
-
     expect(() => resolveOpenAIApiKey({})).toThrow(
-      "Missing OPENAI_API_KEY. Set it before starting HandAgent."
+      "Missing apiKey in ~/.spotAgent/settings.json. 请先在设置页完成模型配置。"
     );
   });
 
-  it("prefers explicit baseURL and falls back to OPENAI_BASE_URL", () => {
-    process.env.OPENAI_BASE_URL = "https://env.example/v1";
-
+  it("returns the explicit baseURL without reading environment variables", () => {
     expect(resolveOpenAIBaseURL({ baseURL: "https://explicit.example/v1" })).toBe(
       "https://explicit.example/v1"
     );
-    expect(resolveOpenAIBaseURL({})).toBe("https://env.example/v1");
   });
 
-  it("returns undefined when no OpenAI base URL is configured", () => {
-    delete process.env.OPENAI_BASE_URL;
-
-    expect(resolveOpenAIBaseURL({})).toBeUndefined();
+  it("returns the OpenAI default baseURL when no custom baseURL is configured", () => {
+    expect(resolveOpenAIBaseURL({})).toBe(defaultOpenAIBaseURL);
   });
 });

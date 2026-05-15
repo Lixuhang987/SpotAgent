@@ -4,10 +4,11 @@ import SwiftUI
 @main
 struct HandAgentApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @StateObject private var settingsStore = AgentSettingsStore()
 
     var body: some Scene {
         Settings {
-            EmptyView()
+            AgentSettingsView(store: settingsStore)
         }
     }
 }

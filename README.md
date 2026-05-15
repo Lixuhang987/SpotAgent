@@ -25,22 +25,14 @@ HandAgent 是一个 macOS 优先的桌面 Agent Runtime MVP。当前桌面壳使
 
 ## 模型配置
 
-当前本地 Node agent-server 会从启动进程环境读取 `OPENAI_API_KEY`，并可选读取 `OPENAI_BASE_URL`。如果没有配置 API key，提交 prompt 后会返回明确错误提示，且不会产生模型回复。
+当前模型配置不再读取环境变量，而是统一由桌面端设置页写入 `~/.spotAgent/settings.json`。可配置项包括：
 
-建议在当前 shell 里先执行：
+- `model`
+- `apiKey`
+- `baseUrl`
+- `api`：当前支持 `responses`、`chat`、`completion`
 
-```bash
-export OPENAI_API_KEY="你的 OpenAI API key"
-export OPENAI_BASE_URL="https://你的模型提供商兼容 OpenAI 的入口/v1"
-```
-
-如果你使用的是官方 OpenAI，通常不需要配置 `OPENAI_BASE_URL`。如果希望每次打开终端都自动生效，可以把同样的 `export` 语句追加到你的 shell 配置文件，例如 `~/.zshrc`，然后重新打开终端或执行：
-
-```bash
-source ~/.zshrc
-```
-
-配置完成后，再按正常流程启动桌面宿主：
+首次启动后，可通过应用菜单里的 `Settings...` 打开配置页并保存。配置完成后，再按正常流程启动桌面宿主：
 
 ```bash
 pnpm install
@@ -49,8 +41,8 @@ bash ./scripts/swiftw run HandAgentDesktop
 
 注意：
 
-- `OPENAI_API_KEY` 和 `OPENAI_BASE_URL` 只会在桌面宿主启动时从当前 shell 继承。
-- 如果你是先打开 HandAgent，再在另一个 `zsh` 里执行 `export`，当前已运行的桌面宿主不会自动拿到新变量；需要回到同一个 shell 重新执行 `bash ./scripts/swiftw run HandAgentDesktop`。
+- `agent-server` 会在每次模型请求前重新读取 `~/.spotAgent/settings.json`，因此保存设置后无需重启应用即可影响后续新请求。
+- 如果未配置 `apiKey`，提交 prompt 后会返回明确错误：`Missing apiKey in ~/.spotAgent/settings.json. 请先在设置页完成模型配置。`
 - 如果对话里看到 `Could not connect to the server`，优先排查本地 `agent-server` 是否启动成功；这类错误发生在连接本地会话服务阶段，通常早于模型 API key 校验。
 
 ## 说明

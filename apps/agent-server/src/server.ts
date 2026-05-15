@@ -36,14 +36,14 @@ export async function handleSocketMessage(
 }
 
 export async function startDefaultServer(port = 4317) {
-  const [{ AgentRuntime }, { VercelClient }, { ToolRegistry }] = await Promise.all([
+  const [{ AgentRuntime }, { ToolRegistry }, { SettingsBackedLLMClient }] = await Promise.all([
     import("../../../packages/core/src/runtime/AgentRuntime.ts"),
-    import("../../../packages/core/src/llm/VercelClient.ts"),
     import("../../../packages/core/src/tools/ToolRegistry.ts"),
+    import("./SettingsBackedLLMClient.ts"),
   ]);
 
   const manager = new SessionManager(
-    new AgentRuntime(new VercelClient(), new ToolRegistry()),
+    new AgentRuntime(new SettingsBackedLLMClient(), new ToolRegistry()),
   );
 
   return startServer({ manager, port });

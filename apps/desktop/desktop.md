@@ -10,11 +10,14 @@
 
 - `HandAgentApp`：SwiftUI 程序入口。
 - `AppDelegate`：应用启动后初始化服务、面板、会话窗口和状态气泡，并根据是否存在打开中的 `SessionWindow` 在 `.accessory` / `.regular` 激活策略之间切换，确保有会话窗口时可通过 `Command+Tab` 回到应用。
+- `Settings` scene：承载模型配置页，写入 `~/.spotAgent/settings.json`。
 
 ### `Sources/AppServices`
 
 - `AppServices`：组装宿主依赖。
 - `AgentServerService`：启动和停止本地 `agent-server` 进程。
+- `AgentSettingsStore`：加载、保存模型设置，并把 `model / apiKey / baseUrl / api` 编码到 `~/.spotAgent/settings.json`。
+- `AgentSettingsView`：渲染设置页表单。
 - `HotkeyService`：注册全局热键并触发 `onTrigger` 回调。
 - `SessionRegistry`：维护会话摘要与最近活跃顺序。
 

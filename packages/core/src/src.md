@@ -29,8 +29,18 @@
 职责：
 
 - 定义统一的 LLM provider 接口。
-- 解析 `OPENAI_API_KEY` 与可选的 `OPENAI_BASE_URL` 环境配置。
+- 解析持久化模型配置，并把缺省 `baseUrl` 归一化到默认 OpenAI 入口。
 - 把内部消息结构转换为 Vercel AI SDK 所需格式。
+
+### `config`
+
+- `AppConfig.ts`
+- `ModelSettings.ts`
+
+职责：
+
+- 定义运行时配置 DTO。
+- 解析 `~/.spotAgent/settings.json` 中的模型设置。
 
 ### `tools`
 
@@ -77,8 +87,10 @@
 
 ### 3. llm 适配阶段
 
+- `loadModelSettings()` 读取 `~/.spotAgent/settings.json`
 - `toVercelMessages(messages)` 将内部消息转为 SDK 消息
 - `toVercelTools(tools)` 将注册 tool 转为 provider tool set
+- `VercelClient` 根据 `api=responses/chat/completion` 选择对应 provider model
 - `generateText()` 返回文本与 toolCalls
 
 ### 4. tool 阶段

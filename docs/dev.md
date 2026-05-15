@@ -2,20 +2,24 @@
 
 ## 启动项目
 
-1. 先配置模型环境变量。
+1. 先配置模型设置。
 
-```bash
-export OPENAI_API_KEY="你的 OpenAI API key"
-export OPENAI_BASE_URL="https://你的模型提供商兼容 OpenAI 的入口/v1"
+```json
+{
+  "llm": {
+    "model": "gpt-5-mini",
+    "apiKey": "你的 OpenAI API key",
+    "baseUrl": "https://你的模型提供商兼容 OpenAI 的入口/v1",
+    "api": "responses"
+  }
+}
 ```
 
-如果使用官方 OpenAI，`OPENAI_BASE_URL` 可以不配。若希望长期生效，可写入 `~/.zshrc`：
+推荐直接通过桌面应用的 `Settings...` 页面编辑这份 `~/.spotAgent/settings.json`。说明：
 
-```bash
-echo 'export OPENAI_API_KEY="你的 OpenAI API key"' >> ~/.zshrc
-echo 'export OPENAI_BASE_URL="https://你的模型提供商兼容 OpenAI 的入口/v1"' >> ~/.zshrc
-source ~/.zshrc
-```
+- `baseUrl` 可留空，运行时会自动回退到 `https://api.openai.com/v1`。
+- `api` 当前支持 `responses`、`chat`、`completion`。
+- `agent-server` 会在每次模型请求前重新读取这份文件，因此修改设置后无需重启桌面宿主。
 
 2. 安装 workspace 依赖。
 
@@ -31,15 +35,13 @@ bash ./scripts/swiftw run HandAgentDesktop
 
 4. 如果 `swiftw run` 在当前机器报错，优先检查 Xcode 版本与 `xcode-select` 是否指向完整 Xcode，再执行同样流程。
 
-### 模型环境变量排查
+### 模型配置排查
 
-- `OPENAI_API_KEY` 由宿主启动出来的本地 `apps/agent-server/src/server.ts` 进程读取。
-- `OPENAI_BASE_URL` 也由同一个本地 `agent-server` 进程读取，用于覆盖默认 OpenAI provider 入口。
-- 如果提交 prompt 后看到 `Missing OPENAI_API_KEY. Set it before starting HandAgent.`，说明桌面宿主启动时没有拿到该环境变量。
-- 如果是先启动桌面宿主，再在另一个 shell 里 `export OPENAI_*`，当前已运行的宿主不会自动更新环境；必须回到启动它的同一个 shell 重新执行 `bash ./scripts/swiftw run HandAgentDesktop`。
+- 本地 `apps/agent-server/src/server.ts` 会通过 `SettingsBackedLLMClient` 在每次请求前读取 `~/.spotAgent/settings.json`。
+- `VercelClient` 会根据配置里的 `api` 选择 `responses`、`chat` 或 `completion` provider model。
+- 如果提交 prompt 后看到 `Missing apiKey in ~/.spotAgent/settings.json. 请先在设置页完成模型配置。`，说明当前设置文件里没有有效的 `apiKey`。
 - 如果提交 prompt 后看到 `Could not connect to the server`，优先检查本地 `agent-server` 是否成功启动，而不要先把问题归因到 API key。
-- 如果模型请求打到了错误的 provider 地址，先检查 `OPENAI_BASE_URL` 是否与目标服务要求的 OpenAI 兼容入口一致。
-- 这时先在当前 shell 里配置变量，再重新执行 `bash ./scripts/swiftw run HandAgentDesktop`。
+- 如果模型请求打到了错误的 provider 地址，先检查 `baseUrl` 是否与目标服务要求的 OpenAI 兼容入口一致。
 
 ## 调试方式
 

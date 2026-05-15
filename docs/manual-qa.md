@@ -21,7 +21,7 @@
 6. 观察 PromptPanel 关闭并新建 SessionWindow。
 7. 观察 SessionWindow 中出现用户消息和 assistant 流式回复。
 8. 点击状态气泡，确认优先回到当前 running session；没有 running session 时回最近活跃窗口。
-9. 如未配置 `OPENAI_API_KEY`，确认错误会以可见文案和 assistant 气泡展示，而不是静默失败。
+9. 如未配置 `apiKey`，确认错误会以可见文案 `Missing apiKey in ~/.spotAgent/settings.json. 请先在设置页完成模型配置。` 和 assistant 气泡展示，而不是静默失败。
 
 ## 通过标准
 
