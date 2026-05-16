@@ -6,9 +6,10 @@
 
 | 文件 | 职责 |
 |------|------|
-| `SettingsView.swift` | `TabView` 容器，挂"模型" + "快捷键"两个 Tab |
+| `SettingsView.swift` | `TabView` 容器，挂"模型" + "快捷键"两个 Tab，统一暗色背景 |
 | `AgentSettingsViewModel.swift` | `@Observable` 代理：把 `AgentSettingsStore.settings` 包装成可双向绑定的属性，写时自动 trim |
 | `ShortcutSettingsView.swift` | 全局热键 + PromptAction 快捷键的 `KeyboardShortcuts.Recorder` 列表 |
+| `SettingsStyles.swift` | 共享样式：`SettingsCardModifier`（暗色卡片容器）、`SettingsFieldStyle`（自定义 TextField 外观）、`SettingsRow`（label + hint + control 布局） |
 
 模型设置的具体 UI 在 [AppServices/AgentSettings/AgentSettingsView.swift](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/AgentSettings/AgentSettingsView.swift)，由本模块的 SettingsView 嵌入。
 
@@ -29,6 +30,7 @@ Coordinator.openOrFocusSettingsWindow
 - **写入时统一 trim**：所有字符串字段在 setter 里 `trimmingCharacters(in: .whitespacesAndNewlines)`，避免空白污染 settings.json。
 - **不要把 store 直接传给 View**：始终经过 ViewModel；测试也是 `AgentSettingsViewModel(store:)`。
 - **Tab 增加规则**：新建 Tab 在 `SettingsView` 内增 `Tab(...)`；Tab 内如果有副作用则配套加 ViewModel；纯展示可直接写 View。
+- **视觉风格**：设置页面使用 `settingsCard()` 卡片容器 + `SettingsFieldStyle` 输入框 + `SettingsRow` 行布局，与 PromptPanel / SessionWindow 保持统一暗色玻璃风格。不要使用系统 `Form` / `GroupBox` / `.grouped` 样式。窗口标题栏设为透明 + fullSizeContentView，与 SessionWindow 一致。
 - **不要在 Settings 里读 LLM/tool 状态**：宿主层不组装 LLM 消息，`api`/`baseURL`/`apiKey` 只是写入 settings.json；agent-server 侧每次请求自己读。
 - **测试**：[AgentSettingsViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/AgentSettingsViewModelTests.swift) 用临时 home 目录验证读写串通；[AgentSettingsStoreTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/AgentSettingsStoreTests.swift) 覆盖磁盘 IO + 轮询。
 

@@ -304,6 +304,9 @@ final class AppCoordinator {
         let window = NSWindow(contentViewController: hosting)
         window.title = "设置"
         window.setContentSize(NSSize(width: 580, height: 480))
+        window.styleMask.insert(.fullSizeContentView)
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
         return window
     }
 }

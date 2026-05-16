@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @Bindable var settingsViewModel: AgentSettingsViewModel
     let shortcutActions: [PromptAction]
+    @Environment(\.appTheme) private var theme
 
     var body: some View {
         TabView {
@@ -14,5 +15,6 @@ struct SettingsView: View {
             }
         }
         .frame(width: 580, height: 480)
+        .background(theme.colors.background)
     }
 }
