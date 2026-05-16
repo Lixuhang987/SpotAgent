@@ -145,6 +145,49 @@ final class AppCoordinator {
                 self?.send(.togglePromptPanel)
             }
         }
+        KeyboardShortcuts.onKeyUp(for: .captureSelection) { [weak self] in
+            Task { @MainActor in
+                await self?.handleCaptureSelectionHotkey()
+            }
+        }
+        KeyboardShortcuts.onKeyUp(for: .captureRegion) { [weak self] in
+            Task { @MainActor in
+                await self?.handleCaptureRegionHotkey()
+            }
+        }
+    }
+
+    private func handleCaptureSelectionHotkey() async {
+        let provider = MacSelectionCaptureProvider()
+        let result = await provider.captureSelectedText()
+        let attachmentId = "selection-\(UUID().uuidString)"
+        switch result {
+        case .selected(let text):
+            promptPanelController.appendAttachment(.textSelection(id: attachmentId, text: text))
+        case .empty:
+            break
+        case .error(let message):
+            promptPanelController.appendAttachment(.selectionError(id: attachmentId, message: message))
+        }
+        promptPanelController.show()
+    }
+
+    private func handleCaptureRegionHotkey() async {
+        let provider = MacRegionCaptureProvider()
+        let result = await provider.captureRegion()
+        let attachmentId = "region-\(UUID().uuidString)"
+        switch result {
+        case .captured(let pngBase64):
+            promptPanelController.appendAttachment(
+                .imageRegion(id: attachmentId, mimeType: "image/png", base64: pngBase64)
+            )
+            promptPanelController.show()
+        case .cancelled:
+            break
+        case .error(let message):
+            promptPanelController.appendAttachment(.selectionError(id: attachmentId, message: message))
+            promptPanelController.show()
+        }
     }
 
     private func setupStatusBubble() {
@@ -177,6 +220,8 @@ final class AppCoordinator {
             switch attachment {
             case .textSelection(let id, let text):
                 return .textSelection(id: id, text: text)
+            case .imageRegion(let id, let mimeType, let base64):
+                return .image(id: id, mimeType: mimeType, base64: base64)
             case .noAttachment, .textToken, .selectionError:
                 return nil
             }

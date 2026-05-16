@@ -26,7 +26,7 @@ final class PromptPanelViewModel {
         switch attachment {
         case .noAttachment:
             return
-        case .textSelection, .selectionError, .textToken:
+        case .textSelection, .selectionError, .textToken, .imageRegion:
             attachments.append(attachment)
         }
     }

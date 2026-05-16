@@ -36,7 +36,7 @@ struct PromptPanelView: View {
         let foreground = isError ? theme.colors.textSecondary : theme.colors.textPrimary
         let background = isError ? theme.colors.surface.opacity(0.4) : theme.colors.accentSubtle
         return HStack(spacing: 6) {
-            Image(systemName: isError ? "exclamationmark.triangle" : "text.quote")
+            Image(systemName: attachment.iconSystemName)
                 .font(.system(size: 11))
                 .foregroundStyle(foreground)
             Text(attachment.displayLabel)

@@ -5,4 +5,7 @@ extension KeyboardShortcuts.Name {
         "showPromptPanel",
         default: .init(.space, modifiers: [.command, .shift])
     )
+
+    static let captureSelection = Self("captureSelection")
+    static let captureRegion = Self("captureRegion")
 }

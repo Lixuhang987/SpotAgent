@@ -50,6 +50,10 @@ final class PromptPanelController {
         panel?.isVisible ?? false
     }
 
+    func appendAttachment(_ attachment: PromptAttachmentResult) {
+        viewModel?.appendAttachment(attachment)
+    }
+
     func show() {
         ensurePanel()
         guard let panel else { return }
