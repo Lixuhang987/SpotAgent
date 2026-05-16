@@ -24,6 +24,7 @@ final class AppCoordinator {
     @ObservationIgnored private let agentServerService: AgentServerService
     @ObservationIgnored private let sessionRegistry: SessionRegistry
     @ObservationIgnored private let settingsStore: AgentSettingsStore
+    @ObservationIgnored private var platformBridgeService: PlatformBridgeService?
     @ObservationIgnored private let setActivationPolicy: @MainActor (NSApplication.ActivationPolicy) -> Void
     @ObservationIgnored private let settingsWindowFactory: (@MainActor () -> NSWindow)?
     @ObservationIgnored private let activationPolicy = AppActivationPolicyCoordinator()
@@ -74,15 +75,25 @@ final class AppCoordinator {
         setupHotkey()
         setupStatusBubble()
         startAgentServer()
+        startPlatformBridge()
         statusBubbleController.show()
     }
 
     func shutdown() {
+        platformBridgeService?.stop()
+        platformBridgeService = nil
         agentServerService.stop()
         settingsWindow?.close()
         settingsWindow = nil
         sessionWindows.values.forEach { $0.close() }
         sessionWindows.removeAll()
+    }
+
+    private func startPlatformBridge() {
+        guard !skipServerStart else { return }
+        let bridge = PlatformBridgeService(serverURL: agentServerURL)
+        platformBridgeService = bridge
+        bridge.start()
     }
 
     func send(_ action: Action) {

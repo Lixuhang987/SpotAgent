@@ -4,23 +4,47 @@ import { homedir } from "node:os";
 import type { SessionMessage } from "../../../packages/core/src/protocol/SessionMessage.ts";
 import { SessionManager } from "./SessionManager.ts";
 import { FileSessionStore } from "../../../packages/core/src/storage/index.ts";
+import { WebSocketPlatformBridge } from "./WebSocketPlatformBridge.ts";
 
 export async function startServer({
   manager,
+  bridge,
   port = 4317,
 }: {
   manager: SessionManager;
+  bridge?: WebSocketPlatformBridge;
   port?: number;
 }) {
   const { WebSocketServer } = await import("ws");
   const wss = new WebSocketServer({ port });
 
   wss.on("connection", (socket) => {
+    let isBridge = false;
+    const send = (outgoing: SessionMessage) => {
+      socket.send(JSON.stringify(outgoing));
+    };
+
     socket.on("message", async (raw) => {
       const message = JSON.parse(raw.toString()) as SessionMessage;
-      await manager.receive(message, (outgoing) => {
-        socket.send(JSON.stringify(outgoing));
-      });
+
+      if (message.type === "platform_bridge_hello" && bridge) {
+        isBridge = true;
+        bridge.attach(send);
+        return;
+      }
+
+      if (message.type === "platform_response") {
+        bridge?.handleResponse(message.payload);
+        return;
+      }
+
+      await manager.receive(message, send);
+    });
+
+    socket.on("close", () => {
+      if (isBridge && bridge) {
+        bridge.detach();
+      }
     });
   });
 
@@ -42,14 +66,14 @@ export async function startDefaultServer(port = 4317) {
   const [
     { AgentRuntime },
     { registerBuiltinTools },
-    { OfflinePlatformAdapter },
+    { RemotePlatformAdapter },
     { FileWorkspaceRegistry },
     { loadToolSettings },
     { SettingsBackedLLMClient },
   ] = await Promise.all([
     import("../../../packages/core/src/runtime/AgentRuntime.ts"),
     import("../../../packages/core/src/tools/registerBuiltins.ts"),
-    import("../../../packages/core/src/platform/OfflinePlatformAdapter.ts"),
+    import("../../../packages/core/src/platform/RemotePlatformAdapter.ts"),
     import("../../../packages/core/src/workspace/FileWorkspaceRegistry.ts"),
     import("../../../packages/core/src/config/ToolSettings.ts"),
     import("./SettingsBackedLLMClient.ts"),
@@ -65,7 +89,8 @@ export async function startDefaultServer(port = 4317) {
   });
   await workspaceRegistry.getDefault();
 
-  const platform = new OfflinePlatformAdapter();
+  const bridge = new WebSocketPlatformBridge();
+  const platform = new RemotePlatformAdapter({ bridge });
   const toolSettings = loadToolSettings();
   const { registry, registered, disabled } = registerBuiltinTools({
     platform,
@@ -84,7 +109,7 @@ export async function startDefaultServer(port = 4317) {
     { store },
   );
 
-  return startServer({ manager, port });
+  return startServer({ manager, bridge, port });
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
