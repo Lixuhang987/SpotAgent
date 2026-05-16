@@ -118,7 +118,7 @@
   - 依赖：无。
   - 阻塞：4.2、4.3、1.1（file tool 注册前需要 registry 就绪）。
 
-- [ ] **4.2 workspace.list / workspace.askUser tool**
+- [x] **4.2 workspace.list / workspace.askUser tool**（仅 list 已落地，askUser 暂缓）
   - 现状：LLM 没有任何方式发现已注册的 workspace。
   - 用户场景：
     - 场景 A（LLM 自决策）：用户说「保存为笔记」→ LLM 调 `workspace.list` 拿到列表 → 看到「Notes」description 为「日常笔记」→ 自行选用，无需追问。
@@ -149,7 +149,7 @@
   - 依赖：4.1、4.2。
   - 阻塞：1.1 中 file tool 真正可用、7.2 权限策略 key 设计（按 `workspaceId` 而非裸路径记忆）。
 
-- [ ] **4.4 Workspace 管理 UI**
+- [x] **4.4 Workspace 管理 UI**
   - 现状：无 UI，注册表只能通过手动编辑 `workspaces.json` 改。
   - 用户场景：用户在 Settings 增加一个 workspace「项目笔记」指向 `~/Documents/proj-notes/`，描述「与当前项目相关的笔记和草稿」；后续 LLM 保存时会识别这个语义。
   - 验收标准：
@@ -185,7 +185,7 @@
 
 ## 七、审计与权限
 
-- [ ] **7.1 SessionEvent 审计写入**
+- [x] **7.1 SessionEvent 审计写入**
   - 现状：`SessionRecord` 定义了 `tool_call` / `tool_result` / `permission_request` / `error` 事件类型，runtime 循环里没有任何写入。
   - 用户场景：用户事后排查「Agent 究竟执行了什么 tool、参数是什么、用了多久」，目前查不到。
   - 验收标准：
@@ -199,7 +199,7 @@
   - 依赖：1.1（tool 调用真实发生）。
   - 阻塞：7.2（权限决策也作为事件写入）。
 
-- [ ] **7.2 权限审批流程（首次询问 + 记忆策略）**
+- [x] **7.2 权限审批流程（首次询问 + 记忆策略）**
   - 现状：`permission_request` 事件类型已定义，无任何拦截 / 审批逻辑。
   - 用户场景：LLM 第一次想调用 `file.write` 改某个文件，弹询问气泡；用户选「本次会话允许」或「始终允许此 tool 写此目录」，后续按策略自动放行；选「拒绝」则 runtime 收到拒绝结果，LLM 自行决定下一步。
   - 验收标准：
@@ -215,7 +215,7 @@
   - 依赖：7.3。
   - 阻塞：无。
 
-- [ ] **7.3 Tool 执行前权限检查**
+- [x] **7.3 Tool 执行前权限检查**
   - 现状：架构预留，runtime 未实现。
   - 用户场景：是 7.2 的「前置拦截器」，独立列出来是因为它属于 runtime 改动而非 UI 改动。
   - 验收标准：
