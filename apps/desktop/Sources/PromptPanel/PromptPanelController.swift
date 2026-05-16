@@ -5,16 +5,19 @@ import SwiftUI
 
 @MainActor
 final class PromptPanelController {
+    private var panel: PromptPanelWindow?
+    private var eventMonitor: Any?
+    private var viewModel: PromptPanelViewModel?
+
+    // Legacy callbacks kept for backward compatibility during migration
     var onSubmit: ((String, [PromptAttachmentResult]) -> Void)?
     var onOpenSettings: (() -> Void)?
 
-    private var actions: [PromptAction] = []
-    private var focusSeed = 0
-    private var panel: PromptPanelWindow?
-    private var eventMonitor: Any?
+    func configure(viewModel: PromptPanelViewModel) {
+        self.viewModel = viewModel
+    }
 
     func register(actions: [PromptAction]) {
-        self.actions = actions
         for action in actions {
             if let defaultShortcut = action.defaultShortcut {
                 let name = action.shortcutName
@@ -23,19 +26,30 @@ final class PromptPanelController {
                 }
             }
         }
-        refreshContent()
+        if viewModel == nil {
+            let vm = PromptPanelViewModel(actions: actions)
+            vm.onSubmit = { [weak self] draft, attachments in
+                self?.onSubmit?(draft, attachments)
+            }
+            vm.onHide = { [weak self] in
+                self?.hide()
+            }
+            vm.onOpenSettings = { [weak self] in
+                self?.onOpenSettings?()
+                self?.hide()
+            }
+            self.viewModel = vm
+        }
     }
 
     func show() {
         ensurePanel()
-        focusSeed += 1
-        refreshContent()
-
         guard let panel else { return }
-
+        viewModel?.focusSeed += 1
         panel.center()
         panel.orderFrontRegardless()
         panel.makeKey()
+        NSApp.activate(ignoringOtherApps: true)
         installEventMonitor()
     }
 
@@ -44,16 +58,8 @@ final class PromptPanelController {
         removeEventMonitor()
     }
 
-    func submit(draft: String, attachments: [PromptAttachmentResult]) {
-        let trimmedDraft = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedDraft.isEmpty else { return }
-
-        onSubmit?(trimmedDraft, attachments)
-        hide()
-    }
-
     private func ensurePanel() {
-        guard panel == nil else { return }
+        guard panel == nil, let viewModel else { return }
 
         let panel = PromptPanelWindow(
             contentRect: NSRect(x: 0, y: 0, width: 640, height: 420),
@@ -71,49 +77,18 @@ final class PromptPanelController {
         panel.standardWindowButton(.closeButton)?.isHidden = true
         panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
         panel.standardWindowButton(.zoomButton)?.isHidden = true
-        panel.hidesOnDeactivate = true
         panel.onDidResignKey = { [weak self] in
             self?.hide()
         }
-        panel.contentView = makeContentView()
-        panel.orderOut(nil)
+        panel.contentView = NSHostingView(rootView: PromptPanelView(viewModel: viewModel))
 
         self.panel = panel
-    }
-
-    private func refreshContent() {
-        guard let panel else { return }
-        panel.contentView = makeContentView()
-    }
-
-    private func makeContentView() -> NSView {
-        NSHostingView(
-            rootView: PromptPanelView(
-                actions: actions,
-                shortcutLabelProvider: { action in
-                    KeyboardShortcuts.getShortcut(for: action.shortcutName)?
-                        .description
-                },
-                focusSeed: focusSeed,
-                onOpenSettings: { [weak self] in
-                    self?.openSettings()
-                },
-                onSubmitDraft: { [weak self] draft in
-                    self?.submit(draft: draft, attachments: [])
-                },
-                onSubmitAction: { [weak self] action in
-                    action.perform()
-                    self?.hide()
-                }
-            )
-        )
     }
 
     private func installEventMonitor() {
         guard eventMonitor == nil else { return }
         eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self else { return event }
-            return self.handle(event: event)
+            self?.handleKeyEvent(event) ?? event
         }
     }
 
@@ -124,30 +99,23 @@ final class PromptPanelController {
         }
     }
 
-    private func handle(event: NSEvent) -> NSEvent? {
+    private func handleKeyEvent(_ event: NSEvent) -> NSEvent? {
         if event.keyCode == UInt16(kVK_Escape) {
             hide()
             return nil
         }
-
-        guard panel?.isKeyWindow == true else { return event }
-
-        guard let eventShortcut = KeyboardShortcuts.Shortcut(event: event) else { return event }
-
-        for action in actions {
+        guard panel?.isKeyWindow == true,
+              let viewModel,
+              let eventShortcut = KeyboardShortcuts.Shortcut(event: event) else {
+            return event
+        }
+        for action in viewModel.filteredActions {
             guard let shortcut = KeyboardShortcuts.getShortcut(for: action.shortcutName) else { continue }
             if shortcut == eventShortcut {
-                action.perform()
-                hide()
+                viewModel.submitAction(action)
                 return nil
             }
         }
-
         return event
-    }
-
-    private func openSettings() {
-        onOpenSettings?()
-        hide()
     }
 }

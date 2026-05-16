@@ -1,97 +1,71 @@
 import SwiftUI
 
 struct PromptPanelView: View {
-    let actions: [PromptAction]
-    let shortcutLabelProvider: (PromptAction) -> String?
-    let focusSeed: Int
-    let onOpenSettings: () -> Void
-    let onSubmitDraft: ((String) -> Void)?
-    let onSubmitAction: ((PromptAction) -> Void)?
-
-    @State private var draft = ""
+    @Bindable var viewModel: PromptPanelViewModel
+    @Environment(\.appTheme) private var theme
     @FocusState private var isQueryFocused: Bool
 
-    private var filteredActions: [PromptAction] {
-        PromptAction.filter(actions, query: draft)
+    var body: some View {
+        VStack(spacing: theme.spacing.lg) {
+            headerBar
+            inputField
+            Divider()
+            actionList
+        }
+        .promptPanelContainer()
+        .onAppear { isQueryFocused = true }
+        .onChange(of: viewModel.focusSeed) { _, _ in isQueryFocused = true }
     }
 
-    var body: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Spacer()
-                Button {
-                    onOpenSettings()
-                } label: {
-                    Image(systemName: "gearshape")
-                }
-                .buttonStyle(.plain)
-                .help("打开设置 (⌘,)")
+    private var headerBar: some View {
+        HStack {
+            Spacer()
+            Button { viewModel.openSettings() } label: {
+                Image(systemName: "gearshape")
             }
+            .buttonStyle(.plain)
+            .help("打开设置 (⌘,)")
+        }
+    }
 
-            TextField("输入你的请求", text: $draft)
-                .textFieldStyle(.plain)
-                .font(.system(size: 20, weight: .semibold))
-                .focused($isQueryFocused)
-                .onSubmit {
-                    submitDraft()
-                }
+    private var inputField: some View {
+        TextField("输入你的请求", text: $viewModel.draft)
+            .textFieldStyle(.plain)
+            .font(theme.typography.promptInputFont)
+            .focused($isQueryFocused)
+            .onSubmit { viewModel.submit() }
+    }
 
-            Divider()
-
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 8) {
-                    if filteredActions.isEmpty {
-                        Text("No actions")
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.vertical, 8)
-                    } else {
-                        ForEach(filteredActions) { action in
-                            Button {
-                                submitAction(action)
-                            } label: {
-                                HStack(spacing: 12) {
-                                    Text(action.title)
-                                        .foregroundStyle(.primary)
-
-                                    Spacer()
-
-                                    if let shortcut = shortcutLabelProvider(action) {
-                                        Text(shortcut)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                                .padding(.vertical, 8)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                        }
+    private var actionList: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: theme.spacing.sm) {
+                if viewModel.filteredActions.isEmpty {
+                    Text("No actions")
+                        .foregroundStyle(theme.colors.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, theme.spacing.sm)
+                } else {
+                    ForEach(viewModel.filteredActions) { action in
+                        actionRow(action)
                     }
                 }
             }
         }
-        .padding(20)
-        .frame(minWidth: 640, minHeight: 420)
-        .background(Color(nsColor: .windowBackgroundColor))
-        .onAppear {
-            isQueryFocused = true
-        }
-        .onChange(of: focusSeed) { _, _ in
-            isQueryFocused = true
-        }
     }
 
-    private func submitAction(_ action: PromptAction) {
-        if let onSubmitAction {
-            onSubmitAction(action)
-        } else {
-            action.perform()
+    private func actionRow(_ action: PromptAction) -> some View {
+        Button { viewModel.submitAction(action) } label: {
+            HStack(spacing: theme.spacing.md) {
+                Text(action.title)
+                    .foregroundStyle(theme.colors.textPrimary)
+                Spacer()
+                if let shortcut = viewModel.shortcutLabel(for: action) {
+                    Text(shortcut)
+                        .foregroundStyle(theme.colors.textSecondary)
+                }
+            }
+            .actionRow()
         }
-    }
-
-    private func submitDraft() {
-        let trimmedDraft = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedDraft.isEmpty else { return }
-        onSubmitDraft?(trimmedDraft)
+        .buttonStyle(.plain)
     }
 }
