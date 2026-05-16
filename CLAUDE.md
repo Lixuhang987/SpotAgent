@@ -54,7 +54,7 @@ Call flow: hotkey → PromptPanel → user submits prompt → SessionWindow + We
 
 ## Development Workflow
 
-- 需要修改代码的任务，必须先使用 `EnterWorktree` 创建 worktree（目录 `.worktrees/<task-name>/`），并在 worktree 中运行 `pnpm install` + 基线验证（`bash ./scripts/test.sh` 和 `bash ./scripts/swiftw build`）通过后，再开始实际代码修改。纯文档任务不需要 worktree。
+- 需要修改代码的任务，必须先在 `.worktrees/<task-name>/` 目录下创建 worktree（使用 `git worktree add .worktrees/<task-name> -b <branch-name>`，**不要使用 `EnterWorktree` 工具** —— 它会把 worktree 放到 `.claude/worktrees/`，与本仓库约定不符）。在 worktree 中运行 `pnpm install` + 基线验证（`bash ./scripts/test.sh` 和 `bash ./scripts/swiftw build`）通过后，再开始实际代码修改。纯文档任务不需要 worktree。
 - Update existing docs after code changes.
 - Commit with descriptive message; don't leave completed work uncommitted.
 
