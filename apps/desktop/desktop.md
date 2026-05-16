@@ -4,64 +4,139 @@
 
 `apps/desktop` 是 macOS 宿主层，负责应用生命周期、PromptPanel、SessionWindow、状态气泡和热键监听。
 
+## 架构概览
+
+采用 **AppCoordinator + ViewModel + Theme** 三层架构：
+
+- **AppCoordinator**：单向事件流（`send(.action)`），管理全局状态和模块间协调。
+- **ViewModel**（`@Observable`）：每个 View 模块的状态和交互逻辑。
+- **Theme**：通过 `@Environment(\.appTheme)` 注入全局设计 token（颜色/字体/间距）。
+- **Styles**：ViewModifier 文件，封装可复用的样式组合。
+
+所有 `ObservableObject` / `@Published` / Combine 已迁移为 Observation 框架的 `@Observable`。
+
+## 目录结构
+
+```
+HandAgentApp.swift          — @main 入口，纯 Scene 声明
+Sources/
+  Coordinator/
+    AppCoordinator.swift    — 单向事件流，全局状态协调
+  Theme/
+    AppTheme.swift          — 颜色/字体/间距 token
+    ThemeEnvironment.swift  — EnvironmentKey + View extension
+  PromptPanel/
+    PromptPanelController.swift — 纯窗口管理
+    PromptPanelView.swift       — 纯 UI + Theme + ViewModel 绑定
+    PromptPanelViewModel.swift  — 状态 + 交互逻辑
+    PromptPanelStyles.swift     — ViewModifier
+    PromptPanelWindow.swift     — NSPanel 子类
+    PromptAction.swift          — action 数据结构与过滤
+  SessionWindow/
+    SessionViewModel.swift      — @Observable，消费 WebSocket 事件
+    SessionWindowView.swift     — 纯 UI + Theme
+    SessionStyles.swift         — ViewModifier
+    SessionSocketClient.swift   — WebSocket 连接
+  StatusBubble/
+    StatusBubbleController.swift — 窗口管理 + ViewModel 注入
+    StatusBubbleView.swift       — 纯 UI + Theme + ViewModel
+    StatusBubbleViewModel.swift  — 状态逻辑
+    StatusBubbleStyles.swift     — ViewModifier
+  Settings/
+    SettingsView.swift           — TabView 容器
+    AgentSettingsViewModel.swift — 设置逻辑代理
+    ShortcutSettingsView.swift   — 快捷键配置页
+  AppServices/
+    AgentServer/AgentServerService.swift
+    AgentSettings/AgentSettingsStore.swift, AgentSettingsView.swift
+    Lifecycle/AppActivationPolicyCoordinator.swift
+    Hotkey/GlobalShortcutNames.swift
+    Session/SessionRegistry.swift
+    AppServices.swift
+TestsSwift/
+  AppThemeTests.swift
+  PromptPanelViewModelTests.swift
+  AppCoordinatorTests.swift
+  AgentSettingsViewModelTests.swift
+  StatusBubbleViewModelTests.swift
+  SessionViewModelTests.swift
+  SessionRegistryTests.swift
+  AgentSettingsStoreTests.swift
+  AppActivationPolicyCoordinatorTests.swift
+  PromptActionTests.swift
+```
+
 ## 核心模块
 
 ### `HandAgentApp.swift`
 
-- `HandAgentApp`：SwiftUI 程序入口。
-- `AppDelegate`：应用启动后初始化服务、面板、会话窗口和状态气泡，并根据是否存在打开中的 `SessionWindow` 在 `.accessory` / `.regular` 激活策略之间切换，确保有会话窗口时可通过 `Command+Tab` 回到应用。
-- `Settings` scene：承载模型配置页，写入 `~/.spotAgent/settings.json`。
+- `HandAgentApp`：SwiftUI 程序入口，持有 `AppCoordinator` 作为 `@State`。
+- `Window("设置")` scene：承载 `SettingsView`（TabView 容器）。
+- 不再使用 `AppDelegate`，所有初始化由 `AppCoordinator.bootstrap()` 完成。
 
-### `Sources/AppServices`
+### `Sources/Coordinator`
 
-- `AppServices`：组装宿主依赖。
-- `AgentServerService`：启动和停止本地 `agent-server` 进程。
-- `AgentSettingsStore`：加载、保存模型设置，并把 `model / apiKey / baseUrl / api` 编码到 `~/.spotAgent/settings.json`。
-- `AgentSettingsView`：渲染设置页表单。
-- `HotkeyService`：注册全局热键并触发 `onTrigger` 回调。
-- `SessionRegistry`：维护会话摘要与最近活跃顺序。
+- `AppCoordinator`：`@Observable`，通过 `send(_ action:)` 接收事件，管理 PromptPanel、SessionWindow、StatusBubble、AgentServer 的生命周期。非测试模式下 `init` 自动调用 `bootstrap()`。
+
+### `Sources/Theme`
+
+- `AppTheme`：定义 `ThemeColors`、`ThemeTypography`、`ThemeSpacing` token。
+- `ThemeEnvironment`：通过 `EnvironmentKey` 注入，所有 View 通过 `@Environment(\.appTheme)` 访问。
 
 ### `Sources/PromptPanel`
 
-- `PromptPanelController`：管理面板生命周期与 prompt 提交。
-- `PromptPanelView`：渲染输入框、设置入口和 action 列表，并展示当前配置生效的 action 快捷键。
-- `PromptAction`：定义 action 数据结构与过滤逻辑。
-
-### `Sources/Settings`
-
-- `ShortcutSettingsView`：渲染全局热键与 `PromptAction` 快捷键配置页。
-- `ShortcutRecorderView`：负责录制和清空快捷键。
-- 快捷键展示文案由宿主层按显式 keyCode 映射生成，避免把 Carbon 键码误当作连续区间导致显示或渲染异常。
+- `PromptPanelViewModel`：`@Observable`，管理 draft、action 过滤、提交逻辑。
+- `PromptPanelController`：纯窗口管理，接收 ViewModel 后创建 NSPanel。
+- `PromptPanelView`：纯 UI，绑定 ViewModel + Theme。
+- `PromptPanelStyles`：`PromptPanelContainerModifier`、`ActionRowModifier`。
 
 ### `Sources/SessionWindow`
 
-- `SessionWindowController`：管理单个会话窗口与 SwiftUI 内容。
-- `SessionViewModel`：消费 WebSocket 事件并维护消息列表、状态和错误。
+- `SessionViewModel`：`@Observable`，消费 WebSocket 事件并维护消息列表、状态和错误。
+- `SessionWindowView`：纯 UI + Theme，使用 `messageBubble(role:)` modifier。
+- `SessionStyles`：`MessageBubbleModifier`。
 - `SessionSocketClient`：负责与 `agent-server` 建立会话级 WebSocket 连接。
 
 ### `Sources/StatusBubble`
 
-- `StatusBubbleController`：管理状态气泡展示与回跳。
-- `StatusBubbleView`：渲染气泡内容与点击区域。
+- `StatusBubbleViewModel`：`@Observable`，从 `SessionRegistry` 派生 `isRunning` / `latestSummary`。
+- `StatusBubbleController`：管理状态气泡窗口，注入 ViewModel。
+- `StatusBubbleView`：纯 UI + Theme。
+- `StatusBubbleStyles`：`StatusBubbleContainerModifier`。
+
+### `Sources/Settings`
+
+- `SettingsView`：TabView 容器，包含"模型"和"快捷键"两个 Tab。
+- `AgentSettingsViewModel`：`@Observable`，代理 `AgentSettingsStore` 的读写。
+- `AgentSettingsView`：纯 UI + Theme + ViewModel 绑定。
+- `ShortcutSettingsView`：渲染全局热键与 PromptAction 快捷键配置。
+
+### `Sources/AppServices`
+
+- `AgentServerService`：启动和停止本地 `agent-server` 进程。
+- `AgentSettingsStore`：`@Observable`，加载、保存模型设置到 `~/.spotAgent/settings.json`。
+- `SessionRegistry`：`@Observable`，维护会话摘要与最近活跃顺序。
+- `AppActivationPolicyCoordinator`：根据打开的 SessionWindow 数量切换激活策略。
 
 ## 宿主调用链路
 
 ```mermaid
 sequenceDiagram
   participant User as 用户
-  participant Hotkey as HotkeyService
+  participant Hotkey as KeyboardShortcuts
+  participant Coord as AppCoordinator
   participant Panel as PromptPanel
   participant Window as SessionWindow
   participant Server as agent-server
 
   User->>Hotkey: 按下全局热键
-  Hotkey->>Panel: show()
-  User->>Panel: 点击设置按钮或按下 Command+,
-  Panel->>Panel: 打开 Settings 并隐藏面板
+  Hotkey->>Coord: send(.showPromptPanel)
+  Coord->>Panel: show()
   User->>Panel: 输入 prompt 并提交
-  Panel->>Window: 创建 SessionWindow
-  Window->>Server: 发送 SessionMessage
-  Server-->>Window: 返回 session_snapshot / assistant / tool / status 事件
+  Panel->>Coord: send(.submitPrompt)
+  Coord->>Window: 创建 NSWindow + SessionViewModel
+  Window->>Server: WebSocket 连接
+  Server-->>Window: 返回 session 事件流
 ```
 
 ## 宿主核心 DTO
@@ -74,9 +149,7 @@ sequenceDiagram
 - `lastActiveAt: Date`
 - `windowIsOpen: Bool`
 
-作用：
-
-- 为状态气泡和会话回跳提供聚合摘要。
+作用：为状态气泡和会话回跳提供聚合摘要。
 
 ## 对下游的约束
 
