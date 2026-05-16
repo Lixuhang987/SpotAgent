@@ -7,7 +7,7 @@ struct HandAgentApp: App {
     @State private var coordinator = AppCoordinator()
 
     var body: some Scene {
-        Window("设置", id: "settings") {
+        Settings {
             SettingsView(
                 settingsViewModel: coordinator.makeSettingsViewModel(),
                 shortcutActions: coordinator.makeShortcutActions()

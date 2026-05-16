@@ -3,6 +3,21 @@ import XCTest
 
 final class AppCoordinatorTests: XCTestCase {
     @MainActor
+    func testOpenSettingsInvokesInjectedWindowOpener() {
+        var didOpenSettings = false
+        let coordinator = AppCoordinator(
+            skipServerStart: true,
+            openSettingsWindow: {
+                didOpenSettings = true
+            }
+        )
+
+        coordinator.send(.openSettings)
+
+        XCTAssertTrue(didOpenSettings)
+    }
+
+    @MainActor
     func testSubmitPromptCreatesSessionViewModel() {
         let coordinator = AppCoordinator(skipServerStart: true)
 

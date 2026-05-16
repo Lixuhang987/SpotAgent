@@ -71,7 +71,7 @@ TestsSwift/
 ### `HandAgentApp.swift`
 
 - `HandAgentApp`：SwiftUI 程序入口，持有 `AppCoordinator` 作为 `@State`。
-- `Window("设置")` scene：承载 `SettingsView`（TabView 容器）。
+- `Settings` scene：承载 `SettingsView`（TabView 容器），复用系统设置窗口打开链路。
 - 不再使用 `AppDelegate`，所有初始化由 `AppCoordinator.bootstrap()` 完成。
 
 ### `Sources/Coordinator`

@@ -22,6 +22,7 @@ final class AppCoordinator {
     @ObservationIgnored private let agentServerService: AgentServerService
     @ObservationIgnored private let sessionRegistry: SessionRegistry
     @ObservationIgnored private let settingsStore: AgentSettingsStore
+    @ObservationIgnored private let openSettingsWindowAction: @MainActor () -> Void
     @ObservationIgnored private let activationPolicy = AppActivationPolicyCoordinator()
     @ObservationIgnored private lazy var promptPanelController = PromptPanelController()
     @ObservationIgnored private lazy var statusBubbleController: StatusBubbleController = {
@@ -45,11 +46,18 @@ final class AppCoordinator {
 
     @ObservationIgnored private var sessionWindows: [String: NSWindow] = [:]
 
-    init(skipServerStart: Bool = false) {
+    init(
+        skipServerStart: Bool = false,
+        openSettingsWindow: @escaping @MainActor () -> Void = {
+            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            NSApp.activate(ignoringOtherApps: true)
+        }
+    ) {
         self.skipServerStart = skipServerStart
         self.agentServerService = AgentServerService()
         self.sessionRegistry = SessionRegistry()
         self.settingsStore = AgentSettingsStore()
+        self.openSettingsWindowAction = openSettingsWindow
         if !skipServerStart {
             bootstrap()
         }
@@ -80,7 +88,7 @@ final class AppCoordinator {
             action.perform()
             promptPanelController.hide()
         case .openSettings:
-            openSettingsWindow()
+            openSettingsWindowAction()
         case .sessionClosed(let sessionID):
             handleSessionClosed(sessionID)
         case .statusBubbleTapped(let sessionID):
@@ -222,10 +230,5 @@ final class AppCoordinator {
             return
         }
         promptPanelController.show()
-    }
-
-    private func openSettingsWindow() {
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-        NSApp.activate(ignoringOtherApps: true)
     }
 }
