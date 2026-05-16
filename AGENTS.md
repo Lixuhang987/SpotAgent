@@ -78,6 +78,7 @@ flowchart TD
 - 已实现：热键唤起、PromptPanel、SessionWindow、状态气泡、`AgentRuntime` 循环、工具协议、文件工具、平台抽象、macOS 选区捕获。
 - 已预留：screen / OCR / accessibility / file / app 类 tool 的统一协议与平台适配入口。
 - 待收尾：把选区采集接入 PromptPanel attachment 流程，并继续补齐更多桌面能力。
+- Since the project hasn’t gone live yet, there’s no need to consider compatibility.
 
 ## 开发规范
 
