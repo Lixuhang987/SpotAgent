@@ -69,6 +69,21 @@ final class PromptPanelViewModelTests: XCTestCase {
         XCTAssertTrue(hidden)
     }
 
+    @MainActor
+    func testOpenSettingsCallsOnOpenSettingsAndOnHide() {
+        let actions = makeTestActions()
+        let vm = PromptPanelViewModel(actions: actions)
+        var didOpenSettings = false
+        var didHide = false
+        vm.onOpenSettings = { didOpenSettings = true }
+        vm.onHide = { didHide = true }
+
+        vm.openSettings()
+
+        XCTAssertTrue(didOpenSettings)
+        XCTAssertTrue(didHide)
+    }
+
     private func makeTestActions() -> [PromptAction] {
         [
             PromptAction(

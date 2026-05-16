@@ -12,6 +12,7 @@ final class AppCoordinator {
         case submitPrompt(String, attachments: [PromptAttachmentResult])
         case submitAction(PromptAction)
         case openSettings
+        case settingsWindowClosed
         case sessionClosed(String)
         case statusBubbleTapped(String?)
     }
@@ -22,7 +23,8 @@ final class AppCoordinator {
     @ObservationIgnored private let agentServerService: AgentServerService
     @ObservationIgnored private let sessionRegistry: SessionRegistry
     @ObservationIgnored private let settingsStore: AgentSettingsStore
-    @ObservationIgnored private let openSettingsWindowAction: @MainActor () -> Void
+    @ObservationIgnored private let setActivationPolicy: @MainActor (NSApplication.ActivationPolicy) -> Void
+    @ObservationIgnored private let settingsWindowFactory: (@MainActor () -> NSWindow)?
     @ObservationIgnored private let activationPolicy = AppActivationPolicyCoordinator()
     @ObservationIgnored private lazy var promptPanelController = PromptPanelController()
     @ObservationIgnored private lazy var statusBubbleController: StatusBubbleController = {
@@ -45,25 +47,28 @@ final class AppCoordinator {
     ]
 
     @ObservationIgnored private var sessionWindows: [String: NSWindow] = [:]
+    @ObservationIgnored private var settingsWindow: NSWindow?
 
     init(
         skipServerStart: Bool = false,
-        openSettingsWindow: @escaping @MainActor () -> Void = {
-            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-            NSApp.activate(ignoringOtherApps: true)
-        }
+        setActivationPolicy: @escaping @MainActor (NSApplication.ActivationPolicy) -> Void = {
+            NSApplication.shared.setActivationPolicy($0)
+        },
+        settingsWindowFactory: (@MainActor () -> NSWindow)? = nil
     ) {
         self.skipServerStart = skipServerStart
         self.agentServerService = AgentServerService()
         self.sessionRegistry = SessionRegistry()
         self.settingsStore = AgentSettingsStore()
-        self.openSettingsWindowAction = openSettingsWindow
+        self.setActivationPolicy = setActivationPolicy
+        self.settingsWindowFactory = settingsWindowFactory
         if !skipServerStart {
             bootstrap()
         }
     }
 
     func bootstrap() {
+        setActivationPolicy(activationPolicy.policyAfterUpdatingOpenSessionWindows(by: 0))
         setupPromptPanel()
         setupHotkey()
         startAgentServer()
@@ -72,6 +77,8 @@ final class AppCoordinator {
 
     func shutdown() {
         agentServerService.stop()
+        settingsWindow?.close()
+        settingsWindow = nil
         sessionWindows.values.forEach { $0.close() }
         sessionWindows.removeAll()
     }
@@ -88,7 +95,9 @@ final class AppCoordinator {
             action.perform()
             promptPanelController.hide()
         case .openSettings:
-            openSettingsWindowAction()
+            openOrFocusSettingsWindow()
+        case .settingsWindowClosed:
+            handleSettingsWindowClosed()
         case .sessionClosed(let sessionID):
             handleSessionClosed(sessionID)
         case .statusBubbleTapped(let sessionID):
@@ -169,7 +178,7 @@ final class AppCoordinator {
             return
         }
 
-        NSApp.setActivationPolicy(
+        setActivationPolicy(
             activationPolicy.policyAfterUpdatingOpenSessionWindows(by: 1)
         )
 
@@ -207,7 +216,7 @@ final class AppCoordinator {
         viewModel?.stop()
 
         if !skipServerStart {
-            NSApp.setActivationPolicy(
+            setActivationPolicy(
                 activationPolicy.policyAfterUpdatingOpenSessionWindows(by: -1)
             )
         }
@@ -230,5 +239,58 @@ final class AppCoordinator {
             return
         }
         promptPanelController.show()
+    }
+
+    private func openOrFocusSettingsWindow() {
+        setActivationPolicy(
+            activationPolicy.policyAfterUpdatingSettingsWindow(isOpen: true)
+        )
+
+        if let settingsWindow {
+            settingsWindow.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        let window = makeSettingsWindow()
+        settingsWindow = window
+
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification,
+            object: window,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.send(.settingsWindowClosed)
+            }
+        }
+
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func handleSettingsWindowClosed() {
+        settingsWindow = nil
+        setActivationPolicy(
+            activationPolicy.policyAfterUpdatingSettingsWindow(isOpen: false)
+        )
+    }
+
+    private func makeSettingsWindow() -> NSWindow {
+        if let settingsWindowFactory {
+            return settingsWindowFactory()
+        }
+
+        let hosting = NSHostingController(
+            rootView: SettingsView(
+                settingsViewModel: makeSettingsViewModel(),
+                shortcutActions: makeShortcutActions()
+            )
+        )
+        let window = NSWindow(contentViewController: hosting)
+        window.title = "设置"
+        window.setContentSize(NSSize(width: 580, height: 480))
+        return window
     }
 }

@@ -3,18 +3,37 @@ import XCTest
 
 final class AppCoordinatorTests: XCTestCase {
     @MainActor
-    func testOpenSettingsInvokesInjectedWindowOpener() {
-        var didOpenSettings = false
+    func testOpenSettingsBuildsSettingsWindowAndPromotesRegularPolicy() {
+        var builtWindowCount = 0
+        var appliedPolicies: [NSApplication.ActivationPolicy] = []
         let coordinator = AppCoordinator(
             skipServerStart: true,
-            openSettingsWindow: {
-                didOpenSettings = true
+            setActivationPolicy: { appliedPolicies.append($0) },
+            settingsWindowFactory: {
+                builtWindowCount += 1
+                return NSWindow()
             }
         )
 
         coordinator.send(.openSettings)
 
-        XCTAssertTrue(didOpenSettings)
+        XCTAssertEqual(builtWindowCount, 1)
+        XCTAssertEqual(appliedPolicies.last, .regular)
+    }
+
+    @MainActor
+    func testSettingsWindowClosedReturnsAccessoryPolicyWithoutSessions() {
+        var appliedPolicies: [NSApplication.ActivationPolicy] = []
+        let coordinator = AppCoordinator(
+            skipServerStart: true,
+            setActivationPolicy: { appliedPolicies.append($0) },
+            settingsWindowFactory: { NSWindow() }
+        )
+
+        coordinator.send(.openSettings)
+        coordinator.send(.settingsWindowClosed)
+
+        XCTAssertEqual(appliedPolicies.suffix(2), [.regular, .accessory])
     }
 
     @MainActor

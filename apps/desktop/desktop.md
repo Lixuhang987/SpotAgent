@@ -71,12 +71,12 @@ TestsSwift/
 ### `HandAgentApp.swift`
 
 - `HandAgentApp`：SwiftUI 程序入口，持有 `AppCoordinator` 作为 `@State`。
-- `Settings` scene：承载 `SettingsView`（TabView 容器），复用系统设置窗口打开链路。
+- `Settings` scene：仅保留空占位，真实设置页由 `AppCoordinator` 以独立 `NSWindow` 托管。
 - 不再使用 `AppDelegate`，所有初始化由 `AppCoordinator.bootstrap()` 完成。
 
 ### `Sources/Coordinator`
 
-- `AppCoordinator`：`@Observable`，通过 `send(_ action:)` 接收事件，管理 PromptPanel、SessionWindow、StatusBubble、AgentServer 的生命周期。非测试模式下 `init` 自动调用 `bootstrap()`。
+- `AppCoordinator`：`@Observable`，通过 `send(_ action:)` 接收事件，管理 PromptPanel、SessionWindow、SettingsWindow、StatusBubble、AgentServer 的生命周期。非测试模式下 `init` 自动调用 `bootstrap()`。
 
 ### `Sources/Theme`
 
@@ -116,7 +116,7 @@ TestsSwift/
 - `AgentServerService`：启动和停止本地 `agent-server` 进程。
 - `AgentSettingsStore`：`@Observable`，加载、保存模型设置到 `~/.spotAgent/settings.json`。
 - `SessionRegistry`：`@Observable`，维护会话摘要与最近活跃顺序。
-- `AppActivationPolicyCoordinator`：根据打开的 SessionWindow 数量切换激活策略。
+- `AppActivationPolicyCoordinator`：根据打开的 SessionWindow 与 SettingsWindow 状态切换激活策略。
 
 ## 宿主调用链路
 

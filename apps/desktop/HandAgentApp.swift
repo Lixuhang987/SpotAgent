@@ -8,12 +8,8 @@ struct HandAgentApp: App {
 
     var body: some Scene {
         Settings {
-            SettingsView(
-                settingsViewModel: coordinator.makeSettingsViewModel(),
-                shortcutActions: coordinator.makeShortcutActions()
-            )
+            EmptyView()
         }
-        .defaultSize(width: 580, height: 480)
         .commands {
             CommandGroup(replacing: .appSettings) {
                 Button("设置…") {

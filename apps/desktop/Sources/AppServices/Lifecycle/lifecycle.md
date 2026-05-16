@@ -6,12 +6,12 @@
 
 | 文件 | 职责 |
 |------|------|
-| `AppActivationPolicyCoordinator.swift` | 根据打开的 SessionWindow 数量切换 activation policy |
+| `AppActivationPolicyCoordinator.swift` | 根据打开的 SessionWindow / SettingsWindow 状态切换 activation policy |
 
 ## 行为
 
-- 有 SessionWindow 打开时：`.regular`（显示 Dock 图标，出现在 Cmd+Tab）
-- 无 SessionWindow 时：`.accessory`（纯后台应用，仅 StatusBubble 可见）
+- 有 SessionWindow 或 SettingsWindow 打开时：`.regular`（显示 Dock 图标，出现在 Cmd+Tab）
+- 无 SessionWindow 且无 SettingsWindow 时：`.accessory`（纯后台应用，仅 StatusBubble 可见）
 
 ## 设计备注
 
