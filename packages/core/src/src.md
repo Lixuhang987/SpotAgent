@@ -70,6 +70,22 @@
 - 定义用户选区的抽象结果类型。
 - 约束会话初始上下文只接收用户主动选区。
 
+### `storage`
+
+- `SessionRecord.ts`
+- `SessionStore.ts`
+- `InMemorySessionStore.ts`
+- `FileSessionStore.ts`
+- `index.ts`
+
+职责：
+
+- 定义持久化会话模型（`PersistedSession`），包含元数据、消息历史和事件审计。
+- 定义 `SessionStore` 接口，支持 CRUD、消息追加/替换、事件追加。
+- `InMemorySessionStore`：内存实现，用于测试。
+- `FileSessionStore`：JSON 文件持久化，默认存储到 `~/.spotAgent/sessions/`。
+- `SessionEvent` 类型预留了 tool 调用记录、权限审计和错误追踪。
+
 ## 关键数据流
 
 ### 1. 会话阶段

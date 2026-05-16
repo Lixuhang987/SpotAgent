@@ -109,10 +109,33 @@ flowchart TD
   - `accessibilitySnapshot`
   - `performAccessibilityAction`
 
+### 5. 会话存储
+
+- `SessionMetadata`
+  - `id: string`
+  - `title: string | null`
+  - `createdAt: string`
+  - `updatedAt: string`
+  - `messageCount: number`
+- `PersistedSession`
+  - `version: 1`
+  - `metadata: SessionMetadata`
+  - `messages: AgentMessage[]`
+  - `events: SessionEvent[]`
+- `SessionEvent`
+  - `tool_call`：记录 tool 调用入参
+  - `tool_result`：记录 tool 执行结果与耗时
+  - `permission_request`：预留权限审批记录
+  - `error`：运行时错误
+- `SessionStore`（接口）
+  - `create / get / delete / list`
+  - `updateTitle / appendMessages / setMessages / appendEvents`
+
 ## 当前实现状态
 
 - 当前桌面壳已经切到 `PromptPanel + SessionWindow + StatusBubble`。
 - `agent-server` 通过 `SessionManager + SessionStore` 管理会话并驱动 runtime。
+- `packages/core/src/storage` 提供持久化会话存储，默认使用 `FileSessionStore` 将会话写入 `~/.spotAgent/sessions/`。
 - `packages/core` 已经定义完整的 tool、platform DTO。
 - `packages/platform-macos` 当前实现了选区捕获、前台 App、窗口列表、剪贴板、区域截图；OCR 与 accessibility 仍未完成。
 

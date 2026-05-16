@@ -1,6 +1,9 @@
 import { pathToFileURL } from "node:url";
+import { join } from "node:path";
+import { homedir } from "node:os";
 import type { SessionMessage } from "../../../packages/core/src/protocol/SessionMessage.ts";
 import { SessionManager } from "./SessionManager.ts";
+import { FileSessionStore } from "../../../packages/core/src/storage/index.ts";
 
 export async function startServer({
   manager,
@@ -42,8 +45,13 @@ export async function startDefaultServer(port = 4317) {
     import("./SettingsBackedLLMClient.ts"),
   ]);
 
+  const sessionsDir = join(homedir(), ".spotAgent", "sessions");
+  const store = new FileSessionStore(sessionsDir);
+
   const manager = new SessionManager(
     new AgentRuntime(new SettingsBackedLLMClient(), new ToolRegistry()),
+    undefined,
+    { store },
   );
 
   return startServer({ manager, port });
