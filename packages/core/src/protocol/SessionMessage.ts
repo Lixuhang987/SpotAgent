@@ -107,6 +107,47 @@ export type SessionMessage =
       };
     }
   | {
+      type: "list_sessions_request";
+      sessionId: string;
+      messageId: string;
+      timestamp: string;
+      payload: {};
+    }
+  | {
+      type: "list_sessions_response";
+      sessionId: string;
+      messageId: string;
+      timestamp: string;
+      payload: {
+        sessions: SessionListEntry[];
+      };
+    }
+  | {
+      type: "load_session_request";
+      sessionId: string;
+      messageId: string;
+      timestamp: string;
+      payload: { targetSessionId: string };
+    }
+  | {
+      type: "load_session_response";
+      sessionId: string;
+      messageId: string;
+      timestamp: string;
+      payload: {
+        targetSessionId: string;
+        messages: ConversationMessage[];
+        title: string | null;
+      };
+    }
+  | {
+      type: "delete_session_request";
+      sessionId: string;
+      messageId: string;
+      timestamp: string;
+      payload: { targetSessionId: string };
+    }
+  | {
       type: "platform_bridge_hello";
       sessionId: string;
       messageId: string;
@@ -132,6 +173,14 @@ export type SessionMessage =
       timestamp: string;
       payload: PlatformResponsePayload;
     };
+
+export type SessionListEntry = {
+  id: string;
+  title: string | null;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+};
 
 export type UserMessageAttachment =
   | {

@@ -7,6 +7,7 @@ import type {
   SessionMessage,
   UserMessageAttachment,
 } from "../../../packages/core/src/protocol/SessionMessage.ts";
+import type { ConversationMessage } from "../../../packages/core/src/conversation/ConversationMessage.ts";
 import type {
   SessionStore,
   SessionSummary,
@@ -68,6 +69,49 @@ export class SessionManager {
   }
 
   async receive(message: SessionMessage, pushMessage?: PushMessage): Promise<void> {
+    const push = pushMessage ?? this.pushMessage;
+
+    if (message.type === "list_sessions_request") {
+      const sessions = await this.store.list();
+      push({
+        type: "list_sessions_response",
+        sessionId: message.sessionId,
+        messageId: message.messageId,
+        timestamp: this.now(),
+        payload: {
+          sessions: sessions.map((s) => ({
+            id: s.id,
+            title: s.title,
+            createdAt: s.createdAt,
+            updatedAt: s.updatedAt,
+            messageCount: s.messageCount,
+          })),
+        },
+      });
+      return;
+    }
+
+    if (message.type === "load_session_request") {
+      const target = await this.store.get(message.payload.targetSessionId);
+      push({
+        type: "load_session_response",
+        sessionId: message.sessionId,
+        messageId: message.messageId,
+        timestamp: this.now(),
+        payload: {
+          targetSessionId: message.payload.targetSessionId,
+          messages: target ? agentMessagesToConversation(target.messages) : [],
+          title: target?.metadata.title ?? null,
+        },
+      });
+      return;
+    }
+
+    if (message.type === "delete_session_request") {
+      await this.store.delete(message.payload.targetSessionId);
+      return;
+    }
+
     if (message.type !== "user_message") {
       return;
     }
@@ -224,6 +268,32 @@ function toSessionMessage(
     case "runtime_error":
       return null;
   }
+}
+
+function agentMessagesToConversation(messages: AgentMessage[]): ConversationMessage[] {
+  return messages.map((msg, idx) => {
+    const id = `msg-${idx}`;
+    const now = new Date(0).toISOString();
+    if (msg.role === "tool") {
+      return {
+        id,
+        role: "tool",
+        text: msg.content,
+        status: "completed",
+        createdAt: now,
+        updatedAt: now,
+        toolCall: { name: msg.name },
+      };
+    }
+    return {
+      id,
+      role: msg.role,
+      text: typeof msg.content === "string" ? msg.content : "",
+      status: "completed",
+      createdAt: now,
+      updatedAt: now,
+    };
+  });
 }
 
 function toAuditEvent(event: AgentRuntimeEvent, timestamp: string): SessionEvent | null {
