@@ -1,184 +1,85 @@
 # desktop
 
-## 目录职责
+`apps/desktop` 是 macOS 宿主层：应用生命周期、PromptPanel、SessionWindow、StatusBubble、Settings 与全局热键。
 
-`apps/desktop` 是 macOS 宿主层，负责应用生命周期、PromptPanel、SessionWindow、状态气泡和热键监听。
+## 架构红线（编辑此目录前必读）
 
-## 架构概览
+新代码必须遵守以下约束。违反约束的改动应被回退或在合并前重设计。
 
-采用 **AppCoordinator + ViewModel + Theme** 三层架构：
+### 1. 状态：Observation 框架（`@Observable`）
 
-- **AppCoordinator**：单向事件流（`send(.action)`），管理全局状态和模块间协调。
-- **ViewModel**（`@Observable`）：每个 View 模块的状态和交互逻辑。
-- **Theme**：通过 `@Environment(\.appTheme)` 注入全局设计 token（颜色/字体/间距）。
-- **Styles**：ViewModifier 文件，封装可复用的样式组合。
+- **不要**新增 `ObservableObject` / `@Published` / `@StateObject` / `@ObservedObject` / Combine。所有状态类用 `@Observable`，View 用 `@Bindable`、`@State`。
+- 非状态依赖（store、registry、回调闭包、socket client）用 `@ObservationIgnored` 标注，避免无意义的 SwiftUI 重渲染。
+- `@MainActor` 用在 UI 相关的 `@Observable` 类（ViewModel / Registry / Settings store）；纯进程/IO 服务保持非 MainActor。
 
-所有 `ObservableObject` / `@Published` / Combine 已迁移为 Observation 框架的 `@Observable`。
+### 2. 模块布局：View + ViewModel + Controller + Styles
 
-## 目录结构
+每个独立 UI 模块（PromptPanel / SessionWindow / StatusBubble / Settings）按四件套拆分：
 
-```
-HandAgentApp.swift          — @main 入口，纯 Scene 声明
-Sources/
-  Coordinator/
-    AppCoordinator.swift    — 单向事件流，全局状态协调
-  Theme/
-    AppTheme.swift          — 颜色/字体/间距 token
-    ThemeEnvironment.swift  — EnvironmentKey + View extension
-  PromptPanel/
-    PromptPanelController.swift — 纯窗口管理
-    PromptPanelView.swift       — 纯 UI + Theme + ViewModel 绑定
-    PromptPanelViewModel.swift  — 状态 + 交互逻辑
-    PromptPanelStyles.swift     — ViewModifier
-    PromptPanelWindow.swift     — NSPanel 子类
-    PromptAction.swift          — action 数据结构与过滤
-  SessionWindow/
-    SessionViewModel.swift      — @Observable，消费 WebSocket 事件
-    SessionWindowView.swift     — 纯 UI + Theme
-    SessionStyles.swift         — ViewModifier
-    SessionSocketClient.swift   — WebSocket 连接
-  StatusBubble/
-    StatusBubbleController.swift — 窗口管理 + ViewModel 注入
-    StatusBubbleView.swift       — 纯 UI + Theme + ViewModel
-    StatusBubbleViewModel.swift  — 状态逻辑
-    StatusBubbleStyles.swift     — ViewModifier
-  Settings/
-    SettingsView.swift           — TabView 容器
-    AgentSettingsViewModel.swift — 设置逻辑代理
-    ShortcutSettingsView.swift   — 快捷键配置页
-  AppServices/
-    AgentServer/AgentServerService.swift
-    AgentSettings/AgentSettingsStore.swift, AgentSettingsView.swift
-    Lifecycle/AppActivationPolicyCoordinator.swift
-    Hotkey/GlobalShortcutNames.swift
-    Session/SessionRegistry.swift
-    AppServices.swift
-TestsSwift/
-  AppThemeTests.swift
-  PromptPanelViewModelTests.swift
-  AppCoordinatorTests.swift
-  AgentSettingsViewModelTests.swift
-  StatusBubbleViewModelTests.swift
-  SessionViewModelTests.swift
-  SessionRegistryTests.swift
-  AgentSettingsStoreTests.swift
-  AppActivationPolicyCoordinatorTests.swift
-  PromptActionTests.swift
-```
+- **View**：纯 SwiftUI，只读 ViewModel 状态、消费 `@Environment(\.appTheme)`，不直接调 `NSEvent` / `NSPanel` / 系统 API。
+- **ViewModel**：`@Observable` 状态机；不持有 `View` / `Color` / `Font`；跨模块意图通过闭包出口（`onSubmit` / `onTap` / `onHide`）暴露。
+- **Controller**（仅当模块需要 `NSPanel` / `NSWindow` 自定义生命周期时）：纯窗口与事件监听层，不写业务逻辑。
+- **Styles**：跨 View 复用的 `ViewModifier`。一次性样式直接写在 View 里，避免 ViewModifier 爆炸。
 
-## 核心模块
+### 3. 协调：AppCoordinator 单向事件流
 
-### `HandAgentApp.swift`
+- 全局唯一 `AppCoordinator`（`@Observable @MainActor`）由 `HandAgentApp` 持有为 `@State`。
+- 模块间一切协调通过 `coordinator.send(.action)`，禁止 `NotificationCenter` / 全局单例 / 直接调 Coordinator 的 private 方法绕开。
+- 新增协调行为：在 `AppCoordinator.Action` 枚举显式增分支；新窗口 / 控制器由 Coordinator 持有并 lazy 初始化，子模块通过闭包注入接入。
+- 测试态用 `AppCoordinator(skipServerStart: true)` 跳过窗口/进程/激活策略副作用；非测试态 `init` 自动 `bootstrap()`。
 
-- `HandAgentApp`：SwiftUI 程序入口，持有 `AppCoordinator` 作为 `@State`。
-- `Settings` scene：仅保留空占位，真实设置页由 `AppCoordinator` 以独立 `NSWindow` 托管。
-- 不再使用 `AppDelegate`，所有初始化由 `AppCoordinator.bootstrap()` 完成。
+### 4. 视觉：Theme token
 
-### `Sources/Coordinator`
+- 所有颜色、字体、间距、圆角、动画时长**必须**走 `theme.colors.*` / `theme.typography.*` / `theme.spacing.*` / `theme.radius.*` / `theme.animation.*`。
+- View / Styles 中**禁止**硬编码 `Color(...)` / 字号 / `padding(20)` 等魔法数字。Token 缺失先扩 [Theme](Sources/Theme/theme.md)。
+- 当前 dark-only + Raycast Glass + Mango Amber，目标 macOS 15+，不为旧系统加 fallback。
 
-- `AppCoordinator`：`@Observable`，通过 `send(_ action:)` 接收事件，管理 PromptPanel、SessionWindow、SettingsWindow、StatusBubble、AgentServer 的生命周期。非测试模式下 `init` 自动调用 `bootstrap()`。
+### 5. 输入边界（产品红线）
 
-### `Sources/Theme`
+- 只有用户主动输入和用户主动选区可以作为会话初始上下文；屏幕 / 窗口 / 文件 / 剪贴板 / App 状态一律通过 tool 按需读取。
+- 宿主层只通过 `WebSocket + SessionMessage` 与 agent-server 通信；**不组装 LLM 消息、不读取 runtime 内部状态、不直接执行 tool 编排**。
+- 快捷键配置只保存在宿主层本地（UserDefaults，由 `KeyboardShortcuts` 库管理），不下沉到 runtime。
 
-- `AppTheme`：定义 `ThemeColors`、`ThemeTypography`、`ThemeSpacing` token。
-- `ThemeEnvironment`：通过 `EnvironmentKey` 注入，所有 View 通过 `@Environment(\.appTheme)` 访问。
+### 6. 测试与验证
 
-### `Sources/PromptPanel`
+- 每个 ViewModel / 协调器都有对应 `TestsSwift/*Tests.swift`；新增 ViewModel 必须配测试。
+- 提交前在当前 shell 跑：`bash ./scripts/swiftw test` + `bash ./scripts/swiftw build` + `bash ./scripts/test.sh`。Stop hook 不跑 Swift 校验，必须手动。
 
-- `PromptPanelViewModel`：`@Observable`，管理 draft、action 过滤、提交逻辑。
-- `PromptPanelController`：纯窗口管理，接收 ViewModel 后创建 NSPanel。
-- `PromptPanelView`：纯 UI，绑定 ViewModel + Theme。
-- `PromptPanelStyles`：`PromptPanelContainerModifier`、`ActionRowModifier`。
+## 目录索引
 
-### `Sources/SessionWindow`
+下级文档入口：
 
-- `SessionViewModel`：`@Observable`，消费 WebSocket 事件并维护消息列表、状态和错误。
-- `SessionWindowView`：纯 UI + Theme，使用 `messageBubble(role:)` modifier。
-- `SessionStyles`：`MessageBubbleModifier`。
-- `SessionSocketClient`：负责与 `agent-server` 建立会话级 WebSocket 连接。
+- [Coordinator/](Sources/Coordinator/coordinator.md) — `AppCoordinator` 单向事件流
+- [Theme/](Sources/Theme/theme.md) — 视觉 token 与 Environment 注入
+- [PromptPanel/](Sources/PromptPanel/prompt-panel.md) — 命令面板 View+ViewModel+Controller+Styles
+- [SessionWindow/](Sources/SessionWindow/session-window.md) — 会话窗口与 WebSocket 客户端
+- [StatusBubble/](Sources/StatusBubble/status-bubble.md) — 右下角状态气泡
+- [Settings/](Sources/Settings/settings.md) — 设置窗口 TabView 容器
+- [AppServices/](Sources/AppServices/app-services.md) — 跨模块共享服务（AgentServer / AgentSettings / Hotkey / Lifecycle / Session）
 
-### `Sources/StatusBubble`
+## 入口与启动流程
 
-- `StatusBubbleViewModel`：`@Observable`，从 `SessionRegistry` 派生 `isRunning` / `latestSummary`。
-- `StatusBubbleController`：管理状态气泡窗口，注入 ViewModel。
-- `StatusBubbleView`：纯 UI + Theme。
-- `StatusBubbleStyles`：`StatusBubbleContainerModifier`。
+`HandAgentApp.swift` 是 SwiftUI `@main`：
 
-### `Sources/Settings`
-
-- `SettingsView`：TabView 容器，包含"模型"和"快捷键"两个 Tab。
-- `AgentSettingsViewModel`：`@Observable`，代理 `AgentSettingsStore` 的读写。
-- `AgentSettingsView`：纯 UI + Theme + ViewModel 绑定。
-- `ShortcutSettingsView`：渲染全局热键与 PromptAction 快捷键配置。
-
-### `Sources/AppServices`
-
-- `AgentServerService`：启动和停止本地 `agent-server` 进程。
-- `AgentSettingsStore`：`@Observable`，加载、保存模型设置到 `~/.spotAgent/settings.json`。
-- `SessionRegistry`：`@Observable`，维护会话摘要与最近活跃顺序。
-- `AppActivationPolicyCoordinator`：根据打开的 SessionWindow 与 SettingsWindow 状态切换激活策略。
-
-## 启动流程
+- 持有 `AppCoordinator` 为 `@State`；非测试态 `init` 自动 `bootstrap()`。
+- `Settings` scene 仅放空占位，实际设置窗口由 Coordinator 用 `NSWindow` 托管（需要主动 `openOrFocus` 控制）。
+- `CommandGroup(replacing: .appSettings)` 把 ⌘, 路由到 `coordinator.send(.openSettings)`。
 
 ```mermaid
 sequenceDiagram
   participant App as HandAgentApp (@main)
   participant Coord as AppCoordinator
   participant Server as AgentServerService
-  participant Node as node (子进程)
-  participant SM as SessionManager
-  participant RT as AgentRuntime
-  participant LLM as SettingsBackedLLMClient
+  participant Node as node 子进程
 
-  App->>Coord: @State 初始化
-  Coord->>Coord: init() — 创建 AgentServerService, SessionRegistry, AgentSettingsStore
-  Coord->>Coord: bootstrap()
-  Coord->>Coord: setupPromptPanel() + setupHotkey()
+  App->>Coord: @State 初始化 → 自动 bootstrap()
+  Coord->>Coord: setupPromptPanel + setupHotkey + setupStatusBubble
   Coord->>Server: start()
-  Server->>Node: Process.run() — node --experimental-transform-types server.ts
-  Node->>SM: startDefaultServer(port=4317)
-  SM->>RT: new AgentRuntime(SettingsBackedLLMClient, ToolRegistry)
-  SM->>Node: WebSocketServer 监听 :4317
+  Server->>Node: node --experimental-transform-types apps/agent-server/src/server.ts
   Coord->>Coord: statusBubbleController.show()
 ```
 
-### 启动细节
-
-1. **SwiftUI 入口** (`HandAgentApp.swift`)：`@main` 创建 `AppCoordinator` 作为 `@State`。
-2. **AppCoordinator.init()**：创建 `AgentServerService`、`SessionRegistry`、`AgentSettingsStore`，然后调用 `bootstrap()`。
-3. **bootstrap()**：依次执行 `setupPromptPanel()` → `setupHotkey()` → `startAgentServer()` → `statusBubbleController.show()`。
-4. **AgentServerService.start()**：
-   - 从 Bundle/CWD 向上查找仓库根目录（标志：`Package.swift` + `apps/agent-server/src/server.ts` 同时存在）。
-   - 查找 `node` 可执行文件（`$PATH` → `/opt/homebrew/bin` → `/usr/local/bin`）。
-   - 以子进程方式启动：`node --experimental-transform-types --experimental-specifier-resolution=node apps/agent-server/src/server.ts`。
-   - 设置 `NODE_PATH` 包含 `node_modules` 和 `apps/agent-server/node_modules`。
-   - **进程生命周期与 desktop app 绑定**：app 退出时调用 `stop()` 终止子进程。
-5. **agent-server 初始化** (`server.ts`)：
-   - 创建 `SettingsBackedLLMClient`（无状态，每次 `complete()` 重新读取 settings.json）。
-   - 创建 `AgentRuntime(client, toolRegistry)`。
-   - 创建 `SessionManager(runtime)`。
-   - 启动 `WebSocketServer` 监听 `0.0.0.0:4317`。
-
-### 设置同步机制
-
-```
-~/.spotAgent/settings.json
-    ↑ 写入                    ↓ 读取
-AgentSettingsStore          SettingsBackedLLMClient
-(desktop, 500ms 轮询)      (agent-server, 每次请求时 readFileSync)
-```
-
-- **Desktop 侧**：`AgentSettingsStore` 启动时读取一次，之后每 500ms 轮询文件变化（比较 `Data` 字节），用于 UI 同步。
-- **Agent-server 侧**：`SettingsBackedLLMClient.complete()` 每次调用 `loadModelSettings()`，同步读取文件。**无缓存、无 file watcher**。
-- **设计意图**：settings.json 是两侧的唯一通信通道，修改后下一次 LLM 请求即生效，无需重启。
-
-### 注意事项
-
-- agent-server 是 desktop app 启动时 fork 的 **长驻子进程**，运行期间不会自动重启。如果修改了 TS 源码，必须重启 desktop app 才能加载新代码。
-- node 进程的 stdout/stderr 通过 Pipe 捕获但未暴露到 UI（仅防止 fd 泄漏）。
-- 如果 node 进程意外退出，当前无自动重启机制。
-
-## 宿主调用链路
+## 主调用链路
 
 ```mermaid
 sequenceDiagram
@@ -189,31 +90,38 @@ sequenceDiagram
   participant Window as SessionWindow
   participant Server as agent-server
 
-  User->>Hotkey: 按下全局热键
-  Hotkey->>Coord: send(.showPromptPanel)
+  User->>Hotkey: 全局热键
+  Hotkey->>Coord: send(.togglePromptPanel)
   Coord->>Panel: show()
-  User->>Panel: 输入 prompt 并提交
+  User->>Panel: 输入并提交
   Panel->>Coord: send(.submitPrompt)
-  Coord->>Window: 创建 NSWindow + SessionViewModel
-  Window->>Server: WebSocket 连接
-  Server-->>Window: 返回 session 事件流
+  Coord->>Window: NSWindow + SessionViewModel
+  Window->>Server: WebSocket
+  Server-->>Window: SessionEvent 流
 ```
 
-## 宿主核心 DTO
+## 关键 DTO
 
-### `SessionSummary`
+### `SessionSummary`（[Session](Sources/AppServices/Session/session.md)）
 
-- `sessionId: String`
-- `isRunning: Bool`
-- `latestSummary: String`
-- `lastActiveAt: Date`
-- `windowIsOpen: Bool`
+- `sessionId` / `isRunning` / `latestSummary` / `lastActiveAt` / `windowIsOpen`
+- 用途：聚合 StatusBubble 显示与会话回跳。
 
-作用：为状态气泡和会话回跳提供聚合摘要。
+### `AgentSettings` 文件结构（[AgentSettings](Sources/AppServices/AgentSettings/agent-settings.md)）
 
-## 对下游的约束
+`~/.spotAgent/settings.json` 是 desktop 与 agent-server 的**唯一通信通道**：
 
-- 宿主层只通过 `WebSocket + SessionMessage` 与 TS 边界通信。
-- 宿主层不组装 LLM 消息，不读取 runtime 内部状态。
-- 宿主层不直接执行 tool 编排。
-- 快捷键配置只保存在宿主层本地，不下沉到 runtime。
+- desktop 侧 `AgentSettingsStore` 启动读一次 + 500ms 轮询；写入走 `update(_:)` 原子写。
+- agent-server 侧 `SettingsBackedLLMClient.complete()` 每次同步 `readFileSync`，无缓存、无 watcher。
+- 修改后下一次 LLM 请求即生效，无需重启。
+
+### `PromptAttachmentResult` / `PromptAction`（[PromptPanel](Sources/PromptPanel/prompt-panel.md)）
+
+- `PromptAttachmentResult.noAttachment | .textToken(String)`：提交时附加文本块。
+- `PromptAction(id, title, keywords, defaultShortcut, perform)`：命令面板可触发的动作；`shortcutName` 计算属性生成 `KeyboardShortcuts.Name("action.\(id)")`。
+
+## 注意事项
+
+- agent-server 是 desktop app fork 的长驻子进程，**修改 TS 源码必须重启 desktop app**，无 hot reload；进程意外退出当前无自动重启。
+- node 子进程 stdout/stderr 通过 Pipe 捕获但未暴露 UI（仅防 fd 泄漏）。
+- 设置窗口与 Session 窗口共享 `AppActivationPolicyCoordinator`，全部关闭后 app 切回 `.accessory`。

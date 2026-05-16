@@ -1,19 +1,30 @@
 # Lifecycle 模块
 
-应用生命周期相关的协调逻辑。
+应用激活策略协调。
 
 ## 文件
 
 | 文件 | 职责 |
 |------|------|
-| `AppActivationPolicyCoordinator.swift` | 根据打开的 SessionWindow / SettingsWindow 状态切换 activation policy |
+| `AppActivationPolicyCoordinator.swift` | 根据打开的 SessionWindow / SettingsWindow 数量切换 `NSApp.activationPolicy` |
 
 ## 行为
 
-- 有 SessionWindow 或 SettingsWindow 打开时：`.regular`（显示 Dock 图标，出现在 Cmd+Tab）
-- 无 SessionWindow 且无 SettingsWindow 时：`.accessory`（纯后台应用，仅 StatusBubble 可见）
+- 有 SessionWindow 或 SettingsWindow 打开 → `.regular`（出现在 Dock 与 Cmd+Tab）。
+- 都关闭 → `.accessory`（纯后台 app，仅 StatusBubble 可见）。
 
 ## 设计备注
 
-- 通过 delta 增减计数，避免外部需要维护绝对计数
-- `max(0, ...)` 防御性处理，防止计数变负
+- 通过 delta（`+1` / `-1`）增减计数，外部不需要维护绝对值。
+- `max(0, ...)` 防御性处理，防止计数变负。
+- Settings 窗口走独立 `policyAfterUpdatingSettingsWindow(isOpen:)`，与 Session 计数解耦。
+
+## 编辑此目录的约束
+
+- 计数与策略派生是纯逻辑，不调 `NSApp`；切换由 [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 中的 `setActivationPolicy` 闭包完成（测试可注入 mock）。
+- 不要在此处依赖 SwiftUI / AppKit。
+- 测试：[AppActivationPolicyCoordinatorTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/AppActivationPolicyCoordinatorTests.swift)。
+
+## 与其他模块的关系
+
+- 由 [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 持有；在 `bootstrap()` / `handleSubmitPrompt` / `handleSessionClosed` / `openOrFocusSettingsWindow` / `handleSettingsWindowClosed` 中调用。

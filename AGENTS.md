@@ -19,7 +19,14 @@
 ### `apps/`
 
 - `apps/apps.md`：应用层总览，说明桌面入口与交互壳职责。
-- `apps/desktop/desktop.md`：macOS 宿主层说明，覆盖热键、PromptPanel、SessionWindow 与状态气泡。
+- `apps/desktop/desktop.md`：macOS 宿主层架构红线 + 子模块索引（编辑此目录前必读）。
+- `apps/desktop/Sources/Coordinator/coordinator.md`：`AppCoordinator` 单向事件流。
+- `apps/desktop/Sources/Theme/theme.md`：视觉 token 与 Environment 注入。
+- `apps/desktop/Sources/PromptPanel/prompt-panel.md`：命令面板 View+ViewModel+Controller+Styles。
+- `apps/desktop/Sources/SessionWindow/session-window.md`：会话窗口与 WebSocket 客户端。
+- `apps/desktop/Sources/StatusBubble/status-bubble.md`：右下角状态气泡。
+- `apps/desktop/Sources/Settings/settings.md`：设置窗口 TabView 容器。
+- `apps/desktop/Sources/AppServices/app-services.md`：跨模块共享服务汇总（AgentServer / AgentSettings / Hotkey / Lifecycle / Session 各有子文档）。
 
 ### `packages/`
 
