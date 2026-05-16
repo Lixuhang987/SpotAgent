@@ -39,17 +39,47 @@ export async function handleSocketMessage(
 }
 
 export async function startDefaultServer(port = 4317) {
-  const [{ AgentRuntime }, { ToolRegistry }, { SettingsBackedLLMClient }] = await Promise.all([
+  const [
+    { AgentRuntime },
+    { registerBuiltinTools },
+    { OfflinePlatformAdapter },
+    { FileWorkspaceRegistry },
+    { loadToolSettings },
+    { SettingsBackedLLMClient },
+  ] = await Promise.all([
     import("../../../packages/core/src/runtime/AgentRuntime.ts"),
-    import("../../../packages/core/src/tools/ToolRegistry.ts"),
+    import("../../../packages/core/src/tools/registerBuiltins.ts"),
+    import("../../../packages/core/src/platform/OfflinePlatformAdapter.ts"),
+    import("../../../packages/core/src/workspace/FileWorkspaceRegistry.ts"),
+    import("../../../packages/core/src/config/ToolSettings.ts"),
     import("./SettingsBackedLLMClient.ts"),
   ]);
 
-  const sessionsDir = join(homedir(), ".spotAgent", "sessions");
+  const spotDir = join(homedir(), ".spotAgent");
+  const sessionsDir = join(spotDir, "sessions");
   const store = new FileSessionStore(sessionsDir);
 
+  const workspaceRegistry = new FileWorkspaceRegistry({
+    filePath: join(spotDir, "workspaces.json"),
+    defaultRootPath: join(spotDir, "workspace"),
+  });
+  await workspaceRegistry.getDefault();
+
+  const platform = new OfflinePlatformAdapter();
+  const toolSettings = loadToolSettings();
+  const { registry, registered, disabled } = registerBuiltinTools({
+    platform,
+    workspaceRegistry,
+    settings: toolSettings,
+  });
+
+  console.log(`[agent-server] registered tools: ${registered.join(", ") || "(none)"}`);
+  for (const d of disabled) {
+    console.log(`[agent-server] disabled tool ${d.name}: ${d.reason}`);
+  }
+
   const manager = new SessionManager(
-    new AgentRuntime(new SettingsBackedLLMClient(), new ToolRegistry()),
+    new AgentRuntime(new SettingsBackedLLMClient(), registry),
     undefined,
     { store },
   );

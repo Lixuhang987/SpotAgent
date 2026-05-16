@@ -18,4 +18,6 @@ pnpm exec vitest run \
   packages/core/tests/file-tools.test.ts \
   packages/core/tests/file-session-store.test.ts \
   packages/core/tests/vercel-client.test.ts \
-  packages/core/tests/workspace-registry.test.ts
+  packages/core/tests/workspace-registry.test.ts \
+  packages/core/tests/register-builtins.test.ts \
+  packages/core/tests/tool-settings.test.ts

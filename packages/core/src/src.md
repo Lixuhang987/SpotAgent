@@ -36,11 +36,13 @@
 
 - `AppConfig.ts`
 - `ModelSettings.ts`
+- `ToolSettings.ts`
 
 职责：
 
 - 定义运行时配置 DTO。
 - 解析 `~/.spotAgent/settings.json` 中的模型设置。
+- `ToolSettings` 解析 `tools.allowlist` / `tools.denylist`，并提供 `filterToolNames` 辅助函数（denylist 优先于 allowlist）。
 
 ### `tools`
 
