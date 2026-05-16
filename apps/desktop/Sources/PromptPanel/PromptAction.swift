@@ -1,4 +1,5 @@
 import Foundation
+import KeyboardShortcuts
 
 enum PromptAttachmentResult: Equatable {
     case noAttachment
@@ -9,17 +10,11 @@ struct PromptAction: Identifiable {
     let id: String
     let title: String
     let keywords: [String]
-    let defaultShortcut: KeyShortcut?
+    let defaultShortcut: KeyboardShortcuts.Shortcut?
     let perform: () -> Void
 
-    @MainActor
-    func shortcut(using store: ShortcutSettingsStore) -> KeyShortcut? {
-        store.shortcut(forActionID: id) ?? defaultShortcut
-    }
-
-    @MainActor
-    func shortcutDisplay(using store: ShortcutSettingsStore) -> String? {
-        shortcut(using: store)?.displayString
+    var shortcutName: KeyboardShortcuts.Name {
+        KeyboardShortcuts.Name("action.\(id)")
     }
 
     static func filter(_ actions: [PromptAction], query: String) -> [PromptAction] {

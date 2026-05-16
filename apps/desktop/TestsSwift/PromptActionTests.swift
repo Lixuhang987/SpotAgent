@@ -1,4 +1,5 @@
 import XCTest
+import KeyboardShortcuts
 @testable import HandAgentDesktop
 
 final class PromptActionTests: XCTestCase {
@@ -8,14 +9,14 @@ final class PromptActionTests: XCTestCase {
                 id: "open",
                 title: "Open File",
                 keywords: ["file", "document"],
-                defaultShortcut: .init(keyCode: 31, modifiers: [.command]),
+                defaultShortcut: .init(.o, modifiers: [.command]),
                 perform: {}
             ),
             PromptAction(
                 id: "new",
                 title: "New Session",
                 keywords: ["workspace"],
-                defaultShortcut: .init(keyCode: 45, modifiers: [.command]),
+                defaultShortcut: .init(.n, modifiers: [.command]),
                 perform: {}
             )
         ]
