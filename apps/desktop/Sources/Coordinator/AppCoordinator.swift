@@ -369,6 +369,7 @@ final class AppCoordinator {
         let hosting = NSHostingController(
             rootView: SettingsView(
                 settingsViewModel: makeSettingsViewModel(),
+                workspaceViewModel: WorkspaceSettingsViewModel(),
                 shortcutActions: makeShortcutActions()
             )
         )
