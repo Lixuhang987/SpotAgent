@@ -165,7 +165,7 @@
 
 ## 六、会话历史与恢复
 
-- [ ] **6.1 会话历史 UI + 恢复（三处入口）**
+- [x] **6.1 会话历史 UI + 恢复（三处入口）**（仅落地 SessionWindow 侧栏入口；PromptPanel action / 独立历史窗口暂缓）
   - 现状：`listSessions()` / `getSessionHistory()` 后端已实现，前端无任何浏览或恢复入口。
   - 用户场景：
     - 入口 A（PromptPanel action）：用户唤起面板，输入框 query 实时过滤「最近会话」action，回车恢复对应会话。
