@@ -23,4 +23,5 @@ pnpm exec vitest run \
   packages/core/tests/register-builtins.test.ts \
   packages/core/tests/tool-settings.test.ts \
   packages/core/tests/workspace-list-tool.test.ts \
-  packages/core/tests/permission.test.ts
+  packages/core/tests/permission.test.ts \
+  packages/core/tests/file-permission-policy.test.ts
