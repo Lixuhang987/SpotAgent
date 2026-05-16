@@ -1,0 +1,182 @@
+import AppKit
+import Foundation
+import KeyboardShortcuts
+
+@Observable
+@MainActor
+final class AppCoordinator {
+    enum Action {
+        case showPromptPanel
+        case hidePromptPanel
+        case submitPrompt(String, attachments: [PromptAttachmentResult])
+        case submitAction(PromptAction)
+        case openSettings
+        case sessionClosed(String)
+        case statusBubbleTapped(String?)
+    }
+
+    private(set) var sessionViewModels: [String: SessionViewModel] = [:]
+    private(set) var agentServerError: String?
+
+    @ObservationIgnored private let agentServerService: AgentServerService
+    @ObservationIgnored private let sessionRegistry: SessionRegistry
+    @ObservationIgnored private let settingsStore: AgentSettingsStore
+    @ObservationIgnored private let activationPolicy = AppActivationPolicyCoordinator()
+    @ObservationIgnored private lazy var promptPanelController = PromptPanelController()
+    @ObservationIgnored private lazy var statusBubbleController: StatusBubbleController = {
+        StatusBubbleController(registry: sessionRegistry)
+    }()
+
+    @ObservationIgnored private let agentServerURL = URL(string: "ws://127.0.0.1:4317/api/session")!
+    @ObservationIgnored private let skipServerStart: Bool
+
+    @ObservationIgnored private lazy var promptActions: [PromptAction] = [
+        PromptAction(
+            id: "open-settings",
+            title: "打开设置",
+            keywords: ["settings", "preferences", "shortcut", "hotkey"],
+            defaultShortcut: .init(.comma, modifiers: [.command]),
+            perform: { [weak self] in
+                self?.send(.openSettings)
+            }
+        )
+    ]
+
+    init(skipServerStart: Bool = false) {
+        self.skipServerStart = skipServerStart
+        self.agentServerService = AgentServerService()
+        self.sessionRegistry = SessionRegistry()
+        self.settingsStore = AgentSettingsStore()
+    }
+
+    func bootstrap() {
+        setupPromptPanel()
+        setupHotkey()
+        startAgentServer()
+        statusBubbleController.show()
+    }
+
+    func shutdown() {
+        agentServerService.stop()
+    }
+
+    func send(_ action: Action) {
+        switch action {
+        case .showPromptPanel:
+            promptPanelController.show()
+        case .hidePromptPanel:
+            promptPanelController.hide()
+        case .submitPrompt(let draft, let attachments):
+            handleSubmitPrompt(draft, attachments: attachments)
+        case .submitAction(let action):
+            action.perform()
+            promptPanelController.hide()
+        case .openSettings:
+            openSettingsWindow()
+        case .sessionClosed(let sessionID):
+            handleSessionClosed(sessionID)
+        case .statusBubbleTapped(let sessionID):
+            handleStatusBubbleTap(sessionID)
+        }
+    }
+
+    func makeSettingsViewModel() -> AgentSettingsViewModel {
+        AgentSettingsViewModel(store: settingsStore)
+    }
+
+    func makeShortcutActions() -> [PromptAction] {
+        promptActions
+    }
+
+    private func setupPromptPanel() {
+        promptPanelController.register(actions: promptActions)
+        promptPanelController.onSubmit = { [weak self] draft, attachments in
+            self?.send(.submitPrompt(draft, attachments: attachments))
+        }
+        promptPanelController.onOpenSettings = { [weak self] in
+            self?.send(.openSettings)
+        }
+    }
+
+    private func setupHotkey() {
+        KeyboardShortcuts.onKeyUp(for: .showPromptPanel) { [weak self] in
+            Task { @MainActor in
+                self?.send(.showPromptPanel)
+            }
+        }
+    }
+
+    private func startAgentServer() {
+        guard !skipServerStart else { return }
+        do {
+            try agentServerService.start()
+            agentServerError = nil
+        } catch {
+            agentServerError = agentServerService.lastStartupError ?? error.localizedDescription
+        }
+    }
+
+    private func handleSubmitPrompt(_ draft: String, attachments: [PromptAttachmentResult]) {
+        let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        let attachmentText = attachments.compactMap { attachment -> String? in
+            switch attachment {
+            case .noAttachment: return nil
+            case .textToken(let token): return token
+            }
+        }
+
+        let composedPrompt = ([trimmed] + attachmentText).joined(separator: "\n\n")
+        let sessionID = UUID().uuidString
+        let viewModel = SessionViewModel(
+            sessionID: sessionID,
+            socketClient: SessionSocketClient(serverURL: agentServerURL)
+        )
+
+        sessionViewModels[sessionID] = viewModel
+        sessionRegistry.upsert(
+            SessionSummary(
+                sessionId: sessionID,
+                isRunning: true,
+                latestSummary: composedPrompt,
+                lastActiveAt: .now,
+                windowIsOpen: true
+            )
+        )
+
+        promptPanelController.hide()
+
+        viewModel.start(
+            initialPrompt: composedPrompt,
+            startupError: agentServerError
+        )
+    }
+
+    private func handleSessionClosed(_ sessionID: String) {
+        let viewModel = sessionViewModels.removeValue(forKey: sessionID)
+        viewModel?.stop()
+
+        sessionRegistry.upsert(
+            SessionSummary(
+                sessionId: sessionID,
+                isRunning: viewModel?.status == "running",
+                latestSummary: viewModel?.messages.last?.text ?? "",
+                lastActiveAt: .now,
+                windowIsOpen: false
+            )
+        )
+    }
+
+    private func handleStatusBubbleTap(_ sessionID: String?) {
+        if sessionID != nil, sessionViewModels[sessionID!] != nil {
+            return
+        }
+        promptPanelController.show()
+    }
+
+    private func openSettingsWindow() {
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+}
