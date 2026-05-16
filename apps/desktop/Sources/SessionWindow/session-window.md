@@ -42,6 +42,7 @@ agent-server 流式回包 → SessionEvent → ViewModel.handle(_:) → messages
 - **不要在 ViewModel 里 dispatch 系统通知或调 Controller**：会话关闭由 NSWindow 通知触发 Coordinator，ViewModel 只对 `stop()` 做 socket 断开。
 - **不要在前端做 LLM/tool 编排**：宿主只消费 `SessionEvent`；新事件类型必须先在 agent-server 与前端 `SessionEvent` enum 同步定义，再加 case 到 `handle(_:)`。
 - **窗口尺寸 / 持久化**：当前每次 prompt 提交都新开 760×560 居中窗口，不做位置记忆；新增此能力需走 Coordinator，不要让 View 直接写 `UserDefaults`。
+- **窗口与拖动区域**：Coordinator 创建 `NSWindow` 时启用 `fullSizeContentView` + `titlebarAppearsTransparent` + `titleVisibility = .hidden`，让标题栏保留默认 traffic light 与拖动手势，但视觉颜色与 SwiftUI 内容（`statusHeader` 区域）连成一片，不再出现单独颜色的标题栏条。`SessionWindowView` 的首行 `statusHeader` 直接落在标题栏下方，`Spacer()` 留出的右侧区域天然成为拖动手柄；如需在 statusHeader 增加交互控件，要给左右两端留出可拖动的空隙。
 - **测试**：[SessionViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/SessionViewModelTests.swift) 覆盖事件序列下的 messages/status 推导。
 
 ## 与其他模块的关系

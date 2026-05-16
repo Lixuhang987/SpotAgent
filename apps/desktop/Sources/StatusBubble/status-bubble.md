@@ -30,6 +30,7 @@ SessionRegistry (@Observable) 变化
 - **窗口位置策略写死右下角**：当前 `visibleFrame.maxX - width - 24, minY + 24`；新增多屏 / 拖拽支持需走 Controller，不要在 View 里写 `NSScreen` API。
 - **`onTap` 出口只暴露 `sessionID?`**：不要把 `SessionSummary` 或更多 Registry 状态泄漏给 Coordinator；Coordinator 自己再去 Registry 查。
 - **动画在 View 内闭环**：glow pulse 等装饰性动画用 SwiftUI `withAnimation` 完成，不要污染 ViewModel。
+- **窗口与拖动区域**：`NSWindow` 设为 `isOpaque = false` + `backgroundColor = .clear` + `fullSizeContentView` + `titlebarAppearsTransparent`，避免气泡上方出现一条与 SwiftUI 圆角容器颜色不同的标题栏。`isMovableByWindowBackground = true` 让气泡所有空白区域都能拖；点击交互必须用 `onTapGesture` 挂在容器上而不是把整个内容包进 `Button`，否则 `Button` 会吞掉拖拽手势。
 - **测试**：[StatusBubbleViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/StatusBubbleViewModelTests.swift) 覆盖空 / 运行 / 已结束三种 registry 状态。
 
 ## 与其他模块的关系

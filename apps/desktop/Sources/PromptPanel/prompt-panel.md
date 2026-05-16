@@ -33,6 +33,7 @@ Hotkey → Coordinator.send(.togglePromptPanel) → Controller.toggle()
 - **Controller 是窗口管理 + 事件监听层**：不直接写消息循环或会话逻辑，所有跨模块意图通过 `onSubmit` / `onOpenSettings` 闭包出口给 Coordinator。
 - **Action 默认快捷键**：在 `register(actions:)` 中**仅当用户未自定义时**写入默认值，不要每次启动覆盖用户配置。
 - **Styles 抽取阈值**：跨 View 复用的样式才放 `PromptPanelStyles.swift`；一次性样式写在 View 里，避免 ViewModifier 爆炸。
+- **窗口与拖动区域**：`NSPanel` 自身设为 `isOpaque = false` + `backgroundColor = .clear`，可见背景全部由 SwiftUI `promptPanelContainer()` 的圆角 + ultraThinMaterial 提供，避免顶部"标题栏条"和主体颜色不一致。`isMovableByWindowBackground = true` 让任何空白处都能拖；首行的 input 框宽度固定（左上角紧凑，带 surface 背景与 border），右侧是齿轮按钮，中间留出的 `Spacer` 区域天然成为不显眼的拖动手柄。新增首行控件时不要让控件铺满整行，必须保留中间的拖动空隙。
 - **PromptAction.filter 大小写不敏感**：title 与 keywords 两路匹配；新增匹配维度需保持纯函数 + 单元测试。
 - **测试**：[PromptPanelViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/PromptPanelViewModelTests.swift) 覆盖 draft 提交 / 过滤 / action 触发；[PromptActionTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/PromptActionTests.swift) 覆盖过滤逻辑。
 

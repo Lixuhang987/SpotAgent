@@ -7,8 +7,8 @@ struct PromptPanelView: View {
     @State private var hoveredActionId: String?
 
     var body: some View {
-        VStack(spacing: theme.spacing.lg) {
-            inputField
+        VStack(alignment: .leading, spacing: theme.spacing.lg) {
+            firstRow
             Divider()
                 .overlay(theme.colors.border)
             actionList
@@ -18,26 +18,47 @@ struct PromptPanelView: View {
         .onChange(of: viewModel.focusSeed) { _, _ in isQueryFocused = true }
     }
 
-    private var inputField: some View {
+    private var firstRow: some View {
         HStack(spacing: theme.spacing.md) {
+            inputField
+            Spacer(minLength: theme.spacing.lg)
+            settingsButton
+        }
+    }
+
+    private var inputField: some View {
+        HStack(spacing: theme.spacing.sm) {
             Image(systemName: "sparkles")
                 .foregroundStyle(theme.colors.accent)
-                .font(.system(size: 16, weight: .medium))
+                .font(.system(size: 14, weight: .medium))
             TextField("输入你的请求", text: $viewModel.draft)
                 .textFieldStyle(.plain)
                 .font(theme.typography.promptInputFont)
                 .foregroundStyle(theme.colors.textPrimary)
                 .focused($isQueryFocused)
                 .onSubmit { viewModel.submit() }
-            Button { viewModel.openSettings() } label: {
-                Image(systemName: "gearshape")
-                    .foregroundStyle(theme.colors.textSecondary)
-                    .font(.system(size: 14))
-            }
-            .buttonStyle(.plain)
-            .help("打开设置 (⌘,)")
         }
-        .padding(.vertical, theme.spacing.sm)
+        .padding(.horizontal, theme.spacing.md)
+        .padding(.vertical, 10)
+        .frame(width: 360)
+        .background(
+            RoundedRectangle(cornerRadius: theme.radius.md)
+                .fill(theme.colors.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: theme.radius.md)
+                .strokeBorder(theme.colors.border, lineWidth: 0.5)
+        )
+    }
+
+    private var settingsButton: some View {
+        Button { viewModel.openSettings() } label: {
+            Image(systemName: "gearshape")
+                .foregroundStyle(theme.colors.textSecondary)
+                .font(.system(size: 14))
+        }
+        .buttonStyle(.plain)
+        .help("打开设置 (⌘,)")
     }
 
     private var actionList: some View {
