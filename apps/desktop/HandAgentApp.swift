@@ -10,7 +10,7 @@ struct HandAgentApp: App {
 
     var body: some Scene {
         Settings {
-            AgentSettingsView(store: settingsStore)
+            AgentSettingsView(viewModel: AgentSettingsViewModel(store: settingsStore))
             appDelegate.makeSettingsView()
         }
         .commands {

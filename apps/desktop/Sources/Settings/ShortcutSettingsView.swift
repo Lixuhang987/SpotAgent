@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ShortcutSettingsView: View {
     let actions: [PromptAction]
+    @Environment(\.appTheme) private var theme
 
     var body: some View {
         Form {
@@ -13,7 +14,7 @@ struct ShortcutSettingsView: View {
             Section("PromptAction 快捷键") {
                 if actions.isEmpty {
                     Text("当前没有可配置的 PromptAction。")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(theme.colors.textSecondary)
                 } else {
                     ForEach(actions) { action in
                         KeyboardShortcuts.Recorder(action.title, name: action.shortcutName)
@@ -22,7 +23,6 @@ struct ShortcutSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .padding(20)
-        .frame(width: 560, height: 320)
+        .padding(theme.spacing.xl)
     }
 }

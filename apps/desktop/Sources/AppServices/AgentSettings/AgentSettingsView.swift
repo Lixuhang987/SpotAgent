@@ -1,77 +1,46 @@
 import SwiftUI
 
 struct AgentSettingsView: View {
-    @Bindable var store: AgentSettingsStore
+    @Bindable var viewModel: AgentSettingsViewModel
+    @Environment(\.appTheme) private var theme
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: theme.spacing.xl) {
                 GroupBox("模型") {
-                    VStack(alignment: .leading, spacing: 12) {
-                        TextField(
-                            "gpt-5-mini",
-                            text: binding(
-                                get: \.model,
-                                set: { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                            )
-                        )
+                    VStack(alignment: .leading, spacing: theme.spacing.md) {
+                        TextField("gpt-5-mini", text: $viewModel.model)
 
-                        Picker("接口", selection: binding(get: \.api, set: { $0 })) {
+                        Picker("接口", selection: $viewModel.api) {
                             ForEach(AgentAPIType.allCases) { api in
                                 Text(api.title).tag(api)
                             }
                         }
 
-                        TextField(
-                            "https://api.openai.com/v1",
-                            text: binding(
-                                get: \.baseURL,
-                                set: { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                            )
-                        )
+                        TextField("https://api.openai.com/v1", text: $viewModel.baseURL)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
                 GroupBox("认证") {
-                    TextField(
-                        "sk-...",
-                        text: binding(
-                            get: \.apiKey,
-                            set: { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                        )
-                    )
-                    .privacySensitive()
-                    .textFieldStyle(.roundedBorder)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    TextField("sk-...", text: $viewModel.apiKey)
+                        .privacySensitive()
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: theme.spacing.sm) {
                     Text("设置会自动保存到 `~/.spotAgent/settings.json`。")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(theme.colors.textSecondary)
 
-                    if let saveErrorMessage = store.saveErrorMessage {
+                    if let saveErrorMessage = viewModel.saveErrorMessage {
                         Text(saveErrorMessage)
-                            .foregroundStyle(.red)
+                            .foregroundStyle(theme.colors.error)
                     }
                 }
             }
-            .padding(20)
+            .padding(theme.spacing.xl)
         }
         .frame(width: 520)
-    }
-
-    private func binding<Value>(
-        get keyPath: WritableKeyPath<AgentSettings, Value>,
-        set normalize: @escaping (Value) -> Value
-    ) -> Binding<Value> {
-        Binding(
-            get: { store.settings[keyPath: keyPath] },
-            set: { newValue in
-                store.update { settings in
-                    settings[keyPath: keyPath] = normalize(newValue)
-                }
-            }
-        )
     }
 }
