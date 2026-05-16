@@ -2,6 +2,8 @@ import type { AgentMessage } from "./AgentMessage.ts";
 import type { ToolCallEnvelope } from "./ToolCallEnvelope.ts";
 import type { LLMClient } from "../llm/LLMClient.ts";
 import { ToolRegistry } from "../tools/ToolRegistry.ts";
+import type { PermissionPolicy } from "../permission/PermissionPolicy.ts";
+import { AllowAllPermissionPolicy, DENY_TOOL_RESULT_TEXT } from "../permission/PermissionPolicy.ts";
 
 export type AgentBubble = {
   id: string;
@@ -43,20 +45,34 @@ export type AgentRuntimeEvent =
       durationMs: number;
     }
   | {
+      type: "permission_decision";
+      toolCallId: string;
+      toolName: string;
+      decision: "allow" | "deny";
+      scope?: "once" | "session" | "always";
+      reason?: string;
+    }
+  | {
       type: "runtime_error";
       message: string;
       code?: string;
     };
 
+export type AgentRuntimeRunOptions = {
+  sessionId?: string;
+};
+
 export class AgentRuntime {
   private readonly maxTurns: number;
+  private readonly permissionPolicy: PermissionPolicy;
 
   constructor(
     private readonly client: LLMClient,
     private readonly toolRegistry: ToolRegistry,
-    options?: { maxTurns?: number }
+    options?: { maxTurns?: number; permissionPolicy?: PermissionPolicy }
   ) {
     this.maxTurns = options?.maxTurns ?? 8;
+    this.permissionPolicy = options?.permissionPolicy ?? new AllowAllPermissionPolicy();
   }
 
   async run(userInput: string): Promise<AgentRunResult> {
@@ -70,7 +86,8 @@ export class AgentRuntime {
 
   async runWithMessages(
     messages: AgentMessage[],
-    onEvent: (event: AgentRuntimeEvent) => void = () => {}
+    onEvent: (event: AgentRuntimeEvent) => void = () => {},
+    runOptions: AgentRuntimeRunOptions = {}
   ): Promise<AgentRunResult> {
     const nextMessages = [...messages];
     const bubbles: AgentBubble[] = [];
@@ -126,6 +143,45 @@ export class AgentRuntime {
         const tool = this.toolRegistry.get(toolCall.name);
         if (!tool) {
           throw new Error(`Unknown tool: ${toolCall.name}`);
+        }
+
+        const permRequest = {
+          toolName: toolCall.name,
+          arguments: toolCall.arguments,
+          sessionId: runOptions.sessionId,
+          toolCallId: toolCall.id,
+        };
+
+        let decision = await this.permissionPolicy.check(permRequest);
+        if (decision === "ask") {
+          const resolution = await this.permissionPolicy.resolveAsk(permRequest);
+          await this.permissionPolicy.remember(permRequest, resolution);
+          decision = resolution.decision;
+          onEvent({
+            type: "permission_decision",
+            toolCallId: toolCall.id,
+            toolName: toolCall.name,
+            decision: resolution.decision,
+            scope: resolution.remember,
+            reason: resolution.decision === "deny" ? resolution.reason : undefined,
+          });
+        }
+
+        if (decision === "deny") {
+          nextMessages.push({
+            role: "tool",
+            toolCallId: toolCall.id,
+            name: toolCall.name,
+            content: DENY_TOOL_RESULT_TEXT,
+          });
+          onEvent({
+            type: "tool_result",
+            toolCallId: toolCall.id,
+            status: "error",
+            output: DENY_TOOL_RESULT_TEXT,
+            durationMs: 0,
+          });
+          continue;
         }
 
         onEvent({

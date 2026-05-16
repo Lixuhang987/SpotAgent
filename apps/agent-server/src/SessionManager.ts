@@ -245,6 +245,14 @@ function toAuditEvent(event: AgentRuntimeEvent, timestamp: string): SessionEvent
         output: event.output,
         durationMs: event.durationMs,
       };
+    case "permission_decision":
+      return {
+        type: "permission_request",
+        timestamp,
+        toolName: event.toolName,
+        action: event.decision,
+        granted: event.decision === "allow",
+      };
     case "runtime_error":
       return {
         type: "error",
