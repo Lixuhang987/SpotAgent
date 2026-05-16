@@ -42,6 +42,10 @@ final class PromptPanelController {
         }
     }
 
+    var isVisible: Bool {
+        panel?.isVisible ?? false
+    }
+
     func show() {
         ensurePanel()
         guard let panel else { return }
@@ -56,6 +60,14 @@ final class PromptPanelController {
     func hide() {
         panel?.orderOut(nil)
         removeEventMonitor()
+    }
+
+    func toggle() {
+        if isVisible {
+            hide()
+        } else {
+            show()
+        }
     }
 
     private func ensurePanel() {

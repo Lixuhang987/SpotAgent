@@ -9,6 +9,7 @@ final class AppCoordinator {
     enum Action {
         case showPromptPanel
         case hidePromptPanel
+        case togglePromptPanel
         case submitPrompt(String, attachments: [PromptAttachmentResult])
         case submitAction(PromptAction)
         case openSettings
@@ -90,6 +91,8 @@ final class AppCoordinator {
             promptPanelController.show()
         case .hidePromptPanel:
             promptPanelController.hide()
+        case .togglePromptPanel:
+            promptPanelController.toggle()
         case .submitPrompt(let draft, let attachments):
             handleSubmitPrompt(draft, attachments: attachments)
         case .submitAction(let action):
@@ -127,7 +130,7 @@ final class AppCoordinator {
     private func setupHotkey() {
         KeyboardShortcuts.onKeyUp(for: .showPromptPanel) { [weak self] in
             Task { @MainActor in
-                self?.send(.showPromptPanel)
+                self?.send(.togglePromptPanel)
             }
         }
     }
