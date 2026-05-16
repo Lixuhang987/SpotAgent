@@ -71,6 +71,7 @@ final class AppCoordinator {
         setActivationPolicy(activationPolicy.policyAfterUpdatingOpenSessionWindows(by: 0))
         setupPromptPanel()
         setupHotkey()
+        setupStatusBubble()
         startAgentServer()
         statusBubbleController.show()
     }
@@ -128,6 +129,12 @@ final class AppCoordinator {
             Task { @MainActor in
                 self?.send(.showPromptPanel)
             }
+        }
+    }
+
+    private func setupStatusBubble() {
+        statusBubbleController.onTap = { [weak self] sessionID in
+            self?.send(.statusBubbleTapped(sessionID))
         }
     }
 
