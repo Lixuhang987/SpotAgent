@@ -52,6 +52,7 @@
 
 - 定义 tool 输入 schema、说明和执行入口。
 - 将平台能力和文件能力封装为可被 LLM 调用的最小单元。
+- `file.read` / `file.write` 入参为 `{workspaceId, relativePath}`，强制走 `WorkspaceRegistry` 解析根目录后再做 `..`/绝对路径/symlink 沙箱校验，禁止 LLM 直接传绝对路径。
 
 ### `platform`
 
