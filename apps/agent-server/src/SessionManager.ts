@@ -3,7 +3,10 @@ import type {
   AgentRuntimeEvent,
   AgentRunResult,
 } from "../../../packages/core/src/runtime/AgentRuntime.ts";
-import type { SessionMessage } from "../../../packages/core/src/protocol/SessionMessage.ts";
+import type {
+  SessionMessage,
+  UserMessageAttachment,
+} from "../../../packages/core/src/protocol/SessionMessage.ts";
 import type {
   SessionStore,
   SessionSummary,
@@ -77,9 +80,14 @@ export class SessionManager {
       });
     }
 
+    const composedText = composeUserContent(
+      message.payload.text,
+      message.payload.attachments,
+    );
+
     const userMessage: AgentMessage = {
       role: "user",
-      content: message.payload.text,
+      content: composedText,
     };
     await this.store.appendMessages(
       message.sessionId,
@@ -160,6 +168,22 @@ export class SessionManager {
 
 function generateSessionId(): string {
   return `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function composeUserContent(
+  text: string,
+  attachments: UserMessageAttachment[] | undefined,
+): string {
+  if (!attachments || attachments.length === 0) return text;
+  const parts: string[] = [text];
+  for (const attachment of attachments) {
+    if (attachment.kind === "text_selection") {
+      parts.push(`[选区]\n${attachment.text}`);
+    } else if (attachment.kind === "image") {
+      parts.push(`[图片附件: ${attachment.mimeType} (${attachment.id})]`);
+    }
+  }
+  return parts.join("\n\n");
 }
 
 function deriveTitle(text: string): string {

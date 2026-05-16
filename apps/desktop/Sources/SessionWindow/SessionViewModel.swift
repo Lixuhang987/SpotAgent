@@ -21,7 +21,11 @@ final class SessionViewModel {
         self.socketClient = socketClient
     }
 
-    func start(initialPrompt: String, startupError: String? = nil) {
+    func start(
+        initialPrompt: String,
+        attachments: [UserMessageAttachmentPayload] = [],
+        startupError: String? = nil
+    ) {
         if let startupError,
            !startupError.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             handle(
@@ -41,14 +45,14 @@ final class SessionViewModel {
         }
 
         socketClient.connect(sessionID: sessionID)
-        sendPrompt(initialPrompt)
+        sendPrompt(initialPrompt, attachments: attachments)
     }
 
     func stop() {
         socketClient.disconnect()
     }
 
-    func sendPrompt(_ text: String) {
+    func sendPrompt(_ text: String, attachments: [UserMessageAttachmentPayload] = []) {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedText.isEmpty else { return }
 
@@ -59,7 +63,8 @@ final class SessionViewModel {
             sessionID: sessionID,
             messageID: messageID,
             text: trimmedText,
-            timestamp: timestamp
+            timestamp: timestamp,
+            attachments: attachments
         )
     }
 

@@ -16,7 +16,7 @@ export type SessionMessage =
       sessionId: string;
       messageId: string;
       timestamp: string;
-      payload: { text: string; selection?: string | null };
+      payload: { text: string; attachments?: UserMessageAttachment[] };
     }
   | {
       type: "interrupt";
@@ -106,6 +106,19 @@ export type SessionMessage =
       messageId: string;
       timestamp: string;
       payload: PlatformResponsePayload;
+    };
+
+export type UserMessageAttachment =
+  | {
+      kind: "text_selection";
+      id: string;
+      text: string;
+    }
+  | {
+      kind: "image";
+      id: string;
+      mimeType: "image/png" | "image/jpeg" | "image/webp";
+      base64: string;
     };
 
 export type PlatformResponsePayload =

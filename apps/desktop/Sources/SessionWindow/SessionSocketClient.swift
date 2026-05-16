@@ -48,14 +48,20 @@ final class SessionSocketClient {
         socketTask = nil
     }
 
-    func sendUserMessage(sessionID: String, messageID: String, text: String, timestamp: String) {
+    func sendUserMessage(
+        sessionID: String,
+        messageID: String,
+        text: String,
+        timestamp: String,
+        attachments: [UserMessageAttachmentPayload] = []
+    ) {
         guard let socketTask else { return }
 
         let envelope = UserMessageEnvelope(
             sessionId: sessionID,
             messageId: messageID,
             timestamp: timestamp,
-            payload: UserMessagePayload(text: text, selection: nil)
+            payload: UserMessagePayload(text: text, attachments: attachments.isEmpty ? nil : attachments)
         )
         send(envelope, on: socketTask)
     }
@@ -209,9 +215,55 @@ private struct UserMessageEnvelope: Encodable {
     let payload: UserMessagePayload
 }
 
+struct UserMessageAttachmentPayload: Encodable, Equatable {
+    enum Kind: String, Encodable {
+        case textSelection = "text_selection"
+        case image
+    }
+
+    let kind: Kind
+    let id: String
+    let text: String?
+    let mimeType: String?
+    let base64: String?
+
+    static func textSelection(id: String, text: String) -> UserMessageAttachmentPayload {
+        UserMessageAttachmentPayload(
+            kind: .textSelection,
+            id: id,
+            text: text,
+            mimeType: nil,
+            base64: nil
+        )
+    }
+
+    static func image(id: String, mimeType: String, base64: String) -> UserMessageAttachmentPayload {
+        UserMessageAttachmentPayload(
+            kind: .image,
+            id: id,
+            text: nil,
+            mimeType: mimeType,
+            base64: base64
+        )
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case kind, id, text, mimeType, base64
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(kind, forKey: .kind)
+        try container.encode(id, forKey: .id)
+        try container.encodeIfPresent(text, forKey: .text)
+        try container.encodeIfPresent(mimeType, forKey: .mimeType)
+        try container.encodeIfPresent(base64, forKey: .base64)
+    }
+}
+
 private struct UserMessagePayload: Encodable {
     let text: String
-    let selection: String?
+    let attachments: [UserMessageAttachmentPayload]?
 }
 
 private struct IncomingEnvelope: Decodable {

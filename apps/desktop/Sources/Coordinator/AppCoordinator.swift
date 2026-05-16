@@ -167,18 +167,26 @@ final class AppCoordinator {
         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        let attachmentText = attachments.compactMap { attachment -> String? in
+        let tokenSuffix = attachments.compactMap { attachment -> String? in
+            if case .textToken(let token) = attachment { return token }
+            return nil
+        }
+        let composedPrompt = ([trimmed] + tokenSuffix).joined(separator: "\n\n")
+
+        let socketAttachments = attachments.compactMap { attachment -> UserMessageAttachmentPayload? in
             switch attachment {
-            case .noAttachment, .selectionError:
+            case .textSelection(let id, let text):
+                return .textSelection(id: id, text: text)
+            case .noAttachment, .textToken, .selectionError:
                 return nil
-            case .textToken(let token):
-                return token
-            case .textSelection(_, let text):
-                return "[选区]\n\(text)"
             }
         }
 
-        let composedPrompt = ([trimmed] + attachmentText).joined(separator: "\n\n")
+        let summaryText: String = {
+            if socketAttachments.isEmpty { return composedPrompt }
+            return composedPrompt + "\n\n[附件 ×\(socketAttachments.count)]"
+        }()
+
         let sessionID = UUID().uuidString
         let viewModel = SessionViewModel(
             sessionID: sessionID,
@@ -190,7 +198,7 @@ final class AppCoordinator {
             SessionSummary(
                 sessionId: sessionID,
                 isRunning: true,
-                latestSummary: composedPrompt,
+                latestSummary: summaryText,
                 lastActiveAt: .now,
                 windowIsOpen: true
             )
@@ -199,6 +207,7 @@ final class AppCoordinator {
         guard !skipServerStart else {
             viewModel.start(
                 initialPrompt: composedPrompt,
+                attachments: socketAttachments,
                 startupError: agentServerError
             )
             return
@@ -236,6 +245,7 @@ final class AppCoordinator {
 
         viewModel.start(
             initialPrompt: composedPrompt,
+            attachments: socketAttachments,
             startupError: agentServerError
         )
     }
