@@ -8,6 +8,9 @@ struct PromptPanelView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: theme.spacing.lg) {
+            if !viewModel.attachments.isEmpty {
+                attachmentRow
+            }
             firstRow
             Divider()
                 .overlay(theme.colors.border)
@@ -16,6 +19,59 @@ struct PromptPanelView: View {
         .promptPanelContainer()
         .onAppear { isQueryFocused = true }
         .onChange(of: viewModel.focusSeed) { _, _ in isQueryFocused = true }
+    }
+
+    private var attachmentRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: theme.spacing.sm) {
+                ForEach(viewModel.attachments) { attachment in
+                    attachmentChip(attachment)
+                }
+            }
+        }
+    }
+
+    private func attachmentChip(_ attachment: PromptAttachmentResult) -> some View {
+        let isError = attachment.isError
+        let foreground = isError ? theme.colors.textSecondary : theme.colors.textPrimary
+        let background = isError ? theme.colors.surface.opacity(0.4) : theme.colors.accentSubtle
+        return HStack(spacing: 6) {
+            Image(systemName: isError ? "exclamationmark.triangle" : "text.quote")
+                .font(.system(size: 11))
+                .foregroundStyle(foreground)
+            Text(attachment.displayLabel)
+                .font(theme.typography.captionFont)
+                .foregroundStyle(foreground)
+                .lineLimit(1)
+            Button {
+                viewModel.removeAttachment(id: attachment.id)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(theme.colors.textSecondary)
+            }
+            .buttonStyle(.plain)
+            .help("移除附件")
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(
+            RoundedRectangle(cornerRadius: theme.radius.sm)
+                .fill(background)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: theme.radius.sm)
+                .strokeBorder(theme.colors.border, lineWidth: 0.5)
+        )
+        .help(tooltip(for: attachment))
+    }
+
+    private func tooltip(for attachment: PromptAttachmentResult) -> String {
+        switch attachment {
+        case .selectionError(_, let message): return message
+        case .textSelection(_, let text): return text
+        default: return ""
+        }
     }
 
     private var firstRow: some View {

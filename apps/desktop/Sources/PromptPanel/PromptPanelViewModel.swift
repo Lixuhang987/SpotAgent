@@ -6,6 +6,7 @@ import KeyboardShortcuts
 final class PromptPanelViewModel {
     var draft = ""
     var focusSeed = 0
+    var attachments: [PromptAttachmentResult] = []
 
     var onSubmit: ((String, [PromptAttachmentResult]) -> Void)?
     var onHide: (() -> Void)?
@@ -21,16 +22,38 @@ final class PromptPanelViewModel {
         self.actions = actions
     }
 
+    func appendAttachment(_ attachment: PromptAttachmentResult) {
+        switch attachment {
+        case .noAttachment:
+            return
+        case .textSelection, .selectionError, .textToken:
+            attachments.append(attachment)
+        }
+    }
+
+    func removeAttachment(id: String) {
+        attachments.removeAll { $0.id == id }
+    }
+
+    func resetForNewSession() {
+        draft = ""
+        attachments = []
+    }
+
     func submit() {
         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        onSubmit?(trimmed, [])
-        draft = ""
+        let payload = attachments.filter {
+            if case .selectionError = $0 { return false }
+            return true
+        }
+        onSubmit?(trimmed, payload)
+        resetForNewSession()
     }
 
     func submitAction(_ action: PromptAction) {
         action.perform()
-        draft = ""
+        resetForNewSession()
         onHide?()
     }
 

@@ -70,6 +70,46 @@ final class PromptPanelViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testAppendAttachmentSkipsNoAttachment() {
+        let vm = PromptPanelViewModel(actions: [])
+        vm.appendAttachment(.noAttachment)
+        XCTAssertEqual(vm.attachments.count, 0)
+    }
+
+    @MainActor
+    func testAppendAttachmentAddsTextSelection() {
+        let vm = PromptPanelViewModel(actions: [])
+        vm.appendAttachment(.textSelection(id: "a", text: "hello"))
+        XCTAssertEqual(vm.attachments.count, 1)
+        XCTAssertEqual(vm.attachments.first?.id, "a")
+    }
+
+    @MainActor
+    func testRemoveAttachmentByID() {
+        let vm = PromptPanelViewModel(actions: [])
+        vm.appendAttachment(.textSelection(id: "a", text: "x"))
+        vm.appendAttachment(.textSelection(id: "b", text: "y"))
+        vm.removeAttachment(id: "a")
+        XCTAssertEqual(vm.attachments.map(\.id), ["b"])
+    }
+
+    @MainActor
+    func testSubmitForwardsAttachmentsAndDropsErrors() {
+        let vm = PromptPanelViewModel(actions: [])
+        vm.draft = "hello"
+        vm.appendAttachment(.textSelection(id: "a", text: "code"))
+        vm.appendAttachment(.selectionError(id: "b", message: "boom"))
+
+        var received: [PromptAttachmentResult] = []
+        vm.onSubmit = { _, attachments in received = attachments }
+        vm.submit()
+
+        XCTAssertEqual(received.count, 1)
+        XCTAssertEqual(received.first?.id, "a")
+        XCTAssertEqual(vm.attachments, [])
+    }
+
+    @MainActor
     func testOpenSettingsCallsOnOpenSettingsAndOnHide() {
         let actions = makeTestActions()
         let vm = PromptPanelViewModel(actions: actions)

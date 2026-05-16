@@ -11,7 +11,7 @@
 | `PromptPanelController.swift` | `NSPanel` 生命周期、`NSEvent` 局部监听、ViewModel 注入 |
 | `PromptPanelWindow.swift` | `NSPanel` 子类，处理失焦自动隐藏 |
 | `PromptPanelStyles.swift` | `PromptPanelContainerModifier` / `ActionRowModifier` |
-| `PromptAction.swift` | `PromptAction` 数据结构 + `filter(_:query:)` 静态方法 + `PromptAttachmentResult` 枚举 |
+| `PromptAction.swift` | `PromptAction` 数据结构 + `filter(_:query:)` 静态方法 + `PromptAttachmentResult` 枚举（`textSelection` / `selectionError` / `textToken` / `noAttachment`） |
 
 ## 数据流
 

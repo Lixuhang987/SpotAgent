@@ -130,6 +130,7 @@ final class AppCoordinator {
 
     private func setupPromptPanel() {
         promptPanelController.register(actions: promptActions)
+        promptPanelController.setSelectionProvider(MacSelectionCaptureProvider())
         promptPanelController.onSubmit = { [weak self] draft, attachments in
             self?.send(.submitPrompt(draft, attachments: attachments))
         }
@@ -168,8 +169,12 @@ final class AppCoordinator {
 
         let attachmentText = attachments.compactMap { attachment -> String? in
             switch attachment {
-            case .noAttachment: return nil
-            case .textToken(let token): return token
+            case .noAttachment, .selectionError:
+                return nil
+            case .textToken(let token):
+                return token
+            case .textSelection(_, let text):
+                return "[选区]\n\(text)"
             }
         }
 
