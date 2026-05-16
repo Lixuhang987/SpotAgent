@@ -12,6 +12,7 @@ import { FrontmostAppTool } from "./builtins/FrontmostAppTool.ts";
 import { OCRTool } from "./builtins/OCRTool.ts";
 import { ScreenCaptureTool } from "./builtins/ScreenCaptureTool.ts";
 import { WindowListTool } from "./builtins/WindowListTool.ts";
+import { WorkspaceListTool } from "./builtins/WorkspaceListTool.ts";
 
 export type RegisterBuiltinToolsOptions = {
   registry?: ToolRegistry;
@@ -43,6 +44,7 @@ export function registerBuiltinTools(
   ];
 
   if (options.workspaceRegistry) {
+    candidates.push(new WorkspaceListTool(options.workspaceRegistry));
     candidates.push(new FileReadTool(options.workspaceRegistry));
     candidates.push(new FileWriteTool(options.workspaceRegistry));
   }
@@ -50,6 +52,7 @@ export function registerBuiltinTools(
   const disabled: { name: string; reason: string }[] = [];
   if (!options.workspaceRegistry) {
     disabled.push(
+      { name: "workspace.list", reason: "workspace registry not provided" },
       { name: "file.read", reason: "workspace registry not provided" },
       { name: "file.write", reason: "workspace registry not provided" },
     );

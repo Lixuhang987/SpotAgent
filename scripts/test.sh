@@ -21,4 +21,5 @@ pnpm exec vitest run \
   packages/core/tests/vercel-client.test.ts \
   packages/core/tests/workspace-registry.test.ts \
   packages/core/tests/register-builtins.test.ts \
-  packages/core/tests/tool-settings.test.ts
+  packages/core/tests/tool-settings.test.ts \
+  packages/core/tests/workspace-list-tool.test.ts

@@ -35,6 +35,7 @@ describe("registerBuiltinTools", () => {
         "ocr.read",
         "screen.capture",
         "window.list",
+        "workspace.list",
       ].sort(),
     );
     expect(disabled).toEqual([]);
