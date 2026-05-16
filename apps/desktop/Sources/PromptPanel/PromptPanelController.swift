@@ -1,5 +1,6 @@
 import AppKit
 import Carbon.HIToolbox
+import KeyboardShortcuts
 import SwiftUI
 
 @MainActor
@@ -8,23 +9,20 @@ final class PromptPanelController {
     var onOpenSettings: (() -> Void)?
 
     private var actions: [PromptAction] = []
-    private let shortcutSettingsStore: ShortcutSettingsStore
     private var focusSeed = 0
     private var panel: PromptPanelWindow?
     private var eventMonitor: Any?
 
-    init(shortcutSettingsStore: ShortcutSettingsStore) {
-        self.shortcutSettingsStore = shortcutSettingsStore
-    }
-
     func register(actions: [PromptAction]) {
         self.actions = actions
-        let defaultShortcuts = Dictionary(
-            uniqueKeysWithValues: actions.compactMap { action in
-                action.defaultShortcut.map { (action.id, $0) }
+        for action in actions {
+            if let defaultShortcut = action.defaultShortcut {
+                let name = action.shortcutName
+                if KeyboardShortcuts.getShortcut(for: name) == nil {
+                    KeyboardShortcuts.setShortcut(defaultShortcut, for: name)
+                }
             }
-        )
-        shortcutSettingsStore.registerDefaultActionShortcuts(defaultShortcuts)
+        }
         refreshContent()
     }
 
@@ -92,8 +90,9 @@ final class PromptPanelController {
         NSHostingView(
             rootView: PromptPanelView(
                 actions: actions,
-                shortcutLabelProvider: { [shortcutSettingsStore] action in
-                    action.shortcutDisplay(using: shortcutSettingsStore)
+                shortcutLabelProvider: { action in
+                    KeyboardShortcuts.getShortcut(for: action.shortcutName)?
+                        .description
                 },
                 focusSeed: focusSeed,
                 onOpenSettings: { [weak self] in
@@ -131,17 +130,13 @@ final class PromptPanelController {
             return nil
         }
 
-        let settingsShortcut = KeyShortcut(keyCode: UInt16(kVK_ANSI_Comma), modifiers: [.command])
-        if settingsShortcut.matches(event) {
-            openSettings()
-            return nil
-        }
-
         guard panel?.isKeyWindow == true else { return event }
 
+        guard let eventShortcut = KeyboardShortcuts.Shortcut(event: event) else { return event }
+
         for action in actions {
-            guard let shortcut = action.shortcut(using: shortcutSettingsStore) else { continue }
-            if shortcut.matches(event) {
+            guard let shortcut = KeyboardShortcuts.getShortcut(for: action.shortcutName) else { continue }
+            if shortcut == eventShortcut {
                 action.perform()
                 hide()
                 return nil

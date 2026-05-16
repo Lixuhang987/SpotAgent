@@ -1,5 +1,6 @@
 import AppKit
 import Carbon.HIToolbox
+import KeyboardShortcuts
 import SwiftUI
 
 @main
@@ -27,9 +28,7 @@ struct HandAgentApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let services = AppServices()
     private let agentServerURL = URL(string: "ws://127.0.0.1:4317/api/session")!
-    private lazy var promptPanelController = PromptPanelController(
-        shortcutSettingsStore: services.shortcutSettingsStore
-    )
+    private lazy var promptPanelController = PromptPanelController()
     private let activationPolicyCoordinator = AppActivationPolicyCoordinator()
     private lazy var statusBubbleController = StatusBubbleController(registry: services.sessionRegistry)
     private var sessionWindows: [String: SessionWindowController] = [:]
@@ -39,7 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             id: "open-settings",
             title: "打开设置",
             keywords: ["settings", "preferences", "shortcut", "hotkey"],
-            defaultShortcut: .init(keyCode: UInt16(kVK_ANSI_Comma), modifiers: [.command]),
+            defaultShortcut: .init(.comma, modifiers: [.command]),
             perform: { [weak self] in
                 self?.openSettingsWindow()
             }
@@ -59,15 +58,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.openSettingsWindow()
         }
 
-        services.hotkeyService.onTrigger = { [promptPanelController] in
-            promptPanelController.show()
+        KeyboardShortcuts.onKeyUp(for: .showPromptPanel) { [weak promptPanelController] in
+            promptPanelController?.show()
         }
-        services.shortcutSettingsStore.onGlobalShortcutChanged = { [weak self] shortcut in
-            _ = self?.services.hotkeyService.setShortcut(shortcut)
-        }
-        services.shortcutSettingsStore.onActionShortcutsChanged = { [weak self] in
-            self?.promptPanelController.register(actions: self?.promptActions ?? [])
-        }
+
         statusBubbleController.onTap = { [weak self] sessionID in
             self?.handleStatusBubbleTap(sessionID: sessionID)
         }
@@ -80,15 +74,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 services.agentServerService.lastStartupError
                 ?? error.localizedDescription
         }
-        _ = services.hotkeyService.start()
         statusBubbleController.show()
     }
 
     func makeSettingsView() -> some View {
-        ShortcutSettingsView(
-            store: services.shortcutSettingsStore,
-            actions: promptActions
-        )
+        ShortcutSettingsView(actions: promptActions)
     }
 
     func openSettingsWindow() {
@@ -97,7 +87,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        services.hotkeyService.stop()
         services.agentServerService.stop()
         sessionWindows.values.forEach { $0.close() }
         sessionWindows.removeAll()
