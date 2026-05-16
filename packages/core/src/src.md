@@ -86,6 +86,19 @@
 - `FileSessionStore`：JSON 文件持久化，默认存储到 `~/.spotAgent/sessions/`。
 - `SessionEvent` 类型预留了 tool 调用记录、权限审计和错误追踪。
 
+### `workspace`
+
+- `Workspace.ts`
+- `FileWorkspaceRegistry.ts`
+- `index.ts`
+
+职责：
+
+- 定义 `Workspace` DTO（id / name / description / rootPath / createdAt / isDefault）与 `WorkspaceRegistry` 接口。
+- `FileWorkspaceRegistry` 把注册表持久化到 `~/.spotAgent/workspaces.json`，首次启动自动播种 `default` workspace（rootPath 默认为 `~/.spotAgent/workspace/`）。
+- `summarize()` 返回不含 `rootPath` 的精简列表，专供 LLM 通过 `workspace.list` 消费。
+- 注册时强制 `rootPath` 为绝对路径，并 `mkdir -p`；删除仅从注册表移除，不删除磁盘内容。
+
 ## 关键数据流
 
 ### 1. 会话阶段
