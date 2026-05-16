@@ -1,5 +1,12 @@
 import Foundation
 
+struct SessionListItem: Equatable, Identifiable {
+    let id: String
+    let title: String?
+    let updatedAt: String
+    let messageCount: Int
+}
+
 enum SessionEvent: Equatable {
     case userMessage(messageID: String, text: String, timestamp: String)
     case assistantMessageStart(messageID: String, timestamp: String)
@@ -10,6 +17,8 @@ enum SessionEvent: Equatable {
     case status(value: String)
     case error(messageID: String, message: String, timestamp: String)
     case sessionSnapshot(messages: [SessionBubble], status: String)
+    case sessionList(sessions: [SessionListItem])
+    case sessionLoaded(targetSessionId: String, title: String?, messages: [SessionBubble])
 
     static func == (lhs: SessionEvent, rhs: SessionEvent) -> Bool {
         switch (lhs, rhs) {
@@ -31,6 +40,10 @@ enum SessionEvent: Equatable {
             return a1 == b1 && a2 == b2 && a3 == b3
         case let (.sessionSnapshot(a1, a2), .sessionSnapshot(b1, b2)):
             return a1 == b1 && a2 == b2
+        case let (.sessionList(a), .sessionList(b)):
+            return a == b
+        case let (.sessionLoaded(a1, a2, a3), .sessionLoaded(b1, b2, b3)):
+            return a1 == b1 && a2 == b2 && a3 == b3
         default:
             return false
         }
@@ -219,9 +232,67 @@ final class SessionSocketClient {
                 toolName: envelope.payload.toolName ?? "unknown",
                 arguments: [:]
             )
+        case "list_sessions_response":
+            let items = envelope.payload.sessions?.map {
+                SessionListItem(
+                    id: $0.id,
+                    title: $0.title,
+                    updatedAt: $0.updatedAt ?? "",
+                    messageCount: $0.messageCount ?? 0
+                )
+            } ?? []
+            return .sessionList(sessions: items)
+        case "load_session_response":
+            let bubbles = envelope.payload.messages?.map {
+                SessionBubble(id: $0.id, role: $0.role, text: $0.text)
+            } ?? []
+            return .sessionLoaded(
+                targetSessionId: envelope.payload.targetSessionId ?? "",
+                title: envelope.payload.title ?? nil,
+                messages: bubbles
+            )
         default:
             return nil
         }
+    }
+
+    func sendListSessions(sessionID: String) {
+        sendJSON([
+            "type": "list_sessions_request",
+            "sessionId": sessionID,
+            "messageId": UUID().uuidString,
+            "timestamp": Self.timestamp(),
+            "payload": [:] as [String: Any],
+        ])
+    }
+
+    func sendLoadSession(sessionID: String, targetSessionId: String) {
+        sendJSON([
+            "type": "load_session_request",
+            "sessionId": sessionID,
+            "messageId": UUID().uuidString,
+            "timestamp": Self.timestamp(),
+            "payload": ["targetSessionId": targetSessionId],
+        ])
+    }
+
+    func sendDeleteSession(sessionID: String, targetSessionId: String) {
+        sendJSON([
+            "type": "delete_session_request",
+            "sessionId": sessionID,
+            "messageId": UUID().uuidString,
+            "timestamp": Self.timestamp(),
+            "payload": ["targetSessionId": targetSessionId],
+        ])
+    }
+
+    private func sendJSON(_ object: [String: Any]) {
+        guard let socketTask else { return }
+        guard
+            let data = try? JSONSerialization.data(withJSONObject: object),
+            let text = String(data: data, encoding: .utf8)
+        else { return }
+        socketTask.send(.string(text)) { _ in }
     }
 
     func sendPermissionResponse(
@@ -340,10 +411,20 @@ private struct IncomingPayload: Decodable {
     let messages: [IncomingSnapshotMessage]?
     let requestId: String?
     let toolName: String?
+    let sessions: [IncomingSessionListItem]?
+    let targetSessionId: String?
+    let title: String?
 }
 
 private struct IncomingSnapshotMessage: Decodable {
     let id: String
     let role: String
     let text: String
+}
+
+private struct IncomingSessionListItem: Decodable {
+    let id: String
+    let title: String?
+    let updatedAt: String?
+    let messageCount: Int?
 }

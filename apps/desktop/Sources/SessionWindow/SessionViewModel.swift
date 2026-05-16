@@ -18,6 +18,7 @@ final class SessionViewModel {
     private(set) var status: String = "idle"
     private(set) var error: String?
     private(set) var pendingPermissionRequests: [SessionPermissionRequest] = []
+    private(set) var historyList: [SessionListItem] = []
 
     let sessionID: String
     @ObservationIgnored let socketClient: SessionSocketClient
@@ -35,6 +36,19 @@ final class SessionViewModel {
             scope: scope
         )
         pendingPermissionRequests.removeAll { $0.id == requestId }
+    }
+
+    func refreshHistory() {
+        socketClient.sendListSessions(sessionID: sessionID)
+    }
+
+    func restoreSession(_ targetSessionId: String) {
+        socketClient.sendLoadSession(sessionID: sessionID, targetSessionId: targetSessionId)
+    }
+
+    func deleteSession(_ targetSessionId: String) {
+        socketClient.sendDeleteSession(sessionID: sessionID, targetSessionId: targetSessionId)
+        historyList.removeAll { $0.id == targetSessionId }
     }
 
     func start(
@@ -117,6 +131,12 @@ final class SessionViewModel {
             pendingPermissionRequests.append(
                 SessionPermissionRequest(id: requestId, toolName: toolName)
             )
+        case .sessionList(let sessions):
+            historyList = sessions
+        case .sessionLoaded(_, _, let bubbles):
+            messages = bubbles
+            status = "idle"
+            error = nil
         }
     }
 
