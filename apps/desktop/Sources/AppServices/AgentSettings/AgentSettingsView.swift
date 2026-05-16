@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct AgentSettingsView: View {
-    @ObservedObject var store: AgentSettingsStore
+    @Bindable var store: AgentSettingsStore
 
     var body: some View {
         ScrollView {

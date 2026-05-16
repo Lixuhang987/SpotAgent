@@ -9,12 +9,9 @@ enum AgentAPIType: String, CaseIterable, Codable, Equatable, Identifiable {
 
     var title: String {
         switch self {
-        case .responses:
-            return "Responses"
-        case .chat:
-            return "Chat Completions"
-        case .completion:
-            return "Completions"
+        case .responses: return "Responses"
+        case .chat: return "Chat Completions"
+        case .completion: return "Completions"
         }
     }
 }
@@ -44,15 +41,16 @@ private struct AgentSettingsFile: Codable {
     var llm: AgentSettings
 }
 
+@Observable
 @MainActor
-final class AgentSettingsStore: ObservableObject {
-    @Published private(set) var settings: AgentSettings
-    @Published private(set) var saveErrorMessage: String?
+final class AgentSettingsStore {
+    private(set) var settings: AgentSettings
+    private(set) var saveErrorMessage: String?
 
-    private let fileManager: FileManager
-    private let homeDirectoryURL: URL
-    private var lastLoadedData: Data?
-    private var pollingTask: Task<Void, Never>?
+    @ObservationIgnored private let fileManager: FileManager
+    @ObservationIgnored private let homeDirectoryURL: URL
+    @ObservationIgnored private var lastLoadedData: Data?
+    @ObservationIgnored private var pollingTask: Task<Void, Never>?
 
     init(
         fileManager: FileManager = .default,
@@ -101,7 +99,6 @@ final class AgentSettingsStore: ObservableObject {
         else {
             return (.defaultValue, nil)
         }
-
         return (persisted.llm, data)
     }
 
