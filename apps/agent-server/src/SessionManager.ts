@@ -107,32 +107,15 @@ export class SessionManager {
       const events: SessionEvent[] = [];
       const result = await this.runtime.runWithMessages(nextMessages, (event) => {
         const push = pushMessage ?? this.pushMessage;
-        push(toSessionMessage(message.sessionId, event, this.now()));
+        const sessionMessage = toSessionMessage(message.sessionId, event, this.now());
+        if (sessionMessage) {
+          push(sessionMessage);
+        }
+        const auditEvent = toAuditEvent(event, this.now());
+        if (auditEvent) {
+          events.push(auditEvent);
+        }
       });
-
-      const newMessages = result.messages.slice(nextMessages.length);
-      for (const msg of newMessages) {
-        if (msg.role === "assistant" && msg.toolCalls) {
-          for (const tc of msg.toolCalls) {
-            events.push({
-              type: "tool_call",
-              timestamp: this.now(),
-              toolCallId: tc.id,
-              toolName: tc.name,
-              input: tc.arguments,
-            });
-          }
-        }
-        if (msg.role === "tool") {
-          events.push({
-            type: "tool_result",
-            timestamp: this.now(),
-            toolCallId: msg.toolCallId,
-            status: "success",
-            output: msg.content.slice(0, 500),
-          });
-        }
-      }
 
       await this.store.setMessages(
         message.sessionId,
@@ -203,20 +186,20 @@ function toSessionMessage(
   sessionId: string,
   event: AgentRuntimeEvent,
   timestamp: string,
-): Extract<
-  SessionMessage,
-  | { type: "assistant_message_start" }
-  | { type: "assistant_message_delta" }
-  | { type: "assistant_message_end" }
-> {
-  const messageId = `${sessionId}-${event.messageId}`;
-
+):
+  | Extract<
+      SessionMessage,
+      | { type: "assistant_message_start" }
+      | { type: "assistant_message_delta" }
+      | { type: "assistant_message_end" }
+    >
+  | null {
   switch (event.type) {
     case "assistant_message_start":
       return {
         type: "assistant_message_start",
         sessionId,
-        messageId,
+        messageId: `${sessionId}-${event.messageId}`,
         timestamp,
         payload: event.payload,
       };
@@ -224,7 +207,7 @@ function toSessionMessage(
       return {
         type: "assistant_message_delta",
         sessionId,
-        messageId,
+        messageId: `${sessionId}-${event.messageId}`,
         timestamp,
         payload: event.payload,
       };
@@ -232,9 +215,44 @@ function toSessionMessage(
       return {
         type: "assistant_message_end",
         sessionId,
-        messageId,
+        messageId: `${sessionId}-${event.messageId}`,
         timestamp,
         payload: event.payload,
       };
+    case "tool_call":
+    case "tool_result":
+    case "runtime_error":
+      return null;
+  }
+}
+
+function toAuditEvent(event: AgentRuntimeEvent, timestamp: string): SessionEvent | null {
+  switch (event.type) {
+    case "tool_call":
+      return {
+        type: "tool_call",
+        timestamp,
+        toolCallId: event.toolCallId,
+        toolName: event.toolName,
+        input: event.input,
+      };
+    case "tool_result":
+      return {
+        type: "tool_result",
+        timestamp,
+        toolCallId: event.toolCallId,
+        status: event.status,
+        output: event.output,
+        durationMs: event.durationMs,
+      };
+    case "runtime_error":
+      return {
+        type: "error",
+        timestamp,
+        message: event.message,
+        code: event.code,
+      };
+    default:
+      return null;
   }
 }

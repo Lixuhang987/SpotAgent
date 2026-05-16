@@ -28,6 +28,24 @@ export type AgentRuntimeEvent =
       type: "assistant_message_end";
       messageId: string;
       payload: { status: "completed" };
+    }
+  | {
+      type: "tool_call";
+      toolCallId: string;
+      toolName: string;
+      input: Record<string, unknown>;
+    }
+  | {
+      type: "tool_result";
+      toolCallId: string;
+      status: "success" | "error";
+      output: string;
+      durationMs: number;
+    }
+  | {
+      type: "runtime_error";
+      message: string;
+      code?: string;
     };
 
 export class AgentRuntime {
@@ -110,12 +128,38 @@ export class AgentRuntime {
           throw new Error(`Unknown tool: ${toolCall.name}`);
         }
 
-        const result = await tool.call(toolCall.arguments);
+        onEvent({
+          type: "tool_call",
+          toolCallId: toolCall.id,
+          toolName: toolCall.name,
+          input: toolCall.arguments,
+        });
+
+        const startedAt = Date.now();
+        let toolContent: string;
+        let toolStatus: "success" | "error" = "success";
+        try {
+          const result = await tool.call(toolCall.arguments);
+          toolContent = serializeToolResult(result);
+        } catch (error) {
+          toolStatus = "error";
+          toolContent = error instanceof Error ? error.message : String(error);
+        }
+        const durationMs = Date.now() - startedAt;
+
         nextMessages.push({
           role: "tool",
           toolCallId: toolCall.id,
           name: toolCall.name,
-          content: serializeToolResult(result),
+          content: toolContent,
+        });
+
+        onEvent({
+          type: "tool_result",
+          toolCallId: toolCall.id,
+          status: toolStatus,
+          output: truncateOutput(toolContent),
+          durationMs,
         });
       }
     }
@@ -134,4 +178,11 @@ function serializeToolResult(value: unknown): string {
   } catch {
     return "[unserializable tool result]";
   }
+}
+
+const MAX_OUTPUT_BYTES = 8 * 1024;
+
+function truncateOutput(value: string): string {
+  if (Buffer.byteLength(value, "utf8") <= MAX_OUTPUT_BYTES) return value;
+  return value.slice(0, MAX_OUTPUT_BYTES) + "\n[...truncated]";
 }

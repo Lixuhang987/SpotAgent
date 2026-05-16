@@ -460,6 +460,19 @@ describe("SessionManager", () => {
             messageId: "assistant-1",
             payload: { status: "completed" },
           });
+          onEvent({
+            type: "tool_call",
+            toolCallId: "tc-1",
+            toolName: "file.read",
+            input: { path: "/tmp/test.txt" },
+          });
+          onEvent({
+            type: "tool_result",
+            toolCallId: "tc-1",
+            status: "success",
+            output: "file contents here",
+            durationMs: 12,
+          });
           return {
             messages: [
               ...messages,
@@ -502,6 +515,7 @@ describe("SessionManager", () => {
         toolCallId: "tc-1",
         status: "success",
         output: "file contents here",
+        durationMs: 12,
       },
     ]);
   });
