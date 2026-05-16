@@ -1,4 +1,3 @@
-import Combine
 import Foundation
 
 struct SessionBubble: Identifiable, Equatable {
@@ -7,14 +6,15 @@ struct SessionBubble: Identifiable, Equatable {
     var text: String
 }
 
+@Observable
 @MainActor
-final class SessionViewModel: ObservableObject {
-    @Published private(set) var messages: [SessionBubble] = []
-    @Published private(set) var status: String = "idle"
-    @Published private(set) var error: String?
+final class SessionViewModel {
+    private(set) var messages: [SessionBubble] = []
+    private(set) var status: String = "idle"
+    private(set) var error: String?
 
     let sessionID: String
-    let socketClient: SessionSocketClient
+    @ObservationIgnored let socketClient: SessionSocketClient
 
     init(sessionID: String, socketClient: SessionSocketClient) {
         self.sessionID = sessionID
@@ -77,25 +77,16 @@ final class SessionViewModel: ObservableObject {
             guard let index = messages.firstIndex(where: { $0.id == messageID }) else { return }
             messages[index].text += text
         case .assistantMessageEnd(_, let status, _):
-            if status == "completed" {
-                self.status = "idle"
-            } else {
-                self.status = status
-            }
+            self.status = status == "completed" ? "idle" : status
         case .toolMessage(let messageID, let name, let text, _, _):
             messages.append(SessionBubble(id: messageID, role: "tool", text: "\(name): \(text)"))
         case .status(let value):
             status = value
-            if value != "failed" {
-                error = nil
-            }
+            if value != "failed" { error = nil }
         case .error(let messageID, let message, _):
             status = "failed"
             error = message
-            if messages.last?.role == "assistant",
-               messages.last?.text == message {
-                return
-            }
+            if messages.last?.role == "assistant", messages.last?.text == message { return }
             messages.append(SessionBubble(id: messageID, role: "assistant", text: message))
         case .sessionSnapshot(let messages, let status):
             self.messages = messages

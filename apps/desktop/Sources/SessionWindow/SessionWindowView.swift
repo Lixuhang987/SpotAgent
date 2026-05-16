@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SessionWindowView: View {
-    @ObservedObject var viewModel: SessionViewModel
+    @Bindable var viewModel: SessionViewModel
 
     @State private var draft = ""
 
