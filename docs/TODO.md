@@ -32,7 +32,7 @@
 
 ## 二、选区与附件接入（CLAUDE.md 标记「待收尾」）
 
-- [ ] **2.1 Swift 侧选区采集未接入 PromptPanel**
+- [x] **2.1 Swift 侧选区采集未接入 PromptPanel**
   - 现状：`PromptPanelViewModel.submit()` 只传 `attachments: []`，`PromptAttachmentResult` 始终为 `.noAttachment`，`MacSelectionCapture` 已实现但从未被调用。
   - 用户场景：用户在 Xcode 选了一段代码，唤起 PromptPanel 输入「这段代码什么意思」，但选区没进上下文，LLM 拿不到代码片段无法回答。
   - 验收标准：
@@ -46,7 +46,7 @@
   - 依赖：无。
   - 阻塞：2.2、2.3。
 
-- [ ] **2.2 选区未传入 WebSocket**
+- [x] **2.2 选区未传入 WebSocket**
   - 现状：`SessionSocketClient.sendUserMessage` 在 `apps/desktop/Sources/SessionWindow/SessionSocketClient.swift:58` 硬编码 `selection: nil`。
   - 用户场景：即便 2.1 完成，附件仍然不会被传到 agent-server，相当于半截功能。
   - 验收标准：
@@ -60,7 +60,7 @@
   - 依赖：2.1。
   - 阻塞：2.3 的端到端验证。
 
-- [ ] **2.3 选区采集时机：双全局快捷键**
+- [x] **2.3 选区采集时机：双全局快捷键**
   - 现状：只有一个唤起 PromptPanel 的快捷键，没有显式选区/截图采集入口。
   - 用户场景：
     - 场景 A（文本选区）：用户在某个 App 里手动选好文字，按「文本选区」快捷键，PromptPanel 弹出且文本已作为 chip 附上。
