@@ -1,4 +1,3 @@
-import Combine
 import Foundation
 
 struct SessionSummary: Equatable {
@@ -9,10 +8,11 @@ struct SessionSummary: Equatable {
     let windowIsOpen: Bool
 }
 
+@Observable
 @MainActor
-final class SessionRegistry: ObservableObject {
-    @Published private(set) var summaries: [String: SessionSummary] = [:]
-    @Published private(set) var recentSessionIDs: [String] = []
+final class SessionRegistry {
+    private(set) var summaries: [String: SessionSummary] = [:]
+    private(set) var recentSessionIDs: [String] = []
 
     func upsert(_ summary: SessionSummary) {
         summaries[summary.sessionId] = summary

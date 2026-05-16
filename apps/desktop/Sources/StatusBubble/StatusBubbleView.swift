@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct StatusBubbleView: View {
-    @ObservedObject var registry: SessionRegistry
+    @Bindable var registry: SessionRegistry
     let onTap: () -> Void
 
     private var summary: SessionSummary? {
