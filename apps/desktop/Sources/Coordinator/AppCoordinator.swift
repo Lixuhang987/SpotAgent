@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import KeyboardShortcuts
+import SwiftUI
 
 @Observable
 @MainActor
@@ -42,11 +43,16 @@ final class AppCoordinator {
         )
     ]
 
+    @ObservationIgnored private var sessionWindows: [String: NSWindow] = [:]
+
     init(skipServerStart: Bool = false) {
         self.skipServerStart = skipServerStart
         self.agentServerService = AgentServerService()
         self.sessionRegistry = SessionRegistry()
         self.settingsStore = AgentSettingsStore()
+        if !skipServerStart {
+            bootstrap()
+        }
     }
 
     func bootstrap() {
@@ -58,6 +64,8 @@ final class AppCoordinator {
 
     func shutdown() {
         agentServerService.stop()
+        sessionWindows.values.forEach { $0.close() }
+        sessionWindows.removeAll()
     }
 
     func send(_ action: Action) {
@@ -145,7 +153,40 @@ final class AppCoordinator {
             )
         )
 
+        guard !skipServerStart else {
+            viewModel.start(
+                initialPrompt: composedPrompt,
+                startupError: agentServerError
+            )
+            return
+        }
+
+        NSApp.setActivationPolicy(
+            activationPolicy.policyAfterUpdatingOpenSessionWindows(by: 1)
+        )
+
         promptPanelController.hide()
+
+        let hosting = NSHostingController(rootView: SessionWindowView(viewModel: viewModel))
+        let window = NSWindow(contentViewController: hosting)
+        window.title = "Session \(sessionID.prefix(8))"
+        window.setContentSize(NSSize(width: 760, height: 560))
+        window.center()
+
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification,
+            object: window,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.send(.sessionClosed(sessionID))
+                self?.sessionWindows.removeValue(forKey: sessionID)
+            }
+        }
+
+        sessionWindows[sessionID] = window
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
 
         viewModel.start(
             initialPrompt: composedPrompt,
@@ -156,6 +197,12 @@ final class AppCoordinator {
     private func handleSessionClosed(_ sessionID: String) {
         let viewModel = sessionViewModels.removeValue(forKey: sessionID)
         viewModel?.stop()
+
+        if !skipServerStart {
+            NSApp.setActivationPolicy(
+                activationPolicy.policyAfterUpdatingOpenSessionWindows(by: -1)
+            )
+        }
 
         sessionRegistry.upsert(
             SessionSummary(
@@ -169,7 +216,9 @@ final class AppCoordinator {
     }
 
     private func handleStatusBubbleTap(_ sessionID: String?) {
-        if sessionID != nil, sessionViewModels[sessionID!] != nil {
+        if let sessionID, let window = sessionWindows[sessionID] {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
             return
         }
         promptPanelController.show()

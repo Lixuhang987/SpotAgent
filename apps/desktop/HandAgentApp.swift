@@ -1,171 +1,26 @@
 import AppKit
-import Carbon.HIToolbox
 import KeyboardShortcuts
 import SwiftUI
 
 @main
 struct HandAgentApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @State private var settingsStore = AgentSettingsStore()
+    @State private var coordinator = AppCoordinator()
 
     var body: some Scene {
-        Settings {
-            AgentSettingsView(viewModel: AgentSettingsViewModel(store: settingsStore))
-            appDelegate.makeSettingsView()
+        Window("设置", id: "settings") {
+            SettingsView(
+                settingsViewModel: coordinator.makeSettingsViewModel(),
+                shortcutActions: coordinator.makeShortcutActions()
+            )
         }
+        .defaultSize(width: 580, height: 480)
         .commands {
             CommandGroup(replacing: .appSettings) {
                 Button("设置…") {
-                    appDelegate.openSettingsWindow()
+                    coordinator.send(.openSettings)
                 }
                 .keyboardShortcut(",", modifiers: .command)
             }
-        }
-    }
-}
-
-@MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let services = AppServices()
-    private let agentServerURL = URL(string: "ws://127.0.0.1:4317/api/session")!
-    private lazy var promptPanelController = PromptPanelController()
-    private let activationPolicyCoordinator = AppActivationPolicyCoordinator()
-    private lazy var statusBubbleController = StatusBubbleController(registry: services.sessionRegistry)
-    private var sessionWindows: [String: SessionWindowController] = [:]
-    private var agentServerStartupError: String?
-    private lazy var promptActions: [PromptAction] = [
-        PromptAction(
-            id: "open-settings",
-            title: "打开设置",
-            keywords: ["settings", "preferences", "shortcut", "hotkey"],
-            defaultShortcut: .init(.comma, modifiers: [.command]),
-            perform: { [weak self] in
-                self?.openSettingsWindow()
-            }
-        )
-    ]
-
-    func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(
-            activationPolicyCoordinator.policyAfterUpdatingOpenSessionWindows(by: 0)
-        )
-
-        promptPanelController.register(actions: promptActions)
-        promptPanelController.onSubmit = { [weak self] draft, attachments in
-            self?.openSessionWindow(for: draft, attachments: attachments)
-        }
-        promptPanelController.onOpenSettings = { [weak self] in
-            self?.openSettingsWindow()
-        }
-
-        KeyboardShortcuts.onKeyUp(for: .showPromptPanel) { [weak promptPanelController] in
-            promptPanelController?.show()
-        }
-
-        statusBubbleController.onTap = { [weak self] sessionID in
-            self?.handleStatusBubbleTap(sessionID: sessionID)
-        }
-
-        do {
-            try services.agentServerService.start()
-            agentServerStartupError = nil
-        } catch {
-            agentServerStartupError =
-                services.agentServerService.lastStartupError
-                ?? error.localizedDescription
-        }
-        statusBubbleController.show()
-    }
-
-    func makeSettingsView() -> some View {
-        ShortcutSettingsView(actions: promptActions)
-    }
-
-    func openSettingsWindow() {
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-        NSApp.activate(ignoringOtherApps: true)
-    }
-
-    func applicationWillTerminate(_ notification: Notification) {
-        services.agentServerService.stop()
-        sessionWindows.values.forEach { $0.close() }
-        sessionWindows.removeAll()
-    }
-
-    private func openSessionWindow(for draft: String, attachments: [PromptAttachmentResult]) {
-        let trimmedDraft = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedDraft.isEmpty else { return }
-
-        let attachmentText = attachments.compactMap { attachment -> String? in
-            switch attachment {
-            case .noAttachment:
-                return nil
-            case .textToken(let token):
-                return token
-            }
-        }
-
-        let composedPrompt = ([trimmedDraft] + attachmentText).joined(separator: "\n\n")
-        let sessionID = UUID().uuidString
-        let viewModel = SessionViewModel(
-            sessionID: sessionID,
-            socketClient: SessionSocketClient(serverURL: agentServerURL)
-        )
-        let windowController = SessionWindowController(viewModel: viewModel)
-        NSApp.setActivationPolicy(
-            activationPolicyCoordinator.policyAfterUpdatingOpenSessionWindows(by: 1)
-        )
-
-        windowController.onClose = { [weak self, weak viewModel] in
-            guard let self else { return }
-
-            self.sessionWindows[sessionID] = nil
-            NSApp.setActivationPolicy(
-                self.activationPolicyCoordinator.policyAfterUpdatingOpenSessionWindows(by: -1)
-            )
-            self.services.sessionRegistry.upsert(
-                SessionSummary(
-                    sessionId: sessionID,
-                    isRunning: viewModel?.status == "running",
-                    latestSummary: viewModel?.messages.last?.text ?? trimmedDraft,
-                    lastActiveAt: .now,
-                    windowIsOpen: false
-                )
-            )
-        }
-
-        sessionWindows[sessionID] = windowController
-        services.sessionRegistry.upsert(
-            SessionSummary(
-                sessionId: sessionID,
-                isRunning: true,
-                latestSummary: composedPrompt,
-                lastActiveAt: .now,
-                windowIsOpen: true
-            )
-        )
-
-        windowController.showWindow(nil)
-        viewModel.start(
-            initialPrompt: composedPrompt,
-            startupError: agentServerStartupError
-        )
-    }
-
-    private func handleStatusBubbleTap(sessionID: String?) {
-        if let sessionID {
-            focusSessionWindow(with: sessionID)
-            return
-        }
-
-        promptPanelController.show()
-    }
-
-    private func focusSessionWindow(with sessionID: String) {
-        if let windowController = sessionWindows[sessionID] {
-            windowController.showWindow(nil)
-        } else {
-            promptPanelController.show()
         }
     }
 }
