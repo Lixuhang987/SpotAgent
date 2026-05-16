@@ -46,6 +46,7 @@ struct SettingsTabBar: View {
                 RoundedRectangle(cornerRadius: theme.radius.md)
                     .strokeBorder(isSelected ? theme.colors.border : Color.clear, lineWidth: 0.5)
             )
+            .contentShape(RoundedRectangle(cornerRadius: theme.radius.md))
         }
         .buttonStyle(.plain)
     }
