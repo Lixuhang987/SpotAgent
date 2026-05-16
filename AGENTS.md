@@ -53,9 +53,10 @@
 
 - `apps/desktop/HandAgentApp.swift` 是 macOS 宿主入口，负责应用生命周期、全局热键、`PromptPanel`、`SessionWindow` 与状态气泡。
 - `apps/desktop/Sources/` 按 `AppServices`、`PromptPanel`、`SessionWindow`、`StatusBubble` 划分宿主实现。
-- `packages/core/` 是跨平台核心层，负责会话模型、LLM 循环、tool 协议、tool 注册、平台抽象和通用测试。
-- `packages/platform-macos/` 是 macOS 平台实现层，负责把平台能力落到具体系统 API 或 AppleScript。
+- `packages/core/` 是跨平台核心层，负责会话模型、LLM 循环、tool 协议、tool 注册、平台抽象和通用测试；不得引入 macOS 相关导入或 UI 依赖。
+- `packages/platform-macos/` 是 macOS 平台实现层，只能通过 `PlatformAdapter` 接口对外暴露 macOS 能力，负责把平台能力落到具体系统 API 或 AppleScript。
 - `docs/` 里的设计稿和开发说明只描述规则和约束，不作为运行时依赖。
+- 模型相关设置存放在 `~/.spotAgent/settings.json`，每次请求时读取，无需重启。
 
 ## 主调用链路
 
@@ -104,6 +105,13 @@ flowchart TD
 - 只有在原生 API 明确无法覆盖需求时，才退回 `osascript` 或其他兼容性方案；若采用退回方案，必须在设计或实现文档中说明原因。
 - 新增桌面能力时，默认目标是“尽可能支持系统已提供的高能力接口”，例如系统级内容选择器、窗口级共享、录制或更完整的 accessibility 读写能力。
 
+### 常用命令
+
+- 安装依赖：`pnpm install`
+- TypeScript 测试（agent-server + core，vitest）：`bash ./scripts/test.sh`
+- Swift 测试与构建（桌面 App）：`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`
+- 运行桌面 App：`bash ./scripts/swiftw run HandAgentDesktop`
+
 ### 提交前检查
 
 - `bash ./scripts/test.sh`
@@ -117,9 +125,9 @@ flowchart TD
 
 ### Development Workflow
 
-- Before making code changes, create a new worktree from the project root at `.worktrees/<task-name>/`. Pure documentation work or read-only work does not require a worktree.
-- After creating the worktree, finish project initialization first. At minimum, ensure the worktree can run independently. For this repo, run `pnpm install` by default, then add any other dependency initialization as needed.
-- After initialization, run a baseline verification once to confirm the worktree is usable, then start browsing the codebase. Focus on the architecture docs with the same name under the target folder.
-- Make code changes.
-- After verification passes, update existing docs.
-- run `git commit` and summarize the changes in commit message. Do not leave completed work uncommitted for a long time.
+- 需要修改代码的任务，必须先在 `.worktrees/<task-name>/` 目录下创建 worktree（使用 `git worktree add .worktrees/<task-name> -b <branch-name>`，**不要使用 `EnterWorktree` 工具** —— 它会把 worktree 放到 `.claude/worktrees/`，与本仓库约定不符）。纯文档任务或只读任务不需要 worktree。
+- 创建 worktree 后，先完成项目初始化，至少保证 worktree 可独立运行。本仓库默认执行 `pnpm install`，再按需补齐其他依赖初始化。
+- 初始化完成后，先跑一次基线验证（`bash ./scripts/test.sh` 与 `bash ./scripts/swiftw build`）确认 worktree 可用，再开始浏览代码。优先阅读目标目录下同名的架构文档。
+- 进行代码修改。
+- 验证通过后，更新已有文档。
+- 执行 `git commit` 并在 commit message 中总结改动，不要让完成的工作长时间不提交。

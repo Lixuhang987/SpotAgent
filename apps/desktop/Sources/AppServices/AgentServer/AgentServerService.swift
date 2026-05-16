@@ -23,6 +23,7 @@ final class AgentServerService {
     private(set) var process: Process?
     private(set) var lastStartupError: String?
     private var outputPipe: Pipe?
+    private var stdinPipe: Pipe?
 
     func start() throws {
         guard process == nil else { return }
@@ -61,9 +62,13 @@ final class AgentServerService {
         process.standardOutput = pipe
         process.standardError = pipe
 
+        let stdinPipe = Pipe()
+        process.standardInput = stdinPipe
+
         do {
             try process.run()
             self.process = process
+            self.stdinPipe = stdinPipe
             outputPipe = pipe
         } catch {
             pipe.fileHandleForReading.readabilityHandler = nil
@@ -75,6 +80,7 @@ final class AgentServerService {
     func stop() {
         outputPipe?.fileHandleForReading.readabilityHandler = nil
         outputPipe = nil
+        stdinPipe = nil
         process?.terminate()
         process = nil
         lastStartupError = nil

@@ -50,5 +50,7 @@ export async function startDefaultServer(port = 4317) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  process.stdin.resume();
+  process.stdin.on("end", () => process.exit(0));
   await startDefaultServer();
 }

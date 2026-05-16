@@ -118,6 +118,66 @@ TestsSwift/
 - `SessionRegistry`：`@Observable`，维护会话摘要与最近活跃顺序。
 - `AppActivationPolicyCoordinator`：根据打开的 SessionWindow 与 SettingsWindow 状态切换激活策略。
 
+## 启动流程
+
+```mermaid
+sequenceDiagram
+  participant App as HandAgentApp (@main)
+  participant Coord as AppCoordinator
+  participant Server as AgentServerService
+  participant Node as node (子进程)
+  participant SM as SessionManager
+  participant RT as AgentRuntime
+  participant LLM as SettingsBackedLLMClient
+
+  App->>Coord: @State 初始化
+  Coord->>Coord: init() — 创建 AgentServerService, SessionRegistry, AgentSettingsStore
+  Coord->>Coord: bootstrap()
+  Coord->>Coord: setupPromptPanel() + setupHotkey()
+  Coord->>Server: start()
+  Server->>Node: Process.run() — node --experimental-transform-types server.ts
+  Node->>SM: startDefaultServer(port=4317)
+  SM->>RT: new AgentRuntime(SettingsBackedLLMClient, ToolRegistry)
+  SM->>Node: WebSocketServer 监听 :4317
+  Coord->>Coord: statusBubbleController.show()
+```
+
+### 启动细节
+
+1. **SwiftUI 入口** (`HandAgentApp.swift`)：`@main` 创建 `AppCoordinator` 作为 `@State`。
+2. **AppCoordinator.init()**：创建 `AgentServerService`、`SessionRegistry`、`AgentSettingsStore`，然后调用 `bootstrap()`。
+3. **bootstrap()**：依次执行 `setupPromptPanel()` → `setupHotkey()` → `startAgentServer()` → `statusBubbleController.show()`。
+4. **AgentServerService.start()**：
+   - 从 Bundle/CWD 向上查找仓库根目录（标志：`Package.swift` + `apps/agent-server/src/server.ts` 同时存在）。
+   - 查找 `node` 可执行文件（`$PATH` → `/opt/homebrew/bin` → `/usr/local/bin`）。
+   - 以子进程方式启动：`node --experimental-transform-types --experimental-specifier-resolution=node apps/agent-server/src/server.ts`。
+   - 设置 `NODE_PATH` 包含 `node_modules` 和 `apps/agent-server/node_modules`。
+   - **进程生命周期与 desktop app 绑定**：app 退出时调用 `stop()` 终止子进程。
+5. **agent-server 初始化** (`server.ts`)：
+   - 创建 `SettingsBackedLLMClient`（无状态，每次 `complete()` 重新读取 settings.json）。
+   - 创建 `AgentRuntime(client, toolRegistry)`。
+   - 创建 `SessionManager(runtime)`。
+   - 启动 `WebSocketServer` 监听 `0.0.0.0:4317`。
+
+### 设置同步机制
+
+```
+~/.spotAgent/settings.json
+    ↑ 写入                    ↓ 读取
+AgentSettingsStore          SettingsBackedLLMClient
+(desktop, 500ms 轮询)      (agent-server, 每次请求时 readFileSync)
+```
+
+- **Desktop 侧**：`AgentSettingsStore` 启动时读取一次，之后每 500ms 轮询文件变化（比较 `Data` 字节），用于 UI 同步。
+- **Agent-server 侧**：`SettingsBackedLLMClient.complete()` 每次调用 `loadModelSettings()`，同步读取文件。**无缓存、无 file watcher**。
+- **设计意图**：settings.json 是两侧的唯一通信通道，修改后下一次 LLM 请求即生效，无需重启。
+
+### 注意事项
+
+- agent-server 是 desktop app 启动时 fork 的 **长驻子进程**，运行期间不会自动重启。如果修改了 TS 源码，必须重启 desktop app 才能加载新代码。
+- node 进程的 stdout/stderr 通过 Pipe 捕获但未暴露到 UI（仅防止 fd 泄漏）。
+- 如果 node 进程意外退出，当前无自动重启机制。
+
 ## 宿主调用链路
 
 ```mermaid
