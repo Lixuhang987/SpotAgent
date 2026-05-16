@@ -5,14 +5,17 @@ import type { SessionMessage } from "../../../packages/core/src/protocol/Session
 import { SessionManager } from "./SessionManager.ts";
 import { FileSessionStore } from "../../../packages/core/src/storage/index.ts";
 import { WebSocketPlatformBridge } from "./WebSocketPlatformBridge.ts";
+import { SessionPermissionBridge } from "./SessionPermissionBridge.ts";
 
 export async function startServer({
   manager,
   bridge,
+  permissionBridge,
   port = 4317,
 }: {
   manager: SessionManager;
   bridge?: WebSocketPlatformBridge;
+  permissionBridge?: SessionPermissionBridge;
   port?: number;
 }) {
   const { WebSocketServer } = await import("ws");
@@ -20,6 +23,7 @@ export async function startServer({
 
   wss.on("connection", (socket) => {
     let isBridge = false;
+    let boundSessionId: string | null = null;
     const send = (outgoing: SessionMessage) => {
       socket.send(JSON.stringify(outgoing));
     };
@@ -38,12 +42,25 @@ export async function startServer({
         return;
       }
 
+      if (message.type === "permission_response" && permissionBridge) {
+        permissionBridge.handleResponse(message.payload);
+        return;
+      }
+
+      if (message.type === "user_message" && permissionBridge && !boundSessionId) {
+        boundSessionId = message.sessionId;
+        permissionBridge.bindSession(message.sessionId, send);
+      }
+
       await manager.receive(message, send);
     });
 
     socket.on("close", () => {
       if (isBridge && bridge) {
         bridge.detach();
+      }
+      if (boundSessionId && permissionBridge) {
+        permissionBridge.unbindSession(boundSessionId);
       }
     });
   });
@@ -68,6 +85,7 @@ export async function startDefaultServer(port = 4317) {
     { registerBuiltinTools },
     { RemotePlatformAdapter },
     { FileWorkspaceRegistry },
+    { FilePermissionPolicy },
     { loadToolSettings },
     { SettingsBackedLLMClient },
   ] = await Promise.all([
@@ -75,6 +93,7 @@ export async function startDefaultServer(port = 4317) {
     import("../../../packages/core/src/tools/registerBuiltins.ts"),
     import("../../../packages/core/src/platform/RemotePlatformAdapter.ts"),
     import("../../../packages/core/src/workspace/FileWorkspaceRegistry.ts"),
+    import("../../../packages/core/src/permission/FilePermissionPolicy.ts"),
     import("../../../packages/core/src/config/ToolSettings.ts"),
     import("./SettingsBackedLLMClient.ts"),
   ]);
@@ -89,8 +108,8 @@ export async function startDefaultServer(port = 4317) {
   });
   await workspaceRegistry.getDefault();
 
-  const bridge = new WebSocketPlatformBridge();
-  const platform = new RemotePlatformAdapter({ bridge });
+  const platformBridge = new WebSocketPlatformBridge();
+  const platform = new RemotePlatformAdapter({ bridge: platformBridge });
   const toolSettings = loadToolSettings();
   const { registry, registered, disabled } = registerBuiltinTools({
     platform,
@@ -103,13 +122,21 @@ export async function startDefaultServer(port = 4317) {
     console.log(`[agent-server] disabled tool ${d.name}: ${d.reason}`);
   }
 
+  const permissionBridge = new SessionPermissionBridge();
+  const permissionPolicy = new FilePermissionPolicy({
+    filePath: join(spotDir, "permissions.json"),
+    askResolver: permissionBridge.ask,
+  });
+
   const manager = new SessionManager(
-    new AgentRuntime(new SettingsBackedLLMClient(), registry),
+    new AgentRuntime(new SettingsBackedLLMClient(), registry, {
+      permissionPolicy,
+    }),
     undefined,
     { store },
   );
 
-  return startServer({ manager, bridge, port });
+  return startServer({ manager, bridge: platformBridge, permissionBridge, port });
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

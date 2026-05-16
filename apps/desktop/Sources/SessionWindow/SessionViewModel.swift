@@ -6,12 +6,18 @@ struct SessionBubble: Identifiable, Equatable {
     var text: String
 }
 
+struct SessionPermissionRequest: Identifiable, Equatable {
+    let id: String
+    let toolName: String
+}
+
 @Observable
 @MainActor
 final class SessionViewModel {
     private(set) var messages: [SessionBubble] = []
     private(set) var status: String = "idle"
     private(set) var error: String?
+    private(set) var pendingPermissionRequests: [SessionPermissionRequest] = []
 
     let sessionID: String
     @ObservationIgnored let socketClient: SessionSocketClient
@@ -19,6 +25,16 @@ final class SessionViewModel {
     init(sessionID: String, socketClient: SessionSocketClient) {
         self.sessionID = sessionID
         self.socketClient = socketClient
+    }
+
+    func resolvePermission(requestId: String, decision: String, scope: String?) {
+        socketClient.sendPermissionResponse(
+            sessionID: sessionID,
+            requestId: requestId,
+            decision: decision,
+            scope: scope
+        )
+        pendingPermissionRequests.removeAll { $0.id == requestId }
     }
 
     func start(
@@ -97,6 +113,10 @@ final class SessionViewModel {
             self.messages = messages
             self.status = status
             error = nil
+        case .permissionRequest(let requestId, let toolName, _):
+            pendingPermissionRequests.append(
+                SessionPermissionRequest(id: requestId, toolName: toolName)
+            )
         }
     }
 

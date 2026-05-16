@@ -6,9 +6,35 @@ enum SessionEvent: Equatable {
     case assistantMessageDelta(messageID: String, text: String, timestamp: String)
     case assistantMessageEnd(messageID: String, status: String, timestamp: String)
     case toolMessage(messageID: String, name: String, text: String, status: String, timestamp: String)
+    case permissionRequest(requestId: String, toolName: String, arguments: [String: Any])
     case status(value: String)
     case error(messageID: String, message: String, timestamp: String)
     case sessionSnapshot(messages: [SessionBubble], status: String)
+
+    static func == (lhs: SessionEvent, rhs: SessionEvent) -> Bool {
+        switch (lhs, rhs) {
+        case let (.userMessage(a1, a2, a3), .userMessage(b1, b2, b3)):
+            return a1 == b1 && a2 == b2 && a3 == b3
+        case let (.assistantMessageStart(a1, a2), .assistantMessageStart(b1, b2)):
+            return a1 == b1 && a2 == b2
+        case let (.assistantMessageDelta(a1, a2, a3), .assistantMessageDelta(b1, b2, b3)):
+            return a1 == b1 && a2 == b2 && a3 == b3
+        case let (.assistantMessageEnd(a1, a2, a3), .assistantMessageEnd(b1, b2, b3)):
+            return a1 == b1 && a2 == b2 && a3 == b3
+        case let (.toolMessage(a1, a2, a3, a4, a5), .toolMessage(b1, b2, b3, b4, b5)):
+            return a1 == b1 && a2 == b2 && a3 == b3 && a4 == b4 && a5 == b5
+        case let (.permissionRequest(a1, a2, _), .permissionRequest(b1, b2, _)):
+            return a1 == b1 && a2 == b2
+        case let (.status(a), .status(b)):
+            return a == b
+        case let (.error(a1, a2, a3), .error(b1, b2, b3)):
+            return a1 == b1 && a2 == b2 && a3 == b3
+        case let (.sessionSnapshot(a1, a2), .sessionSnapshot(b1, b2)):
+            return a1 == b1 && a2 == b2
+        default:
+            return false
+        }
+    }
 }
 
 final class SessionSocketClient {
@@ -187,9 +213,40 @@ final class SessionSocketClient {
                 messages: bubbles,
                 status: envelope.payload.value ?? "idle"
             )
+        case "permission_request":
+            return .permissionRequest(
+                requestId: envelope.payload.requestId ?? envelope.messageId,
+                toolName: envelope.payload.toolName ?? "unknown",
+                arguments: [:]
+            )
         default:
             return nil
         }
+    }
+
+    func sendPermissionResponse(
+        sessionID: String,
+        requestId: String,
+        decision: String,
+        scope: String? = nil
+    ) {
+        guard let socketTask else { return }
+        let envelope: [String: Any?] = [
+            "type": "permission_response",
+            "sessionId": sessionID,
+            "messageId": UUID().uuidString,
+            "timestamp": Self.timestamp(),
+            "payload": [
+                "requestId": requestId,
+                "decision": decision,
+                "scope": scope as Any?,
+            ] as [String: Any?],
+        ]
+        guard
+            let data = try? JSONSerialization.data(withJSONObject: envelope.compactMapValues { $0 }),
+            let text = String(data: data, encoding: .utf8)
+        else { return }
+        socketTask.send(.string(text)) { _ in }
     }
 
     private static func timestamp() -> String {
@@ -281,6 +338,8 @@ private struct IncomingPayload: Decodable {
     let value: String?
     let message: String?
     let messages: [IncomingSnapshotMessage]?
+    let requestId: String?
+    let toolName: String?
 }
 
 private struct IncomingSnapshotMessage: Decodable {

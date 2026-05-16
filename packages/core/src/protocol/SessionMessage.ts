@@ -82,6 +82,31 @@ export type SessionMessage =
       };
     }
   | {
+      type: "permission_request";
+      sessionId: string;
+      messageId: string;
+      timestamp: string;
+      payload: {
+        requestId: string;
+        toolName: string;
+        toolCallId: string;
+        arguments: Record<string, unknown>;
+        timeoutMs?: number;
+      };
+    }
+  | {
+      type: "permission_response";
+      sessionId: string;
+      messageId: string;
+      timestamp: string;
+      payload: {
+        requestId: string;
+        decision: "allow" | "deny";
+        scope?: "once" | "session" | "always";
+        reason?: string;
+      };
+    }
+  | {
       type: "platform_bridge_hello";
       sessionId: string;
       messageId: string;

@@ -13,6 +13,9 @@ struct SessionWindowView: View {
             if let error = viewModel.error {
                 errorBanner(error)
             }
+            ForEach(viewModel.pendingPermissionRequests) { request in
+                permissionBubble(request)
+            }
             Divider().overlay(theme.colors.border)
             inputField
         }
@@ -60,6 +63,57 @@ struct SessionWindowView: View {
         .padding(.vertical, theme.spacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(theme.colors.error.opacity(0.08))
+    }
+
+    private func permissionBubble(_ request: SessionPermissionRequest) -> some View {
+        VStack(alignment: .leading, spacing: theme.spacing.sm) {
+            HStack(spacing: theme.spacing.sm) {
+                Image(systemName: "lock.shield")
+                    .foregroundStyle(theme.colors.accent)
+                    .font(.system(size: 14, weight: .medium))
+                Text("授权调用 \(request.toolName)")
+                    .font(theme.typography.bodyFont)
+                    .foregroundStyle(theme.colors.textPrimary)
+                Spacer()
+            }
+            HStack(spacing: theme.spacing.sm) {
+                permissionButton("拒绝", role: "deny", scope: nil, requestId: request.id, accent: false)
+                permissionButton("仅本次", role: "allow", scope: "once", requestId: request.id, accent: true)
+                permissionButton("本会话", role: "allow", scope: "session", requestId: request.id, accent: true)
+                permissionButton("始终允许", role: "allow", scope: "always", requestId: request.id, accent: true)
+            }
+        }
+        .padding(.horizontal, theme.spacing.xl)
+        .padding(.vertical, theme.spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(theme.colors.accentSubtle)
+    }
+
+    private func permissionButton(
+        _ label: String,
+        role: String,
+        scope: String?,
+        requestId: String,
+        accent: Bool
+    ) -> some View {
+        Button {
+            viewModel.resolvePermission(requestId: requestId, decision: role, scope: scope)
+        } label: {
+            Text(label)
+                .font(theme.typography.captionFont)
+                .foregroundStyle(accent ? theme.colors.accent : theme.colors.textSecondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(
+                    RoundedRectangle(cornerRadius: theme.radius.sm)
+                        .fill(theme.colors.surface)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: theme.radius.sm)
+                        .strokeBorder(theme.colors.border, lineWidth: 0.5)
+                )
+        }
+        .buttonStyle(.plain)
     }
 
     private var inputField: some View {
