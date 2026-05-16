@@ -4,17 +4,32 @@ struct SettingsView: View {
     @Bindable var settingsViewModel: AgentSettingsViewModel
     let shortcutActions: [PromptAction]
     @Environment(\.appTheme) private var theme
+    @State private var selectedTab = "model"
+
+    private let tabs: [SettingsTabItem] = [
+        SettingsTabItem(id: "model", title: "模型", icon: "cpu"),
+        SettingsTabItem(id: "shortcuts", title: "快捷键", icon: "keyboard"),
+    ]
 
     var body: some View {
-        TabView {
-            Tab("模型", systemImage: "cpu") {
-                AgentSettingsView(viewModel: settingsViewModel)
-            }
-            Tab("快捷键", systemImage: "keyboard") {
-                ShortcutSettingsView(actions: shortcutActions)
-            }
+        VStack(spacing: 0) {
+            SettingsTabBar(tabs: tabs, selected: $selectedTab)
+            SettingsSectionSeparator()
+            tabContent
         }
-        .frame(width: 580, height: 480)
+        .frame(width: 660, height: 520)
         .background(theme.colors.background)
+    }
+
+    @ViewBuilder
+    private var tabContent: some View {
+        switch selectedTab {
+        case "model":
+            AgentSettingsView(viewModel: settingsViewModel)
+        case "shortcuts":
+            ShortcutSettingsView(actions: shortcutActions)
+        default:
+            EmptyView()
+        }
     }
 }

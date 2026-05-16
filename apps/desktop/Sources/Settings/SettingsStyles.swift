@@ -1,30 +1,112 @@
 import SwiftUI
 
-struct SettingsCardModifier: ViewModifier {
-    @Environment(\.appTheme) private var theme
-    let title: String?
+// MARK: - Tab Bar
 
-    func body(content: Content) -> some View {
-        VStack(alignment: .leading, spacing: theme.spacing.md) {
-            if let title {
-                Text(title)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(theme.colors.textSecondary)
-                    .textCase(.uppercase)
-                    .tracking(0.6)
+struct SettingsTabItem: Identifiable, Equatable {
+    let id: String
+    let title: String
+    let icon: String
+}
+
+struct SettingsTabBar: View {
+    let tabs: [SettingsTabItem]
+    @Binding var selected: String
+    @Environment(\.appTheme) private var theme
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(tabs) { tab in
+                tabButton(tab)
             }
-            content
-                .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(theme.spacing.lg)
-        .background(theme.colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: theme.radius.md))
-        .overlay(
-            RoundedRectangle(cornerRadius: theme.radius.md)
-                .strokeBorder(theme.colors.border, lineWidth: 0.5)
-        )
+        .padding(.horizontal, theme.spacing.lg)
+        .padding(.top, 6)
+        .padding(.bottom, theme.spacing.sm)
+    }
+
+    private func tabButton(_ tab: SettingsTabItem) -> some View {
+        let isSelected = selected == tab.id
+        return Button {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                selected = tab.id
+            }
+        } label: {
+            VStack(spacing: 4) {
+                Image(systemName: tab.icon)
+                    .font(.system(size: 20))
+                    .frame(height: 24)
+                Text(tab.title)
+                    .font(.system(size: 11))
+            }
+            .foregroundStyle(isSelected ? theme.colors.textPrimary : theme.colors.textSecondary)
+            .frame(width: 72, height: 56)
+            .background(
+                RoundedRectangle(cornerRadius: theme.radius.md)
+                    .fill(isSelected ? theme.colors.surface : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: theme.radius.md)
+                    .strokeBorder(isSelected ? theme.colors.border : Color.clear, lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
+
+// MARK: - Section
+
+struct SettingsSection<Content: View>: View {
+    @Environment(\.appTheme) private var theme
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(spacing: 0) {
+            content()
+        }
+        .padding(.vertical, theme.spacing.lg)
+        .padding(.horizontal, theme.spacing.xxl)
+        .background(theme.colors.surface.opacity(0.5))
+    }
+}
+
+// MARK: - Row (left label, right control)
+
+struct SettingsRow<Control: View>: View {
+    @Environment(\.appTheme) private var theme
+    let label: String
+    @ViewBuilder let control: () -> Control
+
+    init(_ label: String, @ViewBuilder control: @escaping () -> Control) {
+        self.label = label
+        self.control = control
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: theme.spacing.xl) {
+            Text(label)
+                .font(theme.typography.bodyFont)
+                .foregroundStyle(theme.colors.textSecondary)
+                .frame(width: 120, alignment: .trailing)
+            control()
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, theme.spacing.md)
+    }
+}
+
+// MARK: - Row Divider
+
+struct SettingsRowDivider: View {
+    @Environment(\.appTheme) private var theme
+
+    var body: some View {
+        Divider()
+            .overlay(theme.colors.border)
+            .padding(.leading, 152)
+    }
+}
+
+// MARK: - Field Style
 
 struct SettingsFieldStyle: TextFieldStyle {
     @Environment(\.appTheme) private var theme
@@ -36,8 +118,11 @@ struct SettingsFieldStyle: TextFieldStyle {
             .foregroundStyle(theme.colors.textPrimary)
             .padding(.horizontal, theme.spacing.md)
             .padding(.vertical, 8)
-            .background(theme.colors.background.opacity(0.6))
-            .clipShape(RoundedRectangle(cornerRadius: theme.radius.sm))
+            .frame(maxWidth: 340)
+            .background(
+                RoundedRectangle(cornerRadius: theme.radius.sm)
+                    .fill(Color.black.opacity(0.3))
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: theme.radius.sm)
                     .strokeBorder(theme.colors.border, lineWidth: 0.5)
@@ -45,36 +130,14 @@ struct SettingsFieldStyle: TextFieldStyle {
     }
 }
 
-struct SettingsRow<Control: View>: View {
-    @Environment(\.appTheme) private var theme
-    let label: String
-    let hint: String?
-    @ViewBuilder let control: () -> Control
+// MARK: - Section Separator
 
-    init(_ label: String, hint: String? = nil, @ViewBuilder control: @escaping () -> Control) {
-        self.label = label
-        self.hint = hint
-        self.control = control
-    }
+struct SettingsSectionSeparator: View {
+    @Environment(\.appTheme) private var theme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(label)
-                .font(theme.typography.captionFont)
-                .foregroundStyle(theme.colors.textSecondary)
-            control()
-            if let hint {
-                Text(hint)
-                    .font(theme.typography.captionFont)
-                    .foregroundStyle(theme.colors.textSecondary.opacity(0.7))
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-extension View {
-    func settingsCard(_ title: String? = nil) -> some View {
-        modifier(SettingsCardModifier(title: title))
+        Rectangle()
+            .fill(theme.colors.border)
+            .frame(height: 0.5)
     }
 }
