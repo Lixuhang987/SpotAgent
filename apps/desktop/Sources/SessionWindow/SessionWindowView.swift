@@ -2,59 +2,54 @@ import SwiftUI
 
 struct SessionWindowView: View {
     @Bindable var viewModel: SessionViewModel
-
+    @Environment(\.appTheme) private var theme
     @State private var draft = ""
 
     var body: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Text("状态：\(viewModel.status)")
-                    .font(.headline)
-                Spacer()
-            }
-
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 12) {
-                    ForEach(viewModel.messages) { message in
-                        Text(message.text)
-                            .frame(
-                                maxWidth: .infinity,
-                                alignment: message.role == "user" ? .trailing : .leading
-                            )
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .background(backgroundColor(for: message.role))
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
+        VStack(spacing: theme.spacing.lg) {
+            statusHeader
+            messageList
             if let error = viewModel.error {
-                Text(error)
-                    .foregroundStyle(.red)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                errorBanner(error)
             }
-
-            TextField("继续追问", text: $draft)
-                .textFieldStyle(.roundedBorder)
-                .onSubmit {
-                    let currentDraft = draft
-                    draft = ""
-                    viewModel.sendPrompt(currentDraft)
-                }
+            inputField
         }
-        .padding(20)
+        .padding(theme.spacing.xl)
     }
 
-    private func backgroundColor(for role: String) -> Color {
-        switch role {
-        case "user":
-            return Color(nsColor: .selectedContentBackgroundColor)
-        case "tool":
-            return Color(nsColor: .controlBackgroundColor)
-        default:
-            return Color(nsColor: .windowBackgroundColor)
+    private var statusHeader: some View {
+        HStack {
+            Text("状态：\(viewModel.status)")
+                .font(theme.typography.titleFont)
+            Spacer()
         }
+    }
+
+    private var messageList: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: theme.spacing.md) {
+                ForEach(viewModel.messages) { message in
+                    Text(message.text)
+                        .messageBubble(role: message.role)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func errorBanner(_ error: String) -> some View {
+        Text(error)
+            .foregroundStyle(theme.colors.error)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var inputField: some View {
+        TextField("继续追问", text: $draft)
+            .textFieldStyle(.roundedBorder)
+            .onSubmit {
+                let currentDraft = draft
+                draft = ""
+                viewModel.sendPrompt(currentDraft)
+            }
     }
 }

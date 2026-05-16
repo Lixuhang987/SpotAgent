@@ -3,22 +3,22 @@ import SwiftUI
 
 @MainActor
 final class StatusBubbleController {
-    var onTap: ((String?) -> Void)?
-
-    private let registry: SessionRegistry
+    private let viewModel: StatusBubbleViewModel
     private var window: NSWindow?
 
     init(registry: SessionRegistry) {
-        self.registry = registry
+        self.viewModel = StatusBubbleViewModel(registry: registry)
+    }
+
+    var onTap: ((String?) -> Void)? {
+        get { viewModel.onTap }
+        set { viewModel.onTap = newValue }
     }
 
     func show() {
         if window == nil {
             let hosting = NSHostingController(
-                rootView: StatusBubbleView(registry: registry) { [weak self] in
-                    guard let self else { return }
-                    self.onTap?(self.registry.primarySessionID)
-                }
+                rootView: StatusBubbleView(viewModel: viewModel)
             )
             let window = NSWindow(contentViewController: hosting)
             window.setContentSize(NSSize(width: 280, height: 96))
@@ -38,9 +38,7 @@ final class StatusBubbleController {
     }
 
     private func positionWindowIfNeeded() {
-        guard let window,
-              let screen = NSScreen.main else { return }
-
+        guard let window, let screen = NSScreen.main else { return }
         let visibleFrame = screen.visibleFrame
         let origin = NSPoint(
             x: visibleFrame.maxX - window.frame.width - 24,
