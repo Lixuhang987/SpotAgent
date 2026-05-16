@@ -38,6 +38,5 @@ struct ShortcutSettingsView: View {
                 Spacer(minLength: 0)
             }
         }
-        .background(theme.colors.background)
     }
 }

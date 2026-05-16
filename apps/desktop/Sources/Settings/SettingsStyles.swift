@@ -27,9 +27,7 @@ struct SettingsTabBar: View {
     private func tabButton(_ tab: SettingsTabItem) -> some View {
         let isSelected = selected == tab.id
         return Button {
-            withAnimation(.easeInOut(duration: 0.15)) {
-                selected = tab.id
-            }
+            selected = tab.id
         } label: {
             VStack(spacing: 4) {
                 Image(systemName: tab.icon)
@@ -65,7 +63,6 @@ struct SettingsSection<Content: View>: View {
         }
         .padding(.vertical, theme.spacing.lg)
         .padding(.horizontal, theme.spacing.xxl)
-        .background(theme.colors.surface.opacity(0.5))
     }
 }
 

@@ -48,7 +48,6 @@ struct AgentSettingsView: View {
                 }
             }
         }
-        .background(theme.colors.background)
     }
 
     private var apiSegmented: some View {
