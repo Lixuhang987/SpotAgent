@@ -6,6 +6,8 @@ struct MessageBubbleModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            .font(theme.typography.bodyFont)
+            .foregroundStyle(theme.colors.textPrimary)
             .frame(
                 maxWidth: .infinity,
                 alignment: role == "user" ? .trailing : .leading
@@ -13,7 +15,11 @@ struct MessageBubbleModifier: ViewModifier {
             .padding(.horizontal, theme.spacing.md)
             .padding(.vertical, 10)
             .background(bubbleColor)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .clipShape(RoundedRectangle(cornerRadius: theme.radius.md))
+            .overlay(
+                RoundedRectangle(cornerRadius: theme.radius.md)
+                    .strokeBorder(theme.colors.border, lineWidth: 0.5)
+            )
     }
 
     private var bubbleColor: Color {

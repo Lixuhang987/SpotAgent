@@ -7,17 +7,29 @@ struct PromptPanelContainerModifier: ViewModifier {
         content
             .padding(theme.spacing.xl)
             .frame(minWidth: 640, minHeight: 420)
-            .background(theme.colors.background)
+            .background(.ultraThinMaterial)
+            .background(theme.colors.background.opacity(0.85))
+            .clipShape(RoundedRectangle(cornerRadius: theme.radius.lg))
+            .overlay(
+                RoundedRectangle(cornerRadius: theme.radius.lg)
+                    .strokeBorder(theme.colors.border, lineWidth: 0.5)
+            )
     }
 }
 
 struct ActionRowModifier: ViewModifier {
     @Environment(\.appTheme) private var theme
+    var isHighlighted: Bool = false
 
     func body(content: Content) -> some View {
         content
-            .padding(.vertical, theme.spacing.sm)
-            .contentShape(Rectangle())
+            .padding(.vertical, 10)
+            .padding(.horizontal, theme.spacing.md)
+            .background(
+                RoundedRectangle(cornerRadius: theme.radius.md)
+                    .fill(isHighlighted ? theme.colors.accentSubtle : Color.clear)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: theme.radius.md))
     }
 }
 
@@ -26,7 +38,7 @@ extension View {
         modifier(PromptPanelContainerModifier())
     }
 
-    func actionRow() -> some View {
-        modifier(ActionRowModifier())
+    func actionRow(isHighlighted: Bool = false) -> some View {
+        modifier(ActionRowModifier(isHighlighted: isHighlighted))
     }
 }
