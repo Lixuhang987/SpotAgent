@@ -6,7 +6,7 @@
 
 | 文件 | 职责 |
 |------|------|
-| `PromptPanelView.swift` | 纯 UI：输入框 + action 列表，绑定 ViewModel 状态，消费 Theme token |
+| `PromptPanelView.swift` | 纯 UI：输入框 + action 列表 + 附件 chip + 图片附件内嵌预览，绑定 ViewModel 状态，消费 Theme token |
 | `PromptPanelViewModel.swift` | `@Observable` 状态：`draft` / `focusSeed` / `filteredActions`；提交、隐藏、打开设置回调出口 |
 | `PromptPanelController.swift` | `NSPanel` 生命周期、`NSEvent` 局部监听、ViewModel 注入 |
 | `PromptPanelWindow.swift` | `NSPanel` 子类，处理失焦自动隐藏 |

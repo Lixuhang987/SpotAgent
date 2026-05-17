@@ -5,11 +5,15 @@ struct PromptPanelView: View {
     @Environment(\.appTheme) private var theme
     @FocusState private var isQueryFocused: Bool
     @State private var hoveredActionId: String?
+    @State private var previewedAttachmentId: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: theme.spacing.lg) {
             if !viewModel.attachments.isEmpty {
                 attachmentRow
+                if let preview = currentImagePreview {
+                    imagePreviewPanel(for: preview)
+                }
             }
             firstRow
             Divider()
@@ -19,6 +23,12 @@ struct PromptPanelView: View {
         .promptPanelContainer()
         .onAppear { isQueryFocused = true }
         .onChange(of: viewModel.focusSeed) { _, _ in isQueryFocused = true }
+        .onChange(of: viewModel.attachments) { _, newValue in
+            if let current = previewedAttachmentId,
+               !newValue.contains(where: { $0.id == current }) {
+                previewedAttachmentId = nil
+            }
+        }
     }
 
     private var attachmentRow: some View {
@@ -35,15 +45,13 @@ struct PromptPanelView: View {
         let isError = attachment.isError
         let foreground = isError ? theme.colors.textSecondary : theme.colors.textPrimary
         let background = isError ? theme.colors.surface.opacity(0.4) : theme.colors.accentSubtle
+        let isExpanded = attachment.isImage && previewedAttachmentId == attachment.id
         return HStack(spacing: 6) {
-            Image(systemName: attachment.iconSystemName)
-                .font(.system(size: 11))
-                .foregroundStyle(foreground)
-            Text(attachment.displayLabel)
-                .font(theme.typography.captionFont)
-                .foregroundStyle(foreground)
-                .lineLimit(1)
+            chipLabel(for: attachment, foreground: foreground, isExpanded: isExpanded)
             Button {
+                if previewedAttachmentId == attachment.id {
+                    previewedAttachmentId = nil
+                }
                 viewModel.removeAttachment(id: attachment.id)
             } label: {
                 Image(systemName: "xmark")
@@ -61,9 +69,71 @@ struct PromptPanelView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: theme.radius.sm)
-                .strokeBorder(theme.colors.border, lineWidth: 0.5)
+                .strokeBorder(isExpanded ? theme.colors.accentRing : theme.colors.border,
+                              lineWidth: isExpanded ? 1 : 0.5)
         )
         .help(tooltip(for: attachment))
+    }
+
+    @ViewBuilder
+    private func chipLabel(for attachment: PromptAttachmentResult,
+                           foreground: Color,
+                           isExpanded: Bool) -> some View {
+        let content = HStack(spacing: 6) {
+            Image(systemName: attachment.isImage && isExpanded ? "eye.fill" : attachment.iconSystemName)
+                .font(.system(size: 11))
+                .foregroundStyle(foreground)
+            Text(attachment.displayLabel)
+                .font(theme.typography.captionFont)
+                .foregroundStyle(foreground)
+                .lineLimit(1)
+        }
+        if attachment.isImage {
+            Button {
+                togglePreview(for: attachment.id)
+            } label: {
+                content.contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(isExpanded ? "收起预览" : "点击预览")
+        } else {
+            content
+        }
+    }
+
+    private var currentImagePreview: PromptAttachmentResult? {
+        guard let id = previewedAttachmentId else { return nil }
+        return viewModel.attachments.first { $0.id == id && $0.isImage }
+    }
+
+    @ViewBuilder
+    private func imagePreviewPanel(for attachment: PromptAttachmentResult) -> some View {
+        if let base64 = attachment.imageBase64,
+           let data = Data(base64Encoded: base64),
+           let nsImage = NSImage(data: data) {
+            Image(nsImage: nsImage)
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: .infinity, maxHeight: 280, alignment: .center)
+                .background(
+                    RoundedRectangle(cornerRadius: theme.radius.md)
+                        .fill(theme.colors.surface)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: theme.radius.md)
+                        .strokeBorder(theme.colors.border, lineWidth: 0.5)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: theme.radius.md))
+        } else {
+            Text("无法解码截图数据")
+                .font(theme.typography.captionFont)
+                .foregroundStyle(theme.colors.error)
+                .padding(.vertical, theme.spacing.sm)
+        }
+    }
+
+    private func togglePreview(for id: String) {
+        previewedAttachmentId = (previewedAttachmentId == id) ? nil : id
     }
 
     private func tooltip(for attachment: PromptAttachmentResult) -> String {

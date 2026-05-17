@@ -48,6 +48,16 @@ enum PromptAttachmentResult: Equatable, Identifiable {
         if case .selectionError = self { return true }
         return false
     }
+
+    var isImage: Bool {
+        if case .imageRegion = self { return true }
+        return false
+    }
+
+    var imageBase64: String? {
+        if case .imageRegion(_, _, let base64) = self { return base64 }
+        return nil
+    }
 }
 
 struct PromptAction: Identifiable {
