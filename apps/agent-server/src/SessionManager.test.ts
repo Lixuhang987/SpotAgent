@@ -440,6 +440,28 @@ describe("SessionManager", () => {
     });
   });
 
+  it("forwards sessionId to runtime so permission bridge can route ask requests", async () => {
+    const seenRunOptions: Array<Record<string, unknown> | undefined> = [];
+    const manager = new SessionManager(
+      {
+        async runWithMessages(
+          messages: AgentMessage[],
+          _onEvent,
+          runOptions?: Record<string, unknown>,
+        ) {
+          seenRunOptions.push(runOptions);
+          return { messages, bubbles: [] };
+        },
+      },
+      () => {},
+      { now: () => "2026-05-17T00:00:00.000Z" },
+    );
+
+    await manager.receive(createUserMessage("session-perm", "请求一个 tool", "user-1"));
+
+    expect(seenRunOptions).toEqual([{ sessionId: "session-perm" }]);
+  });
+
   it("records tool call events for audit", async () => {
     const store = new InMemorySessionStore();
     const manager = new SessionManager(

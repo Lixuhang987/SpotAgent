@@ -1,6 +1,7 @@
 import type { AgentMessage } from "../../../packages/core/src/runtime/AgentMessage.ts";
 import type {
   AgentRuntimeEvent,
+  AgentRuntimeRunOptions,
   AgentRunResult,
 } from "../../../packages/core/src/runtime/AgentRuntime.ts";
 import type {
@@ -20,6 +21,7 @@ type RuntimeLike = {
   runWithMessages(
     messages: AgentMessage[],
     onEvent: (event: AgentRuntimeEvent) => void,
+    runOptions?: AgentRuntimeRunOptions,
   ): Promise<AgentRunResult>;
 };
 
@@ -149,17 +151,21 @@ export class SessionManager {
 
     try {
       const events: SessionEvent[] = [];
-      const result = await this.runtime.runWithMessages(nextMessages, (event) => {
-        const push = pushMessage ?? this.pushMessage;
-        const sessionMessage = toSessionMessage(message.sessionId, event, this.now());
-        if (sessionMessage) {
-          push(sessionMessage);
-        }
-        const auditEvent = toAuditEvent(event, this.now());
-        if (auditEvent) {
-          events.push(auditEvent);
-        }
-      });
+      const result = await this.runtime.runWithMessages(
+        nextMessages,
+        (event) => {
+          const push = pushMessage ?? this.pushMessage;
+          const sessionMessage = toSessionMessage(message.sessionId, event, this.now());
+          if (sessionMessage) {
+            push(sessionMessage);
+          }
+          const auditEvent = toAuditEvent(event, this.now());
+          if (auditEvent) {
+            events.push(auditEvent);
+          }
+        },
+        { sessionId: message.sessionId },
+      );
 
       await this.store.setMessages(
         message.sessionId,
