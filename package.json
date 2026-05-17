@@ -7,5 +7,8 @@
     "@ai-sdk/openai": "^3.0.63",
     "ai": "^6.0.177",
     "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.78"
   }
 }
