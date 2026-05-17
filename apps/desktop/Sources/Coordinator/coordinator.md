@@ -6,7 +6,9 @@
 
 | 文件 | 职责 |
 |------|------|
-| `AppCoordinator.swift` | 单向事件流、全局状态聚合、所有窗口/控制器的生命周期 |
+| `AppCoordinator.swift` | 单向事件流、全局状态聚合、Action 路由；不直接构造 `NSWindow` / `NSAlert` |
+| `PromptSubmission.swift` | 把 PromptPanel attachment 翻译为 `composed prompt + summary + UserMessageAttachmentPayload[]` 的纯函数 |
+| `PromptCaptureCoordinator.swift` | 把热键 → 选区 / 区域采集 → PromptPanel attachment 的串联从 Coordinator 抽出 |
 
 ## 事件流约束
 
@@ -14,7 +16,9 @@
 - **Action 是封闭枚举**：新增协调事件必须在 `Action` 枚举中显式声明分支，不要用 `Notification` / `NotificationCenter` 绕开。
 - **回调走 closure 注入**：子模块（ViewModel / Controller）的回调统一在 `bootstrap()` 阶段由 Coordinator 注入闭包，闭包内只允许 `send(.xxx)`，不允许写跨模块状态。
 - **状态私有化**：`sessionViewModels`、`sessionWindows`、`settingsWindow` 等对外只读，外部不能直接增删，全部由 `handleXxx` 私有方法管理。
-- **测试模式 `skipServerStart`**：仅 `AppCoordinatorTests` 使用；非测试态 `init` 自动 `bootstrap()`，测试态跳过窗口/进程/激活策略副作用。
+- **测试模式走 DI**：`AppServices.testing()` 注入 nop 替身（`NopAgentServerService` / `NopSessionWindowPresenter` / `NopSettingsWindowPresenter` / `NopHotkeyRegistrar` / `NopFatalAlertPresenter`），生产路径不再保留 `skipServerStart` 布尔旁路。
+- **窗口 / Alert 构造交给 presenter**：`SessionWindowPresenting` / `SettingsWindowPresenting` / `FatalAlertPresenting` 协议在 [AppServices](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/app-services.md) 层统一暴露，Coordinator 不再 `import AppKit` 构造 `NSWindow` / `NSHostingController` / `NSAlert`。
+- **agent-server 健康状态独立**：`AgentServerHealth` 持有 `errorMessage` + start/stop + fatal alert 触发，Coordinator 仅暴露 `agentServerError` 转发字段。
 
 ## 当前 Action 列表
 

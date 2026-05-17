@@ -18,9 +18,10 @@ final class AppCoordinator {
     }
 
     private(set) var sessionViewModels: [String: SessionViewModel] = [:]
-    private(set) var agentServerError: String?
+    var agentServerError: String? { agentServerHealth.errorMessage }
 
     @ObservationIgnored private let services: AppServices
+    @ObservationIgnored private let agentServerHealth: AgentServerHealth
     @ObservationIgnored private var platformBridgeService: (any PlatformBridgeRunning)?
     @ObservationIgnored private let activationPolicy = AppActivationPolicyCoordinator()
     @ObservationIgnored private lazy var promptPanelController = PromptPanelController()
@@ -49,6 +50,11 @@ final class AppCoordinator {
 
     init(services: AppServices) {
         self.services = services
+        self.agentServerHealth = AgentServerHealth(
+            agentServer: services.agentServer,
+            fatalAlertPresenter: services.fatalAlertPresenter,
+            showsFatalAlert: services.showsStatusBubble
+        )
         bootstrap()
     }
 
@@ -57,7 +63,7 @@ final class AppCoordinator {
         setupPromptPanel()
         setupHotkey()
         setupStatusBubble()
-        startAgentServer()
+        agentServerHealth.start()
         startPlatformBridge()
         if services.showsStatusBubble {
             statusBubbleController.show()
@@ -67,17 +73,11 @@ final class AppCoordinator {
     func shutdown() {
         platformBridgeService?.stop()
         platformBridgeService = nil
-        services.agentServer.stop()
+        agentServerHealth.stop()
         settingsWindow?.close()
         settingsWindow = nil
         sessionWindows.values.forEach { $0.close() }
         sessionWindows.removeAll()
-    }
-
-    private func startPlatformBridge() {
-        guard let bridge = services.platformBridgeFactory(services.agentServerURL) else { return }
-        platformBridgeService = bridge
-        bridge.start()
     }
 
     func send(_ action: Action) {
@@ -125,54 +125,21 @@ final class AppCoordinator {
 
     private func setupHotkey() {
         services.hotkeyRegistrar.registerShowPromptPanel { [weak self] in
-            Task { @MainActor in
-                self?.send(.togglePromptPanel)
-            }
+            Task { @MainActor in self?.send(.togglePromptPanel) }
         }
         services.hotkeyRegistrar.registerCaptureSelection { [weak self] in
-            Task { @MainActor in
-                await self?.handleCaptureSelectionHotkey()
-            }
+            Task { @MainActor in await self?.captureCoordinator.captureSelectionAndShow() }
         }
         services.hotkeyRegistrar.registerCaptureRegion { [weak self] in
-            Task { @MainActor in
-                await self?.handleCaptureRegionHotkey()
-            }
+            Task { @MainActor in await self?.captureCoordinator.captureRegionAndShow() }
         }
     }
 
-    private func handleCaptureSelectionHotkey() async {
-        let provider = MacSelectionCaptureProvider()
-        let result = await provider.captureSelectedText()
-        let attachmentId = "selection-\(UUID().uuidString)"
-        switch result {
-        case .selected(let text):
-            promptPanelController.appendAttachment(.textSelection(id: attachmentId, text: text))
-        case .empty:
-            break
-        case .error(let message):
-            promptPanelController.appendAttachment(.selectionError(id: attachmentId, message: message))
-        }
-        promptPanelController.show()
-    }
-
-    private func handleCaptureRegionHotkey() async {
-        let provider = MacRegionCaptureProvider()
-        let result = await provider.captureRegion()
-        let attachmentId = "region-\(UUID().uuidString)"
-        switch result {
-        case .captured(let pngBase64):
-            promptPanelController.appendAttachment(
-                .imageRegion(id: attachmentId, mimeType: "image/png", base64: pngBase64)
-            )
-            promptPanelController.show()
-        case .cancelled:
-            break
-        case .error(let message):
-            promptPanelController.appendAttachment(.selectionError(id: attachmentId, message: message))
-            promptPanelController.show()
-        }
-    }
+    @ObservationIgnored private lazy var captureCoordinator = PromptCaptureCoordinator(
+        controller: promptPanelController,
+        selectionProvider: MacSelectionCaptureProvider(),
+        regionProvider: MacRegionCaptureProvider()
+    )
 
     private func setupStatusBubble() {
         statusBubbleController.onTap = { [weak self] sessionID in
@@ -180,72 +147,14 @@ final class AppCoordinator {
         }
     }
 
-    private func startAgentServer() {
-        services.agentServer.onAvailabilityChange = { [weak self] available in
-            Task { @MainActor in
-                guard let self else { return }
-                if available {
-                    self.agentServerError = nil
-                } else if self.agentServerError == nil {
-                    self.agentServerError = "agent-server 已断开，正在尝试重连…"
-                }
-            }
-        }
-        services.agentServer.onFatalError = { [weak self] message in
-            Task { @MainActor in
-                self?.agentServerError = message
-                self?.showFatalServerAlert(message: message)
-            }
-        }
-        do {
-            try services.agentServer.start()
-            agentServerError = nil
-        } catch {
-            agentServerError = services.agentServer.lastStartupError ?? error.localizedDescription
-        }
-    }
-
-    private func showFatalServerAlert(message: String) {
-        guard services.showsStatusBubble else { return }
-        let alert = NSAlert()
-        alert.messageText = "Agent Server 已停止"
-        alert.informativeText = message
-        alert.alertStyle = .critical
-        alert.addButton(withTitle: "确定")
-        alert.addButton(withTitle: "查看日志")
-        let response = alert.runModal()
-        if response == .alertSecondButtonReturn {
-            let logsDir = FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent(".spotAgent")
-            NSWorkspace.shared.open(logsDir)
-        }
+    private func startPlatformBridge() {
+        guard let bridge = services.platformBridgeFactory(services.agentServerURL) else { return }
+        platformBridgeService = bridge
+        bridge.start()
     }
 
     private func handleSubmitPrompt(_ draft: String, attachments: [PromptAttachmentResult]) {
-        let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-
-        let tokenSuffix = attachments.compactMap { attachment -> String? in
-            if case .textToken(let token) = attachment { return token }
-            return nil
-        }
-        let composedPrompt = ([trimmed] + tokenSuffix).joined(separator: "\n\n")
-
-        let socketAttachments = attachments.compactMap { attachment -> UserMessageAttachmentPayload? in
-            switch attachment {
-            case .textSelection(let id, let text):
-                return .textSelection(id: id, text: text)
-            case .imageRegion(let id, let mimeType, let base64):
-                return .image(id: id, mimeType: mimeType, base64: base64)
-            case .noAttachment, .textToken, .selectionError:
-                return nil
-            }
-        }
-
-        let summaryText: String = {
-            if socketAttachments.isEmpty { return composedPrompt }
-            return composedPrompt + "\n\n[附件 ×\(socketAttachments.count)]"
-        }()
+        guard let prompt = PromptSubmission.compose(draft: draft, attachments: attachments) else { return }
 
         let sessionID = UUID().uuidString
         let viewModel = SessionViewModel(
@@ -258,7 +167,7 @@ final class AppCoordinator {
             SessionSummary(
                 sessionId: sessionID,
                 isRunning: true,
-                latestSummary: summaryText,
+                latestSummary: prompt.summary,
                 lastActiveAt: .now,
                 windowIsOpen: true
             )
@@ -270,21 +179,16 @@ final class AppCoordinator {
             sessionID: sessionID,
             viewModel: viewModel,
             onClose: { [weak self] in
-                Task { @MainActor in
-                    self?.send(.sessionClosed(sessionID))
-                    self?.sessionWindows.removeValue(forKey: sessionID)
-                }
+                Task { @MainActor in self?.send(.sessionClosed(sessionID)) }
             }
         ) {
             sessionWindows[sessionID] = window
-            services.setActivationPolicy(
-                activationPolicy.policyAfterUpdatingOpenSessionWindows(by: 1)
-            )
+            services.setActivationPolicy(activationPolicy.policyAfterUpdatingOpenSessionWindows(by: 1))
         }
 
         viewModel.start(
-            initialPrompt: composedPrompt,
-            attachments: socketAttachments,
+            initialPrompt: prompt.composed,
+            attachments: prompt.socketAttachments,
             startupError: agentServerError
         )
     }
@@ -293,11 +197,8 @@ final class AppCoordinator {
         let viewModel = sessionViewModels.removeValue(forKey: sessionID)
         viewModel?.stop()
 
-        let hadWindow = sessionWindows.removeValue(forKey: sessionID) != nil
-        if hadWindow {
-            services.setActivationPolicy(
-                activationPolicy.policyAfterUpdatingOpenSessionWindows(by: -1)
-            )
+        if sessionWindows.removeValue(forKey: sessionID) != nil {
+            services.setActivationPolicy(activationPolicy.policyAfterUpdatingOpenSessionWindows(by: -1))
         }
 
         services.sessionRegistry.upsert(
@@ -321,9 +222,7 @@ final class AppCoordinator {
     }
 
     private func openOrFocusSettingsWindow() {
-        services.setActivationPolicy(
-            activationPolicy.policyAfterUpdatingSettingsWindow(isOpen: true)
-        )
+        services.setActivationPolicy(activationPolicy.policyAfterUpdatingSettingsWindow(isOpen: true))
 
         if let settingsWindow {
             settingsWindow.makeKeyAndOrderFront(nil)
@@ -331,52 +230,18 @@ final class AppCoordinator {
             return
         }
 
-        let window = makeSettingsWindow()
-        settingsWindow = window
-
-        NotificationCenter.default.addObserver(
-            forName: NSWindow.willCloseNotification,
-            object: window,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
-                self?.send(.settingsWindowClosed)
+        settingsWindow = services.settingsWindowPresenter.present(
+            settingsViewModel: makeSettingsViewModel(),
+            workspaceViewModel: WorkspaceSettingsViewModel(),
+            shortcutActions: makeShortcutActions(),
+            onClose: { [weak self] in
+                Task { @MainActor in self?.send(.settingsWindowClosed) }
             }
-        }
-
-        window.center()
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        )
     }
 
     private func handleSettingsWindowClosed() {
         settingsWindow = nil
-        services.setActivationPolicy(
-            activationPolicy.policyAfterUpdatingSettingsWindow(isOpen: false)
-        )
-    }
-
-    private func makeSettingsWindow() -> NSWindow {
-        if let factory = services.settingsWindowFactory {
-            return factory()
-        }
-
-        let hosting = NSHostingController(
-            rootView: SettingsView(
-                settingsViewModel: makeSettingsViewModel(),
-                workspaceViewModel: WorkspaceSettingsViewModel(),
-                shortcutActions: makeShortcutActions()
-            )
-        )
-        let window = NSWindow(contentViewController: hosting)
-        window.title = "设置"
-        window.setContentSize(NSSize(width: 660, height: 520))
-        window.styleMask.insert(.fullSizeContentView)
-        window.titleVisibility = .hidden
-        window.titlebarAppearsTransparent = true
-        window.isOpaque = false
-        window.backgroundColor = .clear
-        window.hasShadow = true
-        return window
+        services.setActivationPolicy(activationPolicy.policyAfterUpdatingSettingsWindow(isOpen: false))
     }
 }

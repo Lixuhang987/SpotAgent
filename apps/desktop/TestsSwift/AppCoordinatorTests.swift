@@ -6,12 +6,10 @@ final class AppCoordinatorTests: XCTestCase {
     func testOpenSettingsBuildsSettingsWindowAndPromotesRegularPolicy() {
         var builtWindowCount = 0
         var appliedPolicies: [NSApplication.ActivationPolicy] = []
+        let presenter = StubSettingsWindowPresenter { builtWindowCount += 1 }
         let services = AppServices.testing(
             setActivationPolicy: { appliedPolicies.append($0) },
-            settingsWindowFactory: {
-                builtWindowCount += 1
-                return NSWindow()
-            }
+            settingsWindowPresenter: presenter
         )
         let coordinator = AppCoordinator(services: services)
 
@@ -24,9 +22,10 @@ final class AppCoordinatorTests: XCTestCase {
     @MainActor
     func testSettingsWindowClosedReturnsAccessoryPolicyWithoutSessions() {
         var appliedPolicies: [NSApplication.ActivationPolicy] = []
+        let presenter = StubSettingsWindowPresenter()
         let services = AppServices.testing(
             setActivationPolicy: { appliedPolicies.append($0) },
-            settingsWindowFactory: { NSWindow() }
+            settingsWindowPresenter: presenter
         )
         let coordinator = AppCoordinator(services: services)
 
@@ -86,12 +85,32 @@ final class AppCoordinatorTests: XCTestCase {
             platformBridgeFactory: { _ in nil },
             hotkeyRegistrar: NopHotkeyRegistrar(),
             sessionWindowPresenter: NopSessionWindowPresenter(),
+            settingsWindowPresenter: NopSettingsWindowPresenter(),
+            fatalAlertPresenter: NopFatalAlertPresenter(),
             setActivationPolicy: { _ in },
-            settingsWindowFactory: nil,
             showsStatusBubble: false
         )
         _ = AppCoordinator(services: services)
 
         XCTAssertEqual(stub.startCount, 1)
+    }
+}
+
+@MainActor
+final class StubSettingsWindowPresenter: SettingsWindowPresenting {
+    private let onPresent: () -> Void
+
+    init(onPresent: @escaping () -> Void = {}) {
+        self.onPresent = onPresent
+    }
+
+    func present(
+        settingsViewModel: AgentSettingsViewModel,
+        workspaceViewModel: WorkspaceSettingsViewModel,
+        shortcutActions: [PromptAction],
+        onClose: @escaping () -> Void
+    ) -> NSWindow? {
+        onPresent()
+        return NSWindow()
     }
 }
