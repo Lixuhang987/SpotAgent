@@ -73,6 +73,20 @@
 - 定义用户选区的抽象结果类型。
 - 约束会话初始上下文只接收用户主动选区。
 
+### `logging`
+
+- `NetworkLogger.ts`
+- `FileNetworkLogger.ts`
+- `createLoggingFetch.ts`
+- `index.ts`
+
+职责：
+
+- 定义 `NetworkLogger` 接口与 `NetworkLogEntry` DTO（`request`/`response` 两个方向）。
+- `FileNetworkLogger`：把每条记录以 JSONL 形式追加到 `~/.spotAgent/log/<YYYY-MM-DD>/network-NNN.jsonl`，单文件超过 `maxFileBytes`（默认 1 MiB）时自动切到下一个序号；写入串行化以避免并发写错位。
+- `createLoggingFetch`：包装 `fetch`，把请求/响应 body 解析为 JSON 后交给 `NetworkLogger`，作为 Vercel AI SDK 的 `fetch` 注入项使用。
+- `VercelClient` 在收到 `networkLogger` 时会启用上述 fetch 包装，从而把所有发往 / 来自 LLM 的网络 JSON 都落盘。
+
 ### `storage`
 
 - `SessionRecord.ts`

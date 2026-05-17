@@ -88,6 +88,7 @@ export async function startDefaultServer(port = 4317) {
     { FilePermissionPolicy },
     { loadToolSettings },
     { SettingsBackedLLMClient },
+    { FileNetworkLogger },
   ] = await Promise.all([
     import("../../../packages/core/src/runtime/AgentRuntime.ts"),
     import("../../../packages/core/src/tools/registerBuiltins.ts"),
@@ -96,11 +97,13 @@ export async function startDefaultServer(port = 4317) {
     import("../../../packages/core/src/permission/FilePermissionPolicy.ts"),
     import("../../../packages/core/src/config/ToolSettings.ts"),
     import("./SettingsBackedLLMClient.ts"),
+    import("../../../packages/core/src/logging/FileNetworkLogger.ts"),
   ]);
 
   const spotDir = join(homedir(), ".spotAgent");
   const sessionsDir = join(spotDir, "sessions");
   const store = new FileSessionStore(sessionsDir);
+  const networkLogger = new FileNetworkLogger({ baseDir: join(spotDir, "log") });
 
   const workspaceRegistry = new FileWorkspaceRegistry({
     filePath: join(spotDir, "workspaces.json"),
@@ -129,7 +132,7 @@ export async function startDefaultServer(port = 4317) {
   });
 
   const manager = new SessionManager(
-    new AgentRuntime(new SettingsBackedLLMClient(), registry, {
+    new AgentRuntime(new SettingsBackedLLMClient({ networkLogger }), registry, {
       permissionPolicy,
     }),
     undefined,

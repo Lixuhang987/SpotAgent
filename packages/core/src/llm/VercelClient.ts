@@ -6,6 +6,8 @@ import type { LLMClient, LLMCompletion } from "./LLMClient.ts";
 import type { AgentMessage } from "../runtime/AgentMessage.ts";
 import type { RegisteredTool } from "../tools/ToolRegistry.ts";
 import type { OpenAIApiType } from "../config/ModelSettings.ts";
+import type { NetworkLogger } from "../logging/NetworkLogger.ts";
+import { createLoggingFetch } from "../logging/createLoggingFetch.ts";
 import { resolveOpenAIApiKey, resolveOpenAIBaseURL } from "./OpenAIConfig.ts";
 import { sanitizeToolName, toVercelMessages, toVercelTools } from "./VercelAdapters.ts";
 
@@ -16,6 +18,7 @@ type VercelResponse = Awaited<ReturnType<typeof generateText>>;
 export type VercelClientOptions = OpenAIProviderSettings & {
   model?: string;
   api?: OpenAIApiType;
+  networkLogger?: NetworkLogger;
 };
 
 type VercelClientDependencies = {
@@ -31,13 +34,27 @@ export class VercelClient implements LLMClient {
     options: VercelClientOptions = {},
     dependencies: VercelClientDependencies = {},
   ) {
-    const { model = "gpt-5-mini", api = "chat", apiKey, baseURL, ...providerSettings } =
-      options;
+    const {
+      model = "gpt-5-mini",
+      api = "chat",
+      apiKey,
+      baseURL,
+      networkLogger,
+      fetch: fetchOverride,
+      ...providerSettings
+    } = options;
     const createOpenAIProvider = dependencies.createOpenAI ?? createOpenAI;
+    const fetchImpl = networkLogger
+      ? createLoggingFetch({
+          logger: networkLogger,
+          baseFetch: fetchOverride as typeof fetch | undefined,
+        })
+      : fetchOverride;
     const provider = createOpenAIProvider({
       ...providerSettings,
       apiKey: resolveOpenAIApiKey({ apiKey }),
       baseURL: resolveOpenAIBaseURL({ baseURL }),
+      ...(fetchImpl ? { fetch: fetchImpl } : {}),
     });
     this.model = selectLanguageModel(provider, api, model);
     this.generateText = dependencies.generateText ?? generateText;
