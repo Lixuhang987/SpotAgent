@@ -28,6 +28,7 @@ final class QuickLookPreviewController: NSObject {
         guard let panel = QLPreviewPanel.shared() else { return }
         panel.dataSource = self
         panel.delegate = self
+        panel.level = .floating
         panel.reloadData()
 
         if resignKeyObserver == nil {
@@ -46,9 +47,6 @@ final class QuickLookPreviewController: NSObject {
     }
 
     func dismiss() {
-        if Self.isQuickLookVisible {
-            QLPreviewPanel.shared().orderOut(nil)
-        }
         handleClose()
     }
 
@@ -56,6 +54,9 @@ final class QuickLookPreviewController: NSObject {
         if let observer = resignKeyObserver {
             NotificationCenter.default.removeObserver(observer)
             resignKeyObserver = nil
+        }
+        if QLPreviewPanel.sharedPreviewPanelExists(), QLPreviewPanel.shared().isVisible {
+            QLPreviewPanel.shared().orderOut(nil)
         }
         cleanupTempFile()
         onClose?()
