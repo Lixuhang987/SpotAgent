@@ -54,8 +54,8 @@
 - [PromptPanel/](Sources/PromptPanel/prompt-panel.md) — 命令面板 View+ViewModel+Controller+Styles
 - [SessionWindow/](Sources/SessionWindow/session-window.md) — 会话窗口与 WebSocket 客户端
 - [StatusBubble/](Sources/StatusBubble/status-bubble.md) — 右下角状态气泡
-- [Settings/](Sources/Settings/settings.md) — 设置窗口 TabView 容器
-- [AppServices/](Sources/AppServices/app-services.md) — 跨模块共享服务（AgentServer / AgentSettings / Hotkey / Lifecycle / Session）
+- [Settings/](Sources/Settings/settings.md) — 设置窗口 TabView 容器（model / shortcut / workspace 三个 Tab）
+- [AppServices/](Sources/AppServices/app-services.md) — 跨模块共享服务（AgentServer / AgentSettings / Hotkey / Lifecycle / PlatformBridge / SelectionCapture / Session）
 
 ## 入口与启动流程
 
@@ -117,11 +117,19 @@ sequenceDiagram
 
 ### `PromptAttachmentResult` / `PromptAction`（[PromptPanel](Sources/PromptPanel/prompt-panel.md)）
 
-- `PromptAttachmentResult.noAttachment | .textToken(String)`：提交时附加文本块。
-- `PromptAction(id, title, keywords, defaultShortcut, perform)`：命令面板可触发的动作；`shortcutName` 计算属性生成 `KeyboardShortcuts.Name("action.\(id)")`。
+`PromptAttachmentResult` 共有 5 个 case，对应不同附件采集结果：
+
+- `.noAttachment`：无附件，普通提交。
+- `.textToken(String)`：直接附加纯文本块（如内嵌的命令片段）。
+- `.textSelection(text:source:)`：用户主动文本选区（来自 `MacSelectionCaptureProvider`，Cmd-C 抓 NSPasteboard）。
+- `.imageRegion(base64:mimeType:)`：用户区域截图（来自 `MacRegionCaptureProvider`，`screencapture -i` 兜底，待迁 SCK）。
+- `.selectionError(message:)`：采集失败，UI 以禁用 chip + tooltip 反馈。
+
+`PromptAction(id, title, keywords, defaultShortcut, perform)`：命令面板可触发的动作；`shortcutName` 计算属性生成 `KeyboardShortcuts.Name("action.\(id)")`。
 
 ## 注意事项
 
-- agent-server 是 desktop app fork 的长驻子进程，**修改 TS 源码必须重启 desktop app**，无 hot reload；进程意外退出当前无自动重启。
+- agent-server 是 desktop app fork 的长驻子进程，**修改 TS 源码必须重启 desktop app**，无 hot reload。
+- `AgentServerService` 已实现指数退避重启（最多 5 次），多次失败时通过 `onFatalError` 回调上抛 Coordinator 弹原生 alert（详见 [agent-server.md](Sources/AppServices/AgentServer/agent-server.md)）。
 - node 子进程 stdout/stderr 通过 Pipe 捕获但未暴露 UI（仅防 fd 泄漏）。
 - 设置窗口与 Session 窗口共享 `AppActivationPolicyCoordinator`，全部关闭后 app 切回 `.accessory`。

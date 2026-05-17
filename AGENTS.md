@@ -8,40 +8,38 @@
 
 ## 文档索引
 
-以下索引仅覆盖仓库自有文档，不包含 `node_modules/` 等依赖目录中的第三方 `md` 文件。
+仓库文档是一棵 DFS 索引树：每个 `<dir>.md` 只列**直接子节点**，更深层细节由子节点自己继续展开。AI / 新人按 `AGENTS.md → handAgent.md → ...` 一路向下读，需要哪一层就钻到哪一层，不必预先吞下所有路径。
 
-### 根目录
+本文件只列根目录的直接入口；所有 `apps/` 下的模块、`packages/` 下的源码细节，由各自的 `<dir>.md` 接力展开。
+
+### 根目录入口
 
 - `README.md`：项目简介、当前能力、本地验证命令。
-- `handAgent.md`：仓库级架构总览、调用链路和分层 DTO 索引。
-- `AGENTS.md`：仓库工作约定、架构边界与文档导航。
+- `handAgent.md`：仓库级架构总览、主调用链路、分层 DTO 索引；后续向 `apps/` 与 `packages/` 分叉。
+- `AGENTS.md`：本文件，工作约定 + 文档维护规则。
 
-### `apps/`
+### 一级子目录（每个目录由其内 `<dir>.md` 接力）
 
-- `apps/apps.md`：应用层总览，说明桌面入口与交互壳职责。
-- `apps/desktop/desktop.md`：macOS 宿主层架构红线 + 子模块索引（编辑此目录前必读）。
-- `apps/desktop/Sources/Coordinator/coordinator.md`：`AppCoordinator` 单向事件流。
-- `apps/desktop/Sources/Theme/theme.md`：视觉 token 与 Environment 注入。
-- `apps/desktop/Sources/PromptPanel/prompt-panel.md`：命令面板 View+ViewModel+Controller+Styles。
-- `apps/desktop/Sources/SessionWindow/session-window.md`：会话窗口与 WebSocket 客户端。
-- `apps/desktop/Sources/StatusBubble/status-bubble.md`：右下角状态气泡。
-- `apps/desktop/Sources/Settings/settings.md`：设置窗口 TabView 容器。
-- `apps/desktop/Sources/AppServices/app-services.md`：跨模块共享服务汇总（AgentServer / AgentSettings / Hotkey / Lifecycle / Session 各有子文档）。
+- `apps/apps.md`：应用层总览，索引 desktop 与 agent-server 两个可执行单元。
+- `packages/packages.md`：包层总览，索引 core 跨平台核心。
+- `docs/`：仅是平铺的开发说明集合，下面列出的文件即叶节点。
+- `claude-code/`：本地 code agent 的参考项目（权限系统 / tool 系统 / UI 流式展示 / 子 agent 系统等可借鉴）。
 
-### `packages/`
+### `docs/` 叶文件
 
-- `packages/packages.md`：包级总览，说明 `core` 边界与 macOS 平台能力的反向 IPC 落点。
-- `packages/core/core.md`：core 包总览，说明会话、runtime、tool、platform 抽象。
-- `packages/core/src/src.md`：core 源码目录说明，按子模块解释数据流与 DTO。
+- `docs/dev.md`：开发说明。
+- `docs/manual-qa.md`：手工验收清单。
+- `docs/architecture-review.md`：当前代码架构问题与改进路线。
+- `docs/TODO.md`：按依赖关系分组的待办路线图（P0–P4）。
+- `docs/human/`：手工撰写的设计资料。
+- `docs/superpowers/specs/` 与 `docs/superpowers/plans/`：历史设计稿与实施计划。
 
-### `docs/`
+## 文档维护约定
 
-- `docs/dev.md`：开发说明，通常用于开发约束和实现规则补充。
-- `docs/manual-qa.md`：手工验收说明，记录人工验证步骤与关注点。
-- `docs/superpowers/specs/`：设计稿。
-- `docs/superpowers/plans/`：实施计划。
-
-### `claude-code/`: 一个本地code agent的参考项目，可以参考权限系统，tool系统，UI流式展示，子agent系统等
+- 每级 `<dir>.md` 只索引**直接**子节点；不要把孙节点路径平铺上来，避免上层文档随子树膨胀。
+- 新增子目录或子模块时，更新所在目录的 `<dir>.md` 索引；上层文档无需改动。
+- 跨模块约定（协议字段、设置文件路径等）必须在双方文档相互引用，避免单边漂移。
+- 当代码与文档冲突时，优先以代码为真相并立即修文档；不要在 PR 描述里只写"待补文档"。
 
 ## 当前产品边界
 

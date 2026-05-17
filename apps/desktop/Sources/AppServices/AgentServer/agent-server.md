@@ -18,19 +18,23 @@
 
 ## 设计备注
 
-- 非 `@MainActor`，进程管理在后台执行。
+- 非 `@MainActor`（`@unchecked Sendable`），进程管理在后台执行；回调通过 `DispatchQueue.main.async` 切回主线程，`AppCoordinator` 再用 `Task { @MainActor in ... }` 二次切回。
 - 使用 `--experimental-transform-types` 直接运行 TypeScript，无需编译步骤。
 - 进程 stdout/stderr 通过 Pipe 捕获但当前未暴露到 UI（仅防止 fd 泄漏）。
-- 进程意外退出无自动重启机制。
+- **错误恢复**：子进程非零退出码触发自动重启，指数退避 `2^n` 秒（封顶 30s），最多 `maxRestartAttempts = 5` 次；
+  - 重启次数超限时通过 `onFatalError(message)` 通知 Coordinator，弹原生 `NSAlert`（"确定" / "查看日志"，后者打开 `~/.spotAgent/`）。
+  - `userRequestedStop`（来自 `stop()`）与 `exitCode == 0` 都不会触发重启。
+  - 可用性变化通过 `onAvailabilityChange(Bool)` 暴露给 Coordinator。
 
 ## 编辑此目录的约束
 
 - 不要在此处 `import SwiftUI` 或 `import AppKit`。
-- 启动错误对外只暴露 `lastStartupError: String?`；不要直接调 UI。
+- 启动错误对外只暴露 `lastStartupError: String?` 与 `fatalErrorMessage: String?`；不要直接调 UI。
 - 修改 TS 源码后必须重启 desktop app 才能生效（无 hot reload）。
 
 ## 与其他模块的关系
 
-- [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 在 `bootstrap()` 调 `start()`，在 `shutdown()` 调 `stop()`。
+- [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 在 `bootstrap()` 调 `start()`，在 `shutdown()` 调 `stop()`；订阅 `onAvailabilityChange` 与 `onFatalError`。
 - [SessionWindow](/Users/mu9/proj/handAgent/apps/desktop/Sources/SessionWindow/session-window.md) 通过 `ws://127.0.0.1:4317/api/session` 连接子进程。
+- [PlatformBridge](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/PlatformBridge/platform-bridge.md) 走同一端口的反向 WebSocket。
 - 启动错误传递给首个 `SessionViewModel.start(startupError:)`，作为 error 气泡展示。

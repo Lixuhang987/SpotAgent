@@ -2,119 +2,24 @@
 
 ## 目录职责
 
-`packages/core/src` 存放 core 的实际源码实现，是整个 Agent 数据结构和运行循环的核心。
+`packages/core/src` 存放 core 的实际源码实现，是整个 Agent 数据结构和运行循环的核心。本文件是 core 子目录的索引，每个子模块都有独立的 `<module>.md` 描述其内部细节（"渐进式披露"）。
 
-## 模块划分
+## 子模块索引
 
-### `runtime`
-
-- `AgentSession.ts`
-- `AgentRuntime.ts`
-- `AgentMessage.ts`
-- `ToolCallEnvelope.ts`
-
-职责：
-
-- 将用户输入转换为首轮消息。
-- 在 assistant/tool 之间维持多轮消息循环。
-- 产出适合 UI 渲染的 assistant bubbles。
-
-### `llm`
-
-- `LLMClient.ts`
-- `OpenAIConfig.ts`
-- `VercelAdapters.ts`
-- `VercelClient.ts`
-
-职责：
-
-- 定义统一的 LLM provider 接口。
-- 解析持久化模型配置，并把缺省 `baseUrl` 归一化到默认 OpenAI 入口。
-- 把内部消息结构转换为 Vercel AI SDK 所需格式。
-
-### `config`
-
-- `AppConfig.ts`
-- `ModelSettings.ts`
-- `ToolSettings.ts`
-
-职责：
-
-- 定义运行时配置 DTO。
-- 解析 `~/.spotAgent/settings.json` 中的模型设置。
-- `ToolSettings` 解析 `tools.allowlist` / `tools.denylist`，并提供 `filterToolNames` 辅助函数（denylist 优先于 allowlist）。
-
-### `tools`
-
-- `AgentTool.ts`
-- `ToolRegistry.ts`
-- `builtins/*`
-
-职责：
-
-- 定义 tool 输入 schema、说明和执行入口。
-- 将平台能力和文件能力封装为可被 LLM 调用的最小单元。
-- `file.read` / `file.write` 入参为 `{workspaceId, relativePath}`，强制走 `WorkspaceRegistry` 解析根目录后再做 `..`/绝对路径/symlink 沙箱校验，禁止 LLM 直接传绝对路径。
-
-### `platform`
-
-- `PlatformAdapter.ts`
-
-职责：
-
-- 定义跨平台上下文读取与操作能力的统一 DTO 和接口。
-
-### `selection`
-
-- `SelectionCapture.ts`
-
-职责：
-
-- 定义用户选区的抽象结果类型。
-- 约束会话初始上下文只接收用户主动选区。
-
-### `logging`
-
-- `NetworkLogger.ts`
-- `FileNetworkLogger.ts`
-- `createLoggingFetch.ts`
-- `index.ts`
-
-职责：
-
-- 定义 `NetworkLogger` 接口与 `NetworkLogEntry` DTO（`request`/`response` 两个方向）。
-- `FileNetworkLogger`：把每条记录以 JSONL 形式追加到 `~/.spotAgent/log/<YYYY-MM-DD>/network-NNN.jsonl`，单文件超过 `maxFileBytes`（默认 1 MiB）时自动切到下一个序号；写入串行化以避免并发写错位。
-- `createLoggingFetch`：包装 `fetch`，把请求/响应 body 解析为 JSON 后交给 `NetworkLogger`，作为 Vercel AI SDK 的 `fetch` 注入项使用。
-- `VercelClient` 在收到 `networkLogger` 时会启用上述 fetch 包装，从而把所有发往 / 来自 LLM 的网络 JSON 都落盘。
-
-### `storage`
-
-- `SessionRecord.ts`
-- `SessionStore.ts`
-- `InMemorySessionStore.ts`
-- `FileSessionStore.ts`
-- `index.ts`
-
-职责：
-
-- 定义持久化会话模型（`PersistedSession`），包含元数据、消息历史和事件审计。
-- 定义 `SessionStore` 接口，支持 CRUD、消息追加/替换、事件追加。
-- `InMemorySessionStore`：内存实现，用于测试。
-- `FileSessionStore`：JSON 文件持久化，默认存储到 `~/.spotAgent/sessions/`。
-- `SessionEvent` 类型预留了 tool 调用记录、权限审计和错误追踪。
-
-### `workspace`
-
-- `Workspace.ts`
-- `FileWorkspaceRegistry.ts`
-- `index.ts`
-
-职责：
-
-- 定义 `Workspace` DTO（id / name / description / rootPath / createdAt / isDefault）与 `WorkspaceRegistry` 接口。
-- `FileWorkspaceRegistry` 把注册表持久化到 `~/.spotAgent/workspaces.json`，首次启动自动播种 `default` workspace（rootPath 默认为 `~/.spotAgent/workspace/`）。
-- `summarize()` 返回不含 `rootPath` 的精简列表，专供 LLM 通过 `workspace.list` 消费。
-- 注册时强制 `rootPath` 为绝对路径，并 `mkdir -p`；删除仅从注册表移除，不删除磁盘内容。
+| 子模块 | 子文档 | 一句话职责 |
+|------|------|------|
+| `runtime/` | [runtime/runtime.md](/Users/mu9/proj/handAgent/packages/core/src/runtime/runtime.md) | LLM/tool 主循环、消息模型、ToolCallEnvelope |
+| `llm/` | [llm/llm.md](/Users/mu9/proj/handAgent/packages/core/src/llm/llm.md) | LLMClient 抽象 + Vercel AI SDK 适配 |
+| `tools/` | [tools/tools.md](/Users/mu9/proj/handAgent/packages/core/src/tools/tools.md) | AgentTool 协议 + 9 个 builtin tool + 注册组合根 |
+| `platform/` | [platform/platform.md](/Users/mu9/proj/handAgent/packages/core/src/platform/platform.md) | PlatformAdapter / PlatformBridge / Remote+Offline 实现 |
+| `permission/` | [permission/permission.md](/Users/mu9/proj/handAgent/packages/core/src/permission/permission.md) | 权限策略接口 + 三档记忆持久化 |
+| `storage/` | [storage/storage.md](/Users/mu9/proj/handAgent/packages/core/src/storage/storage.md) | PersistedSession 模型 + 内存 / 文件实现 |
+| `workspace/` | [workspace/workspace.md](/Users/mu9/proj/handAgent/packages/core/src/workspace/workspace.md) | 显式 workspace 沙箱 + 默认播种 |
+| `config/` | [config/config.md](/Users/mu9/proj/handAgent/packages/core/src/config/config.md) | settings.json 模型与 tool 设置解析 |
+| `logging/` | [logging/logging.md](/Users/mu9/proj/handAgent/packages/core/src/logging/logging.md) | LLM 网络日志 JSONL 落盘 |
+| `protocol/` | [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md) | desktop ↔ agent-server WS 协议（17 个 SessionMessage 变体） |
+| `conversation/` | [conversation/conversation.md](/Users/mu9/proj/handAgent/packages/core/src/conversation/conversation.md) | UI / 持久化用 ConversationMessage 模型 |
+| `selection/` | [selection/selection.md](/Users/mu9/proj/handAgent/packages/core/src/selection/selection.md) | 用户主动选区抽象 |
 
 ## 关键数据流
 
@@ -126,36 +31,57 @@
 
 ### 2. runtime 阶段
 
-- `AgentRuntime.run(userInput)`
-- 初始构造 `messages: AgentMessage[]`
-- 调用 `LLMClient.complete(messages, tools)`
-- 若有 `toolCalls`，则循环执行 tool 并附加 `tool` message
+- `AgentRuntime.runWithMessages(messages, onEvent, {sessionId})`
+- 每轮调 `LLMClient.complete(messages, registry.list())`
+- 处理 `toolCalls`：`PermissionPolicy.check` → ask / allow / deny → tool 调用 → 写 tool message
+- 详细流程图见 [runtime/runtime.md](/Users/mu9/proj/handAgent/packages/core/src/runtime/runtime.md)
 
 ### 3. llm 适配阶段
 
-- `loadModelSettings()` 读取 `~/.spotAgent/settings.json`
-- `toVercelMessages(messages)` 将内部消息转为 SDK 消息
-- `toVercelTools(tools)` 将注册 tool 转为 provider tool set
-- `VercelClient` 根据 `api=responses/chat/completion` 选择对应 provider model
-- `generateText()` 返回文本与 toolCalls
+- `loadModelSettings()` 读取 `~/.spotAgent/settings.json`（每次请求都重读）
+- `toVercelMessages` / `toVercelTools` 翻译为 SDK 格式（点号 → 下划线）
+- `VercelClient` 按 `api ∈ {responses, chat, completion}` 选 provider model
+- 可注入 `FileNetworkLogger` 把请求 / 响应落 JSONL
 
 ### 4. tool 阶段
 
-当前已定义的内建 tool 族：
+当前已注册的 builtin tool 共 10 个，按依赖分类：
 
-- `file.read`
-- `file.write`
-- `clipboard.read`
-- `app.frontmost`
-- `window.list`
-- `screen.capture`
-- `ocr.read`
-- `accessibility.snapshot`
-- `accessibility.action`
+- 平台类（依赖 `PlatformAdapter`）：`clipboard.read`、`app.frontmost`、`window.list`、`screen.capture`、`ocr.read`、`accessibility.snapshot`、`accessibility.action`。
+- 工作区类（依赖 `WorkspaceRegistry`）：`workspace.list`、`file.read`、`file.write`。
 
-## 当前实现特点
+完整入参 / 实现位置见 [tools/tools.md](/Users/mu9/proj/handAgent/packages/core/src/tools/tools.md)。
+
+### 5. 权限阶段
+
+- `AgentRuntime` 在 `tool.call` 前调 `PermissionPolicy.check`，进入 `ask` 时通过 `resolveAsk` 询问。
+- 生产路径由 agent-server 注入 `FilePermissionPolicy(askResolver = SessionPermissionBridge.ask)`，UI 在 SessionWindow 内联气泡。
+- 三档记忆：once / session / always；always 持久化到 `~/.spotAgent/permissions.json`。
+
+### 6. 持久化阶段
+
+- `SessionStore`（生产 `FileSessionStore`）按 `~/.spotAgent/sessions/<id>.json` 写每会话一份 `PersistedSession`：metadata / messages / events。
+- `events` 是审计视图（tool_call / tool_result / permission_request / error），与 `messages` 解耦。
+
+### 7. 跨进程协议
+
+- desktop 与 agent-server 走 `ws://127.0.0.1:4317/api/session`，所有帧都是 `SessionMessage`。
+- 反向平台 IPC 复用同一 socket，标记 `sessionId = "_platform"`。
+- 字段说明详见 [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md)。
+
+## 当前实现特点与已知改进项
 
 - `AgentRuntime` 默认 `maxTurns = 8`，防止无限循环。
-- tool 结果会被序列化为字符串后重新注入 `AgentMessage(role=tool)`。
-- `VercelClient` 当前默认模型是 `gpt-5-mini`。
-- tool schema 已经齐全，但真实注册链路还没有在 Web 提交时组装完成。
+- tool 结果统一序列化为字符串再回灌；`MAX_OUTPUT_BYTES = 8 KiB` 截断。
+- `VercelClient` 当前默认模型 `gpt-5-mini`。
+- "伪流式"：`assistant_message_delta` 一次性发出整段文本，desktop UI 实际看不到 token 流。
+- 文件 tool 的写沙箱对 basename 是 symlink 的越狱有保护盲区。
+- `FilePermissionPolicy.cache` 与 `FileWorkspaceRegistry.cache` 一次性加载、不监听文件变化。
+
+完整问题清单与改进路线见 [docs/architecture-review.md](/Users/mu9/proj/handAgent/docs/architecture-review.md)。
+
+## 编辑此目录的约束
+
+- core 不允许 `import` 任何 macOS / DOM 模块；只能依赖 Node 标准库 + `ai` + `@ai-sdk/openai`。
+- 跨子模块依赖必须按图层流动：runtime → {llm, tools, permission}；tools → {platform, workspace}；llm → {config, logging, runtime/AgentMessage}；不要在 platform / config / logging 中反向引用 runtime。
+- 每个子目录新增文件时，同步更新对应的 `<module>.md` 文件清单与索引表。

@@ -2,6 +2,100 @@
 
 按依赖关系分组，组内按优先级排列。每一项扩展为：现状、用户场景、验收标准、边界情况、依赖、阻塞。
 
+最优先做：
+## 架构改进（详见 [docs/architecture-review.md](/Users/mu9/proj/handAgent/docs/architecture-review.md)）
+
+> 目标：便于迭代、职责分离、单元易测。以下条目从 architecture-review.md 提炼，按优先级排列。
+
+### P0 — 安全与协议接通（一周内可完成）
+
+- [ ] **10.1 修复 FileWriteTool symlink 越狱**
+  - 现状：`resolveWritePathWithinWorkspace` 仅 realpath 父目录，basename 是 symlink 时 `writeFile` 跟随 symlink 写到 workspace 外。
+  - 改法：写前 lstat 检查 basename 不是 symlink；若是则拒绝。加 size cap（10 MiB）+ 原子写（`.tmp` → rename）。
+  - 验收：`file-tools.test.ts` 增加 symlink 越狱用例。
+  - 依赖：无。
+
+- [ ] **10.2 tool_message 真实 emit + permission_request.arguments 透传**
+  - 现状：`AgentRuntime` emit 了 `tool_call` / `tool_result` / `permission_decision`，但 `SessionManager.toSessionMessage` 只翻译 assistant 三事件，其余丢弃。desktop 看不到 tool 实时进度。`permission_request.arguments` 在 Swift 侧被硬编码为空字典。
+  - 改法：① `SessionManager` 把 `tool_call` → `tool_message(status: running)`，`tool_result` → `tool_message(status: completed|failed)`；② Swift 侧解码 `permission_request.payload.arguments`。
+  - 验收：desktop 上调 `clipboard.read` 能看到 tool bubble 实时出现；权限气泡能显示具体参数。
+  - 依赖：无。
+
+- [ ] **10.3 激活 AppServices.swift 为 DI 容器**
+  - 现状：`AppServices.swift` 是空壳，`AppCoordinator.init` 直接 `new` 所有服务；测试靠 `skipServerStart` 跳过整段 bootstrap。
+  - 改法：`AppCoordinator.init(services: AppServices, ...)`，默认参数提供生产实现，测试注入 fakes。删除 `skipServerStart`。
+  - 验收：`AppCoordinatorTests` 不再依赖 `skipServerStart`，能通过注入 stub 验证全链路。
+  - 依赖：无。
+
+### P1 — 职责拆分（结构性收益）
+
+- [ ] **10.4 拆 AppCoordinator（419 行 → < 200 行）**
+  - 现状：同时做服务持有、窗口构造、NotificationCenter 监听、attachment 翻译、NSAlert 弹窗、激活策略、热键监听。
+  - 改法：抽 `SessionWindowFactory` / `SettingsWindowFactory` / `AgentServerHealth` 三个独立单元；Coordinator 只路由 Action + 保存 ViewModel 索引。
+  - 验收：Coordinator 无 `NSWindow` / `NSHostingController` / `NSAlert` 直接构造；新增窗口类型不改 Coordinator。
+  - 依赖：10.3。
+
+- [ ] **10.5 拆 SessionManager（god class → 4 个模块）**
+  - 现状：单文件做协议路由 + 持久化 + 翻译 + LLM 编排。
+  - 改法：拆为 `SessionRouter`（路由）/ `SessionRuntimeOrchestrator`（跑 runtime + 翻译事件）/ `SessionPersistence`（写 store）/ `MessageTranslator`（AgentMessage ↔ ConversationMessage）。
+  - 验收：`SessionManager.test.ts` 拆为 4 个文件；新增 `tool_message` emit 不需要改其它模块。
+  - 依赖：10.2。
+
+- [ ] **10.6 defineTool 工厂 + schema 单一源**
+  - 现状：9 个 builtin tool 是近乎相同的 class，JSON Schema 与 TS 类型手动双向维护。
+  - 改法：引入 `zod` 或 `@sinclair/typebox`，提供 `defineTool({ name, description, schema, run })` 工厂；builtin 每个文件回到 1 个表达式。
+  - 验收：`tools/builtins/*.ts` 总行数下降 > 50%；新增 tool 在 30 行以内。
+  - 依赖：无。
+
+### P2 — 协议与运行时一致性
+
+- [ ] **10.7 LLMClient 真实流式接口**
+  - 现状：`LLMClient.complete` 是 `Promise<LLMCompletion>`（一次性返回），runtime 人工切成 start/delta/end 三事件。
+  - 改法：`LLMClient.run` 返回 `AsyncIterable<LLMStreamEvent>`；`VercelClient` 改用 `streamText`；runtime 直接转发 stream。
+  - 验收：desktop 上看到 token 级 streaming（>= 5 段 delta）。
+  - 依赖：10.5（runtime 翻译层拆出后更容易改）。
+
+- [ ] **10.8 图片附件接入多模态消息**
+  - 现状：`composeUserContent` 把 image 附件压成字符串占位 `[图片附件: image/png (id)]`，LLM 看不到图。
+  - 改法：`AgentMessage.user.content` 升级为 `string | AgentContentPart[]`（text + image）；`VercelAdapters` 映射到 SDK 多模态消息。
+  - 验收：截屏后让 LLM 描述图片内容，应能给出真实描述。
+  - 依赖：2.2 剩余部分。
+
+- [ ] **10.9 缓存失效策略统一**
+  - 现状：`FilePermissionPolicy.cache` / `FileWorkspaceRegistry.cache` 一次性加载、不监听文件变化。desktop 改 workspace / 撤销权限后 agent-server 看不到。
+  - 改法：统一用 mtime 检测 + 重读策略；每次 `check / list / register` 前调 `loadIfChanged()`。
+  - 验收：`file-permission-policy.test.ts` 增加"外部修改文件后下次 check 看到新规则"。
+  - 依赖：无。
+
+- [ ] **10.10 session scope 权限按 sessionId 隔离**
+  - 现状：`sessionRules: Map<argHash, decision>` 无 sessionId 维度，多会话共存时 A 的"本会话允许"泄漏到 B。
+  - 改法：key 改为 `${sessionId}::${argHash}`；`unbindSession` 时清理对应 session 的规则。
+  - 验收：`file-permission-policy.test.ts` 新增"两个 sessionId 互不影响"用例。
+  - 依赖：无。
+
+### P3 — 模块边界与长期演化
+
+- [ ] **10.11 跨包 path alias 替代相对路径**
+  - 现状：`apps/agent-server/src/*.ts` 用 `../../../packages/core/src/...` 相对路径 reach into core。
+  - 改法：`tsconfig.base.json` 增加 `paths: { "@core/*": ["packages/core/src/*"] }`；agent-server 全部改为 `@core/...`。
+  - 验收：`apps/agent-server/src/**/*.ts` 不再出现 `../../../packages` 字样。
+  - 依赖：无。
+
+- [ ] **10.12 settings 热加载优化（消除同步 IO）**
+  - 现状：`SettingsBackedLLMClient.complete` 每次调用都 `existsSync + readFileSync` + 新建 `VercelClient`。
+  - 改法：引入 `loadModelSettingsCached(homeDir, mtimePolicyMs = 1000)`；settings 不变时复用 client 实例。
+  - 验收：100 次 complete 期间 `loadModelSettings` 实际只走盘 ≤ 2 次。
+  - 依赖：无。
+
+- [ ] **10.13 SessionMessage 拆分会话与平台 RPC**
+  - 现状：`SessionMessage` 既是会话协议又是平台反向 RPC 协议，混用 `sessionId = "_platform"` 魔法字符串。
+  - 改法：拆成 `SessionMessage` + `PlatformBridgeMessage`，复用同一 socket 但加 `channel` 字段区分。
+  - 验收：`server.ts` 的 message 派发不再依赖魔法字符串。
+  - 依赖：10.2。
+
+## 实现stub统一抽象
+docs/superpowers/specs/2026-05-18-blob-stub-abstraction-design.md
+
 ## 一、Tool 注册与运行时接入（当前最关键断点）
 
 - [x] **1.1 生产环境 Tool 注册**
@@ -46,8 +140,8 @@
   - 依赖：无。
   - 阻塞：2.2、2.3。
 
-- [x] **2.2 选区未传入 WebSocket**
-  - 现状：`SessionSocketClient.sendUserMessage` 在 `apps/desktop/Sources/SessionWindow/SessionSocketClient.swift:58` 硬编码 `selection: nil`。
+- [ ] **2.2 选区未传入 WebSocket**（文本选区已接通；图片附件仅为字符串占位，LLM 看不到真实图像字节）
+  - 现状：文本选区已通过 `user_message.attachments` 传到 agent-server 并拼入 prompt；但 `SessionManager.composeUserContent` 把 image 附件压成 `[图片附件: image/png (id)]` 字符串占位，LLM 实际看不到图像内容。
   - 用户场景：即便 2.1 完成，附件仍然不会被传到 agent-server，相当于半截功能。
   - 验收标准：
     - `sendUserMessage` 接受 `selection: SelectionPayload?` 参数。
@@ -60,8 +154,8 @@
   - 依赖：2.1。
   - 阻塞：2.3 的端到端验证。
 
-- [x] **2.3 选区采集时机：双全局快捷键**
-  - 现状：只有一个唤起 PromptPanel 的快捷键，没有显式选区/截图采集入口。
+- [ ] **2.3 选区采集时机：双全局快捷键**（热键 + 基本流程已落地；区域截图仍用 `screencapture -i` 兜底，未切到 SCK 自建圈选 UI）
+  - 现状：`captureSelection` / `captureRegion` 两个热键已注册并可用；文本选区走 `MacSelectionCaptureProvider`（osascript Cmd-C），区域截图走 `MacRegionCaptureProvider`（`screencapture -i`）。验收标准中"使用 ScreenCaptureKit 的窗口/区域选择 API 完成圈选"尚未实现。
   - 用户场景：
     - 场景 A（文本选区）：用户在某个 App 里手动选好文字，按「文本选区」快捷键，PromptPanel 弹出且文本已作为 chip 附上。
     - 场景 B（区域截图）：用户按「屏幕圈选」快捷键，进入类似 `cmd+shift+4` 的圈选 UI，松开后 PromptPanel 弹出且截图已作为 chip 附上。
@@ -134,8 +228,8 @@
   - 依赖：4.1；UI 部分与 7.2 共用基础设施。
   - 阻塞：4.3 的「LLM 选 workspace」混合策略生效。
 
-- [x] **4.3 file tool 接入 workspace（沙箱化）**
-  - 现状：`FileReadTool` / `FileWriteTool` 当前定义接收任意路径，无沙箱、无 workspace 概念。
+- [ ] **4.3 file tool 接入 workspace（沙箱化）**（基本沙箱已落地；`FileWriteTool` 对 basename 是 symlink 的越狱有保护盲区，需修复）
+  - 现状：`file.read` / `file.write` 已改为 `{workspaceId, relativePath}` 入参，`..` 越狱被 `realpath` + `ensureInsideWorkspace` 拦截。但 `FileWriteTool` 仅 realpath 父目录，basename 是 symlink 时 `writeFile` 会跟随 symlink 写到 workspace 外——这是当前最具体的安全缺口。
   - 用户场景：LLM 调 `file.write({workspaceId: "default", relativePath: "2026-05-17.md", content: "..."})`，文件落到 `~/.spotAgent/workspace/2026-05-17.md`；尝试写 `../../etc/passwd` 被拒。
   - 验收标准：
     - `file.read` / `file.write` 入参改为 `{workspaceId: string, relativePath: string, ...}`，**去掉绝对路径入口**。
@@ -199,8 +293,8 @@
   - 依赖：1.1（tool 调用真实发生）。
   - 阻塞：7.2（权限决策也作为事件写入）。
 
-- [x] **7.2 权限审批流程（首次询问 + 记忆策略）**
-  - 现状：`permission_request` 事件类型已定义，无任何拦截 / 审批逻辑。
+- [ ] **7.2 权限审批流程（首次询问 + 记忆策略）**（core 机制 + 协议 + bridge 已落地；desktop 侧询问气泡 UI 未验证；Settings 里查看/撤销永久规则的 UI 未实现）
+  - 现状：`FilePermissionPolicy`（三档记忆）+ `SessionPermissionBridge`（ask/response 协议）+ `AgentRuntime` 权限拦截器已全部接通。剩余：① desktop 侧 SessionWindow 内联气泡 UI 是否真正渲染待验证；② Settings 里查看和撤销永久规则的 UI 未实现；③ `session` scope 规则未按 sessionId 隔离（多会话泄漏）。
   - 用户场景：LLM 第一次想调用 `file.write` 改某个文件，弹询问气泡；用户选「本次会话允许」或「始终允许此 tool 写此目录」，后续按策略自动放行；选「拒绝」则 runtime 收到拒绝结果，LLM 自行决定下一步。
   - 验收标准：
     - `PermissionPolicy` 抽象：输入 `(toolName, arguments)`，输出 `allow` / `deny` / `ask`。
@@ -246,8 +340,8 @@
   - 依赖：无。
   - 阻塞：后续具体 provider 接入。
 
-- [x] **8.2 Agent Server 错误恢复**
-  - 现状：`AgentServerService` 已存在，崩溃重启策略未明确。
+- [ ] **8.2 Agent Server 错误恢复**（server 侧指数退避重启 + 致命 alert 已落地；client 侧断连 UI + 自动重连订阅未验证）
+  - 现状：`AgentServerService` 已实现指数退避重启（最多 5 次）+ `onFatalError` 弹 NSAlert。剩余：① SessionWindow 在 server 不可用时是否显示连接断开 UI 待验证；② 重连成功后是否自动续联订阅待验证。
   - 用户场景：agent-server 崩溃后桌面 App 应自动重启 server 并提示用户，而不是静默挂掉，让用户以为产品坏了。
   - 验收标准：
     - `AgentServerService` 监控 server 子进程退出码。
@@ -285,7 +379,6 @@
   - 依赖：1.1（ToolRegistry 注入路径）、7.2（权限审批）、4.x（workspace 沙箱给插件提供文件边界）。
   - 阻塞：无（终态项目）。
 
-## 路线图（按依赖排序）
 
 **P0 — 让 tool 真的能跑起来：**
 

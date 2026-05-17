@@ -10,11 +10,20 @@
 
 ## 核心子模块
 
-- `runtime`
-- `llm`
-- `tools`
-- `platform`
-- `selection`
+| 子模块 | 职责 | 文档 |
+|------|------|------|
+| `runtime/` | 会话循环、消息模型、tool call 编排 | [runtime/runtime.md](/Users/mu9/proj/handAgent/packages/core/src/runtime/runtime.md) |
+| `llm/` | LLMClient 抽象与 Vercel AI SDK 适配 | [llm/llm.md](/Users/mu9/proj/handAgent/packages/core/src/llm/llm.md) |
+| `tools/` | AgentTool 协议、ToolRegistry、9 个 builtin tool | [tools/tools.md](/Users/mu9/proj/handAgent/packages/core/src/tools/tools.md) |
+| `platform/` | PlatformAdapter / PlatformBridge / RemotePlatformAdapter / OfflinePlatformAdapter | [platform/platform.md](/Users/mu9/proj/handAgent/packages/core/src/platform/platform.md) |
+| `permission/` | 权限策略接口与文件持久化实现 | [permission/permission.md](/Users/mu9/proj/handAgent/packages/core/src/permission/permission.md) |
+| `storage/` | PersistedSession / SessionStore / 内存与文件实现 | [storage/storage.md](/Users/mu9/proj/handAgent/packages/core/src/storage/storage.md) |
+| `workspace/` | Workspace 注册表与文件沙箱根目录 | [workspace/workspace.md](/Users/mu9/proj/handAgent/packages/core/src/workspace/workspace.md) |
+| `config/` | settings.json 解析（model / tools） | [config/config.md](/Users/mu9/proj/handAgent/packages/core/src/config/config.md) |
+| `logging/` | NetworkLogger 与 fetch 包装，落 JSONL 到 `~/.spotAgent/log/` | [logging/logging.md](/Users/mu9/proj/handAgent/packages/core/src/logging/logging.md) |
+| `protocol/` | desktop ↔ agent-server WS 协议 SessionMessage | [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md) |
+| `conversation/` | UI / 持久化用 ConversationMessage 模型 | [conversation/conversation.md](/Users/mu9/proj/handAgent/packages/core/src/conversation/conversation.md) |
+| `selection/` | 用户主动选区抽象 | [selection/selection.md](/Users/mu9/proj/handAgent/packages/core/src/selection/selection.md) |
 
 ## Core 主调用链路
 
@@ -73,6 +82,7 @@ flowchart TD
 ### 平台抽象
 
 - `PlatformAdapter`
+- `PlatformBridge`（跨进程 RPC 接口；`OfflineError` / `TimeoutError` / `RemoteError` 三个类型化错误）
 - `FrontmostAppInfo`
 - `WindowInfo`
 - `ScreenCaptureRequest`
@@ -83,10 +93,31 @@ flowchart TD
 - `AccessibilityActionRequest`
 - `AccessibilityActionResult`
 
+### 持久化与权限
+
+- `PersistedSession` / `SessionMetadata` / `SessionEvent`
+- `SessionStore`（接口）+ `InMemorySessionStore` + `FileSessionStore`
+- `Workspace` / `WorkspaceRegistry` + `FileWorkspaceRegistry`
+- `PermissionPolicy` / `PermissionDecision` / `PermissionResolution` / `PermissionScope`
+- `FilePermissionPolicy`（持久化到 `~/.spotAgent/permissions.json`）
+
+### 跨进程协议
+
+- `SessionMessage`（17 个变体的判别联合）
+- `UserMessageAttachment` / `PlatformResponsePayload` / `SessionListEntry`
+- `ConversationMessage` / `ConversationMessageStatus` / `ToolMessageStatus`
+
 ## 目录级职责边界
 
 - `runtime` 只管消息循环，不关心 UI。
 - `llm` 只管 provider 适配，不关心窗口或平台。
 - `tools` 只管 tool schema 与调用，不关心会话页面状态。
-- `platform` 只定义协议，不写 macOS 细节。
+- `platform` 只定义协议与 RPC 入口，不写 macOS 细节。
+- `permission` 只定义策略接口与持久化，不做 UI 询问；UI 通过 `AskResolver` 注入。
+- `storage` 只做持久化，不感知 runtime 内部状态机。
+- `workspace` 只管沙箱根目录，不暴露绝对路径给 LLM。
+- `config` 仅同步读取 `~/.spotAgent/settings.json`，无监听器、无缓存。
+- `logging` 仅写网络日志，不参与产品决策。
+- `protocol` 仅定义跨进程 WS 消息形状；TS / Swift 双侧据此对齐。
+- `conversation` 是 UI/持久化消息模型，与 LLM 面向的 `AgentMessage` 解耦。
 - `selection` 只定义用户选区抽象，不做宿主编排。

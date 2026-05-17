@@ -6,11 +6,12 @@
 
 | 目录 | 文档 | 职责 |
 |------|------|------|
-| `AgentServer/` | [agent-server.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/AgentServer/agent-server.md) | 启动、停止 node 子进程；记录启动错误 |
+| `AgentServer/` | [agent-server.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/AgentServer/agent-server.md) | 启动、停止 node 子进程；指数退避重启（最多 5 次）；崩溃过限通过 `onFatalError` 上抛 Coordinator |
 | `AgentSettings/` | [agent-settings.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/AgentSettings/agent-settings.md) | `~/.spotAgent/settings.json` 读写 + 500ms 轮询；模型配置 UI |
-| `Hotkey/` | [hotkey.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Hotkey/hotkey.md) | 全局快捷键名定义；PromptAction 快捷键命名规则 |
+| `Hotkey/` | [hotkey.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Hotkey/hotkey.md) | 全局快捷键名定义（`showPromptPanel` / `captureSelection` / `captureRegion`）；PromptAction 快捷键命名规则 |
 | `Lifecycle/` | [lifecycle.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Lifecycle/lifecycle.md) | 根据 SessionWindow / SettingsWindow 计数切换激活策略 |
-| `PlatformBridge/` | [platform-bridge.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/PlatformBridge/platform-bridge.md) | 反向 IPC：把 macOS 原生能力（剪贴板 / 前台 App / 窗口列表等）通过 WebSocket 暴露给 agent-server |
+| `PlatformBridge/` | [platform-bridge.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/PlatformBridge/platform-bridge.md) | 反向 IPC：把 macOS 原生能力（剪贴板 / 前台 App / 窗口列表 / ScreenCaptureKit 截图等）通过 WebSocket 暴露给 agent-server |
+| `SelectionCapture/` | [selection-capture.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/SelectionCapture/selection-capture.md) | 文本选区采集（osascript Cmd-C 兜底）+ 区域截图（`screencapture -i` 兜底），由 Coordinator 在 `captureSelection` / `captureRegion` 热键路径调用 |
 | `Session/` | [session.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Session/session.md) | 会话摘要注册表；驱动 StatusBubble |
 
 ## 文件

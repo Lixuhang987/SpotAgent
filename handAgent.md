@@ -63,6 +63,10 @@ flowchart TD
 - `AgentSession`
   - `prompt: string`
   - `selectedText: string | null`
+- `UserMessageAttachment`（agent-server WS 协议）
+  - `{ kind: "text-selection"; id; text }`
+  - `{ kind: "image"; id; mimeType; base64 }`
+- `PromptAttachmentResult`（desktop 内部）：5 case 详见 [PromptPanel](/Users/mu9/proj/handAgent/apps/desktop/Sources/PromptPanel/prompt-panel.md)。
 
 ### 2. Swift 宿主聚合状态
 
@@ -107,6 +111,7 @@ flowchart TD
   - `recognizeText`
   - `accessibilitySnapshot`
   - `performAccessibilityAction`
+- `PlatformBridge`：跨进程 RPC 接口；定义 `OfflineError` / `TimeoutError` / `RemoteError` 三个类型化错误。
 
 ### 5. 会话存储
 
@@ -124,11 +129,27 @@ flowchart TD
 - `SessionEvent`
   - `tool_call`：记录 tool 调用入参
   - `tool_result`：记录 tool 执行结果与耗时
-  - `permission_request`：预留权限审批记录
+  - `permission_request`：权限审批记录
   - `error`：运行时错误
 - `SessionStore`（接口）
   - `create / get / delete / list`
   - `updateTitle / appendMessages / setMessages / appendEvents`
+
+### 6. 工作区与权限
+
+- `Workspace` / `WorkspaceRegistry` / `FileWorkspaceRegistry`（持久化到 `~/.spotAgent/workspaces.json`）。
+- `PermissionPolicy` / `PermissionDecision` / `PermissionResolution` / `PermissionScope` / `FilePermissionPolicy`（持久化到 `~/.spotAgent/permissions.json`）。
+
+### 7. 跨进程协议（`packages/core/src/protocol/SessionMessage.ts`）
+
+`SessionMessage` 是 17 个变体的判别联合，覆盖：
+
+- 会话生命周期：`open_session` / `user_message` / `assistant_message_start|delta|end` / `tool_message` / `status` / `interrupt` / `session_snapshot` / `error`。
+- 历史读写：`list_sessions_request|response` / `load_session_request|response` / `delete_session_request`。
+- 权限审批：`permission_request` / `permission_response`。
+- 平台反向 IPC：`platform_bridge_hello` / `platform_request` / `platform_response`（`sessionId: "_platform"` 标记）。
+
+详见 [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md)。
 
 ## 当前实现状态
 

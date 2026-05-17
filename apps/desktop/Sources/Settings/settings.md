@@ -1,28 +1,33 @@
 # Settings 模块
 
-设置窗口的容器与各 Tab 视图。当前两个 Tab：模型配置（代理 `AgentSettingsStore`）、快捷键配置（KeyboardShortcuts.Recorder）。窗口本身由 Coordinator 用 `NSWindow + NSHostingController` 管理（不使用 SwiftUI `Settings` scene，因为需要主动 `openOrFocus` 控制）。
+设置窗口的容器与各 Tab 视图。当前三个 Tab：模型配置（代理 `AgentSettingsStore`）、快捷键配置（KeyboardShortcuts.Recorder）、工作区管理（代理 `WorkspaceSettingsViewModel`）。窗口本身由 Coordinator 用 `NSWindow + NSHostingController` 管理（不使用 SwiftUI `Settings` scene，因为需要主动 `openOrFocus` 控制）。
 
 ## 文件
 
 | 文件 | 职责 |
 |------|------|
-| `SettingsView.swift` | `TabView` 容器，挂"模型" + "快捷键"两个 Tab，统一暗色背景 |
+| `SettingsView.swift` | `TabView` 容器，挂"模型" / "快捷键" / "工作区"三个 Tab，统一暗色背景 |
 | `AgentSettingsViewModel.swift` | `@Observable` 代理：把 `AgentSettingsStore.settings` 包装成可双向绑定的属性，写时自动 trim |
 | `ShortcutSettingsView.swift` | 全局热键 + PromptAction 快捷键的 `KeyboardShortcuts.Recorder` 列表 |
-| `SettingsStyles.swift` | 共享样式：`SettingsCardModifier`（暗色卡片容器）、`SettingsFieldStyle`（自定义 TextField 外观）、`SettingsRow`（label + hint + control 布局） |
+| `WorkspaceSettingsView.swift` | 工作区列表 + 添加 / 编辑 / 删除 UI；NSOpenPanel 选目录 + 表单 sheet |
+| `WorkspaceSettingsViewModel.swift` | `@Observable` 代理：直接读写 `~/.spotAgent/workspaces.json`（与 core 侧 `FileWorkspaceRegistry` 共享文件） |
+| `SettingsStyles.swift` | 共享样式：`SettingsTabBar`、`SettingsSection`、`SettingsRow`、`SettingsRowDivider`、`SettingsFieldStyle`、`SettingsSectionSeparator` |
 
-模型设置的具体 UI 在 [AppServices/AgentSettings/AgentSettingsView.swift](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/AgentSettings/AgentSettingsView.swift)，由本模块的 SettingsView 嵌入。
+模型设置的具体 UI 在 [AppServices/AgentSettings/AgentSettingsView.swift](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/AgentSettings/AgentSettingsView.swift)（历史遗留，未来应迁回 `Sources/Settings/`），由本模块的 SettingsView 嵌入。
 
 ## 数据流
 
 ```
 Coordinator.openOrFocusSettingsWindow
   └─ makeSettingsWindow()
-       └─ SettingsView(settingsViewModel: makeSettingsViewModel(), shortcutActions: makeShortcutActions())
-            └─ AgentSettingsView(viewModel:)  // 双向绑定 → ViewModel.set → Store.update → 写 ~/.spotAgent/settings.json
-            └─ ShortcutSettingsView(actions:) // KeyboardShortcuts.Recorder 直写 UserDefaults
+       └─ SettingsView(settingsViewModel:, shortcutActions:, workspaceViewModel:)
+            ├─ AgentSettingsView(viewModel:)        // → AgentSettingsStore.update → 写 ~/.spotAgent/settings.json
+            ├─ ShortcutSettingsView(actions:)       // KeyboardShortcuts.Recorder 直写 UserDefaults
+            └─ WorkspaceSettingsView(viewModel:)    // → 写 ~/.spotAgent/workspaces.json，agent-server 启动时由 FileWorkspaceRegistry 重新加载
   └─ 监听 NSWindow.willCloseNotification → Coordinator.send(.settingsWindowClosed)
 ```
+
+`~/.spotAgent/workspaces.json` 是 desktop（写）与 agent-server（读，启动时一次）共享的注册表文件；当前版本 desktop 写入后需要重启 agent-server 子进程才能让 LLM 看到新 workspace（无 watcher）。
 
 ## 编辑此目录的约束
 
