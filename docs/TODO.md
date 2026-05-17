@@ -246,7 +246,7 @@
   - 依赖：无。
   - 阻塞：后续具体 provider 接入。
 
-- [ ] **8.2 Agent Server 错误恢复**
+- [x] **8.2 Agent Server 错误恢复**
   - 现状：`AgentServerService` 已存在，崩溃重启策略未明确。
   - 用户场景：agent-server 崩溃后桌面 App 应自动重启 server 并提示用户，而不是静默挂掉，让用户以为产品坏了。
   - 验收标准：
