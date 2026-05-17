@@ -9,6 +9,7 @@ final class PromptPanelController {
     private var eventMonitor: Any?
     private var viewModel: PromptPanelViewModel?
     private var selectionProvider: SelectionCaptureProvider?
+    private let quickLookController = QuickLookPreviewController()
 
     var onSubmit: ((String, [PromptAttachmentResult]) -> Void)?
     var onOpenSettings: (() -> Void)?
@@ -42,7 +43,14 @@ final class PromptPanelController {
                 self?.onOpenSettings?()
                 self?.hide()
             }
+            vm.onPreviewImage = { [weak self] attachment in
+                self?.presentQuickLook(for: attachment)
+            }
             self.viewModel = vm
+            quickLookController.onClose = { [weak self] in
+                guard let self, let panel = self.panel, panel.isVisible else { return }
+                panel.makeKey()
+            }
         }
     }
 
@@ -67,8 +75,14 @@ final class PromptPanelController {
     }
 
     func hide() {
+        quickLookController.dismiss()
         panel?.orderOut(nil)
         removeEventMonitor()
+    }
+
+    private func presentQuickLook(for attachment: PromptAttachmentResult) {
+        guard case let .imageRegion(_, mimeType, base64) = attachment else { return }
+        quickLookController.present(base64: base64, mimeType: mimeType, title: attachment.displayLabel)
     }
 
     func toggle() {
@@ -118,6 +132,7 @@ final class PromptPanelController {
         panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
         panel.standardWindowButton(.zoomButton)?.isHidden = true
         panel.onDidResignKey = { [weak self] in
+            if QuickLookPreviewController.isQuickLookVisible { return }
             self?.hide()
         }
         panel.contentView = NSHostingView(rootView: PromptPanelView(viewModel: viewModel))

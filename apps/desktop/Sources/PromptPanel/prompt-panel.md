@@ -6,12 +6,13 @@
 
 | 文件 | 职责 |
 |------|------|
-| `PromptPanelView.swift` | 纯 UI：输入框 + action 列表 + 附件 chip + 图片附件内嵌预览，绑定 ViewModel 状态，消费 Theme token |
-| `PromptPanelViewModel.swift` | `@Observable` 状态：`draft` / `focusSeed` / `filteredActions`；提交、隐藏、打开设置回调出口 |
-| `PromptPanelController.swift` | `NSPanel` 生命周期、`NSEvent` 局部监听、ViewModel 注入 |
+| `PromptPanelView.swift` | 纯 UI：输入框 + action 列表 + 附件 chip（图片 chip 可点击触发 QuickLook 预览），绑定 ViewModel 状态，消费 Theme token |
+| `PromptPanelViewModel.swift` | `@Observable` 状态：`draft` / `focusSeed` / `filteredActions` / `attachments`；`onSubmit` / `onHide` / `onOpenSettings` / `onPreviewImage` 回调出口 |
+| `PromptPanelController.swift` | `NSPanel` 生命周期、`NSEvent` 局部监听、ViewModel 注入、持有 `QuickLookPreviewController` |
 | `PromptPanelWindow.swift` | `NSPanel` 子类，处理失焦自动隐藏 |
 | `PromptPanelStyles.swift` | `PromptPanelContainerModifier` / `ActionRowModifier` |
-| `PromptAction.swift` | `PromptAction` 数据结构 + `filter(_:query:)` 静态方法 + `PromptAttachmentResult` 枚举（`textSelection` / `selectionError` / `textToken` / `noAttachment`） |
+| `PromptAction.swift` | `PromptAction` 数据结构 + `filter(_:query:)` 静态方法 + `PromptAttachmentResult` 枚举（`textSelection` / `selectionError` / `textToken` / `imageRegion` / `noAttachment`） |
+| `QuickLookPreviewController.swift` | 把 `imageRegion` 的 base64 写入 `NSTemporaryDirectory()`，通过 `QLPreviewPanel` 共享面板呈现，关闭时清理临时文件 |
 
 ## 数据流
 

@@ -11,6 +11,7 @@ final class PromptPanelViewModel {
     var onSubmit: ((String, [PromptAttachmentResult]) -> Void)?
     var onHide: (() -> Void)?
     var onOpenSettings: (() -> Void)?
+    var onPreviewImage: ((PromptAttachmentResult) -> Void)?
 
     @ObservationIgnored private let actions: [PromptAction]
 
@@ -33,6 +34,11 @@ final class PromptPanelViewModel {
 
     func removeAttachment(id: String) {
         attachments.removeAll { $0.id == id }
+    }
+
+    func previewAttachment(_ attachment: PromptAttachmentResult) {
+        guard attachment.isImage else { return }
+        onPreviewImage?(attachment)
     }
 
     func resetForNewSession() {
