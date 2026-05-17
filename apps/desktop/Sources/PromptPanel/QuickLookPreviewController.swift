@@ -4,6 +4,7 @@ import Quartz
 @MainActor
 final class QuickLookPreviewController: NSObject {
     private var previewItem: QuickLookPreviewItem?
+    private var staleTempURL: URL?
     private var resignKeyObserver: NSObjectProtocol?
 
     var onClose: (() -> Void)?
@@ -13,7 +14,12 @@ final class QuickLookPreviewController: NSObject {
     }
 
     func present(base64: String, mimeType: String, title: String) {
-        cleanupTempFile()
+        if let url = staleTempURL {
+            try? FileManager.default.removeItem(at: url)
+            staleTempURL = nil
+        }
+        previewItem = nil
+
         guard let data = Data(base64Encoded: base64) else { return }
         let ext = fileExtension(for: mimeType)
         let url = FileManager.default.temporaryDirectory
@@ -58,15 +64,11 @@ final class QuickLookPreviewController: NSObject {
         if QLPreviewPanel.sharedPreviewPanelExists(), QLPreviewPanel.shared().isVisible {
             QLPreviewPanel.shared().orderOut(nil)
         }
-        cleanupTempFile()
-        onClose?()
-    }
-
-    private func cleanupTempFile() {
         if let url = previewItem?.url {
-            try? FileManager.default.removeItem(at: url)
+            staleTempURL = url
         }
         previewItem = nil
+        onClose?()
     }
 
     private func fileExtension(for mimeType: String) -> String {
