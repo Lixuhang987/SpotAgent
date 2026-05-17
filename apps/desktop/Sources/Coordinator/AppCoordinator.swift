@@ -198,11 +198,42 @@ final class AppCoordinator {
 
     private func startAgentServer() {
         guard !skipServerStart else { return }
+        agentServerService.onAvailabilityChange = { [weak self] available in
+            Task { @MainActor in
+                guard let self else { return }
+                if available {
+                    self.agentServerError = nil
+                } else if self.agentServerError == nil {
+                    self.agentServerError = "agent-server 已断开，正在尝试重连…"
+                }
+            }
+        }
+        agentServerService.onFatalError = { [weak self] message in
+            Task { @MainActor in
+                self?.agentServerError = message
+                self?.showFatalServerAlert(message: message)
+            }
+        }
         do {
             try agentServerService.start()
             agentServerError = nil
         } catch {
             agentServerError = agentServerService.lastStartupError ?? error.localizedDescription
+        }
+    }
+
+    private func showFatalServerAlert(message: String) {
+        let alert = NSAlert()
+        alert.messageText = "Agent Server 已停止"
+        alert.informativeText = message
+        alert.alertStyle = .critical
+        alert.addButton(withTitle: "确定")
+        alert.addButton(withTitle: "查看日志")
+        let response = alert.runModal()
+        if response == .alertSecondButtonReturn {
+            let logsDir = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent(".spotAgent")
+            NSWorkspace.shared.open(logsDir)
         }
     }
 
