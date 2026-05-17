@@ -79,7 +79,7 @@
 
 ## 三、ScreenCaptureKit 迁移
 
-- [x] **3.1 迁移到 ScreenCaptureKit（反向 IPC 方案）**
+- [ ] **3.1 迁移到 ScreenCaptureKit（反向 IPC 方案）**
   - 现状：`packages/platform-macos/src/MacPlatformAdapter.ts:91` 仍使用 `screencapture` CLI 子进程，无法做窗口级过滤、流式采集，且 CLI 在权限弹窗、多显示器边缘行为不稳定。
   - 决策：SCK 必须运行在签了名的 macOS App 进程里（TCC 权限按 bundle id 记账），不在 agent-server 的 Node 进程内执行。改为 desktop App 暴露 `PlatformBridge`，agent-server 通过 WebSocket 反向请求。
   - 用户场景：
@@ -118,7 +118,7 @@
   - 依赖：无。
   - 阻塞：4.2、4.3、1.1（file tool 注册前需要 registry 就绪）。
 
-- [x] **4.2 workspace.list / workspace.askUser tool**（仅 list 已落地，askUser 暂缓）
+- [ ] **4.2 workspace.list / workspace.askUser tool**（仅 list 已落地，askUser 暂缓）
   - 现状：LLM 没有任何方式发现已注册的 workspace。
   - 用户场景：
     - 场景 A（LLM 自决策）：用户说「保存为笔记」→ LLM 调 `workspace.list` 拿到列表 → 看到「Notes」description 为「日常笔记」→ 自行选用，无需追问。
@@ -149,7 +149,7 @@
   - 依赖：4.1、4.2。
   - 阻塞：1.1 中 file tool 真正可用、7.2 权限策略 key 设计（按 `workspaceId` 而非裸路径记忆）。
 
-- [x] **4.4 Workspace 管理 UI**
+- [ ] **4.4 Workspace 管理 UI**（待优化）
   - 现状：无 UI，注册表只能通过手动编辑 `workspaces.json` 改。
   - 用户场景：用户在 Settings 增加一个 workspace「项目笔记」指向 `~/Documents/proj-notes/`，描述「与当前项目相关的笔记和草稿」；后续 LLM 保存时会识别这个语义。
   - 验收标准：
@@ -165,7 +165,7 @@
 
 ## 六、会话历史与恢复
 
-- [x] **6.1 会话历史 UI + 恢复（三处入口）**（仅落地 SessionWindow 侧栏入口；PromptPanel action / 独立历史窗口暂缓）
+- [ ] **6.1 会话历史 UI + 恢复（三处入口）**（仅落地 SessionWindow 侧栏入口；PromptPanel action / 独立历史窗口暂缓）
   - 现状：`listSessions()` / `getSessionHistory()` 后端已实现，前端无任何浏览或恢复入口。
   - 用户场景：
     - 入口 A（PromptPanel action）：用户唤起面板，输入框 query 实时过滤「最近会话」action，回车恢复对应会话。
