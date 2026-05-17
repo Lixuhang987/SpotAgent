@@ -17,7 +17,7 @@ final class StatusBubbleController {
 
     func show() {
         if window == nil {
-            let hosting = NSHostingController(
+            let hosting = FirstMouseHostingController(
                 rootView: StatusBubbleView(viewModel: viewModel)
             )
             let window = NSWindow(contentViewController: hosting)
@@ -50,5 +50,31 @@ final class StatusBubbleController {
             y: visibleFrame.minY + 24
         )
         window.setFrameOrigin(origin)
+    }
+}
+
+private final class FirstMouseHostingController<Content: View>: NSHostingController<Content> {
+    override func loadView() {
+        super.loadView()
+        view = FirstMouseHostingView(wrapping: view)
+    }
+}
+
+private final class FirstMouseHostingView: NSView {
+    init(wrapping child: NSView) {
+        super.init(frame: child.bounds)
+        autoresizesSubviews = true
+        child.frame = bounds
+        child.autoresizingMask = [.width, .height]
+        addSubview(child)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
     }
 }
