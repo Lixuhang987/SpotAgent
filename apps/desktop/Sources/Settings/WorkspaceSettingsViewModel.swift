@@ -6,6 +6,7 @@ struct WorkspaceEntry: Identifiable, Equatable {
     var name: String
     var description: String
     let rootPath: String
+    let createdAt: Date?
     let isDefault: Bool
 }
 
@@ -29,15 +30,18 @@ final class WorkspaceSettingsViewModel {
             workspaces = []
             return
         }
+        let isoFormatter = ISO8601DateFormatter()
         workspaces = list.compactMap { entry in
             guard let id = entry["id"] as? String,
                   let name = entry["name"] as? String,
                   let rootPath = entry["rootPath"] as? String else { return nil }
+            let createdAt = (entry["createdAt"] as? String).flatMap { isoFormatter.date(from: $0) }
             return WorkspaceEntry(
                 id: id,
                 name: name,
                 description: entry["description"] as? String ?? "",
                 rootPath: rootPath,
+                createdAt: createdAt,
                 isDefault: entry["isDefault"] as? Bool ?? false
             )
         }

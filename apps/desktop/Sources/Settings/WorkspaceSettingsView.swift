@@ -43,11 +43,25 @@ struct WorkspaceSettingsView: View {
 
     private func workspaceRow(_ ws: WorkspaceEntry) -> some View {
         SettingsRow(ws.name) {
-            HStack(spacing: 8) {
-                Text(ws.description.isEmpty ? ws.rootPath : ws.description)
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(ws.rootPath)
+                        .font(theme.typography.captionFont)
+                        .foregroundStyle(theme.colors.textPrimary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(ws.rootPath)
+                    HStack(spacing: 6) {
+                        if !ws.description.isEmpty {
+                            Text(ws.description)
+                                .lineLimit(1)
+                            Text("·")
+                        }
+                        Text("创建于 \(Self.formatCreatedAt(ws.createdAt))")
+                    }
                     .font(theme.typography.captionFont)
                     .foregroundStyle(theme.colors.textSecondary)
-                    .lineLimit(1)
+                }
                 Spacer()
                 if ws.isDefault {
                     Text("默认")
@@ -70,6 +84,17 @@ struct WorkspaceSettingsView: View {
                 }
             }
         }
+    }
+
+    private static let createdAtFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HH:mm"
+        return f
+    }()
+
+    private static func formatCreatedAt(_ date: Date?) -> String {
+        guard let date else { return "—" }
+        return createdAtFormatter.string(from: date)
     }
 
     private func editSheet(_ ws: WorkspaceEntry) -> some View {
