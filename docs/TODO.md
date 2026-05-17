@@ -4,7 +4,7 @@
 
 ## 一、Tool 注册与运行时接入（当前最关键断点）
 
-- [ ] **1.1 生产环境 Tool 注册**
+- [x] **1.1 生产环境 Tool 注册**
   - 现状：`startDefaultServer` 在 `apps/agent-server/src/server.ts:52` 创建空 `ToolRegistry()`，9 个 builtin tool（`file.read`、`file.write`、`clipboard.read`、`app.frontmost`、`window.list`、`screen.capture`、`ocr.read`、`accessibility.snapshot`、`accessibility.action`）均未注册到生产 server。
   - 用户场景：用户在 PromptPanel 输入「看下我桌面上有哪个窗口」，LLM 决策调用 `window.list`，但 registry 找不到 tool，会话直接返回空回复或错误。
   - 验收标准：
@@ -17,7 +17,7 @@
   - 依赖：4.1（workspace registry 是 file tool 的前置）。
   - 阻塞：1.2、7.1、7.2、7.3 都需要 tool 调用真实发生才能验证。
 
-- [ ] **1.2 Tool 需要 PlatformAdapter 注入**
+- [x] **1.2 Tool 需要 PlatformAdapter 注入**
   - 现状：`ScreenCaptureTool`、`FrontmostAppTool`、`WindowListTool` 等构造依赖 `PlatformAdapter`，server 启动时既未实例化 adapter，也没有把它透传给 tool。
   - 用户场景：1.1 完成后 LLM 调用 `screen.capture`，tool 内部 adapter 为 undefined，直接抛 NPE 或类似错误。
   - 验收标准：
@@ -32,7 +32,7 @@
 
 ## 二、选区与附件接入（CLAUDE.md 标记「待收尾」）
 
-- [ ] **2.1 Swift 侧选区采集未接入 PromptPanel**
+- [x] **2.1 Swift 侧选区采集未接入 PromptPanel**
   - 现状：`PromptPanelViewModel.submit()` 只传 `attachments: []`，`PromptAttachmentResult` 始终为 `.noAttachment`，`MacSelectionCapture` 已实现但从未被调用。
   - 用户场景：用户在 Xcode 选了一段代码，唤起 PromptPanel 输入「这段代码什么意思」，但选区没进上下文，LLM 拿不到代码片段无法回答。
   - 验收标准：
@@ -46,7 +46,7 @@
   - 依赖：无。
   - 阻塞：2.2、2.3。
 
-- [ ] **2.2 选区未传入 WebSocket**
+- [x] **2.2 选区未传入 WebSocket**
   - 现状：`SessionSocketClient.sendUserMessage` 在 `apps/desktop/Sources/SessionWindow/SessionSocketClient.swift:58` 硬编码 `selection: nil`。
   - 用户场景：即便 2.1 完成，附件仍然不会被传到 agent-server，相当于半截功能。
   - 验收标准：
@@ -60,7 +60,7 @@
   - 依赖：2.1。
   - 阻塞：2.3 的端到端验证。
 
-- [ ] **2.3 选区采集时机：双全局快捷键**
+- [x] **2.3 选区采集时机：双全局快捷键**
   - 现状：只有一个唤起 PromptPanel 的快捷键，没有显式选区/截图采集入口。
   - 用户场景：
     - 场景 A（文本选区）：用户在某个 App 里手动选好文字，按「文本选区」快捷键，PromptPanel 弹出且文本已作为 chip 附上。
@@ -79,7 +79,7 @@
 
 ## 三、ScreenCaptureKit 迁移
 
-- [ ] **3.1 迁移到 ScreenCaptureKit（反向 IPC 方案）**
+- [x] **3.1 迁移到 ScreenCaptureKit（反向 IPC 方案）**
   - 现状：`packages/platform-macos/src/MacPlatformAdapter.ts:91` 仍使用 `screencapture` CLI 子进程，无法做窗口级过滤、流式采集，且 CLI 在权限弹窗、多显示器边缘行为不稳定。
   - 决策：SCK 必须运行在签了名的 macOS App 进程里（TCC 权限按 bundle id 记账），不在 agent-server 的 Node 进程内执行。改为 desktop App 暴露 `PlatformBridge`，agent-server 通过 WebSocket 反向请求。
   - 用户场景：
@@ -103,7 +103,7 @@
 
 > 与 Claude Code / Cursor 等 code agent 不同，HandAgent 的 workspace 不是「当前目录」隐式上下文，而是用户显式注册的、带 description 的命名沙箱集合。LLM 不会默认看到 workspace 列表；只有当任务需要落盘或读盘时，才通过 `workspace.list` 按需发现，并根据 description 自行选择或询问用户。
 
-- [ ] **4.1 Workspace 注册表与默认初始化**
+- [x] **4.1 Workspace 注册表与默认初始化**
   - 现状：仓库内不存在 workspace 抽象；`file.read` / `file.write` 一旦注册会需要某种「根目录」上下文，目前没有出处。
   - 用户场景：用户首次启动 App，自动获得一个名为「default」的 workspace，rootPath 指向 `~/.spotAgent/workspace/`；可以直接说「帮我把这段文字保存成笔记」并落盘到该目录。后续可在 Settings 增加更多 workspace（如「Notes」「Code Snippets」）。
   - 验收标准：
@@ -118,7 +118,7 @@
   - 依赖：无。
   - 阻塞：4.2、4.3、1.1（file tool 注册前需要 registry 就绪）。
 
-- [ ] **4.2 workspace.list / workspace.askUser tool**
+- [x] **4.2 workspace.list / workspace.askUser tool**（仅 list 已落地，askUser 暂缓）
   - 现状：LLM 没有任何方式发现已注册的 workspace。
   - 用户场景：
     - 场景 A（LLM 自决策）：用户说「保存为笔记」→ LLM 调 `workspace.list` 拿到列表 → 看到「Notes」description 为「日常笔记」→ 自行选用，无需追问。
@@ -134,7 +134,7 @@
   - 依赖：4.1；UI 部分与 7.2 共用基础设施。
   - 阻塞：4.3 的「LLM 选 workspace」混合策略生效。
 
-- [ ] **4.3 file tool 接入 workspace（沙箱化）**
+- [x] **4.3 file tool 接入 workspace（沙箱化）**
   - 现状：`FileReadTool` / `FileWriteTool` 当前定义接收任意路径，无沙箱、无 workspace 概念。
   - 用户场景：LLM 调 `file.write({workspaceId: "default", relativePath: "2026-05-17.md", content: "..."})`，文件落到 `~/.spotAgent/workspace/2026-05-17.md`；尝试写 `../../etc/passwd` 被拒。
   - 验收标准：
@@ -149,7 +149,7 @@
   - 依赖：4.1、4.2。
   - 阻塞：1.1 中 file tool 真正可用、7.2 权限策略 key 设计（按 `workspaceId` 而非裸路径记忆）。
 
-- [ ] **4.4 Workspace 管理 UI**
+- [x] **4.4 Workspace 管理 UI**
   - 现状：无 UI，注册表只能通过手动编辑 `workspaces.json` 改。
   - 用户场景：用户在 Settings 增加一个 workspace「项目笔记」指向 `~/Documents/proj-notes/`，描述「与当前项目相关的笔记和草稿」；后续 LLM 保存时会识别这个语义。
   - 验收标准：
@@ -165,7 +165,7 @@
 
 ## 六、会话历史与恢复
 
-- [ ] **6.1 会话历史 UI + 恢复（三处入口）**
+- [x] **6.1 会话历史 UI + 恢复（三处入口）**（仅落地 SessionWindow 侧栏入口；PromptPanel action / 独立历史窗口暂缓）
   - 现状：`listSessions()` / `getSessionHistory()` 后端已实现，前端无任何浏览或恢复入口。
   - 用户场景：
     - 入口 A（PromptPanel action）：用户唤起面板，输入框 query 实时过滤「最近会话」action，回车恢复对应会话。
@@ -185,7 +185,7 @@
 
 ## 七、审计与权限
 
-- [ ] **7.1 SessionEvent 审计写入**
+- [x] **7.1 SessionEvent 审计写入**
   - 现状：`SessionRecord` 定义了 `tool_call` / `tool_result` / `permission_request` / `error` 事件类型，runtime 循环里没有任何写入。
   - 用户场景：用户事后排查「Agent 究竟执行了什么 tool、参数是什么、用了多久」，目前查不到。
   - 验收标准：
@@ -199,7 +199,7 @@
   - 依赖：1.1（tool 调用真实发生）。
   - 阻塞：7.2（权限决策也作为事件写入）。
 
-- [ ] **7.2 权限审批流程（首次询问 + 记忆策略）**
+- [x] **7.2 权限审批流程（首次询问 + 记忆策略）**
   - 现状：`permission_request` 事件类型已定义，无任何拦截 / 审批逻辑。
   - 用户场景：LLM 第一次想调用 `file.write` 改某个文件，弹询问气泡；用户选「本次会话允许」或「始终允许此 tool 写此目录」，后续按策略自动放行；选「拒绝」则 runtime 收到拒绝结果，LLM 自行决定下一步。
   - 验收标准：
@@ -215,7 +215,7 @@
   - 依赖：7.3。
   - 阻塞：无。
 
-- [ ] **7.3 Tool 执行前权限检查**
+- [x] **7.3 Tool 执行前权限检查**
   - 现状：架构预留，runtime 未实现。
   - 用户场景：是 7.2 的「前置拦截器」，独立列出来是因为它属于 runtime 改动而非 UI 改动。
   - 验收标准：
@@ -246,7 +246,7 @@
   - 依赖：无。
   - 阻塞：后续具体 provider 接入。
 
-- [ ] **8.2 Agent Server 错误恢复**
+- [x] **8.2 Agent Server 错误恢复**
   - 现状：`AgentServerService` 已存在，崩溃重启策略未明确。
   - 用户场景：agent-server 崩溃后桌面 App 应自动重启 server 并提示用户，而不是静默挂掉，让用户以为产品坏了。
   - 验收标准：

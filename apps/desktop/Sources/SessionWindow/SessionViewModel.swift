@@ -6,12 +6,19 @@ struct SessionBubble: Identifiable, Equatable {
     var text: String
 }
 
+struct SessionPermissionRequest: Identifiable, Equatable {
+    let id: String
+    let toolName: String
+}
+
 @Observable
 @MainActor
 final class SessionViewModel {
     private(set) var messages: [SessionBubble] = []
     private(set) var status: String = "idle"
     private(set) var error: String?
+    private(set) var pendingPermissionRequests: [SessionPermissionRequest] = []
+    private(set) var historyList: [SessionListItem] = []
 
     let sessionID: String
     @ObservationIgnored let socketClient: SessionSocketClient
@@ -21,7 +28,34 @@ final class SessionViewModel {
         self.socketClient = socketClient
     }
 
-    func start(initialPrompt: String, startupError: String? = nil) {
+    func resolvePermission(requestId: String, decision: String, scope: String?) {
+        socketClient.sendPermissionResponse(
+            sessionID: sessionID,
+            requestId: requestId,
+            decision: decision,
+            scope: scope
+        )
+        pendingPermissionRequests.removeAll { $0.id == requestId }
+    }
+
+    func refreshHistory() {
+        socketClient.sendListSessions(sessionID: sessionID)
+    }
+
+    func restoreSession(_ targetSessionId: String) {
+        socketClient.sendLoadSession(sessionID: sessionID, targetSessionId: targetSessionId)
+    }
+
+    func deleteSession(_ targetSessionId: String) {
+        socketClient.sendDeleteSession(sessionID: sessionID, targetSessionId: targetSessionId)
+        historyList.removeAll { $0.id == targetSessionId }
+    }
+
+    func start(
+        initialPrompt: String,
+        attachments: [UserMessageAttachmentPayload] = [],
+        startupError: String? = nil
+    ) {
         if let startupError,
            !startupError.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             handle(
@@ -41,14 +75,14 @@ final class SessionViewModel {
         }
 
         socketClient.connect(sessionID: sessionID)
-        sendPrompt(initialPrompt)
+        sendPrompt(initialPrompt, attachments: attachments)
     }
 
     func stop() {
         socketClient.disconnect()
     }
 
-    func sendPrompt(_ text: String) {
+    func sendPrompt(_ text: String, attachments: [UserMessageAttachmentPayload] = []) {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedText.isEmpty else { return }
 
@@ -59,7 +93,8 @@ final class SessionViewModel {
             sessionID: sessionID,
             messageID: messageID,
             text: trimmedText,
-            timestamp: timestamp
+            timestamp: timestamp,
+            attachments: attachments
         )
     }
 
@@ -91,6 +126,16 @@ final class SessionViewModel {
         case .sessionSnapshot(let messages, let status):
             self.messages = messages
             self.status = status
+            error = nil
+        case .permissionRequest(let requestId, let toolName, _):
+            pendingPermissionRequests.append(
+                SessionPermissionRequest(id: requestId, toolName: toolName)
+            )
+        case .sessionList(let sessions):
+            historyList = sessions
+        case .sessionLoaded(_, _, let bubbles):
+            messages = bubbles
+            status = "idle"
             error = nil
         }
     }

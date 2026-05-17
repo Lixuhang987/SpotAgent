@@ -12,8 +12,10 @@
 
 ### 全局热键
 
-- `KeyboardShortcuts.Name.showPromptPanel`，默认 ⌘⇧Space。
-- 在 [Coordinator.setupHotkey()](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 中调用 `KeyboardShortcuts.onKeyUp(for:)` 注册监听，回调 `send(.togglePromptPanel)`。
+- `KeyboardShortcuts.Name.showPromptPanel`，默认 ⌘⇧Space，回调 `send(.togglePromptPanel)`。
+- `KeyboardShortcuts.Name.captureSelection`，无默认值；按下后调用 `MacSelectionCaptureProvider`，把结果作为 `textSelection` chip 推入 PromptPanel 并自动唤起。
+- `KeyboardShortcuts.Name.captureRegion`，无默认值；按下后调用 `MacRegionCaptureProvider`（基于 `screencapture -i`）；用户取消圈选时不弹面板，截图成功则把 PNG base64 作为 `imageRegion` chip 推入 PromptPanel 并自动唤起。
+- 注册位置统一在 [Coordinator.setupHotkey()](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md)。
 - 库内部使用 Carbon Events 注册系统级热键；用户自定义值由库自动持久化到 UserDefaults。
 
 ### Action 快捷键（局部）

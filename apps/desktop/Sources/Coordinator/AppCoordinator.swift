@@ -24,6 +24,7 @@ final class AppCoordinator {
     @ObservationIgnored private let agentServerService: AgentServerService
     @ObservationIgnored private let sessionRegistry: SessionRegistry
     @ObservationIgnored private let settingsStore: AgentSettingsStore
+    @ObservationIgnored private var platformBridgeService: PlatformBridgeService?
     @ObservationIgnored private let setActivationPolicy: @MainActor (NSApplication.ActivationPolicy) -> Void
     @ObservationIgnored private let settingsWindowFactory: (@MainActor () -> NSWindow)?
     @ObservationIgnored private let activationPolicy = AppActivationPolicyCoordinator()
@@ -74,15 +75,25 @@ final class AppCoordinator {
         setupHotkey()
         setupStatusBubble()
         startAgentServer()
+        startPlatformBridge()
         statusBubbleController.show()
     }
 
     func shutdown() {
+        platformBridgeService?.stop()
+        platformBridgeService = nil
         agentServerService.stop()
         settingsWindow?.close()
         settingsWindow = nil
         sessionWindows.values.forEach { $0.close() }
         sessionWindows.removeAll()
+    }
+
+    private func startPlatformBridge() {
+        guard !skipServerStart else { return }
+        let bridge = PlatformBridgeService(serverURL: agentServerURL)
+        platformBridgeService = bridge
+        bridge.start()
     }
 
     func send(_ action: Action) {
@@ -119,6 +130,7 @@ final class AppCoordinator {
 
     private func setupPromptPanel() {
         promptPanelController.register(actions: promptActions)
+        promptPanelController.setSelectionProvider(MacSelectionCaptureProvider())
         promptPanelController.onSubmit = { [weak self] draft, attachments in
             self?.send(.submitPrompt(draft, attachments: attachments))
         }
@@ -133,6 +145,49 @@ final class AppCoordinator {
                 self?.send(.togglePromptPanel)
             }
         }
+        KeyboardShortcuts.onKeyUp(for: .captureSelection) { [weak self] in
+            Task { @MainActor in
+                await self?.handleCaptureSelectionHotkey()
+            }
+        }
+        KeyboardShortcuts.onKeyUp(for: .captureRegion) { [weak self] in
+            Task { @MainActor in
+                await self?.handleCaptureRegionHotkey()
+            }
+        }
+    }
+
+    private func handleCaptureSelectionHotkey() async {
+        let provider = MacSelectionCaptureProvider()
+        let result = await provider.captureSelectedText()
+        let attachmentId = "selection-\(UUID().uuidString)"
+        switch result {
+        case .selected(let text):
+            promptPanelController.appendAttachment(.textSelection(id: attachmentId, text: text))
+        case .empty:
+            break
+        case .error(let message):
+            promptPanelController.appendAttachment(.selectionError(id: attachmentId, message: message))
+        }
+        promptPanelController.show()
+    }
+
+    private func handleCaptureRegionHotkey() async {
+        let provider = MacRegionCaptureProvider()
+        let result = await provider.captureRegion()
+        let attachmentId = "region-\(UUID().uuidString)"
+        switch result {
+        case .captured(let pngBase64):
+            promptPanelController.appendAttachment(
+                .imageRegion(id: attachmentId, mimeType: "image/png", base64: pngBase64)
+            )
+            promptPanelController.show()
+        case .cancelled:
+            break
+        case .error(let message):
+            promptPanelController.appendAttachment(.selectionError(id: attachmentId, message: message))
+            promptPanelController.show()
+        }
     }
 
     private func setupStatusBubble() {
@@ -143,6 +198,22 @@ final class AppCoordinator {
 
     private func startAgentServer() {
         guard !skipServerStart else { return }
+        agentServerService.onAvailabilityChange = { [weak self] available in
+            Task { @MainActor in
+                guard let self else { return }
+                if available {
+                    self.agentServerError = nil
+                } else if self.agentServerError == nil {
+                    self.agentServerError = "agent-server 已断开，正在尝试重连…"
+                }
+            }
+        }
+        agentServerService.onFatalError = { [weak self] message in
+            Task { @MainActor in
+                self?.agentServerError = message
+                self?.showFatalServerAlert(message: message)
+            }
+        }
         do {
             try agentServerService.start()
             agentServerError = nil
@@ -151,18 +222,47 @@ final class AppCoordinator {
         }
     }
 
+    private func showFatalServerAlert(message: String) {
+        let alert = NSAlert()
+        alert.messageText = "Agent Server 已停止"
+        alert.informativeText = message
+        alert.alertStyle = .critical
+        alert.addButton(withTitle: "确定")
+        alert.addButton(withTitle: "查看日志")
+        let response = alert.runModal()
+        if response == .alertSecondButtonReturn {
+            let logsDir = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent(".spotAgent")
+            NSWorkspace.shared.open(logsDir)
+        }
+    }
+
     private func handleSubmitPrompt(_ draft: String, attachments: [PromptAttachmentResult]) {
         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        let attachmentText = attachments.compactMap { attachment -> String? in
+        let tokenSuffix = attachments.compactMap { attachment -> String? in
+            if case .textToken(let token) = attachment { return token }
+            return nil
+        }
+        let composedPrompt = ([trimmed] + tokenSuffix).joined(separator: "\n\n")
+
+        let socketAttachments = attachments.compactMap { attachment -> UserMessageAttachmentPayload? in
             switch attachment {
-            case .noAttachment: return nil
-            case .textToken(let token): return token
+            case .textSelection(let id, let text):
+                return .textSelection(id: id, text: text)
+            case .imageRegion(let id, let mimeType, let base64):
+                return .image(id: id, mimeType: mimeType, base64: base64)
+            case .noAttachment, .textToken, .selectionError:
+                return nil
             }
         }
 
-        let composedPrompt = ([trimmed] + attachmentText).joined(separator: "\n\n")
+        let summaryText: String = {
+            if socketAttachments.isEmpty { return composedPrompt }
+            return composedPrompt + "\n\n[附件 ×\(socketAttachments.count)]"
+        }()
+
         let sessionID = UUID().uuidString
         let viewModel = SessionViewModel(
             sessionID: sessionID,
@@ -174,7 +274,7 @@ final class AppCoordinator {
             SessionSummary(
                 sessionId: sessionID,
                 isRunning: true,
-                latestSummary: composedPrompt,
+                latestSummary: summaryText,
                 lastActiveAt: .now,
                 windowIsOpen: true
             )
@@ -183,6 +283,7 @@ final class AppCoordinator {
         guard !skipServerStart else {
             viewModel.start(
                 initialPrompt: composedPrompt,
+                attachments: socketAttachments,
                 startupError: agentServerError
             )
             return
@@ -220,6 +321,7 @@ final class AppCoordinator {
 
         viewModel.start(
             initialPrompt: composedPrompt,
+            attachments: socketAttachments,
             startupError: agentServerError
         )
     }
@@ -298,6 +400,7 @@ final class AppCoordinator {
         let hosting = NSHostingController(
             rootView: SettingsView(
                 settingsViewModel: makeSettingsViewModel(),
+                workspaceViewModel: WorkspaceSettingsViewModel(),
                 shortcutActions: makeShortcutActions()
             )
         )

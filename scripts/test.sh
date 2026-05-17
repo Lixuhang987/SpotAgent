@@ -10,6 +10,7 @@ cd "$PROJECT_ROOT"
 pnpm exec vitest run \
   apps/agent-server/src/SessionManager.test.ts \
   apps/agent-server/src/SettingsBackedLLMClient.test.ts \
+  apps/agent-server/src/WebSocketPlatformBridge.test.ts \
   packages/core/tests/model-settings.test.ts \
   packages/core/tests/openai-config.test.ts \
   packages/core/tests/runtime.test.ts \
@@ -17,4 +18,10 @@ pnpm exec vitest run \
   packages/core/tests/context-tools.test.ts \
   packages/core/tests/file-tools.test.ts \
   packages/core/tests/file-session-store.test.ts \
-  packages/core/tests/vercel-client.test.ts
+  packages/core/tests/vercel-client.test.ts \
+  packages/core/tests/workspace-registry.test.ts \
+  packages/core/tests/register-builtins.test.ts \
+  packages/core/tests/tool-settings.test.ts \
+  packages/core/tests/workspace-list-tool.test.ts \
+  packages/core/tests/permission.test.ts \
+  packages/core/tests/file-permission-policy.test.ts

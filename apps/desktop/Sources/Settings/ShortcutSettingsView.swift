@@ -12,6 +12,14 @@ struct ShortcutSettingsView: View {
                     SettingsRow("唤起面板") {
                         KeyboardShortcuts.Recorder("", name: .showPromptPanel)
                     }
+                    SettingsRowDivider()
+                    SettingsRow("捕获文本选区") {
+                        KeyboardShortcuts.Recorder("", name: .captureSelection)
+                    }
+                    SettingsRowDivider()
+                    SettingsRow("圈选区域截图") {
+                        KeyboardShortcuts.Recorder("", name: .captureRegion)
+                    }
                 }
 
                 SettingsSectionSeparator()

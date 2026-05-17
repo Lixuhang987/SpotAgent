@@ -4,58 +4,111 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { FileReadTool } from "../src/tools/builtins/FileReadTool";
 import { FileWriteTool } from "../src/tools/builtins/FileWriteTool";
+import { FileWorkspaceRegistry } from "../src/workspace/FileWorkspaceRegistry";
+import type { WorkspaceRegistry } from "../src/workspace/Workspace";
+
+async function makeRegistryWithDefault(): Promise<{
+  registry: WorkspaceRegistry;
+  workspaceId: string;
+  rootPath: string;
+}> {
+  const dir = await mkdtemp(join(tmpdir(), "handagent-registry-"));
+  const rootPath = join(dir, "ws");
+  const registry = new FileWorkspaceRegistry({
+    filePath: join(dir, "workspaces.json"),
+    defaultRootPath: rootPath,
+  });
+  const def = await registry.getDefault();
+  return { registry, workspaceId: def.id, rootPath };
+}
 
 describe("file tools", () => {
-  it("writes and reads workspace files", async () => {
-    const workspaceRoot = await mkdtemp(join(tmpdir(), "handagent-workspace-"));
-    const writeTool = new FileWriteTool(workspaceRoot);
-    const readTool = new FileReadTool(workspaceRoot);
+  it("writes and reads workspace files via workspaceId", async () => {
+    const { registry, workspaceId } = await makeRegistryWithDefault();
+    const writeTool = new FileWriteTool(registry);
+    const readTool = new FileReadTool(registry);
 
-    await writeTool.call({ path: "notes/today.md", content: "# 今日总结" });
-    const result = await readTool.call({ path: "notes/today.md" });
+    await writeTool.call({
+      workspaceId,
+      relativePath: "notes/today.md",
+      content: "# 今日总结",
+    });
+    const result = await readTool.call({
+      workspaceId,
+      relativePath: "notes/today.md",
+    });
 
     expect(result).toEqual({
-      path: "notes/today.md",
+      workspaceId,
+      relativePath: "notes/today.md",
       content: "# 今日总结",
     });
   });
 
   it("rejects path escape attempts", async () => {
-    const workspaceRoot = await mkdtemp(join(tmpdir(), "handagent-workspace-"));
-    const writeTool = new FileWriteTool(workspaceRoot);
+    const { registry, workspaceId } = await makeRegistryWithDefault();
+    const writeTool = new FileWriteTool(registry);
 
-    await expect(writeTool.call({ path: "../outside.md", content: "nope" })).rejects.toThrow(
-      "Path escapes workspace root"
-    );
+    await expect(
+      writeTool.call({ workspaceId, relativePath: "../outside.md", content: "nope" })
+    ).rejects.toThrow("Path escapes workspace root");
+  });
+
+  it("rejects absolute relativePath", async () => {
+    const { registry, workspaceId } = await makeRegistryWithDefault();
+    const writeTool = new FileWriteTool(registry);
+
+    await expect(
+      writeTool.call({ workspaceId, relativePath: "/etc/passwd", content: "nope" })
+    ).rejects.toThrow("relativePath must not be absolute");
+  });
+
+  it("rejects unknown workspaceId", async () => {
+    const { registry } = await makeRegistryWithDefault();
+    const writeTool = new FileWriteTool(registry);
+
+    await expect(
+      writeTool.call({
+        workspaceId: "does-not-exist",
+        relativePath: "x.md",
+        content: "",
+      })
+    ).rejects.toThrow("workspace not found");
   });
 
   it("can write nested files by creating parent directories", async () => {
-    const workspaceRoot = await mkdtemp(join(tmpdir(), "handagent-workspace-"));
-    const writeTool = new FileWriteTool(workspaceRoot);
+    const { registry, workspaceId, rootPath } = await makeRegistryWithDefault();
+    const writeTool = new FileWriteTool(registry);
 
-    const result = await writeTool.call({ path: "nested/dir/file.txt", content: "ok" });
+    const result = await writeTool.call({
+      workspaceId,
+      relativePath: "nested/dir/file.txt",
+      content: "ok",
+    });
 
     expect(result).toEqual({
-      path: "nested/dir/file.txt",
+      workspaceId,
+      relativePath: "nested/dir/file.txt",
       bytesWritten: 2,
     });
-    await expect(readFile(join(workspaceRoot, "nested/dir/file.txt"), "utf8")).resolves.toBe("ok");
+    await expect(readFile(join(rootPath, "nested/dir/file.txt"), "utf8")).resolves.toBe("ok");
   });
 
   it("rejects symlink escape attempts", async () => {
-    const workspaceRoot = await mkdtemp(join(tmpdir(), "handagent-workspace-"));
+    const { registry, workspaceId, rootPath } = await makeRegistryWithDefault();
     const outsideRoot = await mkdtemp(join(tmpdir(), "handagent-outside-"));
+    await mkdir(rootPath, { recursive: true });
     await writeFile(join(outsideRoot, "secret.txt"), "top-secret", "utf8");
-    await symlink(outsideRoot, join(workspaceRoot, "linked-outside"));
+    await symlink(outsideRoot, join(rootPath, "linked-outside"));
 
-    const readTool = new FileReadTool(workspaceRoot);
-    const writeTool = new FileWriteTool(workspaceRoot);
+    const readTool = new FileReadTool(registry);
+    const writeTool = new FileWriteTool(registry);
 
-    await expect(readTool.call({ path: "linked-outside/secret.txt" })).rejects.toThrow(
-      "Path escapes workspace root"
-    );
-    await expect(writeTool.call({ path: "linked-outside/new.txt", content: "nope" })).rejects.toThrow(
-      "Path escapes workspace root"
-    );
+    await expect(
+      readTool.call({ workspaceId, relativePath: "linked-outside/secret.txt" })
+    ).rejects.toThrow("Path escapes workspace root");
+    await expect(
+      writeTool.call({ workspaceId, relativePath: "linked-outside/new.txt", content: "nope" })
+    ).rejects.toThrow("Path escapes workspace root");
   });
 });

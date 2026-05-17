@@ -17,17 +17,49 @@ enum AgentServerServiceError: LocalizedError {
     }
 }
 
-final class AgentServerService {
+final class AgentServerService: @unchecked Sendable {
     private let agentServerRelativePath = "apps/agent-server/src/server.ts"
+    private let maxRestartAttempts = 5
 
     private(set) var process: Process?
     private(set) var lastStartupError: String?
+    private(set) var fatalErrorMessage: String?
+    private(set) var isAvailable = false
+    private(set) var restartAttempts = 0
+
+    var onAvailabilityChange: ((Bool) -> Void)?
+    var onFatalError: ((String) -> Void)?
+
     private var outputPipe: Pipe?
     private var stdinPipe: Pipe?
+    private var userRequestedStop = false
+    private var pendingRestart: DispatchWorkItem?
 
     func start() throws {
+        userRequestedStop = false
+        restartAttempts = 0
+        fatalErrorMessage = nil
+        try launchProcess()
+    }
+
+    func stop() {
+        userRequestedStop = true
+        pendingRestart?.cancel()
+        pendingRestart = nil
+        outputPipe?.fileHandleForReading.readabilityHandler = nil
+        outputPipe = nil
+        stdinPipe = nil
+        process?.terminationHandler = nil
+        process?.terminate()
+        process = nil
+        lastStartupError = nil
+        updateAvailability(false)
+    }
+
+    private func launchProcess() throws {
         guard process == nil else { return }
         lastStartupError = nil
+
         guard let repoRoot = locateRepositoryRoot() else {
             throw AgentServerServiceError.repositoryRootNotFound
         }
@@ -65,11 +97,19 @@ final class AgentServerService {
         let stdinPipe = Pipe()
         process.standardInput = stdinPipe
 
+        process.terminationHandler = { terminated in
+            let exitCode = terminated.terminationStatus
+            DispatchQueue.main.async { [weak self] in
+                self?.handleTermination(exitCode: exitCode)
+            }
+        }
+
         do {
             try process.run()
             self.process = process
             self.stdinPipe = stdinPipe
             outputPipe = pipe
+            updateAvailability(true)
         } catch {
             pipe.fileHandleForReading.readabilityHandler = nil
             lastStartupError = error.localizedDescription
@@ -77,13 +117,43 @@ final class AgentServerService {
         }
     }
 
-    func stop() {
+    private func handleTermination(exitCode: Int32) {
         outputPipe?.fileHandleForReading.readabilityHandler = nil
         outputPipe = nil
         stdinPipe = nil
-        process?.terminate()
         process = nil
-        lastStartupError = nil
+        updateAvailability(false)
+
+        if userRequestedStop || exitCode == 0 {
+            return
+        }
+
+        restartAttempts += 1
+        if restartAttempts > maxRestartAttempts {
+            let message = "agent-server 多次崩溃（退出码 \(exitCode)）已停止重启。可在「检查日志」中排查。"
+            fatalErrorMessage = message
+            onFatalError?(message)
+            return
+        }
+
+        let delaySeconds = min(pow(2.0, Double(restartAttempts - 1)), 30.0)
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            do {
+                try self.launchProcess()
+            } catch {
+                self.lastStartupError = error.localizedDescription
+                self.handleTermination(exitCode: -1)
+            }
+        }
+        pendingRestart = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delaySeconds, execute: work)
+    }
+
+    private func updateAvailability(_ available: Bool) {
+        guard isAvailable != available else { return }
+        isAvailable = available
+        onAvailabilityChange?(available)
     }
 
     private func makeEnvironment(repoRoot: URL) -> [String: String] {

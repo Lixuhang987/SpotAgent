@@ -1,14 +1,53 @@
 import Foundation
 
+struct SessionListItem: Equatable, Identifiable {
+    let id: String
+    let title: String?
+    let updatedAt: String
+    let messageCount: Int
+}
+
 enum SessionEvent: Equatable {
     case userMessage(messageID: String, text: String, timestamp: String)
     case assistantMessageStart(messageID: String, timestamp: String)
     case assistantMessageDelta(messageID: String, text: String, timestamp: String)
     case assistantMessageEnd(messageID: String, status: String, timestamp: String)
     case toolMessage(messageID: String, name: String, text: String, status: String, timestamp: String)
+    case permissionRequest(requestId: String, toolName: String, arguments: [String: Any])
     case status(value: String)
     case error(messageID: String, message: String, timestamp: String)
     case sessionSnapshot(messages: [SessionBubble], status: String)
+    case sessionList(sessions: [SessionListItem])
+    case sessionLoaded(targetSessionId: String, title: String?, messages: [SessionBubble])
+
+    static func == (lhs: SessionEvent, rhs: SessionEvent) -> Bool {
+        switch (lhs, rhs) {
+        case let (.userMessage(a1, a2, a3), .userMessage(b1, b2, b3)):
+            return a1 == b1 && a2 == b2 && a3 == b3
+        case let (.assistantMessageStart(a1, a2), .assistantMessageStart(b1, b2)):
+            return a1 == b1 && a2 == b2
+        case let (.assistantMessageDelta(a1, a2, a3), .assistantMessageDelta(b1, b2, b3)):
+            return a1 == b1 && a2 == b2 && a3 == b3
+        case let (.assistantMessageEnd(a1, a2, a3), .assistantMessageEnd(b1, b2, b3)):
+            return a1 == b1 && a2 == b2 && a3 == b3
+        case let (.toolMessage(a1, a2, a3, a4, a5), .toolMessage(b1, b2, b3, b4, b5)):
+            return a1 == b1 && a2 == b2 && a3 == b3 && a4 == b4 && a5 == b5
+        case let (.permissionRequest(a1, a2, _), .permissionRequest(b1, b2, _)):
+            return a1 == b1 && a2 == b2
+        case let (.status(a), .status(b)):
+            return a == b
+        case let (.error(a1, a2, a3), .error(b1, b2, b3)):
+            return a1 == b1 && a2 == b2 && a3 == b3
+        case let (.sessionSnapshot(a1, a2), .sessionSnapshot(b1, b2)):
+            return a1 == b1 && a2 == b2
+        case let (.sessionList(a), .sessionList(b)):
+            return a == b
+        case let (.sessionLoaded(a1, a2, a3), .sessionLoaded(b1, b2, b3)):
+            return a1 == b1 && a2 == b2 && a3 == b3
+        default:
+            return false
+        }
+    }
 }
 
 final class SessionSocketClient {
@@ -48,14 +87,20 @@ final class SessionSocketClient {
         socketTask = nil
     }
 
-    func sendUserMessage(sessionID: String, messageID: String, text: String, timestamp: String) {
+    func sendUserMessage(
+        sessionID: String,
+        messageID: String,
+        text: String,
+        timestamp: String,
+        attachments: [UserMessageAttachmentPayload] = []
+    ) {
         guard let socketTask else { return }
 
         let envelope = UserMessageEnvelope(
             sessionId: sessionID,
             messageId: messageID,
             timestamp: timestamp,
-            payload: UserMessagePayload(text: text, selection: nil)
+            payload: UserMessagePayload(text: text, attachments: attachments.isEmpty ? nil : attachments)
         )
         send(envelope, on: socketTask)
     }
@@ -181,9 +226,98 @@ final class SessionSocketClient {
                 messages: bubbles,
                 status: envelope.payload.value ?? "idle"
             )
+        case "permission_request":
+            return .permissionRequest(
+                requestId: envelope.payload.requestId ?? envelope.messageId,
+                toolName: envelope.payload.toolName ?? "unknown",
+                arguments: [:]
+            )
+        case "list_sessions_response":
+            let items = envelope.payload.sessions?.map {
+                SessionListItem(
+                    id: $0.id,
+                    title: $0.title,
+                    updatedAt: $0.updatedAt ?? "",
+                    messageCount: $0.messageCount ?? 0
+                )
+            } ?? []
+            return .sessionList(sessions: items)
+        case "load_session_response":
+            let bubbles = envelope.payload.messages?.map {
+                SessionBubble(id: $0.id, role: $0.role, text: $0.text)
+            } ?? []
+            return .sessionLoaded(
+                targetSessionId: envelope.payload.targetSessionId ?? "",
+                title: envelope.payload.title ?? nil,
+                messages: bubbles
+            )
         default:
             return nil
         }
+    }
+
+    func sendListSessions(sessionID: String) {
+        sendJSON([
+            "type": "list_sessions_request",
+            "sessionId": sessionID,
+            "messageId": UUID().uuidString,
+            "timestamp": Self.timestamp(),
+            "payload": [:] as [String: Any],
+        ])
+    }
+
+    func sendLoadSession(sessionID: String, targetSessionId: String) {
+        sendJSON([
+            "type": "load_session_request",
+            "sessionId": sessionID,
+            "messageId": UUID().uuidString,
+            "timestamp": Self.timestamp(),
+            "payload": ["targetSessionId": targetSessionId],
+        ])
+    }
+
+    func sendDeleteSession(sessionID: String, targetSessionId: String) {
+        sendJSON([
+            "type": "delete_session_request",
+            "sessionId": sessionID,
+            "messageId": UUID().uuidString,
+            "timestamp": Self.timestamp(),
+            "payload": ["targetSessionId": targetSessionId],
+        ])
+    }
+
+    private func sendJSON(_ object: [String: Any]) {
+        guard let socketTask else { return }
+        guard
+            let data = try? JSONSerialization.data(withJSONObject: object),
+            let text = String(data: data, encoding: .utf8)
+        else { return }
+        socketTask.send(.string(text)) { _ in }
+    }
+
+    func sendPermissionResponse(
+        sessionID: String,
+        requestId: String,
+        decision: String,
+        scope: String? = nil
+    ) {
+        guard let socketTask else { return }
+        let envelope: [String: Any?] = [
+            "type": "permission_response",
+            "sessionId": sessionID,
+            "messageId": UUID().uuidString,
+            "timestamp": Self.timestamp(),
+            "payload": [
+                "requestId": requestId,
+                "decision": decision,
+                "scope": scope as Any?,
+            ] as [String: Any?],
+        ]
+        guard
+            let data = try? JSONSerialization.data(withJSONObject: envelope.compactMapValues { $0 }),
+            let text = String(data: data, encoding: .utf8)
+        else { return }
+        socketTask.send(.string(text)) { _ in }
     }
 
     private static func timestamp() -> String {
@@ -209,9 +343,55 @@ private struct UserMessageEnvelope: Encodable {
     let payload: UserMessagePayload
 }
 
+struct UserMessageAttachmentPayload: Encodable, Equatable {
+    enum Kind: String, Encodable {
+        case textSelection = "text_selection"
+        case image
+    }
+
+    let kind: Kind
+    let id: String
+    let text: String?
+    let mimeType: String?
+    let base64: String?
+
+    static func textSelection(id: String, text: String) -> UserMessageAttachmentPayload {
+        UserMessageAttachmentPayload(
+            kind: .textSelection,
+            id: id,
+            text: text,
+            mimeType: nil,
+            base64: nil
+        )
+    }
+
+    static func image(id: String, mimeType: String, base64: String) -> UserMessageAttachmentPayload {
+        UserMessageAttachmentPayload(
+            kind: .image,
+            id: id,
+            text: nil,
+            mimeType: mimeType,
+            base64: base64
+        )
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case kind, id, text, mimeType, base64
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(kind, forKey: .kind)
+        try container.encode(id, forKey: .id)
+        try container.encodeIfPresent(text, forKey: .text)
+        try container.encodeIfPresent(mimeType, forKey: .mimeType)
+        try container.encodeIfPresent(base64, forKey: .base64)
+    }
+}
+
 private struct UserMessagePayload: Encodable {
     let text: String
-    let selection: String?
+    let attachments: [UserMessageAttachmentPayload]?
 }
 
 private struct IncomingEnvelope: Decodable {
@@ -229,10 +409,22 @@ private struct IncomingPayload: Decodable {
     let value: String?
     let message: String?
     let messages: [IncomingSnapshotMessage]?
+    let requestId: String?
+    let toolName: String?
+    let sessions: [IncomingSessionListItem]?
+    let targetSessionId: String?
+    let title: String?
 }
 
 private struct IncomingSnapshotMessage: Decodable {
     let id: String
     let role: String
     let text: String
+}
+
+private struct IncomingSessionListItem: Decodable {
+    let id: String
+    let title: String?
+    let updatedAt: String?
+    let messageCount: Int?
 }

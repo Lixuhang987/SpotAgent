@@ -1,46 +1,71 @@
 import { realpath, readFile } from "node:fs/promises";
-import { basename, dirname, join, resolve, relative, isAbsolute, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { AgentTool } from "../AgentTool.ts";
+import type { WorkspaceRegistry, Workspace } from "../../workspace/Workspace.ts";
 
 export type FileReadToolInput = {
-  path: string;
+  workspaceId: string;
+  relativePath: string;
 };
 
 export type FileReadToolOutput = {
-  path: string;
+  workspaceId: string;
+  relativePath: string;
   content: string;
 };
 
 export class FileReadTool implements AgentTool<FileReadToolInput, FileReadToolOutput> {
   name = "file.read";
-  description = "读取 workspace 内的文本文件";
+  description =
+    "读取指定 workspace 内的文本文件。调用前若不确定 workspace，先调 `workspace.list`，匹配模糊时调 `workspace.askUser`。";
   inputSchema = {
     type: "object",
     properties: {
-      path: { type: "string" },
+      workspaceId: { type: "string", description: "目标 workspace 的 id" },
+      relativePath: {
+        type: "string",
+        description: "相对 workspace rootPath 的路径，禁止使用绝对路径",
+      },
     },
-    required: ["path"],
+    required: ["workspaceId", "relativePath"],
     additionalProperties: false,
   } as const;
 
-  constructor(private readonly workspaceRoot: string) {}
+  constructor(private readonly registry: WorkspaceRegistry) {}
 
   async call(input: FileReadToolInput): Promise<FileReadToolOutput> {
-    const absolutePath = await resolveReadPathWithinWorkspace(this.workspaceRoot, input.path);
+    const workspace = await resolveWorkspace(this.registry, input.workspaceId);
+    const absolutePath = await resolveReadPathWithinWorkspace(
+      workspace.rootPath,
+      input.relativePath,
+    );
     const content = await readFile(absolutePath, "utf8");
     return {
-      path: await normalizeWorkspaceRelativePath(this.workspaceRoot, absolutePath),
+      workspaceId: workspace.id,
+      relativePath: await normalizeWorkspaceRelativePath(workspace.rootPath, absolutePath),
       content,
     };
   }
 }
 
+export async function resolveWorkspace(
+  registry: WorkspaceRegistry,
+  workspaceId: string,
+): Promise<Workspace> {
+  const workspace = await registry.get(workspaceId);
+  if (!workspace) {
+    throw new Error(`workspace not found: ${workspaceId}`);
+  }
+  return workspace;
+}
+
 export async function resolveReadPathWithinWorkspace(
   workspaceRoot: string,
-  targetPath: string
+  targetPath: string,
 ): Promise<string> {
+  ensureRelativePath(targetPath);
   const absoluteRoot = await resolveWorkspaceRoot(workspaceRoot);
-  const absoluteTarget = resolveCandidatePath(absoluteRoot, targetPath);
+  const absoluteTarget = resolve(absoluteRoot, targetPath);
   ensureInsideWorkspace(absoluteRoot, absoluteTarget, targetPath);
 
   try {
@@ -58,10 +83,11 @@ export async function resolveReadPathWithinWorkspace(
 
 export async function resolveWritePathWithinWorkspace(
   workspaceRoot: string,
-  targetPath: string
+  targetPath: string,
 ): Promise<string> {
+  ensureRelativePath(targetPath);
   const absoluteRoot = await resolveWorkspaceRoot(workspaceRoot);
-  const absoluteTarget = resolveCandidatePath(absoluteRoot, targetPath);
+  const absoluteTarget = resolve(absoluteRoot, targetPath);
   ensureInsideWorkspace(absoluteRoot, absoluteTarget, targetPath);
 
   const parentPath = dirname(absoluteTarget);
@@ -71,7 +97,10 @@ export async function resolveWritePathWithinWorkspace(
   return join(resolvedParent, basename(absoluteTarget));
 }
 
-export async function normalizeWorkspaceRelativePath(workspaceRoot: string, absolutePath: string): Promise<string> {
+export async function normalizeWorkspaceRelativePath(
+  workspaceRoot: string,
+  absolutePath: string,
+): Promise<string> {
   const absoluteRoot = await resolveWorkspaceRoot(workspaceRoot);
   return relative(absoluteRoot, absolutePath);
 }
@@ -84,13 +113,20 @@ async function resolveWorkspaceRoot(workspaceRoot: string): Promise<string> {
   return realpath(workspaceRoot).catch(() => resolve(workspaceRoot));
 }
 
-function resolveCandidatePath(absoluteRoot: string, targetPath: string): string {
-  return isAbsolute(targetPath) ? resolve(targetPath) : resolve(absoluteRoot, targetPath);
+function ensureRelativePath(targetPath: string): void {
+  if (isAbsolute(targetPath)) {
+    throw new Error(`relativePath must not be absolute: ${targetPath}`);
+  }
 }
 
-function ensureInsideWorkspace(absoluteRoot: string, absoluteTarget: string, targetPath: string): void {
+function ensureInsideWorkspace(
+  absoluteRoot: string,
+  absoluteTarget: string,
+  targetPath: string,
+): void {
   const relativePath = relative(absoluteRoot, absoluteTarget);
-  const isInsideRoot = relativePath === "" || !relativePath.split(sep).some((segment) => segment === "..");
+  const isInsideRoot =
+    relativePath === "" || !relativePath.split(sep).some((segment) => segment === "..");
 
   if (!isInsideRoot) {
     throw new Error(`Path escapes workspace root: ${targetPath}`);
@@ -98,5 +134,10 @@ function ensureInsideWorkspace(absoluteRoot: string, absoluteTarget: string, tar
 }
 
 function isNotFoundError(error: unknown): boolean {
-  return typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "ENOENT";
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === "ENOENT"
+  );
 }

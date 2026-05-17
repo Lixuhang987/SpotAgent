@@ -16,7 +16,7 @@ export type SessionMessage =
       sessionId: string;
       messageId: string;
       timestamp: string;
-      payload: { text: string; selection?: string | null };
+      payload: { text: string; attachments?: UserMessageAttachment[] };
     }
   | {
       type: "interrupt";
@@ -80,4 +80,130 @@ export type SessionMessage =
         messages: ConversationMessage[];
         status: "idle" | "running" | "failed";
       };
+    }
+  | {
+      type: "permission_request";
+      sessionId: string;
+      messageId: string;
+      timestamp: string;
+      payload: {
+        requestId: string;
+        toolName: string;
+        toolCallId: string;
+        arguments: Record<string, unknown>;
+        timeoutMs?: number;
+      };
+    }
+  | {
+      type: "permission_response";
+      sessionId: string;
+      messageId: string;
+      timestamp: string;
+      payload: {
+        requestId: string;
+        decision: "allow" | "deny";
+        scope?: "once" | "session" | "always";
+        reason?: string;
+      };
+    }
+  | {
+      type: "list_sessions_request";
+      sessionId: string;
+      messageId: string;
+      timestamp: string;
+      payload: {};
+    }
+  | {
+      type: "list_sessions_response";
+      sessionId: string;
+      messageId: string;
+      timestamp: string;
+      payload: {
+        sessions: SessionListEntry[];
+      };
+    }
+  | {
+      type: "load_session_request";
+      sessionId: string;
+      messageId: string;
+      timestamp: string;
+      payload: { targetSessionId: string };
+    }
+  | {
+      type: "load_session_response";
+      sessionId: string;
+      messageId: string;
+      timestamp: string;
+      payload: {
+        targetSessionId: string;
+        messages: ConversationMessage[];
+        title: string | null;
+      };
+    }
+  | {
+      type: "delete_session_request";
+      sessionId: string;
+      messageId: string;
+      timestamp: string;
+      payload: { targetSessionId: string };
+    }
+  | {
+      type: "platform_bridge_hello";
+      sessionId: string;
+      messageId: string;
+      timestamp: string;
+      payload: { agent: string };
+    }
+  | {
+      type: "platform_request";
+      sessionId: string;
+      messageId: string;
+      timestamp: string;
+      payload: {
+        requestId: string;
+        method: string;
+        args: unknown;
+        timeoutMs?: number;
+      };
+    }
+  | {
+      type: "platform_response";
+      sessionId: string;
+      messageId: string;
+      timestamp: string;
+      payload: PlatformResponsePayload;
+    };
+
+export type SessionListEntry = {
+  id: string;
+  title: string | null;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+};
+
+export type UserMessageAttachment =
+  | {
+      kind: "text_selection";
+      id: string;
+      text: string;
+    }
+  | {
+      kind: "image";
+      id: string;
+      mimeType: "image/png" | "image/jpeg" | "image/webp";
+      base64: string;
+    };
+
+export type PlatformResponsePayload =
+  | {
+      requestId: string;
+      status: "ok";
+      result: unknown;
+    }
+  | {
+      requestId: string;
+      status: "error";
+      message: string;
+      code?: string;
     };

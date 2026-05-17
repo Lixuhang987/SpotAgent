@@ -1,42 +1,56 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { AgentTool } from "../AgentTool.ts";
+import type { WorkspaceRegistry } from "../../workspace/Workspace.ts";
 import {
   normalizeWorkspaceRelativePath,
+  resolveWorkspace,
   resolveWritePathWithinWorkspace,
 } from "./FileReadTool.ts";
 
 export type FileWriteToolInput = {
-  path: string;
+  workspaceId: string;
+  relativePath: string;
   content: string;
 };
 
 export type FileWriteToolOutput = {
-  path: string;
+  workspaceId: string;
+  relativePath: string;
   bytesWritten: number;
 };
 
 export class FileWriteTool implements AgentTool<FileWriteToolInput, FileWriteToolOutput> {
   name = "file.write";
-  description = "写入 workspace 内的文本文件";
+  description =
+    "写入指定 workspace 内的文本文件。调用前若不确定 workspace，先调 `workspace.list`，匹配模糊时调 `workspace.askUser`。";
   inputSchema = {
     type: "object",
     properties: {
-      path: { type: "string" },
+      workspaceId: { type: "string", description: "目标 workspace 的 id" },
+      relativePath: {
+        type: "string",
+        description: "相对 workspace rootPath 的路径，禁止使用绝对路径",
+      },
       content: { type: "string" },
     },
-    required: ["path", "content"],
+    required: ["workspaceId", "relativePath", "content"],
     additionalProperties: false,
   } as const;
 
-  constructor(private readonly workspaceRoot: string) {}
+  constructor(private readonly registry: WorkspaceRegistry) {}
 
   async call(input: FileWriteToolInput): Promise<FileWriteToolOutput> {
-    const absolutePath = await resolveWritePathWithinWorkspace(this.workspaceRoot, input.path);
+    const workspace = await resolveWorkspace(this.registry, input.workspaceId);
+    const absolutePath = await resolveWritePathWithinWorkspace(
+      workspace.rootPath,
+      input.relativePath,
+    );
     await mkdir(dirname(absolutePath), { recursive: true });
     await writeFile(absolutePath, input.content, "utf8");
     return {
-      path: await normalizeWorkspaceRelativePath(this.workspaceRoot, absolutePath),
+      workspaceId: workspace.id,
+      relativePath: await normalizeWorkspaceRelativePath(workspace.rootPath, absolutePath),
       bytesWritten: Buffer.byteLength(input.content, "utf8"),
     };
   }

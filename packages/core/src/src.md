@@ -36,11 +36,13 @@
 
 - `AppConfig.ts`
 - `ModelSettings.ts`
+- `ToolSettings.ts`
 
 职责：
 
 - 定义运行时配置 DTO。
 - 解析 `~/.spotAgent/settings.json` 中的模型设置。
+- `ToolSettings` 解析 `tools.allowlist` / `tools.denylist`，并提供 `filterToolNames` 辅助函数（denylist 优先于 allowlist）。
 
 ### `tools`
 
@@ -52,6 +54,7 @@
 
 - 定义 tool 输入 schema、说明和执行入口。
 - 将平台能力和文件能力封装为可被 LLM 调用的最小单元。
+- `file.read` / `file.write` 入参为 `{workspaceId, relativePath}`，强制走 `WorkspaceRegistry` 解析根目录后再做 `..`/绝对路径/symlink 沙箱校验，禁止 LLM 直接传绝对路径。
 
 ### `platform`
 
@@ -85,6 +88,19 @@
 - `InMemorySessionStore`：内存实现，用于测试。
 - `FileSessionStore`：JSON 文件持久化，默认存储到 `~/.spotAgent/sessions/`。
 - `SessionEvent` 类型预留了 tool 调用记录、权限审计和错误追踪。
+
+### `workspace`
+
+- `Workspace.ts`
+- `FileWorkspaceRegistry.ts`
+- `index.ts`
+
+职责：
+
+- 定义 `Workspace` DTO（id / name / description / rootPath / createdAt / isDefault）与 `WorkspaceRegistry` 接口。
+- `FileWorkspaceRegistry` 把注册表持久化到 `~/.spotAgent/workspaces.json`，首次启动自动播种 `default` workspace（rootPath 默认为 `~/.spotAgent/workspace/`）。
+- `summarize()` 返回不含 `rootPath` 的精简列表，专供 LLM 通过 `workspace.list` 消费。
+- 注册时强制 `rootPath` 为绝对路径，并 `mkdir -p`；删除仅从注册表移除，不删除磁盘内容。
 
 ## 关键数据流
 

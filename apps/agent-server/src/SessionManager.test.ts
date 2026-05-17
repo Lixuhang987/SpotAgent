@@ -407,6 +407,39 @@ describe("SessionManager", () => {
     expect(deleted).toBeNull();
   });
 
+  it("composes user content with text_selection attachments", async () => {
+    const store = new InMemorySessionStore();
+    const manager = new SessionManager(
+      {
+        async runWithMessages(messages: AgentMessage[]) {
+          return { messages, bubbles: [] };
+        },
+      },
+      () => {},
+      { now: () => "2026-05-17T00:00:00.000Z", store },
+    );
+
+    const message: Extract<SessionMessage, { type: "user_message" }> = {
+      type: "user_message",
+      sessionId: "session-attach",
+      messageId: "user-1",
+      timestamp: "2026-05-17T00:00:00.000Z",
+      payload: {
+        text: "解释这段代码",
+        attachments: [
+          { kind: "text_selection", id: "a", text: "let x = 1" },
+        ],
+      },
+    };
+    await manager.receive(message);
+
+    const session = await manager.getSession("session-attach");
+    expect(session?.messages[0]).toEqual({
+      role: "user",
+      content: "解释这段代码\n\n[选区]\nlet x = 1",
+    });
+  });
+
   it("records tool call events for audit", async () => {
     const store = new InMemorySessionStore();
     const manager = new SessionManager(
@@ -426,6 +459,19 @@ describe("SessionManager", () => {
             type: "assistant_message_end",
             messageId: "assistant-1",
             payload: { status: "completed" },
+          });
+          onEvent({
+            type: "tool_call",
+            toolCallId: "tc-1",
+            toolName: "file.read",
+            input: { path: "/tmp/test.txt" },
+          });
+          onEvent({
+            type: "tool_result",
+            toolCallId: "tc-1",
+            status: "success",
+            output: "file contents here",
+            durationMs: 12,
           });
           return {
             messages: [
@@ -469,6 +515,7 @@ describe("SessionManager", () => {
         toolCallId: "tc-1",
         status: "success",
         output: "file contents here",
+        durationMs: 12,
       },
     ]);
   });
