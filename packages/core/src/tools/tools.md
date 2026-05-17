@@ -24,7 +24,7 @@
 | `accessibility.action` | `AccessibilityActionRequest` | `PlatformAdapter.performAccessibilityAction` | macOS 暂返回 `not_implemented` |
 | `workspace.list` | `{}` | `WorkspaceRegistry.summarize` | 返回 `[{id, name, description, isDefault}]`，**不含 rootPath** |
 | `file.read` | `{ workspaceId, relativePath }` | `WorkspaceRegistry` | 沙箱 read：经 `realpath` 校验仍在 rootPath 内 |
-| `file.write` | `{ workspaceId, relativePath, content }` | `WorkspaceRegistry` | 沙箱 write：当前对 basename 是 symlink 越狱有保护盲区（见架构改进） |
+| `file.write` | `{ workspaceId, relativePath, content }` | `WorkspaceRegistry` | 沙箱 write：写前 lstat 拒绝 basename 是 symlink；10 MiB 上限；`.tmp → rename` 原子写 |
 
 ## 注册流程
 
