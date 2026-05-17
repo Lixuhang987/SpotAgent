@@ -18,7 +18,6 @@ HandAgent 是一个 macOS 优先的桌面 Agent Runtime MVP。当前桌面壳使
 - `apps/desktop/Sources/Settings`：快捷键设置页与录制控件
 - `packages/core`：跨平台 Agent Core、工具与会话逻辑
 - `apps/agent-server`：本地 session server 与流式消息桥
-- `packages/platform-macos`：macOS 选区捕获实现
 
 ## 本地验证
 

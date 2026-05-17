@@ -33,10 +33,10 @@
 ## 二、选区与附件接入（CLAUDE.md 标记「待收尾」）
 
 - [x] **2.1 Swift 侧选区采集未接入 PromptPanel**
-  - 现状：`PromptPanelViewModel.submit()` 只传 `attachments: []`，`PromptAttachmentResult` 始终为 `.noAttachment`，`MacSelectionCapture` 已实现但从未被调用。
+  - 现状：`PromptPanelViewModel.submit()` 只传 `attachments: []`，`PromptAttachmentResult` 始终为 `.noAttachment`，选区采集逻辑已实现但从未被调用。
   - 用户场景：用户在 Xcode 选了一段代码，唤起 PromptPanel 输入「这段代码什么意思」，但选区没进上下文，LLM 拿不到代码片段无法回答。
   - 验收标准：
-    - PromptPanel 唤起时若用户当前有文本选区，自动调用 `MacSelectionCapture`，把结果作为 attachment chip 显示在输入框上方。
+    - PromptPanel 唤起时若用户当前有文本选区，自动调用 `MacSelectionCaptureProvider`，把结果作为 attachment chip 显示在输入框上方。
     - chip 可点击移除。
     - 提交时 attachment 经 `onSubmit` 上抛到 `AppCoordinator`,再串到 socket 客户端。
   - 边界情况：
@@ -67,7 +67,7 @@
     - 场景 B（区域截图）：用户按「屏幕圈选」快捷键，进入类似 `cmd+shift+4` 的圈选 UI，松开后 PromptPanel 弹出且截图已作为 chip 附上。
   - 验收标准：
     - settings 中可配置两个独立快捷键：`hotkey.captureSelection` 与 `hotkey.captureRegion`。
-    - 文本选区路径复用 `MacSelectionCapture`，唤起 PromptPanel 时把结果直接 push 进 attachments。
+    - 文本选区路径复用 `MacSelectionCaptureProvider`，唤起 PromptPanel 时把结果直接 push 进 attachments。
     - 区域截图路径走新增的 `RegionCapturePresenter`，使用 ScreenCaptureKit 的窗口/区域选择 API 完成圈选；截图后再唤起 PromptPanel。
   - 边界情况：
     - 两条路径都不绕过 PromptPanel——采集完成总是经面板提交。
@@ -79,22 +79,22 @@
 
 ## 三、ScreenCaptureKit 迁移
 
-- [ ] **3.1 迁移到 ScreenCaptureKit（反向 IPC 方案）**
-  - 现状：`packages/platform-macos/src/MacPlatformAdapter.ts:91` 仍使用 `screencapture` CLI 子进程，无法做窗口级过滤、流式采集，且 CLI 在权限弹窗、多显示器边缘行为不稳定。
-  - 决策：SCK 必须运行在签了名的 macOS App 进程里（TCC 权限按 bundle id 记账），不在 agent-server 的 Node 进程内执行。改为 desktop App 暴露 `PlatformBridge`，agent-server 通过 WebSocket 反向请求。
+- [x] **3.1 迁移到 ScreenCaptureKit（反向 IPC 方案）**
+  - 现状：已删除 `packages/platform-macos/`，`screen.capture` 全链路走 `RemotePlatformAdapter` → `PlatformBridge` → 桌面 `MacPlatformProvider`，由后者用 `SCScreenshotManager` 完成 display / window / region 三种 target 的截图，不再依赖 `screencapture` CLI。
+  - 决策：SCK 必须运行在签了名的 macOS App 进程里（TCC 权限按 bundle id 记账），不在 agent-server 的 Node 进程内执行。`PlatformBridgeService` 在桌面 App 内独立维护一条 WebSocket，agent-server 通过 `platform_request` / `platform_response` 反向请求。
   - 用户场景：
-    - LLM 调用 `screen.capture(target: window, windowId: ...)` 截某个窗口。
-    - LLM 调用 `screen.capture(target: display, region: ...)` 截某显示器的指定区域。
-    - 2.3 区域截图复用同一通道。
+    - LLM 调用 `screen.capture(target: window, windowId)` 截某个窗口。
+    - LLM 调用 `screen.capture(target: region, x/y/width/height)` 截某显示器的指定区域。
+    - 2.3 区域截图复用同一通道（`MacRegionCaptureProvider` 仍用 `screencapture -i` 兜底，后续切到自建 SCK 圈选 UI）。
   - 验收标准：
-    - desktop 端新增 `PlatformBridgeService`（Swift），订阅来自 agent-server 的 `platform_request` 事件并回 `platform_response`。
-    - core 侧新增 `RemotePlatformAdapter`，把 `captureScreen` 等调用打包成 `platform_request`，通过 WS 发往 desktop，等待 response。
-    - `SessionMessage` 协议新增 `platform_request` / `platform_response`，带 `requestId` 和 `timeoutMs`。
-    - 测试覆盖：超时、desktop 断连、并发请求隔离。
-  - 边界情况:
+    - desktop 端 `PlatformBridgeService`（Swift）已订阅 `platform_request` 并回 `platform_response`。
+    - core 侧 `RemotePlatformAdapter` 已把 `captureScreen` 打包成 `platform_request` 走 WS。
+    - `SessionMessage` 协议已新增 `platform_request` / `platform_response`，带 `requestId` 与 `timeoutMs`。
+    - 测试：[apps/agent-server/src/WebSocketPlatformBridge.test.ts](apps/agent-server/src/WebSocketPlatformBridge.test.ts) 覆盖超时 / desktop 断连 / 并发隔离；[apps/desktop/TestsSwift/ScreenCaptureKitSpikeTests.swift](apps/desktop/TestsSwift/ScreenCaptureKitSpikeTests.swift) 覆盖 SCK display / window / region 三条路径。
+  - 边界情况：
     - 一次截图 round-trip 增加 < 50ms 延迟视为可接受。
-    - 图片在 WS 上以 base64 传输，单次 < 10MB，超限改走分片或落盘 + 路径返回。
-    - desktop 离线时 `platform_request` 立即返回明确错误，不挂死等。
+    - 图片在 WS 上以 base64 传输，单次 < 10MB，超限改走分片或落盘 + 路径返回（暂未触达，留作后续）。
+    - desktop 离线时 `platform_request` 立即抛 `PlatformBridgeOfflineError`，不挂死等。
     - 多个并发 `platform_request` 通过 `requestId` 隔离，互不影响。
   - 依赖：1.2 的注入机制。
   - 阻塞：2.3 的区域截图、`screen.capture` tool 的实际可用性、未来 OCR / AX 也走同一通道。

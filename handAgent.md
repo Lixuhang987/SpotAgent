@@ -22,15 +22,14 @@
 flowchart TD
   A[apps/desktop<br/>macOS 宿主与 SwiftUI 交互壳] --> B[apps/agent-server<br/>本地会话桥与 runtime 驱动]
   B --> C[packages/core<br/>会话、消息、LLM/tool 循环]
-  C --> D[packages/platform-macos<br/>macOS 平台实现]
+  A -->|PlatformBridge 反向 IPC| C
 ```
 
 ### 分层职责
 
-- `apps/desktop`：负责宿主生命周期、热键、PromptPanel、SessionWindow 与状态气泡。
+- `apps/desktop`：负责宿主生命周期、热键、PromptPanel、SessionWindow、状态气泡，以及通过 `MacPlatformProvider` 实现 macOS 原生能力（ScreenCaptureKit / NSWorkspace / NSPasteboard 等）。
 - `apps/agent-server`：负责本地 WebSocket session 桥、`SessionManager` 和 runtime 驱动。
-- `packages/core`：负责会话输入归一化、消息模型、tool 注册、LLM/tool 循环。
-- `packages/platform-macos`：负责把平台能力映射到 macOS 的系统命令或 AppleScript。
+- `packages/core`：负责会话输入归一化、消息模型、tool 注册、LLM/tool 循环、`RemotePlatformAdapter` 通过 `PlatformBridge` 接口向桌面 App 请求平台能力。
 
 ## 主调用链路
 
@@ -137,7 +136,8 @@ flowchart TD
 - `agent-server` 通过 `SessionManager + SessionStore` 管理会话并驱动 runtime。
 - `packages/core/src/storage` 提供持久化会话存储，默认使用 `FileSessionStore` 将会话写入 `~/.spotAgent/sessions/`。
 - `packages/core` 已经定义完整的 tool、platform DTO。
-- `packages/platform-macos` 当前实现了选区捕获、前台 App、窗口列表、剪贴板、区域截图；OCR 与 accessibility 仍未完成。
+- macOS 平台能力由 `apps/desktop` 内的 `MacPlatformProvider` 实现：剪贴板（`NSPasteboard`）、前台 App（`NSWorkspace`）、窗口列表（`CGWindowListCopyWindowInfo`）、屏幕截图（`ScreenCaptureKit` + `SCScreenshotManager`，支持 display / window / region 三种 target）；OCR 与 accessibility 仍未完成。
+- 桌面 App 通过 `PlatformBridgeService` 与 `agent-server` 维护一条独立 WebSocket 反向通道，core 侧通过 `RemotePlatformAdapter` 调用平台能力。
 
 ## 阅读顺序建议
 

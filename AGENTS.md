@@ -30,11 +30,9 @@
 
 ### `packages/`
 
-- `packages/packages.md`：包级总览，说明 `core` 与 `platform-macos` 的边界。
+- `packages/packages.md`：包级总览，说明 `core` 边界与 macOS 平台能力的反向 IPC 落点。
 - `packages/core/core.md`：core 包总览，说明会话、runtime、tool、platform 抽象。
 - `packages/core/src/src.md`：core 源码目录说明，按子模块解释数据流与 DTO。
-- `packages/platform-macos/platform-macos.md`：macOS 平台实现总览。
-- `packages/platform-macos/src/src.md`：macOS 平台源码目录说明，覆盖系统能力实现细节。
 
 ### `docs/`
 
@@ -61,7 +59,7 @@
 - `apps/desktop/HandAgentApp.swift` 是 macOS 宿主入口，负责应用生命周期、全局热键、`PromptPanel`、`SessionWindow` 与状态气泡。
 - `apps/desktop/Sources/` 按 `AppServices`、`PromptPanel`、`SessionWindow`、`StatusBubble` 划分宿主实现。
 - `packages/core/` 是跨平台核心层，负责会话模型、LLM 循环、tool 协议、tool 注册、平台抽象和通用测试；不得引入 macOS 相关导入或 UI 依赖。
-- `packages/platform-macos/` 是 macOS 平台实现层，只能通过 `PlatformAdapter` 接口对外暴露 macOS 能力，负责把平台能力落到具体系统 API 或 AppleScript。
+- macOS 平台能力由 `apps/desktop/Sources/AppServices/PlatformBridge/MacPlatformProvider.swift` 实现（NSPasteboard / NSWorkspace / CGWindowList / ScreenCaptureKit 等），通过 `PlatformBridgeService` 暴露为 WebSocket 反向通道；core 侧通过 `RemotePlatformAdapter + PlatformBridge` 接口调用，不直接依赖 macOS API。
 - `docs/` 里的设计稿和开发说明只描述规则和约束，不作为运行时依赖。
 - 模型相关设置存放在 `~/.spotAgent/settings.json`，每次请求时读取，无需重启。
 

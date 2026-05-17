@@ -6,7 +6,7 @@
 
 - **独立连接**：与会话窗口的 socket 区分，避免 platform 通道被会话生命周期影响。
 - **provider 注入**：`MacPlatformProvider` 实现 macOS 原生能力；UI 层只关心 service 生命周期。
-- **能力分级**：clipboard / app / window 三项已直接落到 `NSPasteboard` / `NSWorkspace` / `CGWindowListCopyWindowInfo`；screen / ocr / accessibility 暂返回 `not_implemented`，待后续扩展。
+- **能力分级**：clipboard / app / window / screen 四项已落地（`NSPasteboard` / `NSWorkspace` / `CGWindowListCopyWindowInfo` / `ScreenCaptureKit SCScreenshotManager`）；ocr / accessibility 暂返回 `not_implemented`，待后续扩展。
 - **重连**：连接断开后 2s 自动重连，避免 server 重启后桌面端需要手动恢复。
 
 调用链：

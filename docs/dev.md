@@ -77,7 +77,7 @@ bash ./scripts/swiftw build
 - `apps/desktop/HandAgentApp.swift` 只放 macOS 宿主入口与顶层协调逻辑。
 - `apps/desktop/Sources/` 按 `AppServices`、`PromptPanel`、`SessionWindow`、`StatusBubble` 分目录放 Swift 实现。
 - `packages/core/` 只放跨平台的 Agent Core、tool 协议和通用测试。
-- `packages/platform-macos/` 只放 macOS 平台实现。
+- macOS 平台能力放在 `apps/desktop/Sources/AppServices/PlatformBridge/MacPlatformProvider.swift`，通过 `PlatformBridgeService` 暴露反向 IPC。
 
 ### 依赖边界
 
