@@ -3,7 +3,11 @@ import { asSchema } from "ai";
 import {
   resolveOpenAIApiKey,
 } from "../src/llm/OpenAIConfig";
-import { toVercelMessages, toVercelTools } from "../src/llm/VercelAdapters";
+import {
+  sanitizeToolName,
+  toVercelMessages,
+  toVercelTools,
+} from "../src/llm/VercelAdapters";
 import { VercelClient } from "../src/llm/VercelClient";
 import type { AgentMessage } from "../src/runtime/AgentMessage";
 
@@ -58,7 +62,7 @@ describe("VercelClient adapters", () => {
           {
             type: "tool-call",
             toolCallId: "call-1",
-            toolName: "file.read",
+            toolName: "file_read",
             input: {
               path: "/tmp/demo.txt",
             },
@@ -71,7 +75,7 @@ describe("VercelClient adapters", () => {
           {
             type: "tool-result",
             toolCallId: "call-1",
-            toolName: "file.read",
+            toolName: "file_read",
             output: {
               type: "json",
               value: {
@@ -82,6 +86,13 @@ describe("VercelClient adapters", () => {
         ],
       },
     ]);
+  });
+
+  it("sanitizes tool names so they match OpenAI's ^[a-zA-Z0-9_-]+$ pattern", () => {
+    expect(sanitizeToolName("file.read")).toBe("file_read");
+    expect(sanitizeToolName("workspace.list")).toBe("workspace_list");
+    expect(sanitizeToolName("already_safe-name")).toBe("already_safe-name");
+    expect(sanitizeToolName("space here.dot")).toBe("space_here_dot");
   });
 
   it("wraps registered tools as AI SDK tools whose inputSchema is consumable by the SDK", async () => {
@@ -99,10 +110,10 @@ describe("VercelClient adapters", () => {
       },
     ]);
 
-    expect(Object.keys(tools)).toEqual(["file.read"]);
-    expect(tools["file.read"]?.description).toBe("读取文件");
+    expect(Object.keys(tools)).toEqual(["file_read"]);
+    expect(tools["file_read"]?.description).toBe("读取文件");
 
-    const schema = asSchema(tools["file.read"]!.inputSchema);
+    const schema = asSchema(tools["file_read"]!.inputSchema);
     const resolvedJsonSchema = await schema.jsonSchema;
     expect(resolvedJsonSchema).toMatchObject({
       type: "object",
@@ -123,7 +134,7 @@ describe("VercelClient adapters", () => {
     );
   });
 
-  it("creates a responses model by default", () => {
+  it("creates a chat model by default", () => {
     const responses = vi.fn(() => "responses-model");
     const chat = vi.fn(() => "chat-model");
     const completion = vi.fn(() => "completion-model");
@@ -143,8 +154,8 @@ describe("VercelClient adapters", () => {
 
     expect(client).toBeDefined();
     expect(createOpenAI).toHaveBeenCalled();
-    expect(responses).toHaveBeenCalledWith("gpt-5-mini");
-    expect(chat).not.toHaveBeenCalled();
+    expect(chat).toHaveBeenCalledWith("gpt-5-mini");
+    expect(responses).not.toHaveBeenCalled();
     expect(completion).not.toHaveBeenCalled();
   });
 

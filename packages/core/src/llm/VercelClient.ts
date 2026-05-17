@@ -7,7 +7,7 @@ import type { AgentMessage } from "../runtime/AgentMessage.ts";
 import type { RegisteredTool } from "../tools/ToolRegistry.ts";
 import type { OpenAIApiType } from "../config/ModelSettings.ts";
 import { resolveOpenAIApiKey, resolveOpenAIBaseURL } from "./OpenAIConfig.ts";
-import { toVercelMessages, toVercelTools } from "./VercelAdapters.ts";
+import { sanitizeToolName, toVercelMessages, toVercelTools } from "./VercelAdapters.ts";
 
 type OpenAIProviderSettings = NonNullable<Parameters<typeof createOpenAI>[0]>;
 type VercelRequest = Parameters<typeof generateText>[0];
@@ -31,7 +31,7 @@ export class VercelClient implements LLMClient {
     options: VercelClientOptions = {},
     dependencies: VercelClientDependencies = {},
   ) {
-    const { model = "gpt-5-mini", api = "responses", apiKey, baseURL, ...providerSettings } =
+    const { model = "gpt-5-mini", api = "chat", apiKey, baseURL, ...providerSettings } =
       options;
     const createOpenAIProvider = dependencies.createOpenAI ?? createOpenAI;
     const provider = createOpenAIProvider({
@@ -44,6 +44,9 @@ export class VercelClient implements LLMClient {
   }
 
   async complete(messages: AgentMessage[], tools: RegisteredTool[]): Promise<LLMCompletion> {
+    const reverseToolNames = new Map(
+      tools.map((t) => [sanitizeToolName(t.name), t.name])
+    );
     const request: VercelRequest = {
       model: this.model,
       messages: toVercelMessages(messages),
@@ -58,7 +61,7 @@ export class VercelClient implements LLMClient {
       },
       toolCalls: response.toolCalls.map((toolCall) => ({
         id: toolCall.toolCallId,
-        name: toolCall.toolName,
+        name: reverseToolNames.get(toolCall.toolName) ?? toolCall.toolName,
         arguments: toolCall.input as Record<string, unknown>,
       })),
     };
