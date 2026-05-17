@@ -15,7 +15,7 @@ desktop ↔ agent-server 的 WebSocket 协议。所有跨进程消息走 `Sessio
 | 会话生命周期 | `open_session` | desktop → server |
 | | `user_message` | desktop → server |
 | | `assistant_message_start` / `_delta` / `_end` | server → desktop |
-| | `tool_message`（当前 SessionManager 未 emit） | server → desktop |
+| | `tool_message`（`SessionManager` 把 `tool_call` → `running`，`tool_result` → `completed`/`failed`） | server → desktop |
 | | `status` | server → desktop |
 | | `interrupt` | desktop → server（当前未处理） |
 | | `session_snapshot` | server → desktop |

@@ -242,6 +242,7 @@ function toSessionMessage(
       | { type: "assistant_message_start" }
       | { type: "assistant_message_delta" }
       | { type: "assistant_message_end" }
+      | { type: "tool_message" }
     >
   | null {
   switch (event.type) {
@@ -270,9 +271,40 @@ function toSessionMessage(
         payload: event.payload,
       };
     case "tool_call":
+      return {
+        type: "tool_message",
+        sessionId,
+        messageId: `${sessionId}-${event.toolCallId}`,
+        timestamp,
+        payload: {
+          name: event.toolName,
+          text: stringifyToolInput(event.input),
+          status: "running",
+        },
+      };
     case "tool_result":
+      return {
+        type: "tool_message",
+        sessionId,
+        messageId: `${sessionId}-${event.toolCallId}`,
+        timestamp,
+        payload: {
+          name: event.toolName,
+          text: event.output,
+          status: event.status === "success" ? "completed" : "failed",
+        },
+      };
+    case "permission_decision":
     case "runtime_error":
       return null;
+  }
+}
+
+function stringifyToolInput(input: Record<string, unknown>): string {
+  try {
+    return JSON.stringify(input);
+  } catch {
+    return "";
   }
 }
 

@@ -159,6 +159,13 @@ struct SessionWindowView: View {
                     .foregroundStyle(theme.colors.textPrimary)
                 Spacer()
             }
+            if request.argumentsJSON != "{}" {
+                Text(request.argumentsJSON)
+                    .font(theme.typography.captionFont.monospaced())
+                    .foregroundStyle(theme.colors.textSecondary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
             HStack(spacing: theme.spacing.sm) {
                 permissionButton("拒绝", role: "deny", scope: nil, requestId: request.id, accent: false)
                 permissionButton("仅本次", role: "allow", scope: "once", requestId: request.id, accent: true)
