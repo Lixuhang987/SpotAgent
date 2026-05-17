@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { asSchema } from "ai";
 import {
   resolveOpenAIApiKey,
 } from "../src/llm/OpenAIConfig";
@@ -83,7 +84,7 @@ describe("VercelClient adapters", () => {
     ]);
   });
 
-  it("wraps registered tools as AI SDK tools", () => {
+  it("wraps registered tools as AI SDK tools whose inputSchema is consumable by the SDK", async () => {
     const tools = toVercelTools([
       {
         name: "file.read",
@@ -99,15 +100,16 @@ describe("VercelClient adapters", () => {
     ]);
 
     expect(Object.keys(tools)).toEqual(["file.read"]);
-    expect(tools["file.read"]).toMatchObject({
-      description: "读取文件",
-      inputSchema: {
-        type: "object",
-        properties: {
-          path: { type: "string" },
-        },
-        required: ["path"],
+    expect(tools["file.read"]?.description).toBe("读取文件");
+
+    const schema = asSchema(tools["file.read"]!.inputSchema);
+    const resolvedJsonSchema = await schema.jsonSchema;
+    expect(resolvedJsonSchema).toMatchObject({
+      type: "object",
+      properties: {
+        path: { type: "string" },
       },
+      required: ["path"],
     });
   });
 

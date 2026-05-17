@@ -1,4 +1,4 @@
-import { tool, type JSONValue, type ModelMessage, type ToolSet } from "ai";
+import { jsonSchema, tool, type JSONValue, type ModelMessage, type ToolSet } from "ai";
 import type { AgentMessage } from "../runtime/AgentMessage.ts";
 import type { RegisteredTool } from "../tools/ToolRegistry.ts";
 
@@ -65,7 +65,7 @@ export function toVercelTools(tools: RegisteredTool[]): ToolSet {
       registeredTool.name,
       tool({
         description: registeredTool.description,
-        inputSchema: registeredTool.inputSchema,
+        inputSchema: jsonSchema(registeredTool.inputSchema as Parameters<typeof jsonSchema>[0]),
       }),
     ])
   ) as ToolSet;
