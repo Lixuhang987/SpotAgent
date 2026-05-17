@@ -18,7 +18,17 @@
 
 | 文件 | 职责 |
 |------|------|
-| `AppServices.swift` | 历史聚合容器（仅持有 `agentServerService` 与 `sessionRegistry`），新代码已由 Coordinator 直接持有各服务，本类等待清理 |
+| `AppServices.swift` | DI 容器：持有 `agentServer` / `sessionRegistry` / `settingsStore` / `agentServerURL` / `platformBridgeFactory` / `hotkeyRegistrar` / `sessionWindowPresenter` / `setActivationPolicy` / `settingsWindowFactory` / `showsStatusBubble`。生产由 `init()` 默认参数装配，测试用 `AppServices.testing()` 注入 nop 替身。同文件还定义 `SessionWindowPresenting` / `HotkeyRegistering` 协议与 `Nop*` 测试替身 |
+| `AppServicesProductionImpls.swift` | 生产实现：`ProductionHotkeyRegistrar`（绑定 `KeyboardShortcuts.Name`）+ `ProductionSessionWindowPresenter`（构建 `NSWindow` + `NSHostingController` + 关闭通知监听） |
+
+## DI 协议
+
+| 协议 | 生产实现 | 测试替身 |
+|------|---------|---------|
+| `AgentServerStarting`（在 `AgentServer/AgentServerService.swift`）| `AgentServerService` | `NopAgentServerService` |
+| `PlatformBridgeRunning`（在 `PlatformBridge/PlatformBridgeService.swift`）| `PlatformBridgeService` | 工厂返回 `nil` |
+| `HotkeyRegistering` | `ProductionHotkeyRegistrar` | `NopHotkeyRegistrar` |
+| `SessionWindowPresenting` | `ProductionSessionWindowPresenter` | `NopSessionWindowPresenter` |
 
 ## 编辑此层的约束
 

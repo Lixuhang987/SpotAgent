@@ -17,7 +17,18 @@ enum AgentServerServiceError: LocalizedError {
     }
 }
 
-final class AgentServerService: @unchecked Sendable {
+@MainActor
+protocol AgentServerStarting: AnyObject {
+    var lastStartupError: String? { get }
+    var fatalErrorMessage: String? { get }
+    var isAvailable: Bool { get }
+    var onAvailabilityChange: ((Bool) -> Void)? { get set }
+    var onFatalError: ((String) -> Void)? { get set }
+    func start() throws
+    func stop()
+}
+
+final class AgentServerService: AgentServerStarting, @unchecked Sendable {
     private let agentServerRelativePath = "apps/agent-server/src/server.ts"
     private let maxRestartAttempts = 5
 

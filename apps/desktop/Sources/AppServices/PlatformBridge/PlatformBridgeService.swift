@@ -1,7 +1,13 @@
 import Foundation
 
 @MainActor
-final class PlatformBridgeService {
+protocol PlatformBridgeRunning: AnyObject {
+    func start()
+    func stop()
+}
+
+@MainActor
+final class PlatformBridgeService: PlatformBridgeRunning {
     private let serverURL: URL
     private let session: URLSession
     private let provider: PlatformProvider

@@ -1,6 +1,5 @@
 import AppKit
 import Foundation
-import KeyboardShortcuts
 import SwiftUI
 
 @Observable
@@ -21,20 +20,13 @@ final class AppCoordinator {
     private(set) var sessionViewModels: [String: SessionViewModel] = [:]
     private(set) var agentServerError: String?
 
-    @ObservationIgnored private let agentServerService: AgentServerService
-    @ObservationIgnored private let sessionRegistry: SessionRegistry
-    @ObservationIgnored private let settingsStore: AgentSettingsStore
-    @ObservationIgnored private var platformBridgeService: PlatformBridgeService?
-    @ObservationIgnored private let setActivationPolicy: @MainActor (NSApplication.ActivationPolicy) -> Void
-    @ObservationIgnored private let settingsWindowFactory: (@MainActor () -> NSWindow)?
+    @ObservationIgnored private let services: AppServices
+    @ObservationIgnored private var platformBridgeService: (any PlatformBridgeRunning)?
     @ObservationIgnored private let activationPolicy = AppActivationPolicyCoordinator()
     @ObservationIgnored private lazy var promptPanelController = PromptPanelController()
     @ObservationIgnored private lazy var statusBubbleController: StatusBubbleController = {
-        StatusBubbleController(registry: sessionRegistry)
+        StatusBubbleController(registry: services.sessionRegistry)
     }()
-
-    @ObservationIgnored private let agentServerURL = URL(string: "ws://127.0.0.1:4317/api/session")!
-    @ObservationIgnored private let skipServerStart: Bool
 
     @ObservationIgnored private lazy var promptActions: [PromptAction] = [
         PromptAction(
@@ -51,38 +43,31 @@ final class AppCoordinator {
     @ObservationIgnored private var sessionWindows: [String: NSWindow] = [:]
     @ObservationIgnored private var settingsWindow: NSWindow?
 
-    init(
-        skipServerStart: Bool = false,
-        setActivationPolicy: @escaping @MainActor (NSApplication.ActivationPolicy) -> Void = {
-            NSApplication.shared.setActivationPolicy($0)
-        },
-        settingsWindowFactory: (@MainActor () -> NSWindow)? = nil
-    ) {
-        self.skipServerStart = skipServerStart
-        self.agentServerService = AgentServerService()
-        self.sessionRegistry = SessionRegistry()
-        self.settingsStore = AgentSettingsStore()
-        self.setActivationPolicy = setActivationPolicy
-        self.settingsWindowFactory = settingsWindowFactory
-        if !skipServerStart {
-            bootstrap()
-        }
+    convenience init() {
+        self.init(services: AppServices())
+    }
+
+    init(services: AppServices) {
+        self.services = services
+        bootstrap()
     }
 
     func bootstrap() {
-        setActivationPolicy(activationPolicy.policyAfterUpdatingOpenSessionWindows(by: 0))
+        services.setActivationPolicy(activationPolicy.policyAfterUpdatingOpenSessionWindows(by: 0))
         setupPromptPanel()
         setupHotkey()
         setupStatusBubble()
         startAgentServer()
         startPlatformBridge()
-        statusBubbleController.show()
+        if services.showsStatusBubble {
+            statusBubbleController.show()
+        }
     }
 
     func shutdown() {
         platformBridgeService?.stop()
         platformBridgeService = nil
-        agentServerService.stop()
+        services.agentServer.stop()
         settingsWindow?.close()
         settingsWindow = nil
         sessionWindows.values.forEach { $0.close() }
@@ -90,8 +75,7 @@ final class AppCoordinator {
     }
 
     private func startPlatformBridge() {
-        guard !skipServerStart else { return }
-        let bridge = PlatformBridgeService(serverURL: agentServerURL)
+        guard let bridge = services.platformBridgeFactory(services.agentServerURL) else { return }
         platformBridgeService = bridge
         bridge.start()
     }
@@ -121,7 +105,7 @@ final class AppCoordinator {
     }
 
     func makeSettingsViewModel() -> AgentSettingsViewModel {
-        AgentSettingsViewModel(store: settingsStore)
+        AgentSettingsViewModel(store: services.settingsStore)
     }
 
     func makeShortcutActions() -> [PromptAction] {
@@ -140,17 +124,17 @@ final class AppCoordinator {
     }
 
     private func setupHotkey() {
-        KeyboardShortcuts.onKeyUp(for: .showPromptPanel) { [weak self] in
+        services.hotkeyRegistrar.registerShowPromptPanel { [weak self] in
             Task { @MainActor in
                 self?.send(.togglePromptPanel)
             }
         }
-        KeyboardShortcuts.onKeyUp(for: .captureSelection) { [weak self] in
+        services.hotkeyRegistrar.registerCaptureSelection { [weak self] in
             Task { @MainActor in
                 await self?.handleCaptureSelectionHotkey()
             }
         }
-        KeyboardShortcuts.onKeyUp(for: .captureRegion) { [weak self] in
+        services.hotkeyRegistrar.registerCaptureRegion { [weak self] in
             Task { @MainActor in
                 await self?.handleCaptureRegionHotkey()
             }
@@ -197,8 +181,7 @@ final class AppCoordinator {
     }
 
     private func startAgentServer() {
-        guard !skipServerStart else { return }
-        agentServerService.onAvailabilityChange = { [weak self] available in
+        services.agentServer.onAvailabilityChange = { [weak self] available in
             Task { @MainActor in
                 guard let self else { return }
                 if available {
@@ -208,21 +191,22 @@ final class AppCoordinator {
                 }
             }
         }
-        agentServerService.onFatalError = { [weak self] message in
+        services.agentServer.onFatalError = { [weak self] message in
             Task { @MainActor in
                 self?.agentServerError = message
                 self?.showFatalServerAlert(message: message)
             }
         }
         do {
-            try agentServerService.start()
+            try services.agentServer.start()
             agentServerError = nil
         } catch {
-            agentServerError = agentServerService.lastStartupError ?? error.localizedDescription
+            agentServerError = services.agentServer.lastStartupError ?? error.localizedDescription
         }
     }
 
     private func showFatalServerAlert(message: String) {
+        guard services.showsStatusBubble else { return }
         let alert = NSAlert()
         alert.messageText = "Agent Server 已停止"
         alert.informativeText = message
@@ -266,11 +250,11 @@ final class AppCoordinator {
         let sessionID = UUID().uuidString
         let viewModel = SessionViewModel(
             sessionID: sessionID,
-            socketClient: SessionSocketClient(serverURL: agentServerURL)
+            socketClient: SessionSocketClient(serverURL: services.agentServerURL)
         )
 
         sessionViewModels[sessionID] = viewModel
-        sessionRegistry.upsert(
+        services.sessionRegistry.upsert(
             SessionSummary(
                 sessionId: sessionID,
                 isRunning: true,
@@ -280,44 +264,23 @@ final class AppCoordinator {
             )
         )
 
-        guard !skipServerStart else {
-            viewModel.start(
-                initialPrompt: composedPrompt,
-                attachments: socketAttachments,
-                startupError: agentServerError
-            )
-            return
-        }
-
-        setActivationPolicy(
-            activationPolicy.policyAfterUpdatingOpenSessionWindows(by: 1)
-        )
-
         promptPanelController.hide()
 
-        let hosting = NSHostingController(rootView: SessionWindowView(viewModel: viewModel))
-        let window = NSWindow(contentViewController: hosting)
-        window.title = "Session \(sessionID.prefix(8))"
-        window.setContentSize(NSSize(width: 760, height: 560))
-        window.styleMask.insert(.fullSizeContentView)
-        window.titleVisibility = .hidden
-        window.titlebarAppearsTransparent = true
-        window.center()
-
-        NotificationCenter.default.addObserver(
-            forName: NSWindow.willCloseNotification,
-            object: window,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
-                self?.send(.sessionClosed(sessionID))
-                self?.sessionWindows.removeValue(forKey: sessionID)
+        if let window = services.sessionWindowPresenter.present(
+            sessionID: sessionID,
+            viewModel: viewModel,
+            onClose: { [weak self] in
+                Task { @MainActor in
+                    self?.send(.sessionClosed(sessionID))
+                    self?.sessionWindows.removeValue(forKey: sessionID)
+                }
             }
+        ) {
+            sessionWindows[sessionID] = window
+            services.setActivationPolicy(
+                activationPolicy.policyAfterUpdatingOpenSessionWindows(by: 1)
+            )
         }
-
-        sessionWindows[sessionID] = window
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
 
         viewModel.start(
             initialPrompt: composedPrompt,
@@ -330,13 +293,14 @@ final class AppCoordinator {
         let viewModel = sessionViewModels.removeValue(forKey: sessionID)
         viewModel?.stop()
 
-        if !skipServerStart {
-            setActivationPolicy(
+        let hadWindow = sessionWindows.removeValue(forKey: sessionID) != nil
+        if hadWindow {
+            services.setActivationPolicy(
                 activationPolicy.policyAfterUpdatingOpenSessionWindows(by: -1)
             )
         }
 
-        sessionRegistry.upsert(
+        services.sessionRegistry.upsert(
             SessionSummary(
                 sessionId: sessionID,
                 isRunning: viewModel?.status == "running",
@@ -357,7 +321,7 @@ final class AppCoordinator {
     }
 
     private func openOrFocusSettingsWindow() {
-        setActivationPolicy(
+        services.setActivationPolicy(
             activationPolicy.policyAfterUpdatingSettingsWindow(isOpen: true)
         )
 
@@ -387,14 +351,14 @@ final class AppCoordinator {
 
     private func handleSettingsWindowClosed() {
         settingsWindow = nil
-        setActivationPolicy(
+        services.setActivationPolicy(
             activationPolicy.policyAfterUpdatingSettingsWindow(isOpen: false)
         )
     }
 
     private func makeSettingsWindow() -> NSWindow {
-        if let settingsWindowFactory {
-            return settingsWindowFactory()
+        if let factory = services.settingsWindowFactory {
+            return factory()
         }
 
         let hosting = NSHostingController(
