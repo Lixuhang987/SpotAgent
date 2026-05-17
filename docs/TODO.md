@@ -9,19 +9,19 @@
 
 ### P0 — 安全与协议接通（一周内可完成）
 
-- [ ] **10.1 修复 FileWriteTool symlink 越狱**
+- [x] **10.1 修复 FileWriteTool symlink 越狱**
   - 现状：`resolveWritePathWithinWorkspace` 仅 realpath 父目录，basename 是 symlink 时 `writeFile` 跟随 symlink 写到 workspace 外。
   - 改法：写前 lstat 检查 basename 不是 symlink；若是则拒绝。加 size cap（10 MiB）+ 原子写（`.tmp` → rename）。
   - 验收：`file-tools.test.ts` 增加 symlink 越狱用例。
   - 依赖：无。
 
-- [ ] **10.2 tool_message 真实 emit + permission_request.arguments 透传**
+- [x] **10.2 tool_message 真实 emit + permission_request.arguments 透传**
   - 现状：`AgentRuntime` emit 了 `tool_call` / `tool_result` / `permission_decision`，但 `SessionManager.toSessionMessage` 只翻译 assistant 三事件，其余丢弃。desktop 看不到 tool 实时进度。`permission_request.arguments` 在 Swift 侧被硬编码为空字典。
   - 改法：① `SessionManager` 把 `tool_call` → `tool_message(status: running)`，`tool_result` → `tool_message(status: completed|failed)`；② Swift 侧解码 `permission_request.payload.arguments`。
   - 验收：desktop 上调 `clipboard.read` 能看到 tool bubble 实时出现；权限气泡能显示具体参数。
   - 依赖：无。
 
-- [ ] **10.3 激活 AppServices.swift 为 DI 容器**
+- [x] **10.3 激活 AppServices.swift 为 DI 容器**
   - 现状：`AppServices.swift` 是空壳，`AppCoordinator.init` 直接 `new` 所有服务；测试靠 `skipServerStart` 跳过整段 bootstrap。
   - 改法：`AppCoordinator.init(services: AppServices, ...)`，默认参数提供生产实现，测试注入 fakes。删除 `skipServerStart`。
   - 验收：`AppCoordinatorTests` 不再依赖 `skipServerStart`，能通过注入 stub 验证全链路。
