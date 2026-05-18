@@ -117,27 +117,23 @@ protocol SettingsWindowFactory {
 
 ---
 
-### 1.3 `SessionManager` 也是 god class
+### 1.3 `SessionManager` 也是 god class（已修）
 
-**现状**：单文件接管 `list_sessions_request` / `load_session_request` / `delete_session_request` / `user_message`，并：构造 prompt、调 `AgentRuntime.runWithMessages`、把 runtime 事件翻译为 `SessionMessage`、把 messages / events 写入 `SessionStore`、生成会话标题、合成 `composeUserContent`、转换 `agentMessagesToConversation`。
+**原状**：单文件接管 `list_sessions_request` / `load_session_request` / `delete_session_request` / `user_message`，并：构造 prompt、调 `AgentRuntime.runWithMessages`、把 runtime 事件翻译为 `SessionMessage`、把 messages / events 写入 `SessionStore`、生成会话标题、合成 `composeUserContent`、转换 `agentMessagesToConversation`。
 
-**问题**：单一文件做了"协议路由 + 持久化适配 + 翻译 + LLM 编排"，新增功能（例如真实流式、tool_message emit、image attachment 多模态化）都会进一步膨胀。
+**已修**：会话侧已拆为四个边界明确的模块：
 
-**建议改法**：拆为四个边界明确的模块：
-
-| 新模块 | 职责 |
+| 模块 | 职责 |
 |------|------|
 | `SessionRouter` | 只做 `SessionMessage` 路由：根据 `type` 调用对应 handler |
-| `SessionRuntimeOrchestrator` | 跑 `AgentRuntime`，把 runtime 事件转 `SessionMessage`（含真实 streaming） |
+| `SessionRuntimeOrchestrator` | 跑 `AgentRuntime`，把 runtime 事件交给 `MessageTranslator` 后推送 / 审计 |
 | `SessionPersistence` | 写消息 / 写事件 / 标题 / 历史读取 |
 | `MessageTranslator` | `AgentMessage` ↔ `ConversationMessage` 与 `UserMessageAttachment` ↔ user content |
 
-`SessionManager` 退化为 `SessionRouter` 的实现，把后三者作为依赖。
-
 **验收**：
 
-- `SessionManager.test.ts` 拆为 4 个文件，每个文件只测一个责任。
-- 新增 `tool_message` emit 不需要改其它模块。
+- `SessionManager.test.ts` 已拆为 `SessionRouter.test.ts` / `SessionRuntimeOrchestrator.test.ts` / `SessionPersistence.test.ts` / `MessageTranslator.test.ts`。
+- 新增 `tool_message` emit 只需改 `MessageTranslator`。
 
 ---
 
@@ -153,7 +149,7 @@ protocol SettingsWindowFactory {
 
 ### 2.1 跨包相对路径，没有真实"包"边界
 
-**现状**：`apps/agent-server/src/SessionManager.ts` 等使用 `../../../packages/core/src/protocol/SessionMessage.ts` 这样的相对路径直接 reach into core。
+**现状**：`apps/agent-server/src/SessionRouter.ts` / `SessionRuntimeOrchestrator.ts` / `SessionPersistence.ts` 等使用 `../../../packages/core/src/...` 这样的相对路径直接 reach into core。
 
 **问题**：
 
@@ -201,7 +197,7 @@ protocol SettingsWindowFactory {
 
 ### 3.1 `tool_message` 在协议里定义了，但 server 从不 emit（已修）
 
-**已修**：`SessionManager.toSessionMessage` 现在把 runtime 的 `tool_call` 翻译为 `tool_message(status: "running")`，把 `tool_result` 翻译为 `tool_message(status: "completed" | "failed")`，两条共享 `${sessionId}-${toolCallId}` 作为 messageId。`AgentRuntime` 的 `tool_result` 事件加上了 `toolName` 字段，方便 server 直接拼到 `payload.name`。`SessionManager.test.ts` 新增 "translates tool_call/tool_result events into tool_message frames" 用例。
+**已修**：`MessageTranslator.toSessionMessage` 现在把 runtime 的 `tool_call` 翻译为 `tool_message(status: "running")`，把 `tool_result` 翻译为 `tool_message(status: "completed" | "failed")`，两条共享 `${sessionId}-${toolCallId}` 作为 messageId。`AgentRuntime` 的 `tool_result` 事件加上了 `toolName` 字段，方便 server 直接拼到 `payload.name`。`MessageTranslator.test.ts` 覆盖 tool frame 翻译，`SessionRuntimeOrchestrator.test.ts` 覆盖实时推送。
 
 **未做**：`permission_decision` 仍未单独转成 `SessionMessage`；当前由 `permission_request` / `permission_response` 一对协议覆盖，等到有 UX 需要再补。
 
@@ -241,7 +237,7 @@ protocol SettingsWindowFactory {
 
 ### 3.4 图片附件未真实进多模态消息
 
-**现状**：`SessionManager.composeUserContent` 把 `UserMessageAttachment.image` 拼成字符串占位 `[图片附件: image/png (id)]`，LLM 实际看不到字节。
+**现状**：`MessageTranslator.composeUserContent` 把 `UserMessageAttachment.image` 拼成字符串占位 `[图片附件: image/png (id)]`，LLM 实际看不到字节。
 
 **问题**：用户 captureRegion 之后 LLM 拿不到图，这是 TODO 2.x 的 last mile 缺口。
 
@@ -453,11 +449,11 @@ AGENTS.md                         总索引、约定、产品边界
 
 完成上面 P0 + P1 后预期达到：
 
-- `AppCoordinator` 与 `SessionManager` 都在 200 行以内，新功能进得去、拿得出；
+- `AppCoordinator` 保持在 200 行以内，agent-server 会话链路按 Router / Orchestrator / Persistence / Translator 分层，新功能进得去、拿得出；
 - 单元测试可以 mock 整条链路：DI 容器交给 fake services，runtime 通过 fake LLMClient + fake ToolRegistry 跑；
 - `tool_message` / `permission_request.arguments` 在 desktop 上肉眼可见，体验追上参考的 claude-code；
 - 添加新 builtin tool 在 30 行以内（schema + run），不再有重复 class；
-- 添加新 LLM provider 在 100 行以内，不需要碰 runtime 或 SessionManager；
+- 添加新 LLM provider 在 100 行以内，不需要碰 runtime 或 agent-server 会话路由；
 - workspace / 权限规则实时反映文件变化，不需要重启 agent-server。
 
 P2 / P3 则是为"插件系统"、"多 provider"、"多窗口 / 多 session 复用 socket"等长期能力打地基，可以按 TODO 路线图节奏推进。

@@ -2,20 +2,22 @@ import { pathToFileURL } from "node:url";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import type { SessionMessage } from "../../../packages/core/src/protocol/SessionMessage.ts";
-import { SessionManager } from "./SessionManager.ts";
+import { SessionPersistence } from "./SessionPersistence.ts";
+import { SessionRouter } from "./SessionRouter.ts";
+import { SessionRuntimeOrchestrator } from "./SessionRuntimeOrchestrator.ts";
 import { FileSessionStore } from "../../../packages/core/src/storage/index.ts";
 import { WebSocketPlatformBridge } from "./WebSocketPlatformBridge.ts";
 import { SessionPermissionBridge } from "./SessionPermissionBridge.ts";
 import type { FilePermissionPolicy } from "../../../packages/core/src/permission/FilePermissionPolicy.ts";
 
 export async function startServer({
-  manager,
+  router,
   bridge,
   permissionBridge,
   permissionPolicy,
   port = 4317,
 }: {
-  manager: SessionManager;
+  router: SessionRouter;
   bridge?: WebSocketPlatformBridge;
   permissionBridge?: SessionPermissionBridge;
   permissionPolicy?: FilePermissionPolicy;
@@ -55,7 +57,7 @@ export async function startServer({
         permissionBridge.bindSession(message.sessionId, send);
       }
 
-      await manager.receive(message, send);
+      await router.receive(message, send);
     });
 
     socket.on("close", () => {
@@ -73,12 +75,12 @@ export async function startServer({
 }
 
 export async function handleSocketMessage(
-  manager: SessionManager,
+  router: SessionRouter,
   socket: Pick<WebSocket, "send">,
   raw: string,
 ) {
   const message = JSON.parse(raw) as SessionMessage;
-  await manager.receive(message, (outgoing) => {
+  await router.receive(message, (outgoing) => {
     socket.send(JSON.stringify(outgoing));
   });
 }
@@ -135,16 +137,15 @@ export async function startDefaultServer(port = 4317) {
     askResolver: permissionBridge.ask,
   });
 
-  const manager = new SessionManager(
-    new AgentRuntime(new SettingsBackedLLMClient({ networkLogger }), registry, {
-      permissionPolicy,
-    }),
-    undefined,
-    { store },
-  );
+  const runtime = new AgentRuntime(new SettingsBackedLLMClient({ networkLogger }), registry, {
+    permissionPolicy,
+  });
+  const persistence = new SessionPersistence(store);
+  const orchestrator = new SessionRuntimeOrchestrator(runtime, persistence);
+  const router = new SessionRouter(orchestrator, persistence);
 
   return startServer({
-    manager,
+    router,
     bridge: platformBridge,
     permissionBridge,
     permissionPolicy,

@@ -12,8 +12,10 @@
 
 | 文件 | 职责 |
 |------|------|
-| `src/server.ts` | 启动入口；`startServer` 注入式构造，`startDefaultServer` 是组合根（拉起 store / bridge / registry / policy / SessionManager） |
-| `src/SessionManager.ts` | 会话生命周期协调：处理 `user_message` / `list_sessions_request` / `load_session_request` / `delete_session_request`；持久化用户消息、跑 runtime、回流 SessionMessage。翻译逻辑已抽到 `MessageTranslator.ts` |
+| `src/server.ts` | 启动入口；`startServer` 注入式构造，`startDefaultServer` 是组合根（拉起 store / bridge / registry / policy / SessionPersistence / SessionRuntimeOrchestrator / SessionRouter） |
+| `src/SessionRouter.ts` | 协议路由层：处理 `list_sessions_request` / `load_session_request` / `delete_session_request`，并把 `user_message` 委托给 runtime 编排层 |
+| `src/SessionRuntimeOrchestrator.ts` | 一轮用户消息编排：确保 session、持久化 user message、跑 `AgentRuntime`、翻译 runtime event、落库最终 messages / audit events |
+| `src/SessionPersistence.ts` | 会话持久化封装：唯一直接持有 `SessionStore` 的 agent-server 模块，负责 CRUD、标题生成、历史读取、messages / events 写入 |
 | `src/MessageTranslator.ts` | 纯函数：`AgentRuntimeEvent` ↔ `SessionMessage` / `SessionEvent` 翻译（`toSessionMessage` / `toAuditEvent` / `agentMessagesToConversation` / `composeUserContent` / `deriveTitle` / `toErrorMessage`）。新增 tool_message 形态只改这里 |
 | `src/SettingsBackedLLMClient.ts` | 每次 `complete` 同步读 `~/.spotAgent/settings.json` 重建 `VercelClient`；注入 `FileNetworkLogger` 把 LLM 网络调用 JSONL 落盘 |
 | `src/WebSocketPlatformBridge.ts` | 实现 core 的 `PlatformBridge` 接口；通过 `attach(send)` 接管来自 desktop 的反向 socket，按 `requestId` 关联 `platform_request` / `platform_response`，60s 超时 |
@@ -33,7 +35,9 @@ sequenceDiagram
   Server->>Server: 构造 WebSocketPlatformBridge + RemotePlatformAdapter
   Server->>Server: registerBuiltinTools(...) → registry / disabled list
   Server->>Server: SessionPermissionBridge + FilePermissionPolicy(askResolver)
-  Server->>Server: SessionManager(AgentRuntime(LLMClient, registry, {policy}), store)
+  Server->>Server: SessionPersistence(store)
+  Server->>Server: SessionRuntimeOrchestrator(AgentRuntime(LLMClient, registry, {policy}), persistence)
+  Server->>Server: SessionRouter(orchestrator, persistence)
   Server->>Server: WebSocketServer.listen(4317)
 ```
 
@@ -46,7 +50,7 @@ sequenceDiagram
 3. `permission_response` → `permissionBridge.handleResponse(payload)` 唤醒等待中的审批询问。
 4. `user_message`（首次出现）→ `boundSessionId = message.sessionId`，并 `permissionBridge.bindSession(...)` 把这条 socket 注册为该会话的审批回流通道。
 
-随后所有未命中上述分支的消息都交给 `manager.receive(message, send)`，由 `SessionManager` 决定如何处理。
+随后所有未命中上述分支的消息都交给 `router.receive(message, send)`，由 `SessionRouter` 决定如何处理。
 
 ## 与文件系统约定
 
@@ -63,7 +67,7 @@ sequenceDiagram
 - 不允许 `import` 任何 macOS / browser-only 模块；只用 Node 标准库 + `ws` + 通过相对路径访问 `packages/core/src/...`。
 - 不在此处定义跨进程 DTO，全部走 `packages/core/src/protocol/SessionMessage.ts`，避免 desktop 与 server 漂移。
 - 新增长驻服务（store / bridge / policy）必须放进 `startDefaultServer`，并通过参数透传给 `startServer`，保持 `startServer` 的可注入构造。
-- `SessionManager` 已经吃太多职责，新增功能优先以独立 bridge / policy 形式拆出去，不要继续往 `SessionManager` 里塞。
+- 新增协议分支优先放在 `SessionRouter`；新增 runtime 事件翻译优先放在 `MessageTranslator`；新增持久化顺序优先放在 `SessionPersistence`，不要把职责重新堆回单个类。
 
 ## 调试建议
 
@@ -74,7 +78,10 @@ sequenceDiagram
 ## 相关代码与文档
 
 - [server.ts](/Users/mu9/proj/handAgent/apps/agent-server/src/server.ts)
-- [SessionManager.ts](/Users/mu9/proj/handAgent/apps/agent-server/src/SessionManager.ts)
+- [SessionRouter.ts](/Users/mu9/proj/handAgent/apps/agent-server/src/SessionRouter.ts)
+- [SessionRuntimeOrchestrator.ts](/Users/mu9/proj/handAgent/apps/agent-server/src/SessionRuntimeOrchestrator.ts)
+- [SessionPersistence.ts](/Users/mu9/proj/handAgent/apps/agent-server/src/SessionPersistence.ts)
+- [MessageTranslator.ts](/Users/mu9/proj/handAgent/apps/agent-server/src/MessageTranslator.ts)
 - [SessionPermissionBridge.ts](/Users/mu9/proj/handAgent/apps/agent-server/src/SessionPermissionBridge.ts)
 - [SettingsBackedLLMClient.ts](/Users/mu9/proj/handAgent/apps/agent-server/src/SettingsBackedLLMClient.ts)
 - [WebSocketPlatformBridge.ts](/Users/mu9/proj/handAgent/apps/agent-server/src/WebSocketPlatformBridge.ts)
