@@ -1,4 +1,3 @@
-import AppKit
 import Foundation
 import SwiftUI
 
@@ -17,36 +16,35 @@ final class AppCoordinator {
         case statusBubbleTapped(String?)
     }
 
-    private(set) var sessionViewModels: [String: SessionViewModel] = [:]
+    var sessionViewModels: [String: SessionViewModel] { sessionLifecycle.viewModels }
     var agentServerError: String? { agentServerHealth.errorMessage }
 
     @ObservationIgnored private let services: AppServices
     @ObservationIgnored private let agentServerHealth: AgentServerHealth
-    @ObservationIgnored private var platformBridgeService: (any PlatformBridgeRunning)?
+    @ObservationIgnored private let sessionLifecycle: SessionLifecycle
+    @ObservationIgnored private let settingsLifecycle: SettingsLifecycle
     @ObservationIgnored private let activationPolicy = AppActivationPolicyCoordinator()
+    @ObservationIgnored private var platformBridgeService: (any PlatformBridgeRunning)?
     @ObservationIgnored private lazy var promptPanelController = PromptPanelController()
     @ObservationIgnored private lazy var statusBubbleController: StatusBubbleController = {
         StatusBubbleController(registry: services.sessionRegistry)
     }()
-
+    @ObservationIgnored private lazy var captureCoordinator = PromptCaptureCoordinator(
+        controller: promptPanelController,
+        selectionProvider: MacSelectionCaptureProvider(),
+        regionProvider: MacRegionCaptureProvider()
+    )
     @ObservationIgnored private lazy var promptActions: [PromptAction] = [
         PromptAction(
             id: "open-settings",
             title: "打开设置",
             keywords: ["settings", "preferences", "shortcut", "hotkey"],
             defaultShortcut: .init(.comma, modifiers: [.command]),
-            perform: { [weak self] in
-                self?.send(.openSettings)
-            }
+            perform: { [weak self] in self?.send(.openSettings) }
         )
     ]
 
-    @ObservationIgnored private var sessionWindows: [String: NSWindow] = [:]
-    @ObservationIgnored private var settingsWindow: NSWindow?
-
-    convenience init() {
-        self.init(services: AppServices())
-    }
+    convenience init() { self.init(services: AppServices()) }
 
     init(services: AppServices) {
         self.services = services
@@ -55,30 +53,37 @@ final class AppCoordinator {
             fatalAlertPresenter: services.fatalAlertPresenter,
             showsFatalAlert: services.showsStatusBubble
         )
+        self.sessionLifecycle = SessionLifecycle(
+            registry: services.sessionRegistry,
+            windowPresenter: services.sessionWindowPresenter,
+            agentServerURL: services.agentServerURL,
+            activationPolicy: activationPolicy,
+            setActivationPolicy: services.setActivationPolicy
+        )
+        self.settingsLifecycle = SettingsLifecycle(
+            windowPresenter: services.settingsWindowPresenter,
+            activationPolicy: activationPolicy,
+            setActivationPolicy: services.setActivationPolicy
+        )
         bootstrap()
     }
 
     func bootstrap() {
-        services.setActivationPolicy(activationPolicy.policyAfterUpdatingOpenSessionWindows(by: 0))
         setupPromptPanel()
         setupHotkey()
         setupStatusBubble()
         setupAgentServerHealth()
         agentServerHealth.start()
         startPlatformBridge()
-        if services.showsStatusBubble {
-            statusBubbleController.show()
-        }
+        if services.showsStatusBubble { statusBubbleController.show() }
     }
 
     func shutdown() {
         platformBridgeService?.stop()
         platformBridgeService = nil
         agentServerHealth.stop()
-        settingsWindow?.close()
-        settingsWindow = nil
-        sessionWindows.values.forEach { $0.close() }
-        sessionWindows.removeAll()
+        settingsLifecycle.close()
+        sessionLifecycle.closeAll()
     }
 
     func send(_ action: Action) {
@@ -95,11 +100,11 @@ final class AppCoordinator {
             action.perform()
             promptPanelController.hide()
         case .openSettings:
-            openOrFocusSettingsWindow()
+            handleOpenSettings()
         case .settingsWindowClosed:
-            handleSettingsWindowClosed()
+            settingsLifecycle.handleClosed()
         case .sessionClosed(let sessionID):
-            handleSessionClosed(sessionID)
+            sessionLifecycle.close(sessionID)
         case .statusBubbleTapped(let sessionID):
             handleStatusBubbleTap(sessionID)
         }
@@ -109,9 +114,7 @@ final class AppCoordinator {
         AgentSettingsViewModel(store: services.settingsStore)
     }
 
-    func makeShortcutActions() -> [PromptAction] {
-        promptActions
-    }
+    func makeShortcutActions() -> [PromptAction] { promptActions }
 
     private func setupPromptPanel() {
         promptPanelController.register(actions: promptActions)
@@ -143,12 +146,6 @@ final class AppCoordinator {
         }
     }
 
-    @ObservationIgnored private lazy var captureCoordinator = PromptCaptureCoordinator(
-        controller: promptPanelController,
-        selectionProvider: MacSelectionCaptureProvider(),
-        regionProvider: MacRegionCaptureProvider()
-    )
-
     private func setupStatusBubble() {
         statusBubbleController.onTap = { [weak self] sessionID in
             self?.send(.statusBubbleTapped(sessionID))
@@ -169,93 +166,23 @@ final class AppCoordinator {
         }
 
         guard let prompt = PromptSubmission.compose(draft: draft, attachments: attachments) else { return }
-
-        let sessionID = UUID().uuidString
-        let viewModel = SessionViewModel(
-            sessionID: sessionID,
-            socketClient: SessionSocketClient(serverURL: services.agentServerURL)
-        )
-
-        sessionViewModels[sessionID] = viewModel
-        services.sessionRegistry.upsert(
-            SessionSummary(
-                sessionId: sessionID,
-                isRunning: true,
-                latestSummary: prompt.summary,
-                lastActiveAt: .now,
-                windowIsOpen: true
-            )
-        )
-
         promptPanelController.hide()
-
-        if let window = services.sessionWindowPresenter.present(
-            sessionID: sessionID,
-            viewModel: viewModel,
-            onClose: { [weak self] in
-                Task { @MainActor in self?.send(.sessionClosed(sessionID)) }
-            }
-        ) {
-            sessionWindows[sessionID] = window
-            services.setActivationPolicy(activationPolicy.policyAfterUpdatingOpenSessionWindows(by: 1))
+        sessionLifecycle.open(prompt: prompt, startupError: agentServerError) { [weak self] id in
+            self?.send(.sessionClosed(id))
         }
-
-        viewModel.start(
-            initialPrompt: prompt.composed,
-            attachments: prompt.socketAttachments,
-            startupError: agentServerError
-        )
     }
 
-    private func handleSessionClosed(_ sessionID: String) {
-        let viewModel = sessionViewModels.removeValue(forKey: sessionID)
-        viewModel?.stop()
-
-        if sessionWindows.removeValue(forKey: sessionID) != nil {
-            services.setActivationPolicy(activationPolicy.policyAfterUpdatingOpenSessionWindows(by: -1))
-        }
-
-        services.sessionRegistry.upsert(
-            SessionSummary(
-                sessionId: sessionID,
-                isRunning: viewModel?.status == "running",
-                latestSummary: viewModel?.messages.last?.text ?? "",
-                lastActiveAt: .now,
-                windowIsOpen: false
-            )
+    private func handleOpenSettings() {
+        settingsLifecycle.openOrFocus(
+            settingsViewModel: makeSettingsViewModel(),
+            workspaceViewModel: WorkspaceSettingsViewModel(),
+            shortcutActions: makeShortcutActions(),
+            onClosed: { [weak self] in self?.send(.settingsWindowClosed) }
         )
     }
 
     private func handleStatusBubbleTap(_ sessionID: String?) {
-        if let sessionID, let window = sessionWindows[sessionID] {
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
-        }
+        if let sessionID, sessionLifecycle.focus(sessionID) { return }
         promptPanelController.show()
-    }
-
-    private func openOrFocusSettingsWindow() {
-        services.setActivationPolicy(activationPolicy.policyAfterUpdatingSettingsWindow(isOpen: true))
-
-        if let settingsWindow {
-            settingsWindow.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
-        }
-
-        settingsWindow = services.settingsWindowPresenter.present(
-            settingsViewModel: makeSettingsViewModel(),
-            workspaceViewModel: WorkspaceSettingsViewModel(),
-            shortcutActions: makeShortcutActions(),
-            onClose: { [weak self] in
-                Task { @MainActor in self?.send(.settingsWindowClosed) }
-            }
-        )
-    }
-
-    private func handleSettingsWindowClosed() {
-        settingsWindow = nil
-        services.setActivationPolicy(activationPolicy.policyAfterUpdatingSettingsWindow(isOpen: false))
     }
 }
