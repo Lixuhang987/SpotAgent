@@ -53,17 +53,17 @@
 
 ## P1 — 需要修复的可靠性与协议边界
 
-### 4. 生产窗口 presenter 的 NotificationCenter observer 释放
+### 4. 生产窗口 presenter 的 NotificationCenter observer 释放（已完成）
 
-**现状**：`AppCoordinator` 已完成职责拆分：`AppCoordinator.swift` 188 行、无 `import AppKit`，会话/设置窗口生命周期已下沉到 `SessionLifecycle` 与 `SettingsLifecycle`，并有 `SessionLifecycleTests` / `SettingsLifecycleTests` 覆盖。剩余问题转移到生产 presenter：`ProductionSessionWindowPresenter` 与 `ProductionSettingsWindowPresenter` 用 `NotificationCenter.default.addObserver(forName:object:queue:)` 监听 `NSWindow.willCloseNotification`，但没有持有 token，也没有主动 `removeObserver`。
+**现状**：已收敛到 `WindowCloseObservation`。`ProductionSessionWindowPresenter` 与 `ProductionSettingsWindowPresenter` 会持有每个窗口的 `NotificationCenter` observer token，并在首次收到 `NSWindow.willCloseNotification` 时先释放 token，再触发关闭回调。
 
 **用户场景**：用户反复打开/关闭 SessionWindow 或 Settings 后，关闭回调不应因悬挂 observer 累积而重复触发或泄漏窗口相关闭包。
 
-**验收标准**：
+**验收状态**：
 
-- 改用 `NSWindowDelegate.windowWillClose`，或持有 observer token 并在窗口关闭时释放。
-- 反复打开/关闭 20 次 SessionWindow 与 SettingsWindow，不重复调用 close 回调。
-- 新增 presenter 级测试或 lifecycle 集成测试覆盖关闭回调只触发一次。
+- 已持有 observer token 并在窗口关闭时释放。
+- `WindowCloseObservationTests` 覆盖单个窗口重复 close notification 只触发一次。
+- `WindowCloseObservationTests` 覆盖 20 次窗口关闭循环不重复调用 close 回调，并验证 token 已释放。
 
 **依赖**：无。
 

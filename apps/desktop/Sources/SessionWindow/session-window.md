@@ -18,7 +18,7 @@ Coordinator.handleSubmitPrompt
   └─ 创建 SessionViewModel(sessionID, socketClient)
   └─ services.sessionWindowPresenter.present(...)
        └─ 创建 NSWindow + NSHostingController(rootView: SessionWindowView(viewModel:))
-       └─ 监听 NSWindow.willCloseNotification → Coordinator.send(.sessionClosed(id))
+       └─ WindowCloseObservation 持有关闭通知 token，收到 NSWindow.willCloseNotification 后释放 token → Coordinator.send(.sessionClosed(id))
   └─ ViewModel.start(initialPrompt:, startupError:)
        └─ 若 startupError 非空：直接派发 .error 事件并返回
        └─ socketClient.connect(sessionID:) → onEvent → ViewModel.handle(_:)

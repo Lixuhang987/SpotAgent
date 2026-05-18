@@ -24,7 +24,7 @@ Coordinator.send(.openSettings)
             ├─ AgentSettingsView(viewModel:)        // → AgentSettingsStore.update → 写 ~/.spotAgent/settings.json
             ├─ ShortcutSettingsView(actions:)       // KeyboardShortcuts.Recorder 直写 UserDefaults
             └─ WorkspaceSettingsView(viewModel:)    // → 写 ~/.spotAgent/workspaces.json，agent-server 启动时由 FileWorkspaceRegistry 重新加载
-  └─ 生产 presenter 监听 NSWindow.willCloseNotification → Coordinator.send(.settingsWindowClosed)
+  └─ 生产 presenter 通过 WindowCloseObservation 持有关闭通知 token，收到 NSWindow.willCloseNotification 后释放 token → Coordinator.send(.settingsWindowClosed)
 ```
 
 `~/.spotAgent/workspaces.json` 是 desktop（写）与 agent-server（读，启动时一次）共享的注册表文件；当前版本 desktop 写入后需要重启 agent-server 子进程才能让 LLM 看到新 workspace（无 watcher）。

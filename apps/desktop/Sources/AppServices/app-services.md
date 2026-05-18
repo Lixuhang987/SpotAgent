@@ -19,7 +19,7 @@
 | 文件 | 职责 |
 |------|------|
 | `AppServices.swift` | DI 容器：持有 `agentServer` / `sessionRegistry` / `settingsStore` / `agentServerURL` / `platformBridgeFactory` / `hotkeyRegistrar` / `sessionWindowPresenter` / `settingsWindowPresenter` / `fatalAlertPresenter` / `setActivationPolicy` / `showsStatusBubble`。生产由 `init()` 默认参数装配，测试用 `AppServices.testing()` 注入 nop 替身。同文件还定义 `SessionWindowPresenting` / `SettingsWindowPresenting` / `HotkeyRegistering` / `FatalAlertPresenting` 协议与 `Nop*` 测试替身 |
-| `AppServicesProductionImpls.swift` | 生产实现：`ProductionHotkeyRegistrar`（绑定 `KeyboardShortcuts.Name`）+ `ProductionSessionWindowPresenter` / `ProductionSettingsWindowPresenter`（构建 `NSWindow` + `NSHostingController` + 关闭通知监听）+ `ProductionFatalAlertPresenter` |
+| `AppServicesProductionImpls.swift` | 生产实现：`ProductionHotkeyRegistrar`（绑定 `KeyboardShortcuts.Name`）+ `ProductionSessionWindowPresenter` / `ProductionSettingsWindowPresenter`（构建 `NSWindow` + `NSHostingController`，并通过 `WindowCloseObservation` 持有和释放关闭通知 token）+ `ProductionFatalAlertPresenter` |
 
 ## DI 协议
 
