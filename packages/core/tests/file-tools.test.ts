@@ -111,4 +111,30 @@ describe("file tools", () => {
       writeTool.call({ workspaceId, relativePath: "linked-outside/new.txt", content: "nope" })
     ).rejects.toThrow("Path escapes workspace root");
   });
+
+  it("refuses to write through a basename symlink that points outside the workspace", async () => {
+    const { registry, workspaceId, rootPath } = await makeRegistryWithDefault();
+    const outsideRoot = await mkdtemp(join(tmpdir(), "handagent-outside-basename-"));
+    await mkdir(rootPath, { recursive: true });
+    const outsideTarget = join(outsideRoot, "victim.txt");
+    await writeFile(outsideTarget, "original", "utf8");
+    await symlink(outsideTarget, join(rootPath, "trap.md"));
+
+    const writeTool = new FileWriteTool(registry);
+
+    await expect(
+      writeTool.call({ workspaceId, relativePath: "trap.md", content: "pwn" })
+    ).rejects.toThrow("Refuse to write through symlink");
+    await expect(readFile(outsideTarget, "utf8")).resolves.toBe("original");
+  });
+
+  it("rejects writes that exceed the size cap", async () => {
+    const { registry, workspaceId } = await makeRegistryWithDefault();
+    const writeTool = new FileWriteTool(registry);
+    const oversized = "x".repeat(10 * 1024 * 1024 + 1);
+
+    await expect(
+      writeTool.call({ workspaceId, relativePath: "big.txt", content: oversized })
+    ).rejects.toThrow("exceeds");
+  });
 });

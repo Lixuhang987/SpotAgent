@@ -22,7 +22,7 @@
 - **依赖注入断点**：上述两个枢纽对外暴露的注入点很少，子服务大多在 `init` 里直接 `new`，导致单元测试要么跳过整段链路（`skipServerStart`），要么需要起子进程。
 - **协议表面与运行时实现不对齐**：`tool_message`、`status`、`interrupt`、`session_snapshot` 等协议变体是定义了但没人 emit；"伪流式" assistant_message_delta；图片附件被压成字符串占位；这些都会让上游误以为后端已经在做某事。
 - **缓存与权限边界**：`FilePermissionPolicy.cache` / `FileWorkspaceRegistry.cache` 一次性加载、不监听文件；`session` 范围权限规则未按 sessionId 隔离。
-- **安全盲区**：`FileWriteTool.resolveWritePathWithinWorkspace` 仅 realpath 父目录，basename 是 symlink 时可越狱写到 workspace 外。
+- **安全盲区**：~~`FileWriteTool.resolveWritePathWithinWorkspace` 仅 realpath 父目录，basename 是 symlink 时可越狱写到 workspace 外。~~（已修：写前 lstat 检查 basename + 10 MiB 上限 + `.tmp → rename` 原子写，详见 §5.1）
 
 ### 0.2 改进路线建议（按依赖顺序）
 
@@ -354,21 +354,11 @@ private async loadIfChanged(): Promise<void> {
 
 ## 5. 安全与可靠性
 
-### 5.1 `FileWriteTool` 的 symlink 越狱盲区
+### 5.1 `FileWriteTool` 的 symlink 越狱盲区（已修）
 
-**现状**：`resolveWritePathWithinWorkspace` 只对 `dirname(filePath)` realpath，`basename` 是 symlink 时 `writeFile` 会跟随 symlink 把内容写到 workspace 外。
+**已修**：`FileWriteTool.call` 在写入前 `lstat(absolutePath)`，basename 若为 symlink 直接拒绝；同步加上 10 MiB 写入上限和 `.tmp → rename` 原子写，避免半截文件可见。`file-tools.test.ts` 新增 "Refuse to write through symlink" 与 "exceeds size cap" 两个用例。
 
-**问题**：用户只要在 workspace 内放一个指向 `/etc/passwd` 的符号链接就能让 LLM 写出 workspace。是当前最具体的安全缺口。
-
-**建议改法**：
-
-1. `writeFile` 前先 `realpath` 整个 path（要求文件已存在则 realpath 之；不存在则父目录 realpath + lstat 检查 basename 不是 symlink）。
-2. 如果 basename 是 symlink，要么拒绝、要么显式 deny-by-default（建议拒绝）。
-3. 给 `FileWriteTool` 加 size cap（建议 10 MiB）+ 原子写（写 `.tmp` 后 rename）+ 备份选项（可选）。
-
-**验收**：
-
-- `file-tools.test.ts` 增加 symlink 越狱用例（sun.: writeFile 后断言原 link 仍是 link、目标文件未被改写、tool 返回错误）。
+**保留参考（原现状）**：`resolveWritePathWithinWorkspace` 只对 `dirname(filePath)` realpath，`basename` 是 symlink 时 `writeFile` 会跟随 symlink 把内容写到 workspace 外，用户只要在 workspace 内放一个指向 `/etc/passwd` 的符号链接就能让 LLM 写出 workspace。
 
 ---
 
