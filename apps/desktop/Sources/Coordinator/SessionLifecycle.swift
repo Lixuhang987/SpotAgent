@@ -90,4 +90,18 @@ final class SessionLifecycle {
             )
         )
     }
+
+    @discardableResult
+    func focus(_ sessionID: String) -> Bool {
+        guard let window = windows[sessionID] else { return false }
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        return true
+    }
+
+    func closeAll() {
+        viewModels.values.forEach { $0.stop() }
+        viewModels.removeAll()
+        windows.removeAll()
+    }
 }

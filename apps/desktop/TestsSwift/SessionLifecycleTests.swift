@@ -86,4 +86,52 @@ final class SessionLifecycleTests: XCTestCase {
 
         lifecycle.close("unknown")  // 不应崩溃
     }
+
+    @MainActor
+    func testFocusReturnsTrueForKnownSession() {
+        let lifecycle = SessionLifecycle(
+            registry: SessionRegistry(),
+            windowPresenter: SpySessionWindowPresenter(),
+            agentServerURL: URL(string: "ws://127.0.0.1:0/noop")!,
+            activationPolicy: AppActivationPolicyCoordinator(),
+            setActivationPolicy: { _ in }
+        )
+        let prompt = PromptSubmission.compose(draft: "hi", attachments: [])!
+        let id = lifecycle.open(prompt: prompt, startupError: nil) { _ in }
+
+        XCTAssertTrue(lifecycle.focus(id))
+    }
+
+    @MainActor
+    func testFocusReturnsFalseForUnknownSession() {
+        let lifecycle = SessionLifecycle(
+            registry: SessionRegistry(),
+            windowPresenter: SpySessionWindowPresenter(),
+            agentServerURL: URL(string: "ws://127.0.0.1:0/noop")!,
+            activationPolicy: AppActivationPolicyCoordinator(),
+            setActivationPolicy: { _ in }
+        )
+
+        XCTAssertFalse(lifecycle.focus("unknown"))
+    }
+
+    @MainActor
+    func testCloseAllStopsEverySessionAndClearsWindows() {
+        let registry = SessionRegistry()
+        let lifecycle = SessionLifecycle(
+            registry: registry,
+            windowPresenter: SpySessionWindowPresenter(),
+            agentServerURL: URL(string: "ws://127.0.0.1:0/noop")!,
+            activationPolicy: AppActivationPolicyCoordinator(),
+            setActivationPolicy: { _ in }
+        )
+        let prompt = PromptSubmission.compose(draft: "hi", attachments: [])!
+        _ = lifecycle.open(prompt: prompt, startupError: nil) { _ in }
+        _ = lifecycle.open(prompt: prompt, startupError: nil) { _ in }
+        XCTAssertEqual(lifecycle.viewModels.count, 2)
+
+        lifecycle.closeAll()
+
+        XCTAssertTrue(lifecycle.viewModels.isEmpty)
+    }
 }
