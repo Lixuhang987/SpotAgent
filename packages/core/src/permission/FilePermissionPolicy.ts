@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { createHash } from "node:crypto";
@@ -22,6 +22,11 @@ type PersistedFile = {
   rules: PersistedRule[];
 };
 
+type FileStamp = {
+  mtimeMs: number;
+  size: number;
+};
+
 export type AskResolver = (
   request: PermissionRequest,
 ) => Promise<PermissionResolution>;
@@ -38,6 +43,7 @@ export class FilePermissionPolicy implements PermissionPolicy {
   private readonly now: () => string;
 
   private cache: PersistedRule[] | null = null;
+  private cacheStamp: FileStamp | null = null;
   private readonly sessionRules = new Map<string, "allow" | "deny">();
 
   constructor(options: FilePermissionPolicyOptions) {
@@ -116,9 +122,13 @@ export class FilePermissionPolicy implements PermissionPolicy {
   }
 
   private loadSync(): PersistedRule[] {
-    if (this.cache) return this.cache;
-    if (!existsSync(this.filePath)) {
+    const currentStamp = this.readFileStamp();
+    if (this.cache && stampsEqual(this.cacheStamp, currentStamp)) {
+      return this.cache;
+    }
+    if (!currentStamp) {
       this.cache = [];
+      this.cacheStamp = null;
       return this.cache;
     }
     try {
@@ -127,6 +137,7 @@ export class FilePermissionPolicy implements PermissionPolicy {
     } catch {
       this.cache = [];
     }
+    this.cacheStamp = this.readFileStamp();
     return this.cache;
   }
 
@@ -135,7 +146,19 @@ export class FilePermissionPolicy implements PermissionPolicy {
     await mkdir(dirname(this.filePath), { recursive: true });
     const data: PersistedFile = { version: 1, rules };
     await writeFile(this.filePath, JSON.stringify(data, null, 2), "utf8");
+    this.cacheStamp = this.readFileStamp();
   }
+
+  private readFileStamp(): FileStamp | null {
+    if (!existsSync(this.filePath)) return null;
+    const info = statSync(this.filePath);
+    return { mtimeMs: info.mtimeMs, size: info.size };
+  }
+}
+
+function stampsEqual(left: FileStamp | null, right: FileStamp | null): boolean {
+  if (!left || !right) return left === right;
+  return left.mtimeMs === right.mtimeMs && left.size === right.size;
 }
 
 function stableStringify(value: unknown): string {

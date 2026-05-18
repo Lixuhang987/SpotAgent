@@ -7,7 +7,7 @@
 | 文件 | 职责 |
 |------|------|
 | `Workspace.ts` | DTO：`Workspace`（id / name / description / rootPath / createdAt / isDefault）/ `WorkspaceSummary`（不含 rootPath）/ `WorkspaceRegistration` / `WorkspaceUpdate` / `WorkspaceRegistry` 接口 |
-| `FileWorkspaceRegistry.ts` | 持久化到 `~/.spotAgent/workspaces.json`；首次启动播种 default workspace（rootPath = `~/.spotAgent/workspace/`）；`register` 强制绝对路径 + `mkdir -p` |
+| `FileWorkspaceRegistry.ts` | 持久化到 `~/.spotAgent/workspaces.json`；首次启动播种 default workspace（rootPath = `~/.spotAgent/workspace/`）；`register` 强制绝对路径 + `mkdir -p`；缓存按文件状态戳失效 |
 | `index.ts` | 桶导出 |
 
 ## 设计原则
@@ -15,7 +15,7 @@
 - **不要把 rootPath 给 LLM**：`workspace.list` tool 返回 `WorkspaceSummary`，没有 `rootPath`；LLM 只看到 id / name / description。
 - **删除不删盘**：`remove(id)` 仅从注册表移除条目，不递归删除磁盘内容，避免误伤用户文件。
 - **沙箱化路径解析**：`file.read / file.write` 入参为 `{ workspaceId, relativePath }`，由 tool 内部 join + realpath 校验仍在 rootPath 内（详见 [tools/tools.md](/Users/mu9/proj/handAgent/packages/core/src/tools/tools.md)）。
-- **写共享文件**：desktop 的 [WorkspaceSettingsView](/Users/mu9/proj/handAgent/apps/desktop/Sources/Settings/settings.md) 直接写 `workspaces.json`；agent-server 的 `FileWorkspaceRegistry` 启动时一次性读，未跑 watcher，所以 desktop 改完通常需要重启 server 才能让 LLM 看到新 workspace。
+- **写共享文件**：desktop 的 [WorkspaceSettingsView](/Users/mu9/proj/handAgent/apps/desktop/Sources/Settings/settings.md) 直接写 `workspaces.json`；agent-server 的 `FileWorkspaceRegistry` 不启 watcher，但每次 `list / get / getDefault / register / update / remove` 都会先比较文件 `mtimeMs + size`，文件变化后自动重读，避免写操作覆盖外部修改。
 
 ## 文件结构
 

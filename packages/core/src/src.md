@@ -76,8 +76,8 @@
 - tool 结果统一序列化为字符串再回灌；`MAX_OUTPUT_BYTES = 8 KiB` 截断。
 - `VercelClient` 当前默认模型 `gpt-5-mini`。
 - "伪流式"：`assistant_message_delta` 一次性发出整段文本，desktop UI 实际看不到 token 流。
-- 文件 tool 已使用 workspace 沙箱、basename symlink 拒绝、10 MiB 写入上限与原子写；仍需继续补 workspace / permission 文件缓存失效策略。
-- `FilePermissionPolicy.cache` 与 `FileWorkspaceRegistry.cache` 一次性加载、不监听文件变化。
+- 文件 tool 已使用 workspace 沙箱、basename symlink 拒绝、10 MiB 写入上限与原子写。
+- `FilePermissionPolicy.cache` 与 `FileWorkspaceRegistry.cache` 不启 watcher；每次公开读写入口前比较持久化文件 `mtimeMs + size`，检测到外部修改后重读，保证 Settings 或外部撤销权限后下一次 tool 调用可见。
 
 完整问题清单与改进路线见 [docs/architecture-review.md](/Users/mu9/proj/handAgent/docs/architecture-review.md)。
 

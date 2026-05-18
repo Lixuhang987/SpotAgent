@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, isAbsolute } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -15,6 +15,11 @@ type PersistedFile = {
   workspaces: Workspace[];
 };
 
+type FileStamp = {
+  mtimeMs: number;
+  size: number;
+};
+
 export type FileWorkspaceRegistryOptions = {
   filePath: string;
   defaultRootPath: string;
@@ -26,6 +31,7 @@ export type FileWorkspaceRegistryOptions = {
 
 export class FileWorkspaceRegistry implements WorkspaceRegistry {
   private cache: Workspace[] | null = null;
+  private cacheStamp: FileStamp | null = null;
   private readonly now: () => string;
   private readonly generateId: () => string;
   private readonly defaultName: string;
@@ -129,9 +135,12 @@ export class FileWorkspaceRegistry implements WorkspaceRegistry {
   }
 
   private async load(): Promise<Workspace[]> {
-    if (this.cache) return this.cache;
+    const currentStamp = await this.readFileStamp();
+    if (this.cache && stampsEqual(this.cacheStamp, currentStamp)) {
+      return this.cache;
+    }
 
-    if (!existsSync(this.options.filePath)) {
+    if (!currentStamp) {
       const seeded = await this.seedDefault();
       this.cache = seeded;
       return seeded;
@@ -153,6 +162,7 @@ export class FileWorkspaceRegistry implements WorkspaceRegistry {
     }
 
     this.cache = workspaces;
+    this.cacheStamp = await this.readFileStamp();
     return workspaces;
   }
 
@@ -184,5 +194,17 @@ export class FileWorkspaceRegistry implements WorkspaceRegistry {
       JSON.stringify(data, null, 2),
       "utf8",
     );
+    this.cacheStamp = await this.readFileStamp();
   }
+
+  private async readFileStamp(): Promise<FileStamp | null> {
+    if (!existsSync(this.options.filePath)) return null;
+    const info = await stat(this.options.filePath);
+    return { mtimeMs: info.mtimeMs, size: info.size };
+  }
+}
+
+function stampsEqual(left: FileStamp | null, right: FileStamp | null): boolean {
+  if (!left || !right) return left === right;
+  return left.mtimeMs === right.mtimeMs && left.size === right.size;
 }

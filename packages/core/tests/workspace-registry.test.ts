@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FileWorkspaceRegistry } from "../src/workspace/FileWorkspaceRegistry.ts";
@@ -27,6 +27,14 @@ describe("FileWorkspaceRegistry", () => {
       generateId: () => `${idSeed}${++n}`,
       now: () => "2026-05-17T00:00:00.000Z",
     });
+  }
+
+  async function readWorkspacesFile() {
+    return JSON.parse(await readFile(registryFile, "utf8"));
+  }
+
+  async function writeWorkspacesFile(file: unknown) {
+    await writeFile(registryFile, JSON.stringify(file, null, 2), "utf8");
   }
 
   it("seeds a default workspace on first read", async () => {
@@ -132,14 +140,89 @@ describe("FileWorkspaceRegistry", () => {
     const registry = makeRegistry();
     await registry.getDefault();
 
-    const file = JSON.parse(await readFile(registryFile, "utf8"));
+    const file = await readWorkspacesFile();
     file.workspaces[0].isDefault = false;
     await rm(registryFile);
-    const { writeFile } = await import("node:fs/promises");
-    await writeFile(registryFile, JSON.stringify(file), "utf8");
+    await writeWorkspacesFile(file);
 
     const reopened = makeRegistry();
     const def = await reopened.getDefault();
     expect(def.isDefault).toBe(true);
+  });
+
+  it("reloads external file changes before list and get", async () => {
+    const registry = makeRegistry();
+    await registry.getDefault();
+
+    const file = await readWorkspacesFile();
+    file.workspaces.push({
+      id: "external",
+      name: "External",
+      description: "由设置页写入",
+      rootPath: join(dir, "external-root"),
+      createdAt: "2026-05-18T00:00:00.000Z",
+      isDefault: false,
+    });
+    await writeWorkspacesFile(file);
+
+    expect(await registry.list()).toHaveLength(2);
+    await expect(registry.get("external")).resolves.toMatchObject({
+      id: "external",
+      name: "External",
+    });
+  });
+
+  it("reloads external file changes before register, update, and remove", async () => {
+    const registry = makeRegistry();
+    await registry.getDefault();
+
+    const file = await readWorkspacesFile();
+    file.workspaces.push({
+      id: "external",
+      name: "External",
+      description: "外部追加",
+      rootPath: join(dir, "external-root"),
+      createdAt: "2026-05-18T00:00:00.000Z",
+      isDefault: false,
+    });
+    await writeWorkspacesFile(file);
+
+    await registry.register({
+      name: "Local",
+      description: "本实例追加",
+      rootPath: join(dir, "local-root"),
+    });
+    expect((await readWorkspacesFile()).workspaces.map((w: { id: string }) => w.id)).toEqual([
+      "id-1",
+      "external",
+      "id-2",
+    ]);
+
+    const renamed = await readWorkspacesFile();
+    renamed.workspaces.find((w: { id: string }) => w.id === "external").name =
+      "Externally Renamed";
+    await writeWorkspacesFile(renamed);
+
+    const updated = await registry.update("external", { description: "本实例更新" });
+    expect(updated.name).toBe("Externally Renamed");
+    expect(updated.description).toBe("本实例更新");
+
+    const addedBeforeRemove = await readWorkspacesFile();
+    addedBeforeRemove.workspaces.push({
+      id: "external-2",
+      name: "External 2",
+      description: "删除前外部追加",
+      rootPath: join(dir, "external-root-2"),
+      createdAt: "2026-05-18T00:00:01.000Z",
+      isDefault: false,
+    });
+    await writeWorkspacesFile(addedBeforeRemove);
+
+    await registry.remove("external");
+    expect((await readWorkspacesFile()).workspaces.map((w: { id: string }) => w.id)).toEqual([
+      "id-1",
+      "id-2",
+      "external-2",
+    ]);
   });
 });
