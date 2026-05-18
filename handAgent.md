@@ -142,7 +142,7 @@ flowchart TD
 
 ### 7. 跨进程协议（`packages/core/src/protocol/SessionMessage.ts`）
 
-`SessionMessage` 是 17 个变体的判别联合，覆盖：
+`SessionMessage` 是 20 个变体的判别联合，覆盖：
 
 - 会话生命周期：`open_session` / `user_message` / `assistant_message_start|delta|end` / `tool_message` / `status` / `interrupt` / `session_snapshot` / `error`。
 - 历史读写：`list_sessions_request|response` / `load_session_request|response` / `delete_session_request`。
@@ -159,6 +159,8 @@ flowchart TD
 - `packages/core` 已经定义完整的 tool、platform DTO。
 - macOS 平台能力由 `apps/desktop` 内的 `MacPlatformProvider` 实现：剪贴板（`NSPasteboard`）、前台 App（`NSWorkspace`）、窗口列表（`CGWindowListCopyWindowInfo`）、屏幕截图（`ScreenCaptureKit` + `SCScreenshotManager`，支持 display / window / region 三种 target）；OCR 与 accessibility 仍未完成。
 - 桌面 App 通过 `PlatformBridgeService` 与 `agent-server` 维护一条独立 WebSocket 反向通道，core 侧通过 `RemotePlatformAdapter` 调用平台能力。
+- SessionWindow 已有断线自动重连并重发 `open_session` 的客户端逻辑；仍需实机验证 agent-server 重启后的 `session_snapshot` 恢复体验。
+- 图片 attachment 已落 Blob/Stub，但尚未接入 vision / 多模态消息，当前 LLM 不能直接理解图片内容。
 
 ## 阅读顺序建议
 

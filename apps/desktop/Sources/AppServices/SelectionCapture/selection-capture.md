@@ -13,14 +13,16 @@
 
 ```
 captureSelection 热键
-  └─ AppCoordinator.handleCaptureSelectionHotkey()
+  └─ AppCoordinator.setupHotkey()
+       └─ PromptCaptureCoordinator.captureSelectionAndShow()
        └─ MacSelectionCaptureProvider.captureSelectedText()
             ├─ selected(text)  → PromptPanelController.appendAttachment(.textSelection(...))
             ├─ empty           → 仅 PromptPanelController.show()
             └─ error(message)  → PromptPanelController.appendAttachment(.selectionError(...))
 
 captureRegion 热键
-  └─ AppCoordinator.handleCaptureRegionHotkey()
+  └─ AppCoordinator.setupHotkey()
+       └─ PromptCaptureCoordinator.captureRegionAndShow()
        └─ MacRegionCaptureProvider.captureRegion()
             ├─ captured(base64) → PromptPanelController.appendAttachment(.imageRegion(...))
             ├─ cancelled        → 不弹面板（用户按 ESC）
@@ -31,9 +33,9 @@ captureRegion 热键
 
 ## 设计备注
 
-- 当前两条路径都使用 macOS 命令行兜底，违反 AGENTS.md「优先原生 API」的偏好。原因与后续计划：
+- 当前两条用户主动采集路径都使用 macOS 命令行能力，原因如下：
   - **文本选区**：macOS 没有公开「读当前应用的当前选区」API，可用方案是 Accessibility API（需 a11y 权限 + 应用支持）或合成 Cmd-C。当前选 osascript Cmd-C，因为不需要额外权限弹窗，适合 MVP。后续可在用户授予 Accessibility 权限后切到 AX 路径以避免污染剪贴板。
-  - **区域截图**：`screencapture -i` 是当前最快出 MVP 的圈选 UI。后续按 TODO 2.3 / 3.1 计划用 ScreenCaptureKit 自建圈选 + 截图 UI，避免依赖 CLI、无需切到「截图全屏然后裁剪」。
+  - **区域截图**：用户主动触发的圈选保留 `screencapture -i`。这是系统提供的交互式区域选择入口，取消时能自然返回 `RegionCaptureResult.cancelled`，且不会把屏幕内容默认注入 LLM。LLM 通过 tool 主动请求的 `screen.capture` 仍归属 [PlatformBridge](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/PlatformBridge/platform-bridge.md)，使用 ScreenCaptureKit 路径。
 - 两个 Provider 都是 `Sendable` 协议、可注入；测试用 stub 实现替代即可。
 - 临时文件失败不抛异常，统一映射成 `RegionCaptureResult.error`。
 - 文本选区路径 120ms 等待是经验值；过短会读不到剪贴板，过长用户能感知到延迟。

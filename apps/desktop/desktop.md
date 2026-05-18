@@ -25,7 +25,7 @@
 
 - 全局唯一 `AppCoordinator`（`@Observable @MainActor`）由 `HandAgentApp` 持有为 `@State`。
 - 模块间一切协调通过 `coordinator.send(.action)`，禁止 `NotificationCenter` / 全局单例 / 直接调 Coordinator 的 private 方法绕开。
-- 新增协调行为：在 `AppCoordinator.Action` 枚举显式增分支；新窗口 / 控制器由 Coordinator 持有并 lazy 初始化，子模块通过闭包注入接入。
+- 新增协调行为：在 `AppCoordinator.Action` 枚举显式增分支；新窗口生命周期优先下沉到独立 lifecycle 控制器，子模块通过闭包注入接入。
 - 测试态用 `AppCoordinator(services: AppServices.testing(...))` 注入 nop 服务，跳过窗口/进程/激活策略副作用；非测试态 `init()` 自动装配生产 `AppServices` 并 `bootstrap()`。
 
 ### 4. 视觉：Theme token
@@ -109,10 +109,11 @@ sequenceDiagram
 
 ### `AgentSettings` 文件结构（[AgentSettings](Sources/AppServices/AgentSettings/agent-settings.md)）
 
-`~/.spotAgent/settings.json` 是 desktop 与 agent-server 的**唯一通信通道**：
+`~/.spotAgent/settings.json` 是 desktop 与 agent-server 共享模型配置的文件通道：
 
 - desktop 侧 `AgentSettingsStore` 启动读一次 + 500ms 轮询；写入走 `update(_:)` 原子写。
 - agent-server 侧 `SettingsBackedLLMClient.complete()` 每次同步 `readFileSync`，无缓存、无 watcher。
+- 同一文件也支持 `tools.allowlist / tools.denylist`，但当前 Settings UI 尚未暴露 tool 管理，agent-server 也只在启动时读取 tool settings。
 - 修改后下一次 LLM 请求即生效，无需重启。
 
 ### `PromptAttachmentResult` / `PromptAction`（[PromptPanel](Sources/PromptPanel/prompt-panel.md)）
@@ -122,7 +123,7 @@ sequenceDiagram
 - `.noAttachment`：无附件，普通提交。
 - `.textToken(String)`：直接附加纯文本块（如内嵌的命令片段）。
 - `.textSelection(text:source:)`：用户主动文本选区（来自 `MacSelectionCaptureProvider`，Cmd-C 抓 NSPasteboard）。
-- `.imageRegion(base64:mimeType:)`：用户区域截图（来自 `MacRegionCaptureProvider`，`screencapture -i` 兜底，待迁自建 SCK 圈选 UI）。
+- `.imageRegion(base64:mimeType:)`：用户区域截图（来自 `MacRegionCaptureProvider`，保留 `screencapture -i` 作为用户主动圈选入口）。
 - `.selectionError(message:)`：采集失败，UI 以禁用 chip + tooltip 反馈。
 
 `PromptAction(id, title, keywords, defaultShortcut, perform)`：命令面板可触发的动作；`shortcutName` 计算属性生成 `KeyboardShortcuts.Name("action.\(id)")`。

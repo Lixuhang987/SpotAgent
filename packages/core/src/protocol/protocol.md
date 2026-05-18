@@ -1,6 +1,6 @@
 # protocol
 
-desktop ↔ agent-server 的 WebSocket 协议。所有跨进程消息走 `SessionMessage`（17 个变体的判别联合）。这是 TS / Swift 双侧对齐的唯一来源。
+desktop ↔ agent-server 的 WebSocket 协议。所有跨进程消息走 `SessionMessage`（20 个变体的判别联合）。这是 TS / Swift 双侧对齐的唯一来源。
 
 ## 文件
 

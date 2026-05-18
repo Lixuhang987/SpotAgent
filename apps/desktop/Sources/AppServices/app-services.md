@@ -11,15 +11,15 @@
 | `Hotkey/` | [hotkey.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Hotkey/hotkey.md) | 全局快捷键名定义（`showPromptPanel` / `captureSelection` / `captureRegion`）；PromptAction 快捷键命名规则 |
 | `Lifecycle/` | [lifecycle.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Lifecycle/lifecycle.md) | 根据 SessionWindow / SettingsWindow 计数切换激活策略 |
 | `PlatformBridge/` | [platform-bridge.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/PlatformBridge/platform-bridge.md) | 反向 IPC：把 macOS 原生能力（剪贴板 / 前台 App / 窗口列表 / ScreenCaptureKit 截图等）通过 WebSocket 暴露给 agent-server |
-| `SelectionCapture/` | [selection-capture.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/SelectionCapture/selection-capture.md) | 文本选区采集（osascript Cmd-C 兜底）+ 区域截图（`screencapture -i` 兜底），由 Coordinator 在 `captureSelection` / `captureRegion` 热键路径调用 |
+| `SelectionCapture/` | [selection-capture.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/SelectionCapture/selection-capture.md) | 文本选区采集（osascript Cmd-C）+ 用户主动区域截图（保留 `screencapture -i`），由 Coordinator 在 `captureSelection` / `captureRegion` 热键路径调用 |
 | `Session/` | [session.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Session/session.md) | 会话摘要注册表；驱动 StatusBubble |
 
 ## 文件
 
 | 文件 | 职责 |
 |------|------|
-| `AppServices.swift` | DI 容器：持有 `agentServer` / `sessionRegistry` / `settingsStore` / `agentServerURL` / `platformBridgeFactory` / `hotkeyRegistrar` / `sessionWindowPresenter` / `setActivationPolicy` / `settingsWindowFactory` / `showsStatusBubble`。生产由 `init()` 默认参数装配，测试用 `AppServices.testing()` 注入 nop 替身。同文件还定义 `SessionWindowPresenting` / `HotkeyRegistering` 协议与 `Nop*` 测试替身 |
-| `AppServicesProductionImpls.swift` | 生产实现：`ProductionHotkeyRegistrar`（绑定 `KeyboardShortcuts.Name`）+ `ProductionSessionWindowPresenter`（构建 `NSWindow` + `NSHostingController` + 关闭通知监听） |
+| `AppServices.swift` | DI 容器：持有 `agentServer` / `sessionRegistry` / `settingsStore` / `agentServerURL` / `platformBridgeFactory` / `hotkeyRegistrar` / `sessionWindowPresenter` / `settingsWindowPresenter` / `fatalAlertPresenter` / `setActivationPolicy` / `showsStatusBubble`。生产由 `init()` 默认参数装配，测试用 `AppServices.testing()` 注入 nop 替身。同文件还定义 `SessionWindowPresenting` / `SettingsWindowPresenting` / `HotkeyRegistering` / `FatalAlertPresenting` 协议与 `Nop*` 测试替身 |
+| `AppServicesProductionImpls.swift` | 生产实现：`ProductionHotkeyRegistrar`（绑定 `KeyboardShortcuts.Name`）+ `ProductionSessionWindowPresenter` / `ProductionSettingsWindowPresenter`（构建 `NSWindow` + `NSHostingController` + 关闭通知监听）+ `ProductionFatalAlertPresenter` |
 
 ## DI 协议
 
@@ -29,10 +29,12 @@
 | `PlatformBridgeRunning`（在 `PlatformBridge/PlatformBridgeService.swift`）| `PlatformBridgeService` | 工厂返回 `nil` |
 | `HotkeyRegistering` | `ProductionHotkeyRegistrar` | `NopHotkeyRegistrar` |
 | `SessionWindowPresenting` | `ProductionSessionWindowPresenter` | `NopSessionWindowPresenter` |
+| `SettingsWindowPresenting` | `ProductionSettingsWindowPresenter` | `NopSettingsWindowPresenter` |
+| `FatalAlertPresenting` | `ProductionFatalAlertPresenter` | `NopFatalAlertPresenter` |
 
 ## 编辑此层的约束
 
-- **服务是 plain 类，UI 无关**：禁止在此层 `import SwiftUI`（`AgentSettingsView.swift` 是历史遗留例外，新代码不要重蹈）。
+- **服务与 presenter 分层**：`AgentServer` / `AgentSettingsStore` / `SessionRegistry` 等服务保持 UI 无关；生产 window presenter 可以 `import AppKit/SwiftUI`，但只能负责窗口构造与关闭回调，不写业务逻辑。
 - **`@Observable` 优先**：`SessionRegistry` / `AgentSettingsStore` 已迁到 `@Observable`；新建状态类不要再用 `ObservableObject` / `@Published` / Combine。
 - **依赖通过 init 注入**：`AgentSettingsStore(homeDirectoryURL:)` 这样允许测试注入临时目录；不要在服务内直接读 `FileManager.default.homeDirectoryForCurrentUser` 之外的全局状态。
 - **Main actor 隔离**：UI 相关的 `@Observable` class（`SessionRegistry` / `AgentSettingsStore`）标 `@MainActor`，进程 / IO 类（`AgentServerService`）保持非 MainActor。

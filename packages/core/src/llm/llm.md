@@ -38,7 +38,7 @@ AgentRuntime
 ## 编辑此目录的约束
 
 - 不要在 runtime 里直接 `import "@ai-sdk/openai"`，必须经 `LLMClient` 抽象。
-- 新 provider 应实现 `LLMClient` 并注册到工厂（待实现，TODO 8.1）；不要直接在 runtime 里 `instanceof VercelClient` 分支。
+- 新 provider 应实现 `LLMClient` 并注册到工厂（待实现，见 [TODO](/Users/mu9/proj/handAgent/docs/TODO.md) 的多 provider 条目）；不要直接在 runtime 里 `instanceof VercelClient` 分支。
 - tool name sanitization 是单向映射，生产时务必维护 `reverseToolNames` 反查；不要在 LLM 输出后直接用 sanitized 名查 `ToolRegistry`。
 
 ## 相关文档

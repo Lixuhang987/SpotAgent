@@ -28,7 +28,7 @@
 10. 在任意 App 中选中一段文字，按 `captureSelection` 热键，确认 PromptPanel 弹出且输入框上方出现 textSelection chip；chip 可点击移除。
 11. 没有任何文字选中时再按一次，确认 PromptPanel 仅弹出，无 chip（`SelectionCaptureResult.empty`）。
 12. 按 `captureRegion` 热键进入 macOS 系统圈选 UI，画一个矩形完成截图，确认 PromptPanel 弹出且出现 imageRegion chip；点 chip 触发 QuickLook 内嵌预览，按 ESC 取消圈选时不弹 PromptPanel。
-13. 提交带 chip 的 prompt，到 SessionWindow 后确认用户消息渲染附件占位（`[附件 ×N]`）；agent-server 可收到 `attachments` 字段。注意：文本选区会拼入 prompt，图片附件当前仍被 `composeUserContent()` 转成字符串占位，LLM 看不到真实图像字节。
+13. 提交带 chip 的 prompt，到 SessionWindow 后确认 agent-server 可收到 `attachments` 字段并写入会话持久化。注意：当前窗口的本地用户气泡只回显 prompt 文本，不展示附件摘要；这是 [TODO](/Users/mu9/proj/handAgent/docs/TODO.md) 中待修 UI 缺口。文本选区会在服务端拼入 user content，图片附件当前被 `composeUserContent()` 写成 image STUB，LLM 看不到真实图像字节。
 
 ## 工作区与文件 tool（P2）
 
@@ -53,14 +53,15 @@
 24. 通过 `kill -9 <agent-server pid>` 模拟崩溃，确认：
     - SessionWindow 出现连接错误或断开提示。
     - 桌面 App 在指数退避（约 1s/2s/4s/8s/16s）内自动重启 server。
-    - 重启成功后新会话可继续提交。现有 SessionWindow 自动重连订阅仍是待验证/待补齐项。
+    - 重启成功后新会话可继续提交。
+    - 现有 SessionWindow 自动重连并重发 `open_session`；该路径已有 `SessionSocketClientTests` 覆盖，但仍需实机确认重启后 `session_snapshot` 正常恢复。
 25. 连续杀 6 次模拟反复崩溃，确认第 6 次后弹出 `NSAlert("Agent Server 已停止")`；「查看日志」按钮是否能打开 `~/.spotAgent/` 仍需实机确认。
 
 ## 通过标准
 
 - 主链路全部跑通；
-- 文本附件能从用户输入流转到 SessionWindow 与 agent-server；图片附件能传输但尚未进入多模态 LLM 消息；
+- 文本附件能从用户输入流转到 agent-server；当前 SessionWindow 附件回显仍待补齐。图片附件能传输并落 Blob，但尚未进入多模态 LLM 消息；
 - file tool 严格沙箱化，越狱被拒；
 - 权限审批 UI 不阻塞其他会话，决策被持久化；权限规则管理 UI 是后续项；
-- agent-server 崩溃可自动重启，过限有可见反馈；现有会话自动重连订阅是后续项；
+- agent-server 崩溃可自动重启，过限有可见反馈；现有会话自动重连订阅需实机验证；
 - 所有错误路径均有明确文案，不出现静默失败。

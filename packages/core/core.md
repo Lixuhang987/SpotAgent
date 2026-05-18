@@ -21,7 +21,7 @@
 | `workspace/` | Workspace 注册表与文件沙箱根目录 | [workspace/workspace.md](/Users/mu9/proj/handAgent/packages/core/src/workspace/workspace.md) |
 | `config/` | settings.json 解析（model / tools） | [config/config.md](/Users/mu9/proj/handAgent/packages/core/src/config/config.md) |
 | `logging/` | NetworkLogger 与 fetch 包装，落 JSONL 到 `~/.spotAgent/log/` | [logging/logging.md](/Users/mu9/proj/handAgent/packages/core/src/logging/logging.md) |
-| `protocol/` | desktop ↔ agent-server WS 协议 SessionMessage | [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md) |
+| `protocol/` | desktop ↔ agent-server WS 协议 SessionMessage（20 个变体） | [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md) |
 | `conversation/` | UI / 持久化用 ConversationMessage 模型 | [conversation/conversation.md](/Users/mu9/proj/handAgent/packages/core/src/conversation/conversation.md) |
 | `selection/` | 用户主动选区抽象 | [selection/selection.md](/Users/mu9/proj/handAgent/packages/core/src/selection/selection.md) |
 
@@ -103,7 +103,7 @@ flowchart TD
 
 ### 跨进程协议
 
-- `SessionMessage`（17 个变体的判别联合）
+- `SessionMessage`（20 个变体的判别联合）
 - `UserMessageAttachment` / `PlatformResponsePayload` / `SessionListEntry`
 - `ConversationMessage` / `ConversationMessageStatus` / `ToolMessageStatus`
 

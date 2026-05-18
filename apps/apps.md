@@ -44,7 +44,7 @@ flowchart LR
 
 - `PromptAttachmentResult`（5 case：textSelection / selectionError / textToken / imageRegion / noAttachment）
 - `SessionSummary`
-- `SessionMessage`（含 user_message / assistant_message_* / tool_message / permission_request / platform_request 等共 17 个变体）
+- `SessionMessage`（含 user_message / assistant_message_* / tool_message / permission_request / platform_request 等共 20 个变体）
 
 ## 模块边界
 

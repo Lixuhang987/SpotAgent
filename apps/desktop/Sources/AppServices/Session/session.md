@@ -35,5 +35,5 @@ SessionSummary {
 
 ## 与其他模块的关系
 
-- [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 在 `handleSubmitPrompt` / `handleSessionClosed` 中调用 `upsert(_:)`。
+- [SessionLifecycle](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 在 `open / close` 中调用 `upsert(_:)`。
 - [StatusBubble ViewModel](/Users/mu9/proj/handAgent/apps/desktop/Sources/StatusBubble/status-bubble.md) 派生 `isRunning` / `latestSummary`。

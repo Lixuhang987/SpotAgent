@@ -13,15 +13,16 @@
 正面：
 
 - 分层清晰：`apps/desktop` ↔ `apps/agent-server` ↔ `packages/core` 三段式，core 不依赖宿主，platform 抽象通过 `RemotePlatformAdapter + PlatformBridge` 反向 IPC 落到桌面，核心约束没有被打穿。
-- 桌面端 SwiftUI 已统一切到 `@Observable` + MVVM + ViewModifier 四件套，`AppCoordinator` 用 `Action` 单向流，避免了散落的 NotificationCenter / 单例状态。
+- 桌面端 SwiftUI 已统一切到 `@Observable` + MVVM + ViewModifier 四件套，`AppCoordinator` 用 `Action` 单向流，避免协调逻辑散落到 NotificationCenter / 单例状态。
 - 协议层 `SessionMessage`、tool 协议、permission 协议、storage 协议都已经显式定义为 TS 判别联合或 interface，跨进程协作的"合约面"是有的。
 
-负面（驱动本文的根因）：
+负面（驱动后续 TODO 的根因）：
 
-- **职责仍偏重**：`AppCoordinator`（247 行）已接入 DI / presenter / health / capture coordinator，但仍持有窗口索引、状态气泡路由与 AppKit 细节；`SessionManager`（208 行）已抽出 `MessageTranslator`，但仍同时做协议路由、持久化与 runtime 编排。
-- **协议表面与运行时仍有不对齐**：`tool_message` 与 `permission_request.arguments` 已接通；剩余主要是"伪流式" assistant_message_delta、图片附件当前只进入 Blob/Stub 且尚未接入 vision 解读工具、平台 RPC 与会话协议混在同一个 `SessionMessage` union。
-- **缓存边界**：`FilePermissionPolicy.cache` / `FileWorkspaceRegistry.cache` 一次性加载、不监听文件；Settings 修改 workspace 或撤销权限后，agent-server 重启前看不到。
-- **安全盲区**：~~`FileWriteTool.resolveWritePathWithinWorkspace` 仅 realpath 父目录，basename 是 symlink 时可越狱写到 workspace 外。~~（已修：写前 lstat 检查 basename + 10 MiB 上限 + `.tmp → rename` 原子写，详见 §5.1）
+- **产品闭环仍有缺口**：图片附件已写入 Blob/Stub，但尚未接入 vision 或多模态消息；SessionWindow 当前用户气泡不展示本轮附件；快捷键修改配置不会在运行中的桌面 App 生效。
+- **协议表面与运行时仍有不对齐**：`tool_message` 与 `permission_request.arguments` 已接通；剩余主要是"伪流式" assistant_message_delta、`interrupt` 帧未处理、平台 RPC 与会话协议混在同一个 `SessionMessage` union。
+- **缓存边界**：`FilePermissionPolicy.cache` / `FileWorkspaceRegistry.cache` 一次性加载、不监听文件；Settings 修改 workspace 或撤销权限后，agent-server 重启前看不到。`SettingsBackedLLMClient` 也仍在每次 complete 时同步读盘并重建 `VercelClient`。
+- **可靠性盲区**：`ProductionSessionWindowPresenter` / `ProductionSettingsWindowPresenter` 通过 `NotificationCenter.default.addObserver` 监听窗口关闭但未持有 observer token；`WebSocketPlatformBridge.attach` 会静默覆盖旧 bridge socket。
+- **能力暴露早于实现**：`ocr.read` / `accessibility.snapshot` / `accessibility.action` 已注册为 builtin tool，但 macOS provider 仍返回 `not_implemented`。
 
 ### 0.2 改进路线建议（按依赖顺序）
 
@@ -35,10 +36,10 @@
 
 当前优先级：
 
-1. 图片附件多模态消息与 PromptPanel 区域圈选 SCK 化。
-2. 缓存失效策略统一（§4.3）与 settings 热路径缓存（§4.2）。
-3. 拆 `AppCoordinator` / `SessionManager`（§1.2、§1.3）。
-4. 给 `LLMClient` 真实流式接口（§3.3）。
+1. 图片附件多模态消息、当前用户气泡附件回显、快捷键配置生效链路修复。
+2. workspace / permission 缓存失效、settings / tool 设置热加载。
+3. 修 `NotificationCenter` observer 生命周期、`WebSocketPlatformBridge` 多连接与多会话绑定。
+4. 给 `LLMClient` 真实流式接口，并补会话 `interrupt` / Stop。
 5. 收敛 `SessionMessage` 的协议混用（§2.2）与跨包 path alias（§2.1）。
 
 ---
@@ -51,39 +52,23 @@
 
 **剩余建议**：
 
-1. 随后续拆分把 `sessionWindowPresenter` / `settingsWindowPresenter` 进一步收敛为 `SessionLifecycle` / `SettingsLifecycle`。
-2. 给 `AppServices.testing()` 暴露更多可选替身参数，减少测试里手写生产依赖。
-3. 补一个轻量 `AppServices` 装配测试，覆盖默认 init 不抛异常。
+1. 给 `AppServices.testing()` 暴露更多可选替身参数，减少测试里手写生产依赖。
+2. 补一个轻量 `AppServices` 装配测试，覆盖默认 init 不抛异常。
+3. 生产 presenter 关闭通知的 observer 生命周期仍需修复（见 §5.4）。
 
 ---
 
-### 1.2 `AppCoordinator` 仍偏重
+### 1.2 `AppCoordinator` 拆分（已修）
 
-**现状**：247 行，已经把服务创建下沉到 `AppServices`，把 agent-server 健康监听抽到 `AgentServerHealth`，把采集串联抽到 `PromptCaptureCoordinator`，窗口构造通过 presenter 注入。但 Coordinator 仍直接 `import AppKit`、持有 `NSWindow` 字典、处理 settings/session 窗口生命周期与状态气泡回跳。
+**已修**：`AppCoordinator.swift` 当前 188 行，已移除 `import AppKit`，不再持有 `NSWindow` 字典或直接构造窗口 / alert。会话窗口生命周期下沉到 `SessionLifecycle`，设置窗口生命周期下沉到 `SettingsLifecycle`，采集串联下沉到 `PromptCaptureCoordinator`，agent-server 健康状态下沉到 `AgentServerHealth`。
 
-**问题**：
+**测试覆盖**：
 
-- 任何"新增一种入口 / 新增一类窗口"都要改 Coordinator；
-- 窗口 presenter 内部仍使用 `NotificationCenter.default.addObserver(...)` 且不持有 token；
-- 不易做窗口生命周期的单元测试。
+- `SessionLifecycleTests` 覆盖 open / close / focus / closeAll 与激活策略更新。
+- `SettingsLifecycleTests` 覆盖 openOrFocus / handleClosed。
+- `AppCoordinatorTests` 通过 `AppServices.testing()` 覆盖设置窗口、会话创建、server 不可用、bootstrap 启动。
 
-**建议改法**：继续把"窗口生命周期 + registry 更新 + activation policy 更新"抽到生命周期对象，例如：
-
-```swift
-@MainActor
-final class SessionLifecycle {
-    func open(prompt: PromptSubmission, startupError: String?) -> String
-    func close(sessionId: String)
-    func focus(sessionId: String) -> Bool
-}
-```
-
-`SettingsLifecycle` 同理持有 settings window 与 open/focus/close 逻辑。Coordinator 只路由 `Action`，不保存 `NSWindow`。
-
-**验收**：
-
-- `AppCoordinator` 行数 < 200，无 `import AppKit` 中的 `NSWindow` / `NSHostingController` / `NSAlert` 直接构造调用。
-- `SessionLifecycleTests` / `SettingsLifecycleTests` 覆盖窗口生命周期与激活策略更新；`AppCoordinatorTests` 用 fake lifecycle 覆盖路由逻辑。
+**剩余问题**：生产窗口 presenter 仍用 `NotificationCenter.default.addObserver(...)` 监听关闭且未持有 token；这是 presenter 层可靠性问题，不再是 Coordinator 职责拆分问题（见 §5.4 与 [TODO](/Users/mu9/proj/handAgent/docs/TODO.md) P1）。
 
 ---
 
@@ -196,7 +181,7 @@ final class SessionLifecycle {
 2. `VercelClient` 改用 `streamText`，把 SDK 的事件流映射为统一事件。
 3. `AgentRuntime` 里直接转发 stream，不再合成假 delta。
 
-这是 TODO 8.1 的扩展，建议把"流式"也并入 `LLMClient` 抽象重做。
+这是 [TODO](/Users/mu9/proj/handAgent/docs/TODO.md) 中真实 streaming 的扩展，建议把"流式"也并入 `LLMClient` 抽象重做。
 
 **验收**：
 
@@ -209,7 +194,7 @@ final class SessionLifecycle {
 
 **现状**：`MessageTranslator.composeUserContent` 会把 `UserMessageAttachment.image` 写入 BlobStore，并在 user message 中插入空 body 的 image STUB。原始 base64 不进入 LLM 上下文，LLM 看到的是 blob 引用而非图像内容。
 
-**问题**：用户 captureRegion 之后，原始图像字节已可回读，但 LLM 还没有 vision / `image.describe` 工具把 blob 转成文本事实。这仍是 TODO 2.x 的 last mile 缺口。
+**问题**：用户 captureRegion 之后，原始图像字节已可回读，但 LLM 还没有 vision / `image.describe` 工具把 blob 转成文本事实。这仍是 [TODO](/Users/mu9/proj/handAgent/docs/TODO.md) 中图片多模态闭环的 last mile 缺口。
 
 **建议改法**：
 
@@ -224,13 +209,59 @@ final class SessionLifecycle {
 
 ---
 
+### 3.5 当前用户气泡不展示附件
+
+**现状**：`PromptSubmission` 会把 text selection / image attachment 通过 `SessionSocketClient.sendUserMessage(... attachments)` 发到 agent-server；`MessageTranslator.composeUserContent` 也会在持久化 user message 中拼入选区文本和 image STUB。但当前 SessionWindow 里本轮提交的 user bubble 是 `SessionViewModel.sendPrompt()` 本地先追加的，只包含 trimmed prompt，不包含附件数量、类型或预览。
+
+**问题**：
+
+- 用户在当前窗口无法确认本轮请求实际带了哪些附件；
+- 当前本地回显与 `session_snapshot` / `load_session_response` 中从持久化恢复的 user message 形态可能不一致；
+- 图片多模态落地前，附件不可见会让排查更困难。
+
+**建议改法**：
+
+1. 让 `SessionBubble` 或 user bubble text 支持附件摘要，当前最小方案是在本地 user message 后追加 `[附件 ×N]` 与类型列表。
+2. 历史恢复时复用同一渲染规则，避免当前窗口与 snapshot 不一致。
+3. 图片预览可复用 PromptPanel 的 QuickLook 路径，也可以先提供明确的图片占位入口。
+
+**验收**：
+
+- `SessionViewModelTests` 覆盖带附件提交后的 user bubble 文本或 attachment view model。
+- 带 text selection 和 imageRegion 提交后，当前窗口无需重连即可看到附件信息。
+
+---
+
+### 3.6 `interrupt` 协议帧未接入运行时
+
+**现状**：`SessionMessage` 中已经定义 `interrupt`，但 `SessionRouter.receive` 未处理该分支，`SessionWindowView` 也没有 Stop 控件。
+
+**问题**：
+
+- 用户无法停止长耗时 LLM 请求或 tool 调用；
+- 关闭窗口只是断开 socket，后端 run 仍可能继续落库；
+- 后续真实 streaming 接入后如果没有 abort 语义，token / tool 事件仍会继续推送。
+
+**建议改法**：
+
+1. SessionWindow 运行态显示 Stop 控件，发送 `interrupt`。
+2. agent-server 维护 sessionId → active run controller 映射。
+3. `LLMClient` / `AgentRuntime` 支持 `AbortSignal`；无法硬取消的 tool 至少要在完成后丢弃已中断 run 的结果。
+
+**验收**：
+
+- interrupt 后不再追加 assistant/tool 消息，状态变为 interrupted 或 idle。
+- 测试覆盖 LLM 进行中、tool 进行中、无 active run 三种分支。
+
+---
+
 ## 4. 测试与可演化性
 
-### 4.1 builtin tool 模板代码（已完成基础版）
+### 4.1 builtin tool 模板代码（已完成基础版，运行时校验待补）
 
 **现状**：`defineTool({ name, description, inputSchema, run })` 已落地，builtin tool 已改为 zod schema 单一源并自动生成 JSON Schema。当前生产注册 10 个 builtin tool：7 个平台类 + `workspace.list` + `file.read` + `file.write`。
 
-**剩余问题**：tool 工厂已解决大部分样板，但运行时输入校验失败的错误文案和测试覆盖还可以继续补强。
+**剩余问题**：tool 工厂目前只用 zod schema 生成 JSON Schema，`call(input)` 没有执行 `inputSchema.parse`。模型返回畸形参数时，错误由各 tool 内部偶然抛出，字段路径和文案不稳定。
 
 **已完成**：
 
@@ -240,7 +271,9 @@ final class SessionLifecycle {
 
 **后续验收**：
 
-- `register-builtins.test.ts` 增加输入校验失败用例（zod 抛错路径）。
+- `defineTool` 在 `call(input)` 时执行 parse / safeParse。
+- 统一错误文案包含 tool name 与字段路径。
+- `register-builtins.test.ts` 或新增 `defineTool.test.ts` 增加输入校验失败用例（类型错误、缺必填、未知字段）。
 
 ---
 
@@ -262,6 +295,29 @@ final class SessionLifecycle {
 **验收**：
 
 - `vercel-client.test.ts` 增加"100 次 complete 期间，loadModelSettings 实际只走盘 ≤ 2 次"。
+
+---
+
+### 4.2.1 tool settings 只在 agent-server 启动时读取
+
+**现状**：`ToolSettings` 支持 `tools.allowlist / tools.denylist`，`registerBuiltinTools` 也能按配置过滤 registry。但 `startDefaultServer` 只在启动时 `loadToolSettings()` 一次；Settings UI 也没有 tool 管理入口。
+
+**问题**：
+
+- 用户无法在 UI 中启停高风险 tool；
+- 即使手改 `settings.json`，已启动的 agent-server registry 也不会变化；
+- 与模型设置“改完下次请求生效”的行为不一致。
+
+**建议改法**：
+
+1. Settings 增加 tool 管理 tab，写 `tools.allowlist / tools.denylist`。
+2. agent-server 引入 registry factory 或可替换 registry，在每轮请求前按 settings mtime 刷新。
+3. 与 `SettingsBackedLLMClient` 的缓存失效策略共用 settings loader，避免两套 watcher。
+
+**验收**：
+
+- denylist 保存后，下一轮 `LLMClient.complete(messages, tools)` 的 tools 不再包含对应 tool。
+- UI / loader / registerBuiltinTools 都有测试覆盖。
 
 ---
 
@@ -320,7 +376,7 @@ private async loadIfChanged(): Promise<void> {
 **现状**：
 
 - `attach(send)` 静默覆盖前一个 send，第二个 desktop 连接会偷走 bridge。
-- `server.ts` 的 `boundSessionId` 一旦设定就不再变，单 socket 多 session 切换不可用。
+- `server.ts` 的 `boundSessionId` 一旦设定就不再变，单 socket 多 session 切换不可用；关闭时也只清理首次绑定的 session 权限回流和 session-scope 规则。
 
 **问题**：未来"多窗口同时连"或"重连恢复"会撞墙。
 
@@ -332,6 +388,7 @@ private async loadIfChanged(): Promise<void> {
 **验收**：
 
 - 新增 `WebSocketPlatformBridge.test.ts` 多 attach 场景：第二次 attach 后第一条 socket 收到 detach 通知。
+- 新增 socket 多 session 场景：同一 socket 连续发送两个 session 的 `user_message` 后，权限请求能发回正确窗口，close 时两者都清理。
 
 ---
 
@@ -345,11 +402,40 @@ private async loadIfChanged(): Promise<void> {
 
 ---
 
-### 5.4 `NotificationCenter` 观察者未释放
+### 5.4 生产窗口 presenter 的 `NotificationCenter` 观察者未释放
 
-**现状**：`AppCoordinator.handleSubmitPrompt` / `openOrFocusSettingsWindow` 用 `NotificationCenter.default.addObserver(forName:...)` 但不持有返回的 token。窗口销毁后通知中心仍持有闭包到下次 GC。
+**现状**：`ProductionSessionWindowPresenter.present` 与 `ProductionSettingsWindowPresenter.present` 用 `NotificationCenter.default.addObserver(forName:object:queue:)` 监听 `NSWindow.willCloseNotification`，但不持有返回的 token。窗口销毁后通知中心仍持有闭包直到通知中心释放 observer。
 
-**建议改法**：用 `NSWindowDelegate.windowWillClose` 替换，或保留 token 到 `[NSObjectProtocol]` 数组并在 `sessionClosed` / `settingsWindowClosed` 时 remove。
+**建议改法**：用 `NSWindowDelegate.windowWillClose` 替换，或由 presenter 持有 token 并在窗口关闭时 remove。由于 Coordinator 已不再持有窗口对象，释放逻辑应留在 presenter / lifecycle 边界内，不要倒灌回 Coordinator。
+
+**验收**：
+
+- 反复打开/关闭 SessionWindow 与 SettingsWindow，close 回调每个窗口只触发一次。
+- 增加 presenter 级测试或 lifecycle 集成测试覆盖 observer/token 释放。
+
+---
+
+### 5.5 OCR / Accessibility tool 已暴露但 macOS provider 未实现
+
+**现状**：`registerBuiltinTools` 默认注册 `ocr.read`、`accessibility.snapshot`、`accessibility.action`，但 `MacPlatformProvider.handle` 对这三个 method 统一抛 `not_implemented`。
+
+**问题**：
+
+- LLM 在需要读图中文字或操作前台 App 时会自然选择这些 tool，但用户看到的是运行时失败；
+- tool list 给模型的能力承诺大于实际能力；
+- 端到端 QA 很难区分“模型不会调用”和“平台没实现”。
+
+**建议改法**：
+
+1. `ocr.read` 用 Vision / 系统 OCR 从用户主动提供图片或 `screen.capture` 结果识别文本。
+2. `accessibility.snapshot` 用 Accessibility API 返回 frontmost app/window/element 树。
+3. `accessibility.action` 至少支持 press / click / set_value，并在未授权时返回权限引导。
+4. 如果短期不实现，应通过 tool settings 默认禁用未实现 tool，避免暴露给 LLM。
+
+**验收**：
+
+- 在真实 macOS App 上通过手工 QA 验证 OCR、snapshot、action 三条路径。
+- 单元测试覆盖 provider 参数解析和错误映射。
 
 ---
 
@@ -404,13 +490,14 @@ AGENTS.md                         总索引、约定、产品边界
 
 ## 7. 改造后的目标手感
 
-完成上面 P0 + P1 后预期达到：
+完成当前 P0 + P1 后预期达到：
 
-- `AppCoordinator` 保持在 200 行以内，agent-server 会话链路按 Router / Orchestrator / Persistence / Translator 分层，新功能进得去、拿得出；
+- `AppCoordinator` 保持在 200 行以内，生产窗口 presenter 的关闭 observer 可释放，agent-server 会话链路按 Router / Orchestrator / Persistence / Translator 分层，新功能进得去、拿得出；
 - 单元测试可以 mock 整条链路：DI 容器交给 fake services，runtime 通过 fake LLMClient + fake ToolRegistry 跑；
 - `tool_message` / `permission_request.arguments` 在 desktop 上肉眼可见，体验追上参考的 claude-code；
-- 添加新 builtin tool 在 30 行以内（schema + run），不再有重复 class；
+- 添加新 builtin tool 在 30 行以内（schema + run），并有统一运行时入参校验；
 - 添加新 LLM provider 在 100 行以内，不需要碰 runtime 或 agent-server 会话路由；
-- workspace / 权限规则实时反映文件变化，不需要重启 agent-server。
+- workspace / 权限规则实时反映文件变化，不需要重启 agent-server；
+- 未实现的平台 tool 不默认误导模型，或已经完成 OCR / Accessibility 最小闭环。
 
 P2 / P3 则是为"插件系统"、"多 provider"、"多窗口 / 多 session 复用 socket"等长期能力打地基，可以按 TODO 路线图节奏推进。

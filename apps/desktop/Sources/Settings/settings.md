@@ -18,16 +18,17 @@
 ## 数据流
 
 ```
-Coordinator.openOrFocusSettingsWindow
-  └─ makeSettingsWindow()
+Coordinator.send(.openSettings)
+  └─ SettingsLifecycle.openOrFocus(...)
        └─ SettingsView(settingsViewModel:, shortcutActions:, workspaceViewModel:)
             ├─ AgentSettingsView(viewModel:)        // → AgentSettingsStore.update → 写 ~/.spotAgent/settings.json
             ├─ ShortcutSettingsView(actions:)       // KeyboardShortcuts.Recorder 直写 UserDefaults
             └─ WorkspaceSettingsView(viewModel:)    // → 写 ~/.spotAgent/workspaces.json，agent-server 启动时由 FileWorkspaceRegistry 重新加载
-  └─ 监听 NSWindow.willCloseNotification → Coordinator.send(.settingsWindowClosed)
+  └─ 生产 presenter 监听 NSWindow.willCloseNotification → Coordinator.send(.settingsWindowClosed)
 ```
 
 `~/.spotAgent/workspaces.json` 是 desktop（写）与 agent-server（读，启动时一次）共享的注册表文件；当前版本 desktop 写入后需要重启 agent-server 子进程才能让 LLM 看到新 workspace（无 watcher）。
+`~/.spotAgent/settings.json` 中已有 `tools.allowlist / tools.denylist` loader，但当前 Settings UI 只暴露模型、快捷键和工作区三个 Tab；tool 管理 UI 与 agent-server registry 热加载仍在 TODO 中。
 
 ## 编辑此目录的约束
 
@@ -36,7 +37,7 @@ Coordinator.openOrFocusSettingsWindow
 - **不要把 store 直接传给 View**：始终经过 ViewModel；测试也是 `AgentSettingsViewModel(store:)`。
 - **Tab 增加规则**：新建 Tab 在 `SettingsView` 内增 `Tab(...)`；Tab 内如果有副作用则配套加 ViewModel；纯展示可直接写 View。
 - **视觉风格**：设置页面使用 `settingsCard()` 卡片容器 + `SettingsFieldStyle` 输入框 + `SettingsRow` 行布局，与 PromptPanel / SessionWindow 保持统一暗色玻璃风格。不要使用系统 `Form` / `GroupBox` / `.grouped` 样式。窗口标题栏设为透明 + fullSizeContentView，与 SessionWindow 一致。
-- **不要在 Settings 里读 LLM/tool 状态**：宿主层不组装 LLM 消息，`api`/`baseURL`/`apiKey` 只是写入 settings.json；agent-server 侧每次请求自己读。
+- **不要在 Settings 里读 LLM/tool 运行态**：宿主层不组装 LLM 消息，`api`/`baseURL`/`apiKey` 只是写入 settings.json；agent-server 侧每次模型请求自己读模型配置，tool settings 当前只在 server 启动时读取。
 - **测试**：[AgentSettingsViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/AgentSettingsViewModelTests.swift) 用临时 home 目录验证读写串通；[AgentSettingsStoreTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/AgentSettingsStoreTests.swift) 覆盖磁盘 IO + 轮询。
 
 ## 与其他模块的关系

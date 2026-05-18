@@ -27,4 +27,4 @@
 
 ## 与其他模块的关系
 
-- 由 [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 持有；在 `bootstrap()` / `handleSubmitPrompt` / `handleSessionClosed` / `openOrFocusSettingsWindow` / `handleSettingsWindowClosed` 中调用。
+- 由 [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 创建并注入 `SessionLifecycle` / `SettingsLifecycle`；会话窗口数量变化通过 `SessionLifecycle.open / close` 更新，设置窗口开关通过 `SettingsLifecycle.openOrFocus / handleClosed` 更新。

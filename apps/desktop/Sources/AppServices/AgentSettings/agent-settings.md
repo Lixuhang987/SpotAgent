@@ -35,10 +35,10 @@ LLM 模型配置的读写与（旧址的）UI。
 - **写入路径只一条**：`update { ... }` → `persist()`；不要绕过 `update` 直接改 `settings`。
 - **轮询间隔修改需配套测试**：当前 500ms 是 UX/IO 折中值，改动须更新 `AgentSettingsStoreTests`。
 - **AgentSettingsView 不直接持有 Store**：通过 [AgentSettingsViewModel](/Users/mu9/proj/handAgent/apps/desktop/Sources/Settings/settings.md) 代理；Store 只作为 ViewModel 的依赖。
-- **不要在 Store 里加 LLM 调用 / runtime 状态**：Store 只是 settings.json 的镜像；agent-server 侧自行 `readFileSync` 读同一个文件。
+- **不要在 Store 里加 LLM 调用 / runtime 状态**：Store 只是 settings.json 的模型配置镜像；agent-server 侧自行 `readFileSync` 读同一个文件。tool allowlist/denylist 当前由 TypeScript loader 支持，但尚未接入桌面 Settings UI。
 - **测试**：[AgentSettingsStoreTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/AgentSettingsStoreTests.swift) 必须通过临时 home 目录验证 IO + 轮询。
 
 ## 与其他模块的关系
 
 - [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 持有 `AgentSettingsStore` 单例，并通过 `makeSettingsViewModel()` 暴露给 Settings 窗口。
-- agent-server（TypeScript 侧）每次 `complete()` 同步读取同一个 JSON 文件 — 这是两侧唯一通信通道。
+- agent-server（TypeScript 侧）每次 `complete()` 同步读取同一个 JSON 文件里的模型配置；tool settings 目前只在 agent-server 启动时读取一次。

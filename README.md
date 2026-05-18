@@ -9,7 +9,7 @@ HandAgent 是一个 macOS 优先的桌面 Agent Runtime MVP。当前桌面壳使
 - 设置页支持配置模型、全局热键、已注册 `PromptAction` 快捷键和 workspace
 - 文本选区与区域截图可作为 PromptPanel attachment chip 附加到用户输入
 - 提交 prompt 后创建 `SessionWindow`
-- `SessionWindow` 展示 user / assistant / tool 消息、历史侧栏和权限审批气泡
+- `SessionWindow` 展示 user / assistant / tool 消息、历史侧栏、连接状态和权限审批气泡，并具备断线自动重连基础逻辑
 - `agent-server` 驱动 `AgentRuntime`、builtin tool 注册、workspace 沙箱文件工具、权限策略和会话持久化
 - 状态气泡提供当前会话回跳入口
 
@@ -52,5 +52,6 @@ bash ./scripts/swiftw run HandAgentDesktop
 
 - 默认不会把屏幕、窗口、文件、剪贴板、App 状态等上下文预注入模型。
 - 这些上下文只能由 LLM 通过 tool 按需读取。
+- 图片附件当前会写入 BlobStore 并以 image STUB 进入 user message，尚未接入 vision / 多模态消息，因此 LLM 不能直接理解图片内容。
 - 当前 assistant delta 是协议层伪流式：后端一次性拿到 LLM 完整结果后再发 `start/delta/end`，真实 token streaming 仍在 TODO 中。
 - 当前桌面壳只负责任务入口、会话窗口和状态反馈，runtime 与平台抽象继续下沉在共享层。
