@@ -49,4 +49,41 @@ final class SessionLifecycleTests: XCTestCase {
         XCTAssertEqual(policies.last, .regular)
         XCTAssertNil(closedID)  // onSessionClosed 还没被触发
     }
+
+    @MainActor
+    func testCloseRemovesViewModelAndUpdatesPolicyAndRegistry() {
+        let registry = SessionRegistry()
+        let presenter = SpySessionWindowPresenter()
+        var policies: [NSApplication.ActivationPolicy] = []
+        let lifecycle = SessionLifecycle(
+            registry: registry,
+            windowPresenter: presenter,
+            agentServerURL: URL(string: "ws://127.0.0.1:0/noop")!,
+            activationPolicy: AppActivationPolicyCoordinator(),
+            setActivationPolicy: { policies.append($0) }
+        )
+
+        let prompt = PromptSubmission.compose(draft: "hello", attachments: [])!
+        let id = lifecycle.open(prompt: prompt, startupError: nil) { _ in }
+        policies.removeAll()  // 只关心 close 之后的策略变化
+
+        lifecycle.close(id)
+
+        XCTAssertTrue(lifecycle.viewModels.isEmpty)
+        XCTAssertEqual(policies.last, .accessory)
+        XCTAssertEqual(registry.summaries[id]?.windowIsOpen, false)
+    }
+
+    @MainActor
+    func testCloseUnknownSessionIDIsNoop() {
+        let lifecycle = SessionLifecycle(
+            registry: SessionRegistry(),
+            windowPresenter: SpySessionWindowPresenter(),
+            agentServerURL: URL(string: "ws://127.0.0.1:0/noop")!,
+            activationPolicy: AppActivationPolicyCoordinator(),
+            setActivationPolicy: { _ in }
+        )
+
+        lifecycle.close("unknown")  // 不应崩溃
+    }
 }

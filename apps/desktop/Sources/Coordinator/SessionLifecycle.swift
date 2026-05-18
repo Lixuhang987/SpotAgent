@@ -71,4 +71,23 @@ final class SessionLifecycle {
 
         return sessionID
     }
+
+    func close(_ sessionID: String) {
+        let viewModel = viewModels.removeValue(forKey: sessionID)
+        viewModel?.stop()
+
+        if windows.removeValue(forKey: sessionID) != nil {
+            setActivationPolicy(activationPolicy.policyAfterUpdatingOpenSessionWindows(by: -1))
+        }
+
+        registry.upsert(
+            SessionSummary(
+                sessionId: sessionID,
+                isRunning: viewModel?.status == "running",
+                latestSummary: viewModel?.messages.last?.text ?? "",
+                lastActiveAt: .now,
+                windowIsOpen: false
+            )
+        )
+    }
 }
