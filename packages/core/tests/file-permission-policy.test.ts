@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FilePermissionPolicy } from "../src/permission/FilePermissionPolicy.ts";
@@ -16,6 +16,14 @@ describe("FilePermissionPolicy", () => {
   afterEach(async () => {
     await rm(dir, { recursive: true, force: true });
   });
+
+  function requestFor(relativePath: string) {
+    return {
+      toolName: "file.write",
+      arguments: { workspaceId: "default", relativePath },
+      toolCallId: `tc-${relativePath}`,
+    };
+  }
 
   it("returns ask when no rule exists", async () => {
     const policy = new FilePermissionPolicy({ filePath });
@@ -148,5 +156,50 @@ describe("FilePermissionPolicy", () => {
 
     expect(await policy.check(reqA)).toBe("ask");
     expect(await policy.check(reqB)).toBe("deny");
+  });
+
+  it("reloads external file changes before check", async () => {
+    const policy = new FilePermissionPolicy({ filePath });
+    const req = requestFor("external.md");
+    expect(await policy.check(req)).toBe("ask");
+
+    const writer = new FilePermissionPolicy({ filePath });
+    await writer.remember(req, { decision: "allow", remember: "always" });
+
+    expect(await policy.check(req)).toBe("allow");
+  });
+
+  it("reloads external file changes before listPersistedRules and revoke", async () => {
+    const policy = new FilePermissionPolicy({ filePath });
+    const firstReq = requestFor("first.md");
+    await policy.remember(firstReq, { decision: "allow", remember: "always" });
+    const firstRule = policy.listPersistedRules()[0];
+
+    const writer = new FilePermissionPolicy({ filePath });
+    const secondReq = requestFor("second.md");
+    await writer.remember(secondReq, { decision: "deny", remember: "always" });
+
+    expect(policy.listPersistedRules().map((r) => r.argHash)).toContain(
+      writer.listPersistedRules()[0].argHash,
+    );
+
+    const raw = JSON.parse(await readFile(filePath, "utf8"));
+    raw.rules.push({
+      toolName: "file.write",
+      argHash: "externally-added",
+      decision: "deny",
+      createdAt: "2026-05-18T00:00:00.000Z",
+    });
+    await writeFile(filePath, JSON.stringify(raw, null, 2), "utf8");
+
+    await policy.revoke(firstRule.argHash);
+
+    const rules = JSON.parse(await readFile(filePath, "utf8")).rules;
+    expect(rules.map((r: { argHash: string }) => r.argHash)).toContain(
+      "externally-added",
+    );
+    expect(rules.map((r: { argHash: string }) => r.argHash)).not.toContain(
+      firstRule.argHash,
+    );
   });
 });
