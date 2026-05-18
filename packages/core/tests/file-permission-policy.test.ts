@@ -100,4 +100,53 @@ describe("FilePermissionPolicy", () => {
     });
     expect(resolution).toEqual({ decision: "deny", reason: "user clicked deny" });
   });
+
+  it("session-scope rules are isolated by sessionId", async () => {
+    const policy = new FilePermissionPolicy({ filePath });
+    const baseArgs = { workspaceId: "default", relativePath: "secret.md" };
+
+    const reqA = {
+      toolName: "file.write",
+      arguments: baseArgs,
+      sessionId: "session-A",
+      toolCallId: "tc-a",
+    };
+    const reqB = {
+      toolName: "file.write",
+      arguments: baseArgs,
+      sessionId: "session-B",
+      toolCallId: "tc-b",
+    };
+
+    await policy.remember(reqA, { decision: "allow", remember: "session" });
+
+    expect(await policy.check(reqA)).toBe("allow");
+    expect(await policy.check(reqB)).toBe("ask");
+  });
+
+  it("clearSessionRules removes only rules for the given sessionId", async () => {
+    const policy = new FilePermissionPolicy({ filePath });
+    const baseArgs = { workspaceId: "default", relativePath: "x.md" };
+
+    const reqA = {
+      toolName: "file.write",
+      arguments: baseArgs,
+      sessionId: "session-A",
+      toolCallId: "tc-a",
+    };
+    const reqB = {
+      toolName: "file.write",
+      arguments: baseArgs,
+      sessionId: "session-B",
+      toolCallId: "tc-b",
+    };
+
+    await policy.remember(reqA, { decision: "allow", remember: "session" });
+    await policy.remember(reqB, { decision: "deny", remember: "session" });
+
+    policy.clearSessionRules("session-A");
+
+    expect(await policy.check(reqA)).toBe("ask");
+    expect(await policy.check(reqB)).toBe("deny");
+  });
 });
