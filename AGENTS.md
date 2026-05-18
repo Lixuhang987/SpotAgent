@@ -79,9 +79,10 @@ flowchart TD
 
 ## 当前实现状态
 
-- 已实现：热键唤起、PromptPanel、SessionWindow、状态气泡、`AgentRuntime` 循环、工具协议、文件工具、平台抽象、macOS 选区捕获。
-- 已预留：screen / OCR / accessibility / file / app 类 tool 的统一协议与平台适配入口。
-- 待收尾：把选区采集接入 PromptPanel attachment 流程，并继续补齐更多桌面能力。
+- 已实现：热键唤起、PromptPanel、PromptPanel attachment、文本选区采集、区域截图采集入口、SessionWindow、会话历史侧栏、状态气泡、设置页（模型 / 快捷键 / workspace）、`AgentRuntime` 循环、builtin tool 注册、workspace 沙箱文件工具、权限审批协议、会话审计事件、平台反向 IPC。
+- 已实现的 macOS 平台能力：剪贴板、前台 App、窗口列表、ScreenCaptureKit 截图（display / window / region target）。PromptPanel 的手动区域圈选入口当前仍由 `screencapture -i` 兜底。
+- 已预留：OCR、accessibility、真实 token streaming、多模态图片消息、插件 tool、独立平台 RPC 协议拆分。
+- 待收尾：图片附件仍只作为字符串占位进入 LLM；PromptPanel 区域圈选 UI 仍需迁到自建 ScreenCaptureKit 流程；workspace / permission 文件缓存仍需失效策略；SessionWindow 断线重连、权限气泡和工作区 UI 还需要端到端手工验证。
 - Since the project hasn’t gone live yet, there’s no need to consider compatibility.
 
 ## 开发规范
@@ -134,3 +135,4 @@ flowchart TD
 - 进行代码修改。
 - 验证通过后，更新已有文档。
 - 执行 `git commit` 并在 commit message 中总结改动，不要让完成的工作长时间不提交。
+- 最后完成任务并自检后，将branch merge进main分支，然后删除worktree和对应branch

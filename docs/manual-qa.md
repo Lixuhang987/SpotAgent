@@ -2,7 +2,7 @@
 
 ## 验收目标
 
-确认桌面 Agent MVP 的端到端主链路可用：热键唤起、输入 prompt、附件采集、创建会话窗口、LLM 返回结果、状态气泡回跳、权限审批、工作区管理、agent-server 崩溃恢复。
+确认桌面 Agent MVP 的端到端主链路可用，并把仍需补齐或待验证的路径单独记录：热键唤起、输入 prompt、附件采集、创建会话窗口、LLM 返回结果、状态气泡回跳、权限审批、工作区管理、agent-server 崩溃恢复。
 
 ## 验收前提
 
@@ -19,7 +19,7 @@
 4. 确认 PromptPanel 输入框自动聚焦。
 5. 输入一段用户主动发起的请求并提交。
 6. 观察 PromptPanel 关闭并新建 SessionWindow。
-7. 观察 SessionWindow 中出现用户消息和 assistant 流式回复。
+7. 观察 SessionWindow 中出现用户消息和 assistant 回复。当前后端是伪流式：一次性拿到 LLM 完整结果后发 `start/delta/end`，不要求 token 级 streaming。
 8. 点击状态气泡，确认优先回到当前 running session；没有 running session 时回最近活跃窗口。
 9. 如未配置 `apiKey`，确认错误会以可见文案 `Missing apiKey in ~/.spotAgent/settings.json. 请先在设置页完成模型配置。` 和 assistant 气泡展示，而不是静默失败。
 
@@ -28,7 +28,7 @@
 10. 在任意 App 中选中一段文字，按 `captureSelection` 热键，确认 PromptPanel 弹出且输入框上方出现 textSelection chip；chip 可点击移除。
 11. 没有任何文字选中时再按一次，确认 PromptPanel 仅弹出，无 chip（`SelectionCaptureResult.empty`）。
 12. 按 `captureRegion` 热键进入 macOS 系统圈选 UI，画一个矩形完成截图，确认 PromptPanel 弹出且出现 imageRegion chip；点 chip 触发 QuickLook 内嵌预览，按 ESC 取消圈选时不弹 PromptPanel。
-13. 提交带 chip 的 prompt，到 SessionWindow 后确认用户消息渲染附件占位（`[附件 ×N]`）；agent-server 日志可见 `attachments` 字段非空。
+13. 提交带 chip 的 prompt，到 SessionWindow 后确认用户消息渲染附件占位（`[附件 ×N]`）；agent-server 可收到 `attachments` 字段。注意：文本选区会拼入 prompt，图片附件当前仍被 `composeUserContent()` 转成字符串占位，LLM 看不到真实图像字节。
 
 ## 工作区与文件 tool（P2）
 
@@ -46,20 +46,21 @@
 20. 选择「拒绝」时，确认 LLM 收到「用户拒绝执行该 tool」的伪造 tool message 并能继续推进，不卡死。
 21. 询问超时（默认 60s）保持沉默，确认按 deny 处理。
 22. 关闭 SessionWindow 时若有挂起请求，确认全部被取消，不留僵尸。
+23. 查看 `~/.spotAgent/permissions.json`，确认「始终允许」规则已写入。当前 Settings 尚无权限规则管理 UI，撤销永久规则需要后续补齐。
 
 ## agent-server 崩溃恢复（P3）
 
-23. 通过 `kill -9 <agent-server pid>` 模拟崩溃，确认：
-    - SessionWindow 出现连接断开提示，PromptPanel 暂时不可提交。
+24. 通过 `kill -9 <agent-server pid>` 模拟崩溃，确认：
+    - SessionWindow 出现连接错误或断开提示。
     - 桌面 App 在指数退避（约 1s/2s/4s/8s/16s）内自动重启 server。
-    - 重启成功后会话流恢复，状态气泡回到 idle/running。
-24. 连续杀 6 次模拟反复崩溃，确认第 6 次后弹出 `NSAlert("Agent Server 已停止")`，「查看日志」按钮打开 `~/.spotAgent/`。
+    - 重启成功后新会话可继续提交。现有 SessionWindow 自动重连订阅仍是待验证/待补齐项。
+25. 连续杀 6 次模拟反复崩溃，确认第 6 次后弹出 `NSAlert("Agent Server 已停止")`；「查看日志」按钮是否能打开 `~/.spotAgent/` 仍需实机确认。
 
 ## 通过标准
 
 - 主链路全部跑通；
-- 文本 / 图片附件能从用户输入流转到 SessionWindow 与 agent-server；
+- 文本附件能从用户输入流转到 SessionWindow 与 agent-server；图片附件能传输但尚未进入多模态 LLM 消息；
 - file tool 严格沙箱化，越狱被拒；
-- 权限审批 UI 不阻塞其他会话，决策被持久化；
-- agent-server 崩溃可自动恢复，过限有可见反馈；
+- 权限审批 UI 不阻塞其他会话，决策被持久化；权限规则管理 UI 是后续项；
+- agent-server 崩溃可自动重启，过限有可见反馈；现有会话自动重连订阅是后续项；
 - 所有错误路径均有明确文案，不出现静默失败。

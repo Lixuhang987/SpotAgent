@@ -14,7 +14,7 @@
 |------|------|------|
 | `runtime/` | 会话循环、消息模型、tool call 编排 | [runtime/runtime.md](/Users/mu9/proj/handAgent/packages/core/src/runtime/runtime.md) |
 | `llm/` | LLMClient 抽象与 Vercel AI SDK 适配 | [llm/llm.md](/Users/mu9/proj/handAgent/packages/core/src/llm/llm.md) |
-| `tools/` | AgentTool 协议、ToolRegistry、9 个 builtin tool | [tools/tools.md](/Users/mu9/proj/handAgent/packages/core/src/tools/tools.md) |
+| `tools/` | AgentTool 协议、ToolRegistry、10 个 builtin tool | [tools/tools.md](/Users/mu9/proj/handAgent/packages/core/src/tools/tools.md) |
 | `platform/` | PlatformAdapter / PlatformBridge / RemotePlatformAdapter / OfflinePlatformAdapter | [platform/platform.md](/Users/mu9/proj/handAgent/packages/core/src/platform/platform.md) |
 | `permission/` | 权限策略接口与文件持久化实现 | [permission/permission.md](/Users/mu9/proj/handAgent/packages/core/src/permission/permission.md) |
 | `storage/` | PersistedSession / SessionStore / 内存与文件实现 | [storage/storage.md](/Users/mu9/proj/handAgent/packages/core/src/storage/storage.md) |

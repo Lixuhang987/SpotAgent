@@ -44,9 +44,9 @@ flowchart TD
 `AgentRuntimeEvent` 是回调流，供 agent-server 翻译成 `SessionMessage`：
 
 - `assistant_message_start | assistant_message_delta | assistant_message_end`：当前是"伪流式"，一次性把整段文本作为单 delta 发出（详见 [docs/architecture-review.md](/Users/mu9/proj/handAgent/docs/architecture-review.md)）。
-- `tool_call`：tool 调用前埋点。
-- `tool_result`：成功 / 失败 + 序列化输出（`MAX_OUTPUT_BYTES = 8 KiB` 截断）+ duration。
-- `permission_decision`：进入 `ask` 路径后的解析结果。
+- `tool_call`：tool 调用前埋点；agent-server 会翻译成 `tool_message(status: "running")`。
+- `tool_result`：成功 / 失败 + 序列化输出（`MAX_OUTPUT_BYTES = 8 KiB` 截断）+ duration；agent-server 会翻译成 `tool_message(status: "completed" | "failed")`。
+- `permission_decision`：进入 `ask` 路径后的解析结果；用于审计事件，不直接发 UI 消息。
 - `runtime_error`：仅类型预留，目前未在循环内主动 emit；外层捕获 throw 后由 `SessionRuntimeOrchestrator` 通过 `MessageTranslator.toErrorMessage` 翻译。
 
 ## 默认策略
@@ -64,7 +64,7 @@ flowchart TD
 - BlobStore 与 TurnSummarizer 由组合根注入；runtime 不创建磁盘 store、不选择具体模型。
 - 不要把 stream / SSE 的 fan-out 写进 `AgentRuntime`，应改 `LLMClient` 接口。
 - tool 调用以 `ToolRegistry.get(name)` 为唯一入口，不允许直接 `import` builtin tool。
-- 新增事件类型时，`MessageTranslator.toSessionMessage` / `toAuditEvent` 必须同步更新。
+- 新增事件类型时，`apps/agent-server/src/MessageTranslator.ts` 的 `toSessionMessage` / `toAuditEvent` 必须同步更新。
 
 ## 相关文档
 

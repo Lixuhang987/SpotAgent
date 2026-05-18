@@ -1,6 +1,6 @@
 # tools
 
-`AgentTool` 协议、`ToolRegistry` 注册中心，以及当前 9 个 builtin tool。
+`AgentTool` 协议、`ToolRegistry` 注册中心，以及当前 10 个 builtin tool。
 
 ## 文件
 
@@ -10,10 +10,10 @@
 | `defineTool.ts` | `defineTool({ name, description, inputSchema (zod), stubByDefault?, run })` 工厂：`zod` schema 自动转 JSON Schema 2019-09，返回带 `.create(deps)` 的 `ToolFactory<TInput, TOutput, TDeps>` |
 | `ToolRegistry.ts` | Map 包装；`register / get / list`，重名抛错；`list()` 返回 `RegisteredTool`（去掉 `call`），供 `LLMClient.complete` 使用 |
 | `registerBuiltins.ts` | 组合根：根据 `PlatformAdapter` + 可选 `WorkspaceRegistry` + `ToolSettings` 装配 candidates，过 allowlist/denylist 后注册 |
-| `builtins/*.ts` | 9 个 builtin tool 实现，全部用 `defineTool` 工厂表达 |
+| `builtins/*.ts` | 10 个 builtin tool 实现，全部用 `defineTool` 工厂表达 |
 | `builtins/workspace-path.ts` | `file.read` / `file.write` 共享的 workspace 路径校验工具：拒绝绝对路径与 `..` 越狱、`realpath` 后再次校验 |
 
-## 9 个 builtin tool
+## 10 个 builtin tool
 
 | name | 入参 | 依赖 | 说明 |
 |------|------|------|------|
@@ -46,7 +46,7 @@ flowchart LR
 
 ## 编辑此目录的约束
 
-- 新增 builtin tool 必须：实现 `AgentTool` → 在 `registerBuiltins.ts` 的 `candidates` 里挂上 → 同步更新 [README](/Users/mu9/proj/handAgent/README.md) 与本文件的"9 个 builtin tool"表。
+- 新增 builtin tool 必须：实现 `AgentTool` → 在 `registerBuiltins.ts` 的 `candidates` 里挂上 → 同步更新 [README](/Users/mu9/proj/handAgent/README.md) 与本文件的"10 个 builtin tool"表。
 - tool name 一律点号风格（`category.action`），描述要包含调用场景与边界条件，方便 LLM 自决策。
 - 不要在 tool 内部直接 `import "node:fs"` 与平台无关的 IO；platform 类 tool 必须经 `PlatformAdapter`，文件类 tool 必须经 `WorkspaceRegistry`。
 - 工具结果优先返回**可序列化对象**（runtime 自动 JSON.stringify）；返回字符串只用于人类阅读场景。

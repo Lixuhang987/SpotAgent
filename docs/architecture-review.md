@@ -18,102 +18,72 @@
 
 负面（驱动本文的根因）：
 
-- **职责过载**：`AppCoordinator`（419 行）与 `SessionManager`（agent-server 内）都吃了太多职责，新功能很难在不动它们的情况下加进去。
-- **依赖注入断点**：上述两个枢纽对外暴露的注入点很少，子服务大多在 `init` 里直接 `new`，导致单元测试要么跳过整段链路（`skipServerStart`），要么需要起子进程。
-- **协议表面与运行时实现不对齐**：`status`、`interrupt`、`session_snapshot` 等协议变体是定义了但没人 emit；"伪流式" assistant_message_delta；图片附件当前只进入 Blob/Stub，尚未接入 vision 解读工具；这些都会让上游误以为后端已经在做某事。
-- **缓存与权限边界**：`FilePermissionPolicy.cache` / `FileWorkspaceRegistry.cache` 一次性加载、不监听文件；`session` 范围权限规则未按 sessionId 隔离。
+- **职责仍偏重**：`AppCoordinator`（247 行）已接入 DI / presenter / health / capture coordinator，但仍持有窗口索引、状态气泡路由与 AppKit 细节；`SessionManager`（208 行）已抽出 `MessageTranslator`，但仍同时做协议路由、持久化与 runtime 编排。
+- **协议表面与运行时仍有不对齐**：`tool_message` 与 `permission_request.arguments` 已接通；剩余主要是"伪流式" assistant_message_delta、图片附件当前只进入 Blob/Stub 且尚未接入 vision 解读工具、平台 RPC 与会话协议混在同一个 `SessionMessage` union。
+- **缓存边界**：`FilePermissionPolicy.cache` / `FileWorkspaceRegistry.cache` 一次性加载、不监听文件；Settings 修改 workspace 或撤销权限后，agent-server 重启前看不到。
 - **安全盲区**：~~`FileWriteTool.resolveWritePathWithinWorkspace` 仅 realpath 父目录，basename 是 symlink 时可越狱写到 workspace 外。~~（已修：写前 lstat 检查 basename + 10 MiB 上限 + `.tmp → rename` 原子写，详见 §5.1）
 
 ### 0.2 改进路线建议（按依赖顺序）
 
-P0（一周内可完成、收益最大）
+已完成的基础项：
 
-1. 修 `FileWriteTool` symlink 越狱（§5.1）。
-2. 把 `tool_message` 真实 emit，并把 `permission_request.arguments` 透传到 desktop（§3.1、§3.2）。
-3. 把 `AppServices.swift` 真正激活成 DI 容器，让 `AppCoordinator(services:)` 接受外部注入（§1.1）。
+1. `FileWriteTool` symlink 越狱修复（§5.1）。
+2. `tool_message` 真实 emit 与 `permission_request.arguments` 透传（§3.1、§3.2）。
+3. `AppServices` DI 容器与测试替身（§1.1）。
+4. `defineTool({...})` + zod schema 单一源（§4.1）。
+5. `session` scope 权限按 `sessionId` 隔离（§4.4）。
 
-P1（结构性收益）
+当前优先级：
 
-4. 拆 `AppCoordinator`：抽 `SessionWindowFactory` / `SettingsWindowFactory` / `AgentServerHealth` 三个独立单元（§1.2）。
-5. 抽 `defineTool({...})` 工厂，消灭 builtin tool 模板代码 + 用 zod / TypeBox 做 schema 单一源（§4.1）。
-6. 拆 `SessionManager`：把"协议路由 / 持久化 / 翻译"分别独立成模块（§1.3）。
-
-P2（持续演进）
-
-7. 给 `LLMClient` 真实流式接口（§3.3），替换"假 delta"。
-8. 缓存失效策略统一（§4.3）：要么换 watcher，要么用 mtime 校验。
-9. 收敛 `SessionMessage` 的"协议混用"：把平台 RPC 拆成独立通道或独立类型族（§3.4）。
-
-P3（架构演化）
-
-10. 跨包发布边界：用 path alias（`@core/*`）替代 `../../packages/core/src/...` 相对路径（§2.1）。
-11. 统一 settings 热加载机制：mtime + 内存 cache + 显式 invalidate API（§4.2）。
+1. 图片附件多模态消息与 PromptPanel 区域圈选 SCK 化。
+2. 缓存失效策略统一（§4.3）与 settings 热路径缓存（§4.2）。
+3. 拆 `AppCoordinator` / `SessionManager`（§1.2、§1.3）。
+4. 给 `LLMClient` 真实流式接口（§3.3）。
+5. 收敛 `SessionMessage` 的协议混用（§2.2）与跨包 path alias（§2.1）。
 
 ---
 
 ## 1. 职责分离
 
-### 1.1 `AppServices.swift` 是空壳，但其实是关键 DI 锚点
+### 1.1 `AppServices` DI 锚点（已完成基础版）
 
-**现状**：
-```swift
-// AppServices.swift
-final class AppServices {
-    let agentServerService: AgentServerService
-    let sessionRegistry: SessionRegistry
-    init(...) { ... }
-}
-```
-该类目前没有任何调用方，`AppCoordinator.init` 直接 `AgentServerService()` / `SessionRegistry()` / `AgentSettingsStore()`。
+**现状**：`AppServices` 已成为生产组合根，持有 `agentServer`、`sessionRegistry`、`settingsStore`、`platformBridgeFactory`、`hotkeyRegistrar`、window presenter、fatal alert presenter 与激活策略注入点。`AppCoordinator.init(services:)` 已落地，测试用 `AppServices.testing()` 注入 nop 替身，不再使用 `skipServerStart`。
 
-**问题**：DI 入口缺失，Coordinator 无法注入测试替身（fake server / fake registry / fake store）；`skipServerStart` 这种"用布尔参数跳过整段 bootstrap"的方式，本质上是绕开测试，而不是支持测试。
+**剩余建议**：
 
-**建议改法**：
-
-1. 把 `AppServices` 升级为持有所有跨模块服务的 DI 容器（包括目前外置的 `AgentSettingsStore`、`PlatformBridgeService`、`MacSelectionCaptureProvider`、`MacRegionCaptureProvider`）。
-2. `AppCoordinator.init` 改为 `init(services: AppServices, ...)`，默认参数提供生产实现，测试态可注入 fakes。
-3. 删除 `skipServerStart`：测试用的 `services` 里直接给 stub `AgentServerService`。
-
-**验收**：
-- `AppCoordinatorTests` 不再依赖 `skipServerStart`，能通过注入 stub 验证 hotkey → SessionWindow 全链路。
-- 新增 `AppServicesTests` 至少覆盖默认装配能跑通 init 不抛异常。
+1. 随后续拆分把 `sessionWindowPresenter` / `settingsWindowPresenter` 进一步收敛为 `SessionLifecycle` / `SettingsLifecycle`。
+2. 给 `AppServices.testing()` 暴露更多可选替身参数，减少测试里手写生产依赖。
+3. 补一个轻量 `AppServices` 装配测试，覆盖默认 init 不抛异常。
 
 ---
 
-### 1.2 `AppCoordinator` 是 god object
+### 1.2 `AppCoordinator` 仍偏重
 
-**现状**：419 行，承担：服务持有、热键监听、PromptPanel / Settings / Session / StatusBubble 的窗口构造、SessionViewModel 工厂、attachment 翻译、激活策略切换、错误 alert、agent-server 监听、平台桥启停。
+**现状**：247 行，已经把服务创建下沉到 `AppServices`，把 agent-server 健康监听抽到 `AgentServerHealth`，把采集串联抽到 `PromptCaptureCoordinator`，窗口构造通过 presenter 注入。但 Coordinator 仍直接 `import AppKit`、持有 `NSWindow` 字典、处理 settings/session 窗口生命周期与状态气泡回跳。
 
 **问题**：
 
 - 任何"新增一种入口 / 新增一类窗口"都要改 Coordinator；
-- 窗口构造内嵌 `NotificationCenter.default.addObserver(...)`，token 不被持有，且对 `AppCoordinator` 形成隐式回调依赖；
+- 窗口 presenter 内部仍使用 `NotificationCenter.default.addObserver(...)` 且不持有 token；
 - 不易做窗口生命周期的单元测试。
 
-**建议改法**：把"造窗口 + 监听关闭 + 产出 ViewModel"抽为协议，例如：
+**建议改法**：继续把"窗口生命周期 + registry 更新 + activation policy 更新"抽到生命周期对象，例如：
 
 ```swift
 @MainActor
-protocol SessionWindowFactory {
-    func makeWindow(viewModel: SessionViewModel,
-                    onClose: @escaping (String) -> Void) -> NSWindow
-}
-
-@MainActor
-protocol SettingsWindowFactory {
-    func makeWindow(deps: SettingsViewDependencies,
-                    onClose: @escaping () -> Void) -> NSWindow
+final class SessionLifecycle {
+    func open(prompt: PromptSubmission, startupError: String?) -> String
+    func close(sessionId: String)
+    func focus(sessionId: String) -> Bool
 }
 ```
 
-`AppCoordinator` 只负责：路由 `Action`、保存当前 SessionViewModel 索引、把 attachment 翻译为 `UserMessageAttachmentPayload` —— 后两类工厂的具体 `NSWindow` / `NSHostingController` 细节都搬到 factory 实现。
-
-同时把"agent-server 健康监听"独立成 `AgentServerHealth`（订阅 `onAvailabilityChange` / `onFatalError`，对外只暴露 `errorMessage` 和"显示致命 alert"），让 Coordinator 不再持有 `NSAlert` 构造逻辑。
+`SettingsLifecycle` 同理持有 settings window 与 open/focus/close 逻辑。Coordinator 只路由 `Action`，不保存 `NSWindow`。
 
 **验收**：
 
 - `AppCoordinator` 行数 < 200，无 `import AppKit` 中的 `NSWindow` / `NSHostingController` / `NSAlert` 直接构造调用。
-- `SessionWindowFactoryTests` / `SettingsWindowFactoryTests` 单测各自的窗口配置；`AppCoordinatorTests` 用 fake factory 覆盖路由逻辑。
+- `SessionLifecycleTests` / `SettingsLifecycleTests` 覆盖窗口生命周期与激活策略更新；`AppCoordinatorTests` 用 fake lifecycle 覆盖路由逻辑。
 
 ---
 
@@ -256,32 +226,20 @@ protocol SettingsWindowFactory {
 
 ## 4. 测试与可演化性
 
-### 4.1 9 个 builtin tool 是模板代码
+### 4.1 builtin tool 模板代码（已完成基础版）
 
-**现状**：每个 builtin tool 是独立 class，只持有一个 adapter 引用，转发一个方法。schema 全是手写 JSON Schema，与 TS 类型双向手动维护。
+**现状**：`defineTool({ name, description, inputSchema, run })` 已落地，builtin tool 已改为 zod schema 单一源并自动生成 JSON Schema。当前生产注册 10 个 builtin tool：7 个平台类 + `workspace.list` + `file.read` + `file.write`。
 
-**问题**：新增 tool 写 80% 的样板；schema 与类型漂移没有自动检测。
+**剩余问题**：tool 工厂已解决大部分样板，但运行时输入校验失败的错误文案和测试覆盖还可以继续补强。
 
-**建议改法**：
+**已完成**：
 
-1. 提供 `defineTool` 工厂：
+- `packages/core/src/tools/defineTool.ts` 提供工厂。
+- `packages/core/src/tools/builtins/*.ts` 使用 zod schema。
+- `packages/core/src/tools/tools.md` 已补 tool 编写约束。
 
-```ts
-export function defineTool<TInput, TOutput>(spec: {
-  name: string;
-  description: string;
-  schema: ZodSchema<TInput>;
-  run: (input: TInput) => Promise<TOutput>;
-}): AgentTool<TInput, TOutput>
-```
+**后续验收**：
 
-2. 引入 `zod` 或 `@sinclair/typebox` 作为单一 schema 源，运行时校验输入 + 自动转 JSON Schema。
-3. 把 9 个 builtin 改为 `defineTool({...})` 调用，`builtins/` 目录下每个文件回到 1 个表达式 + 1 个 export 的级别。
-4. 文档侧在 `tools/tools.md` 增补 tool 编写最佳实践。
-
-**验收**：
-
-- `tools/builtins/*.ts` 总行数下降 > 50%。
 - `register-builtins.test.ts` 增加输入校验失败用例（zod 抛错路径）。
 
 ---
@@ -336,15 +294,14 @@ private async loadIfChanged(): Promise<void> {
 
 ---
 
-### 4.4 `session` scope 权限规则未按 sessionId 隔离
+### 4.4 `session` scope 权限规则隔离（已修）
 
-**现状**：`FilePermissionPolicy.sessionRules: Map<argHash, "allow" | "deny">`，没有 sessionId 维度。多会话并存时，A 会话的"本会话允许"会泄漏到 B 会话。
+**已修**：`FilePermissionPolicy.sessionRules` 的 key 已改为 `${sessionId}::${argHash}`，`server.ts` 在 socket 关闭时调用 `permissionPolicy.clearSessionRules(boundSessionId)` 清理对应会话规则。`file-permission-policy.test.ts` 覆盖了两个 sessionId 互不影响与定向清理。
 
-**建议改法**：把 key 改为 `${sessionId}::${argHash}`，并在 `bindSession`/`unbindSession`（agent-server 侧 `SessionPermissionBridge` 已有）时回调 `policy.dropSession(sessionId)`。
+**剩余建议**：
 
-**验收**：
-
-- `file-permission-policy.test.ts` 新增"两个 sessionId 互不影响"用例。
+- 继续补 desktop 端权限气泡的手工端到端验证。
+- Settings 增加永久权限规则查看 / 撤销 UI。
 
 ---
 

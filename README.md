@@ -6,18 +6,19 @@ HandAgent 是一个 macOS 优先的桌面 Agent Runtime MVP。当前桌面壳使
 
 - 全局热键唤起 `PromptPanel`
 - `PromptPanel` 右上角按钮和 `Command+,` 打开快捷键设置页
-- 设置页支持配置全局热键和已注册 `PromptAction` 的快捷键
+- 设置页支持配置模型、全局热键、已注册 `PromptAction` 快捷键和 workspace
+- 文本选区与区域截图可作为 PromptPanel attachment chip 附加到用户输入
 - 提交 prompt 后创建 `SessionWindow`
-- `SessionWindow` 流式展示 user / assistant / tool 消息
-- `agent-server` 驱动 `AgentRuntime` 与 tool 调用
+- `SessionWindow` 展示 user / assistant / tool 消息、历史侧栏和权限审批气泡
+- `agent-server` 驱动 `AgentRuntime`、builtin tool 注册、workspace 沙箱文件工具、权限策略和会话持久化
 - 状态气泡提供当前会话回跳入口
 
 ## 目录
 
 - `apps/desktop/HandAgentApp.swift`：macOS 宿主、PromptPanel、SessionWindow 与状态气泡入口
-- `apps/desktop/Sources/Settings`：快捷键设置页与录制控件
+- `apps/desktop/Sources/Settings`：模型、快捷键与 workspace 设置页
 - `packages/core`：跨平台 Agent Core、工具与会话逻辑
-- `apps/agent-server`：本地 session server 与流式消息桥
+- `apps/agent-server`：本地 session server、平台反向 IPC 与权限桥
 
 ## 本地验证
 
@@ -51,4 +52,5 @@ bash ./scripts/swiftw run HandAgentDesktop
 
 - 默认不会把屏幕、窗口、文件、剪贴板、App 状态等上下文预注入模型。
 - 这些上下文只能由 LLM 通过 tool 按需读取。
+- 当前 assistant delta 是协议层伪流式：后端一次性拿到 LLM 完整结果后再发 `start/delta/end`，真实 token streaming 仍在 TODO 中。
 - 当前桌面壳只负责任务入口、会话窗口和状态反馈，runtime 与平台抽象继续下沉在共享层。

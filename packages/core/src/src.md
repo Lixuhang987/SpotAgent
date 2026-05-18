@@ -11,7 +11,7 @@
 | `runtime/` | [runtime/runtime.md](/Users/mu9/proj/handAgent/packages/core/src/runtime/runtime.md) | LLM/tool 主循环、消息模型、ToolCallEnvelope |
 | `blob/` | [blob/blob.md](/Users/mu9/proj/handAgent/packages/core/src/blob/blob.md) | 大段上下文内容的本地 Blob 持久化与 summary 元数据 |
 | `llm/` | [llm/llm.md](/Users/mu9/proj/handAgent/packages/core/src/llm/llm.md) | LLMClient 抽象 + Vercel AI SDK 适配 |
-| `tools/` | [tools/tools.md](/Users/mu9/proj/handAgent/packages/core/src/tools/tools.md) | AgentTool 协议 + 9 个 builtin tool + 注册组合根 |
+| `tools/` | [tools/tools.md](/Users/mu9/proj/handAgent/packages/core/src/tools/tools.md) | AgentTool 协议 + 10 个 builtin tool + 注册组合根 |
 | `platform/` | [platform/platform.md](/Users/mu9/proj/handAgent/packages/core/src/platform/platform.md) | PlatformAdapter / PlatformBridge / Remote+Offline 实现 |
 | `permission/` | [permission/permission.md](/Users/mu9/proj/handAgent/packages/core/src/permission/permission.md) | 权限策略接口 + 三档记忆持久化 |
 | `storage/` | [storage/storage.md](/Users/mu9/proj/handAgent/packages/core/src/storage/storage.md) | PersistedSession 模型 + 内存 / 文件实现 |
@@ -46,7 +46,7 @@
 
 ### 4. tool 阶段
 
-当前已注册的 builtin tool 共 10 个，按依赖分类：
+当前生产路径会注册的 builtin tool 共 10 个，按依赖分类：
 
 - 平台类（依赖 `PlatformAdapter`）：`clipboard.read`、`app.frontmost`、`window.list`、`screen.capture`、`ocr.read`、`accessibility.snapshot`、`accessibility.action`。
 - 工作区类（依赖 `WorkspaceRegistry`）：`workspace.list`、`file.read`、`file.write`。
@@ -76,7 +76,7 @@
 - tool 结果统一序列化为字符串再回灌；`MAX_OUTPUT_BYTES = 8 KiB` 截断。
 - `VercelClient` 当前默认模型 `gpt-5-mini`。
 - "伪流式"：`assistant_message_delta` 一次性发出整段文本，desktop UI 实际看不到 token 流。
-- 文件 tool 的写沙箱对 basename 是 symlink 的越狱有保护盲区。
+- 文件 tool 已使用 workspace 沙箱、basename symlink 拒绝、10 MiB 写入上限与原子写；仍需继续补 workspace / permission 文件缓存失效策略。
 - `FilePermissionPolicy.cache` 与 `FileWorkspaceRegistry.cache` 一次性加载、不监听文件变化。
 
 完整问题清单与改进路线见 [docs/architecture-review.md](/Users/mu9/proj/handAgent/docs/architecture-review.md)。

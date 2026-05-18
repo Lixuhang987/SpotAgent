@@ -26,7 +26,7 @@
 - 全局唯一 `AppCoordinator`（`@Observable @MainActor`）由 `HandAgentApp` 持有为 `@State`。
 - 模块间一切协调通过 `coordinator.send(.action)`，禁止 `NotificationCenter` / 全局单例 / 直接调 Coordinator 的 private 方法绕开。
 - 新增协调行为：在 `AppCoordinator.Action` 枚举显式增分支；新窗口 / 控制器由 Coordinator 持有并 lazy 初始化，子模块通过闭包注入接入。
-- 测试态用 `AppCoordinator(skipServerStart: true)` 跳过窗口/进程/激活策略副作用；非测试态 `init` 自动 `bootstrap()`。
+- 测试态用 `AppCoordinator(services: AppServices.testing(...))` 注入 nop 服务，跳过窗口/进程/激活策略副作用；非测试态 `init()` 自动装配生产 `AppServices` 并 `bootstrap()`。
 
 ### 4. 视觉：Theme token
 
@@ -52,7 +52,7 @@
 - [Coordinator/](Sources/Coordinator/coordinator.md) — `AppCoordinator` 单向事件流
 - [Theme/](Sources/Theme/theme.md) — 视觉 token 与 Environment 注入
 - [PromptPanel/](Sources/PromptPanel/prompt-panel.md) — 命令面板 View+ViewModel+Controller+Styles
-- [SessionWindow/](Sources/SessionWindow/session-window.md) — 会话窗口与 WebSocket 客户端
+- [SessionWindow/](Sources/SessionWindow/session-window.md) — 会话窗口、历史侧栏、权限气泡与 WebSocket 客户端
 - [StatusBubble/](Sources/StatusBubble/status-bubble.md) — 右下角状态气泡
 - [Settings/](Sources/Settings/settings.md) — 设置窗口 TabView 容器（model / shortcut / workspace 三个 Tab）
 - [AppServices/](Sources/AppServices/app-services.md) — 跨模块共享服务（AgentServer / AgentSettings / Hotkey / Lifecycle / PlatformBridge / SelectionCapture / Session）
@@ -122,7 +122,7 @@ sequenceDiagram
 - `.noAttachment`：无附件，普通提交。
 - `.textToken(String)`：直接附加纯文本块（如内嵌的命令片段）。
 - `.textSelection(text:source:)`：用户主动文本选区（来自 `MacSelectionCaptureProvider`，Cmd-C 抓 NSPasteboard）。
-- `.imageRegion(base64:mimeType:)`：用户区域截图（来自 `MacRegionCaptureProvider`，`screencapture -i` 兜底，待迁 SCK）。
+- `.imageRegion(base64:mimeType:)`：用户区域截图（来自 `MacRegionCaptureProvider`，`screencapture -i` 兜底，待迁自建 SCK 圈选 UI）。
 - `.selectionError(message:)`：采集失败，UI 以禁用 chip + tooltip 反馈。
 
 `PromptAction(id, title, keywords, defaultShortcut, perform)`：命令面板可触发的动作；`shortcutName` 计算属性生成 `KeyboardShortcuts.Name("action.\(id)")`。
