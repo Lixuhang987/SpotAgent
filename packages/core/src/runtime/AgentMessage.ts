@@ -15,6 +15,7 @@ export type AgentMessage =
       toolCallId: string;
       name: string;
       content: string;
+      blob?: { id: string; cached: "turn" | "persist"; summarized?: boolean };
     }
   | {
       role: "system";

@@ -6,6 +6,7 @@ export type OpenAIApiType = "responses" | "chat" | "completion";
 
 export type ModelSettings = {
   model: string;
+  summarizerModel: string;
   apiKey?: string;
   baseUrl?: string;
   api: OpenAIApiType;
@@ -14,6 +15,7 @@ export type ModelSettings = {
 type PersistedModelSettings = {
   llm?: {
     model?: unknown;
+    summarizerModel?: unknown;
     apiKey?: unknown;
     baseUrl?: unknown;
     api?: unknown;
@@ -22,6 +24,7 @@ type PersistedModelSettings = {
 
 export const defaultModelSettings: ModelSettings = {
   model: "gpt-5-mini",
+  summarizerModel: "claude-haiku-4-5-20251001",
   api: "responses",
 };
 
@@ -49,6 +52,9 @@ export function loadModelSettings(homeDir = homedir()): ModelSettings {
   const llm = parsed.llm ?? {};
   return {
     model: normalizeRequiredString(llm.model) ?? defaultModelSettings.model,
+    summarizerModel:
+      normalizeRequiredString(llm.summarizerModel) ??
+      defaultModelSettings.summarizerModel,
     apiKey: normalizeOptionalString(llm.apiKey),
     baseUrl: normalizeOptionalString(llm.baseUrl),
     api: normalizeApiType(llm.api),

@@ -8,6 +8,7 @@ import type { NetworkLogger } from "../../../packages/core/src/logging/NetworkLo
 
 type SettingsBackedLLMClientOptions = {
   networkLogger?: NetworkLogger;
+  purpose?: "chat" | "summarizer";
 };
 
 type SettingsBackedLLMClientDependencies = {
@@ -25,6 +26,7 @@ export class SettingsBackedLLMClient implements LLMClient {
   private readonly loadModelSettings;
   private readonly createClient;
   private readonly networkLogger;
+  private readonly purpose;
 
   constructor(
     options: SettingsBackedLLMClientOptions = {},
@@ -35,12 +37,13 @@ export class SettingsBackedLLMClient implements LLMClient {
       dependencies.createClient ??
       ((settings) => new VercelClient(settings));
     this.networkLogger = options.networkLogger;
+    this.purpose = options.purpose ?? "chat";
   }
 
   async complete(messages: AgentMessage[], tools: RegisteredTool[]): Promise<LLMCompletion> {
     const settings = this.loadModelSettings();
     return this.createClient({
-      model: settings.model,
+      model: this.purpose === "summarizer" ? settings.summarizerModel : settings.model,
       apiKey: settings.apiKey,
       baseURL: settings.baseUrl,
       api: settings.api,

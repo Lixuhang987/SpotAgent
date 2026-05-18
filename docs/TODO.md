@@ -56,7 +56,7 @@
   - 依赖：10.5（runtime 翻译层拆出后更容易改）。
 
 - [ ] **10.8 图片附件接入多模态消息**
-  - 现状：`composeUserContent` 把 image 附件压成字符串占位 `[图片附件: image/png (id)]`，LLM 看不到图。
+  - 现状：`composeUserContent` 已把 image 附件写入 BlobStore，并在 user message 中插入空 body 的 image STUB；原始 base64 不再进入 LLM 上下文。LLM 仍不能直接看图，需要后续 vision / `image.describe` 工具读取 blob 后产出文本描述。
   - 改法：`AgentMessage.user.content` 升级为 `string | AgentContentPart[]`（text + image）；`VercelAdapters` 映射到 SDK 多模态消息。
   - 验收：截屏后让 LLM 描述图片内容，应能给出真实描述。
   - 依赖：2.2 剩余部分。
@@ -140,8 +140,8 @@ docs/superpowers/specs/2026-05-18-blob-stub-abstraction-design.md
   - 依赖：无。
   - 阻塞：2.2、2.3。
 
-- [ ] **2.2 选区未传入 WebSocket**（文本选区已接通；图片附件仅为字符串占位，LLM 看不到真实图像字节）
-  - 现状：文本选区已通过 `user_message.attachments` 传到 agent-server 并拼入 prompt；但 `SessionManager.composeUserContent` 把 image 附件压成 `[图片附件: image/png (id)]` 字符串占位，LLM 实际看不到图像内容。
+- [ ] **2.2 选区未传入 WebSocket**（文本选区已接通；图片附件已落 Blob/Stub，但 LLM 仍没有 vision 解读能力）
+  - 现状：文本选区已通过 `user_message.attachments` 传到 agent-server 并拼入 prompt；image 附件会写入 BlobStore 并在 user message 中渲染 image STUB，LLM 可以看到 blob 引用但不能直接理解图像内容。
   - 用户场景：即便 2.1 完成，附件仍然不会被传到 agent-server，相当于半截功能。
   - 验收标准：
     - `sendUserMessage` 接受 `selection: SelectionPayload?` 参数。

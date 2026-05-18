@@ -20,7 +20,7 @@
 
 - **职责过载**：`AppCoordinator`（419 行）与 `SessionManager`（agent-server 内）都吃了太多职责，新功能很难在不动它们的情况下加进去。
 - **依赖注入断点**：上述两个枢纽对外暴露的注入点很少，子服务大多在 `init` 里直接 `new`，导致单元测试要么跳过整段链路（`skipServerStart`），要么需要起子进程。
-- **协议表面与运行时实现不对齐**：`tool_message`、`status`、`interrupt`、`session_snapshot` 等协议变体是定义了但没人 emit；"伪流式" assistant_message_delta；图片附件被压成字符串占位；这些都会让上游误以为后端已经在做某事。
+- **协议表面与运行时实现不对齐**：`status`、`interrupt`、`session_snapshot` 等协议变体是定义了但没人 emit；"伪流式" assistant_message_delta；图片附件当前只进入 Blob/Stub，尚未接入 vision 解读工具；这些都会让上游误以为后端已经在做某事。
 - **缓存与权限边界**：`FilePermissionPolicy.cache` / `FileWorkspaceRegistry.cache` 一次性加载、不监听文件；`session` 范围权限规则未按 sessionId 隔离。
 - **安全盲区**：~~`FileWriteTool.resolveWritePathWithinWorkspace` 仅 realpath 父目录，basename 是 symlink 时可越狱写到 workspace 外。~~（已修：写前 lstat 检查 basename + 10 MiB 上限 + `.tmp → rename` 原子写，详见 §5.1）
 
@@ -241,15 +241,15 @@ protocol SettingsWindowFactory {
 
 ### 3.4 图片附件未真实进多模态消息
 
-**现状**：`SessionManager.composeUserContent` 把 `UserMessageAttachment.image` 拼成字符串占位 `[图片附件: image/png (id)]`，LLM 实际看不到字节。
+**现状**：`SessionManager.composeUserContent` 会把 `UserMessageAttachment.image` 写入 BlobStore，并在 user message 中插入空 body 的 image STUB。原始 base64 不进入 LLM 上下文，LLM 看到的是 blob 引用而非图像内容。
 
-**问题**：用户 captureRegion 之后 LLM 拿不到图，这是 TODO 2.x 的 last mile 缺口。
+**问题**：用户 captureRegion 之后，原始图像字节已可回读，但 LLM 还没有 vision / `image.describe` 工具把 blob 转成文本事实。这仍是 TODO 2.x 的 last mile 缺口。
 
 **建议改法**：
 
-1. 把 `AgentMessage.user.content` 从 `string` 升级为 `string | AgentContentPart[]`（`{ type: "text" } | { type: "image"; mimeType; base64 }`）。
-2. `VercelAdapters.toVercelMessages` 处理 `image` 部分映射到 SDK 的多模态消息。
-3. `composeUserContent` 把 `image` 附件直接放进 content parts，不再字符串化。
+1. 增加 `image.describe` / vision tool，按 blobId 读取图像并输出文本描述，输出继续走 `cached` 生命周期。
+2. 或把 `AgentMessage.user.content` 从 `string` 升级为 `string | AgentContentPart[]`（`{ type: "text" } | { type: "image"; mimeType; base64 }`），由 `VercelAdapters.toVercelMessages` 映射到 SDK 多模态消息。
+3. 两条路径都必须保持“屏幕 / 文件 / 剪贴板上下文不默认注入”的产品边界，只能处理用户主动提供的图片附件或 LLM 显式 tool 读取结果。
 
 **验收**：
 

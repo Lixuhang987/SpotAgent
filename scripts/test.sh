@@ -14,6 +14,9 @@ pnpm exec vitest run \
   packages/core/tests/model-settings.test.ts \
   packages/core/tests/openai-config.test.ts \
   packages/core/tests/runtime.test.ts \
+  packages/core/tests/blob-store.test.ts \
+  packages/core/tests/stub.test.ts \
+  packages/core/tests/turn-summarizer.test.ts \
   packages/core/tests/selection.test.ts \
   packages/core/tests/context-tools.test.ts \
   packages/core/tests/file-tools.test.ts \

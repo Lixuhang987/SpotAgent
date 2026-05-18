@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { AgentMessage } from "../../../packages/core/src/runtime/AgentMessage.ts";
 import type { AgentRuntimeEvent } from "../../../packages/core/src/runtime/AgentRuntime.ts";
 import type { SessionMessage } from "../../../packages/core/src/protocol/SessionMessage.ts";
+import type { BlobRecord } from "../../../packages/core/src/blob/BlobRecord.ts";
+import type { BlobStore } from "../../../packages/core/src/blob/BlobStore.ts";
 import { SessionManager } from "./SessionManager.ts";
 import { InMemorySessionStore } from "../../../packages/core/src/storage/index.ts";
 import { handleSocketMessage } from "./server.ts";
@@ -18,6 +20,39 @@ function createUserMessage(
     timestamp: "2026-05-11T10:00:00.000Z",
     payload: { text },
   };
+}
+
+class MemoryBlobStore implements BlobStore {
+  records: BlobRecord[] = [];
+  contents = new Map<string, Buffer>();
+
+  async put(input: { kind: string; bytes: Buffer; extension: string }): Promise<BlobRecord> {
+    const id = `blob-${this.records.length + 1}`;
+    const record: BlobRecord = {
+      id,
+      kind: input.kind,
+      size: input.bytes.byteLength,
+      path: `/tmp/${id}.${input.extension}`,
+    };
+    this.records.push(record);
+    this.contents.set(id, input.bytes);
+    return record;
+  }
+
+  async get(id: string): Promise<BlobRecord | undefined> {
+    return this.records.find((record) => record.id === id);
+  }
+
+  async readContent(id: string): Promise<Buffer> {
+    const content = this.contents.get(id);
+    if (!content) throw new Error(`Blob not found: ${id}`);
+    return content;
+  }
+
+  async setSummary(id: string, summary: string): Promise<void> {
+    const record = await this.get(id);
+    if (record) record.summary = summary;
+  }
 }
 
 describe("SessionManager", () => {
@@ -437,6 +472,60 @@ describe("SessionManager", () => {
     expect(session?.messages[0]).toEqual({
       role: "user",
       content: "解释这段代码\n\n[选区]\nlet x = 1",
+    });
+  });
+
+  it("stores image attachments as blobs and inserts image stubs into user content", async () => {
+    const store = new InMemorySessionStore();
+    const blobStore = new MemoryBlobStore();
+    const manager = new SessionManager(
+      {
+        async runWithMessages(messages: AgentMessage[]) {
+          return { messages, bubbles: [] };
+        },
+      },
+      () => {},
+      {
+        now: () => "2026-05-18T00:00:00.000Z",
+        store,
+        blobStore,
+      },
+    );
+
+    await manager.receive({
+      type: "user_message",
+      sessionId: "session-image",
+      messageId: "user-1",
+      timestamp: "2026-05-18T00:00:00.000Z",
+      payload: {
+        text: "看看这张图",
+        attachments: [
+          {
+            kind: "image",
+            id: "image-1",
+            mimeType: "image/png",
+            base64: Buffer.from("png-bytes").toString("base64"),
+          },
+        ],
+      },
+    });
+
+    expect(blobStore.records).toEqual([
+      {
+        id: "blob-1",
+        kind: "image",
+        size: 9,
+        path: "/tmp/blob-1.png",
+      },
+    ]);
+    await expect(blobStore.readContent("blob-1")).resolves.toEqual(
+      Buffer.from("png-bytes"),
+    );
+    const session = await manager.getSession("session-image");
+    expect(session?.messages[0]).toEqual({
+      role: "user",
+      content:
+        '看看这张图\n\n[STUB id=blob-1 kind=image size=9 path="/tmp/blob-1.png"]\n[/STUB]',
     });
   });
 

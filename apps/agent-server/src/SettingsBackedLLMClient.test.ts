@@ -7,12 +7,14 @@ describe("SettingsBackedLLMClient", () => {
       .fn()
       .mockReturnValueOnce({
         model: "gpt-5-mini",
+        summarizerModel: "claude-haiku-4-5-20251001",
         apiKey: "first-key",
         baseUrl: "https://first.example/v1",
         api: "responses",
       })
       .mockReturnValueOnce({
         model: "gpt-4.1",
+        summarizerModel: "claude-haiku-4-5-20251001",
         apiKey: "second-key",
         baseUrl: "https://second.example/v1",
         api: "chat",
@@ -49,6 +51,7 @@ describe("SettingsBackedLLMClient", () => {
     const networkLogger = { log: vi.fn().mockResolvedValue(undefined) };
     const loadModelSettings = vi.fn().mockReturnValue({
       model: "gpt-5-mini",
+      summarizerModel: "claude-haiku-4-5-20251001",
       apiKey: "k",
       baseUrl: "https://example/v1",
       api: "chat",
@@ -67,6 +70,33 @@ describe("SettingsBackedLLMClient", () => {
 
     expect(createClient).toHaveBeenCalledWith(
       expect.objectContaining({ networkLogger }),
+    );
+  });
+
+  it("can use summarizerModel for summary-only completion requests", async () => {
+    const loadModelSettings = vi.fn().mockReturnValue({
+      model: "gpt-5-mini",
+      summarizerModel: "claude-haiku-4-5-20251001",
+      apiKey: "k",
+      baseUrl: "https://example/v1",
+      api: "chat",
+    });
+    const complete = vi
+      .fn()
+      .mockResolvedValue({ message: { role: "assistant", content: "summary" }, toolCalls: [] });
+    const createClient = vi.fn(() => ({ complete }));
+
+    const client = new SettingsBackedLLMClient(
+      { purpose: "summarizer" },
+      { loadModelSettings, createClient },
+    );
+
+    await client.complete([], []);
+
+    expect(createClient).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: "claude-haiku-4-5-20251001",
+      }),
     );
   });
 });

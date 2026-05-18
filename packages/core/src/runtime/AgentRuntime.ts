@@ -4,6 +4,9 @@ import type { LLMClient } from "../llm/LLMClient.ts";
 import { ToolRegistry } from "../tools/ToolRegistry.ts";
 import type { PermissionPolicy } from "../permission/PermissionPolicy.ts";
 import { AllowAllPermissionPolicy, DENY_TOOL_RESULT_TEXT } from "../permission/PermissionPolicy.ts";
+import type { BlobStore } from "../blob/BlobStore.ts";
+import { renderStub, type StubCacheScope } from "./Stub.ts";
+import type { TurnSummarizerLike } from "./TurnSummarizer.ts";
 
 export type AgentBubble = {
   id: string;
@@ -66,14 +69,24 @@ export type AgentRuntimeRunOptions = {
 export class AgentRuntime {
   private readonly maxTurns: number;
   private readonly permissionPolicy: PermissionPolicy;
+  private readonly blobStore?: BlobStore;
+  private readonly turnSummarizer?: TurnSummarizerLike;
+  private pendingTurnSummary: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly client: LLMClient,
     private readonly toolRegistry: ToolRegistry,
-    options?: { maxTurns?: number; permissionPolicy?: PermissionPolicy }
+    options?: {
+      maxTurns?: number;
+      permissionPolicy?: PermissionPolicy;
+      blobStore?: BlobStore;
+      turnSummarizer?: TurnSummarizerLike;
+    }
   ) {
     this.maxTurns = options?.maxTurns ?? 8;
     this.permissionPolicy = options?.permissionPolicy ?? new AllowAllPermissionPolicy();
+    this.blobStore = options?.blobStore;
+    this.turnSummarizer = options?.turnSummarizer;
   }
 
   async run(userInput: string): Promise<AgentRunResult> {
@@ -91,6 +104,7 @@ export class AgentRuntime {
     runOptions: AgentRuntimeRunOptions = {}
   ): Promise<AgentRunResult> {
     const nextMessages = [...messages];
+    await this.waitForPendingSummaries(nextMessages);
     const bubbles: AgentBubble[] = [];
     let assistantCount = 0;
 
@@ -134,6 +148,7 @@ export class AgentRuntime {
 
       const toolCalls = completion.toolCalls ?? [];
       if (toolCalls.length === 0) {
+        this.startTurnSummary(nextMessages);
         return {
           messages: nextMessages,
           bubbles,
@@ -205,12 +220,13 @@ export class AgentRuntime {
         }
         const durationMs = Date.now() - startedAt;
 
-        nextMessages.push({
-          role: "tool",
+        const toolMessage = await this.createToolMessage({
           toolCallId: toolCall.id,
-          name: toolCall.name,
-          content: toolContent,
+          toolName: toolCall.name,
+          toolContent,
+          cached: tool.stubByDefault ? parseCached(toolCall.arguments.cached) : undefined,
         });
+        nextMessages.push(toolMessage);
 
         onEvent({
           type: "tool_result",
@@ -225,6 +241,57 @@ export class AgentRuntime {
 
     throw new Error(`AgentRuntime exceeded maxTurns: ${this.maxTurns}`);
   }
+
+  private async createToolMessage(input: {
+    toolCallId: string;
+    toolName: string;
+    toolContent: string;
+    cached?: StubCacheScope;
+  }): Promise<Extract<AgentMessage, { role: "tool" }>> {
+    if (!input.cached || !this.blobStore) {
+      return {
+        role: "tool",
+        toolCallId: input.toolCallId,
+        name: input.toolName,
+        content: input.toolContent,
+      };
+    }
+
+    const record = await this.blobStore.put({
+      kind: "tool_result",
+      bytes: Buffer.from(input.toolContent, "utf8"),
+      extension: "txt",
+    });
+    return {
+      role: "tool",
+      toolCallId: input.toolCallId,
+      name: input.toolName,
+      content: renderStub({
+        id: record.id,
+        kind: record.kind,
+        cached: input.cached,
+        size: record.size,
+        path: record.path,
+        body: input.toolContent,
+      }),
+      blob: { id: record.id, cached: input.cached },
+    };
+  }
+
+  async waitForPendingSummaries(messages: AgentMessage[] = []): Promise<void> {
+    await this.pendingTurnSummary;
+    await this.turnSummarizer?.applyStoredSummaries(messages);
+  }
+
+  private startTurnSummary(messages: AgentMessage[]): void {
+    if (!this.turnSummarizer) return;
+    this.pendingTurnSummary = this.turnSummarizer.summarizeTurn(messages);
+  }
+}
+
+function parseCached(value: unknown): StubCacheScope | undefined {
+  if (value === "turn" || value === "persist") return value;
+  return undefined;
 }
 
 function serializeToolResult(value: unknown): string {

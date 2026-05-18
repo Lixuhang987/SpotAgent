@@ -5,6 +5,7 @@ export interface DefineToolOptions<TInput, TOutput, TDeps> {
   name: string;
   description: string;
   inputSchema: z.ZodType<TInput>;
+  stubByDefault?: boolean;
   run: (input: TInput, deps: TDeps) => Promise<TOutput>;
 }
 
@@ -30,6 +31,7 @@ export function defineTool<TInput, TOutput, TDeps = unknown>(
       name: options.name,
       description: options.description,
       inputSchema: jsonSchema,
+      stubByDefault: options.stubByDefault,
       call: (input: TInput) => options.run(input, deps),
     }),
   };

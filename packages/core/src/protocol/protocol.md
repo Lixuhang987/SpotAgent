@@ -48,7 +48,7 @@ desktop ↔ agent-server 的 WebSocket 协议。所有跨进程消息走 `Sessio
 - `text_selection`：纯文本选区。
 - `image`：base64 图片（`image/png | image/jpeg | image/webp`）。
 
-注：当前 `SessionManager.composeUserContent` 把 `image` 附件展平为字符串占位 `[图片附件: image/png (id)]`，**LLM 实际看不到原始图像字节**（架构改进项）。
+注：`SessionManager.composeUserContent` 会把 `image` 附件写入 BlobStore，并在 user message 中插入空 body 的 image STUB；原始 base64 不进入 LLM 上下文。后续图像理解应通过独立 tool 按 blobId 读取。
 
 ## 平台 RPC 帧
 

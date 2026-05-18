@@ -48,6 +48,7 @@ describe("ModelSettings", () => {
 
     expect(loadModelSettings(homeDir)).toEqual({
       model: "gpt-4.1",
+      summarizerModel: "claude-haiku-4-5-20251001",
       apiKey: "test-key",
       baseUrl: "https://example.com/v1",
       api: "chat",
@@ -79,6 +80,7 @@ describe("ModelSettings", () => {
       JSON.stringify({
         llm: {
           model: "gpt-4.1",
+          summarizerModel: "claude-3-5-haiku-latest",
           apiKey: "second-key",
           baseUrl: "https://second.example/v1",
           api: "chat",
@@ -87,6 +89,7 @@ describe("ModelSettings", () => {
     );
     expect(loadModelSettings(homeDir)).toEqual({
       model: "gpt-4.1",
+      summarizerModel: "claude-3-5-haiku-latest",
       apiKey: "second-key",
       baseUrl: "https://second.example/v1",
       api: "chat",

@@ -7,7 +7,7 @@
 | 文件 | 职责 |
 |------|------|
 | `AppConfig.ts` | `AppConfig` 类型 + `defaultAppConfig`；当前未在主链路使用，预留 |
-| `ModelSettings.ts` | `loadModelSettings()`：每次同步 `readFileSync` 读 `settings.json` 的 `llm.{model, apiKey, baseUrl, api}`；JSON 解析失败抛错（带文件路径），其它字段缺失走默认 |
+| `ModelSettings.ts` | `loadModelSettings()`：每次同步 `readFileSync` 读 `settings.json` 的 `llm.{model, summarizerModel, apiKey, baseUrl, api}`；JSON 解析失败抛错（带文件路径），其它字段缺失走默认 |
 | `ToolSettings.ts` | `loadToolSettings()` + `filterToolNames()`：解析 `tools.allowlist / tools.denylist`；`denylist` 优先；JSON 解析失败静默 fallback 到默认 |
 
 ## 配置文件结构
@@ -20,6 +20,7 @@
 {
   "llm": {
     "model": "gpt-5-mini",
+    "summarizerModel": "claude-haiku-4-5-20251001",
     "apiKey": "sk-...",
     "baseUrl": "https://api.openai.com/v1",
     "api": "responses"
@@ -33,7 +34,7 @@
 
 ## 当前实现特点
 
-- **每次 LLM 请求都重读**：`SettingsBackedLLMClient.complete` 调 `loadModelSettings()`，配合 desktop 端 `AgentSettingsStore` 500ms 轮询写盘，达到"改完即生效"。代价是 LLM 热路径上的同步 IO（架构改进项）。
+- **每次 LLM 请求都重读**：`SettingsBackedLLMClient.complete` 调 `loadModelSettings()`，配合 desktop 端 `AgentSettingsStore` 500ms 轮询写盘，达到"改完即生效"。摘要专用 client 读取 `summarizerModel`，缺省为 `claude-haiku-4-5-20251001`。代价是 LLM 热路径上的同步 IO（架构改进项）。
 - **`ModelSettings` vs `ToolSettings` 错误处理不一致**：前者 JSON 解析失败抛错（让用户看到明确反馈），后者静默回默认（避免阻塞启动）。当前是有意为之但未在文档中明示，本文件起统一约定。
 - **默认 api 不一致**：`defaultModelSettings.api = "responses"`，`VercelClient` 构造默认 `api = "chat"`。生产路径全程透传 settings 故无冲突，但留下了一个潜在 footgun。
 

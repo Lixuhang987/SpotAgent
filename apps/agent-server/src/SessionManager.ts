@@ -13,6 +13,8 @@ import type {
   SessionEvent,
   PersistedSession,
 } from "../../../packages/core/src/storage/index.ts";
+import type { BlobStore } from "../../../packages/core/src/blob/BlobStore.ts";
+import { FilesystemBlobStore } from "../../../packages/core/src/blob/FilesystemBlobStore.ts";
 import { InMemorySessionStore } from "../../../packages/core/src/storage/index.ts";
 import {
   agentMessagesToConversation,
@@ -29,17 +31,20 @@ type RuntimeLike = {
     onEvent: (event: AgentRuntimeEvent) => void,
     runOptions?: AgentRuntimeRunOptions,
   ): Promise<AgentRunResult>;
+  waitForPendingSummaries?(messages?: AgentMessage[]): Promise<void>;
 };
 
 type PushMessage = (message: SessionMessage) => void;
 type SessionManagerOptions = {
   now?: () => string;
   store?: SessionStore;
+  blobStore?: BlobStore;
 };
 
 export class SessionManager {
   private readonly now: () => string;
   private readonly store: SessionStore;
+  private readonly blobStore: BlobStore;
 
   constructor(
     private readonly runtime: RuntimeLike,
@@ -48,6 +53,7 @@ export class SessionManager {
   ) {
     this.now = options.now ?? (() => new Date().toISOString());
     this.store = options.store ?? new InMemorySessionStore();
+    this.blobStore = options.blobStore ?? new FilesystemBlobStore();
   }
 
   async createSession(title?: string): Promise<PersistedSession> {
@@ -132,9 +138,10 @@ export class SessionManager {
       });
     }
 
-    const composedText = composeUserContent(
+    const composedText = await composeUserContent(
       message.payload.text,
       message.payload.attachments,
+      this.blobStore,
     );
 
     const userMessage: AgentMessage = {
@@ -148,6 +155,7 @@ export class SessionManager {
     );
 
     const currentSession = (await this.store.get(message.sessionId))!;
+    await this.runtime.waitForPendingSummaries?.(currentSession.messages);
     const nextMessages = [...currentSession.messages];
 
     if (!currentSession.metadata.title && nextMessages.length === 1) {

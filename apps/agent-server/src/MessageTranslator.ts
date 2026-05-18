@@ -3,6 +3,8 @@ import type { AgentRuntimeEvent } from "../../../packages/core/src/runtime/Agent
 import type { SessionMessage, UserMessageAttachment } from "../../../packages/core/src/protocol/SessionMessage.ts";
 import type { ConversationMessage } from "../../../packages/core/src/conversation/ConversationMessage.ts";
 import type { SessionEvent } from "../../../packages/core/src/storage/index.ts";
+import type { BlobStore } from "../../../packages/core/src/blob/BlobStore.ts";
+import { renderStub } from "../../../packages/core/src/runtime/Stub.ts";
 
 export function toSessionMessage(
   sessionId: string,
@@ -137,17 +139,28 @@ export function agentMessagesToConversation(messages: AgentMessage[]): Conversat
   });
 }
 
-export function composeUserContent(
+export async function composeUserContent(
   text: string,
   attachments: UserMessageAttachment[] | undefined,
-): string {
+  blobStore: BlobStore,
+): Promise<string> {
   if (!attachments || attachments.length === 0) return text;
   const parts: string[] = [text];
   for (const attachment of attachments) {
     if (attachment.kind === "text_selection") {
       parts.push(`[选区]\n${attachment.text}`);
     } else if (attachment.kind === "image") {
-      parts.push(`[图片附件: ${attachment.mimeType} (${attachment.id})]`);
+      const record = await blobStore.put({
+        kind: "image",
+        bytes: Buffer.from(attachment.base64, "base64"),
+        extension: imageExtension(attachment.mimeType),
+      });
+      parts.push(renderStub({
+        id: record.id,
+        kind: record.kind,
+        size: record.size,
+        path: record.path,
+      }));
     }
   }
   return parts.join("\n\n");
@@ -171,5 +184,16 @@ function stringifyToolInput(input: Record<string, unknown>): string {
     return JSON.stringify(input);
   } catch {
     return "";
+  }
+}
+
+function imageExtension(mimeType: Extract<UserMessageAttachment, { kind: "image" }>["mimeType"]): string {
+  switch (mimeType) {
+    case "image/jpeg":
+      return "jpg";
+    case "image/png":
+      return "png";
+    case "image/webp":
+      return "webp";
   }
 }

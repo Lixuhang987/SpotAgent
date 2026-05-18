@@ -9,6 +9,7 @@
 | 子模块 | 子文档 | 一句话职责 |
 |------|------|------|
 | `runtime/` | [runtime/runtime.md](/Users/mu9/proj/handAgent/packages/core/src/runtime/runtime.md) | LLM/tool 主循环、消息模型、ToolCallEnvelope |
+| `blob/` | [blob/blob.md](/Users/mu9/proj/handAgent/packages/core/src/blob/blob.md) | 大段上下文内容的本地 Blob 持久化与 summary 元数据 |
 | `llm/` | [llm/llm.md](/Users/mu9/proj/handAgent/packages/core/src/llm/llm.md) | LLMClient 抽象 + Vercel AI SDK 适配 |
 | `tools/` | [tools/tools.md](/Users/mu9/proj/handAgent/packages/core/src/tools/tools.md) | AgentTool 协议 + 9 个 builtin tool + 注册组合根 |
 | `platform/` | [platform/platform.md](/Users/mu9/proj/handAgent/packages/core/src/platform/platform.md) | PlatformAdapter / PlatformBridge / Remote+Offline 实现 |

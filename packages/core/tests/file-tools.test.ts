@@ -36,6 +36,7 @@ describe("file tools", () => {
     const result = await readTool.call({
       workspaceId,
       relativePath: "notes/today.md",
+      cached: "turn",
     });
 
     expect(result).toEqual({
@@ -43,6 +44,18 @@ describe("file tools", () => {
       relativePath: "notes/today.md",
       content: "# 今日总结",
     });
+  });
+
+  it("requires callers to choose a cached scope for file.read", async () => {
+    const schema = FileReadTool.jsonSchema as {
+      properties?: Record<string, unknown>;
+      required?: string[];
+    };
+
+    expect(schema.properties?.cached).toMatchObject({
+      enum: ["turn", "persist"],
+    });
+    expect(schema.required).toContain("cached");
   });
 
   it("rejects path escape attempts", async () => {
@@ -105,7 +118,7 @@ describe("file tools", () => {
     const writeTool = FileWriteTool.create(registry);
 
     await expect(
-      readTool.call({ workspaceId, relativePath: "linked-outside/secret.txt" })
+      readTool.call({ workspaceId, relativePath: "linked-outside/secret.txt", cached: "turn" })
     ).rejects.toThrow("Path escapes workspace root");
     await expect(
       writeTool.call({ workspaceId, relativePath: "linked-outside/new.txt", content: "nope" })

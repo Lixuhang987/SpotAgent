@@ -93,6 +93,8 @@ export async function startDefaultServer(port = 4317) {
     { loadToolSettings },
     { SettingsBackedLLMClient },
     { FileNetworkLogger },
+    { FilesystemBlobStore },
+    { TurnSummarizer },
   ] = await Promise.all([
     import("../../../packages/core/src/runtime/AgentRuntime.ts"),
     import("../../../packages/core/src/tools/registerBuiltins.ts"),
@@ -102,12 +104,15 @@ export async function startDefaultServer(port = 4317) {
     import("../../../packages/core/src/config/ToolSettings.ts"),
     import("./SettingsBackedLLMClient.ts"),
     import("../../../packages/core/src/logging/FileNetworkLogger.ts"),
+    import("../../../packages/core/src/blob/FilesystemBlobStore.ts"),
+    import("../../../packages/core/src/runtime/TurnSummarizer.ts"),
   ]);
 
   const spotDir = join(homedir(), ".spotAgent");
   const sessionsDir = join(spotDir, "sessions");
   const store = new FileSessionStore(sessionsDir);
   const networkLogger = new FileNetworkLogger({ baseDir: join(spotDir, "log") });
+  const blobStore = new FilesystemBlobStore({ rootPath: join(spotDir, "blobs") });
 
   const workspaceRegistry = new FileWorkspaceRegistry({
     filePath: join(spotDir, "workspaces.json"),
@@ -138,9 +143,14 @@ export async function startDefaultServer(port = 4317) {
   const manager = new SessionManager(
     new AgentRuntime(new SettingsBackedLLMClient({ networkLogger }), registry, {
       permissionPolicy,
+      blobStore,
+      turnSummarizer: new TurnSummarizer({
+        client: new SettingsBackedLLMClient({ networkLogger, purpose: "summarizer" }),
+        blobStore,
+      }),
     }),
     undefined,
-    { store },
+    { store, blobStore },
   );
 
   return startServer({

@@ -12,10 +12,10 @@
 
 | 文件 | 职责 |
 |------|------|
-| `src/server.ts` | 启动入口；`startServer` 注入式构造，`startDefaultServer` 是组合根（拉起 store / bridge / registry / policy / SessionManager） |
-| `src/SessionManager.ts` | 会话生命周期协调：处理 `user_message` / `list_sessions_request` / `load_session_request` / `delete_session_request`；持久化用户消息、跑 runtime、回流 SessionMessage。翻译逻辑已抽到 `MessageTranslator.ts` |
-| `src/MessageTranslator.ts` | 纯函数：`AgentRuntimeEvent` ↔ `SessionMessage` / `SessionEvent` 翻译（`toSessionMessage` / `toAuditEvent` / `agentMessagesToConversation` / `composeUserContent` / `deriveTitle` / `toErrorMessage`）。新增 tool_message 形态只改这里 |
-| `src/SettingsBackedLLMClient.ts` | 每次 `complete` 同步读 `~/.spotAgent/settings.json` 重建 `VercelClient`；注入 `FileNetworkLogger` 把 LLM 网络调用 JSONL 落盘 |
+| `src/server.ts` | 启动入口；`startServer` 注入式构造，`startDefaultServer` 是组合根（拉起 store / blobStore / bridge / registry / policy / SessionManager） |
+| `src/SessionManager.ts` | 会话生命周期协调：处理 `user_message` / `list_sessions_request` / `load_session_request` / `delete_session_request`；持久化用户消息、等待 pending summary、跑 runtime、回流 SessionMessage。翻译逻辑已抽到 `MessageTranslator.ts` |
+| `src/MessageTranslator.ts` | 纯函数：`AgentRuntimeEvent` ↔ `SessionMessage` / `SessionEvent` 翻译（`toSessionMessage` / `toAuditEvent` / `agentMessagesToConversation` / `composeUserContent` / `deriveTitle` / `toErrorMessage`）。`composeUserContent` 会把 image attachment 写入 BlobStore 并渲染 image STUB |
+| `src/SettingsBackedLLMClient.ts` | 每次 `complete` 同步读 `~/.spotAgent/settings.json` 重建 `VercelClient`；可用 `purpose=summarizer` 读取 `summarizerModel`；注入 `FileNetworkLogger` 把 LLM 网络调用 JSONL 落盘 |
 | `src/WebSocketPlatformBridge.ts` | 实现 core 的 `PlatformBridge` 接口；通过 `attach(send)` 接管来自 desktop 的反向 socket，按 `requestId` 关联 `platform_request` / `platform_response`，60s 超时 |
 | `src/SessionPermissionBridge.ts` | 实现 `FilePermissionPolicy` 的 `AskResolver`：把 `permission_request` 推到 desktop，按 `requestId` 等回 `permission_response`，60s 超时视为 deny |
 
@@ -29,11 +29,11 @@ sequenceDiagram
 
   Desktop->>Server: spawn node --experimental-transform-types server.ts
   Server->>Core: 动态 import runtime / tools / platform / workspace / permission / config / logging
-  Server->>Server: 构造 FileSessionStore / FileNetworkLogger / FileWorkspaceRegistry
+  Server->>Server: 构造 FileSessionStore / FilesystemBlobStore / FileNetworkLogger / FileWorkspaceRegistry
   Server->>Server: 构造 WebSocketPlatformBridge + RemotePlatformAdapter
   Server->>Server: registerBuiltinTools(...) → registry / disabled list
   Server->>Server: SessionPermissionBridge + FilePermissionPolicy(askResolver)
-  Server->>Server: SessionManager(AgentRuntime(LLMClient, registry, {policy}), store)
+  Server->>Server: SessionManager(AgentRuntime(LLMClient, registry, {policy, blobStore, turnSummarizer}), store, blobStore)
   Server->>Server: WebSocketServer.listen(4317)
 ```
 
@@ -54,6 +54,8 @@ sequenceDiagram
 |------|--------|--------|------|
 | `~/.spotAgent/settings.json` | desktop（`AgentSettingsStore`） | agent-server（每次 LLM 请求 sync 读） | 模型配置 + tool allowlist/denylist |
 | `~/.spotAgent/sessions/<id>.json` | agent-server（`FileSessionStore`） | agent-server | `PersistedSession` |
+| `~/.spotAgent/blobs/<YYYY-MM-DD>/<uuid>.*` | agent-server（`FilesystemBlobStore`） | agent-server / 后续 tool | 图片附件与大段 tool 输出的原始内容 |
+| `~/.spotAgent/blobs/<YYYY-MM-DD>/<uuid>.meta.json` | agent-server（`FilesystemBlobStore` / `TurnSummarizer`） | agent-server | Blob 元数据与可选 summary |
 | `~/.spotAgent/workspaces.json` | desktop（`WorkspaceSettingsViewModel`） + agent-server（`FileWorkspaceRegistry` 自播种 default） | 双侧 | workspace 注册表 |
 | `~/.spotAgent/permissions.json` | agent-server（`FilePermissionPolicy.remember`） | agent-server | 永久权限规则 |
 | `~/.spotAgent/log/<YYYY-MM-DD>/network-NNN.jsonl` | agent-server（`FileNetworkLogger`） | 人工排查 | LLM 请求 / 响应 body |
