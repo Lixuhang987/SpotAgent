@@ -12,6 +12,9 @@ struct PromptPanelView: View {
                 attachmentRow
             }
             firstRow
+            if let message = viewModel.submissionDisabledMessage {
+                submissionDisabledBanner(message)
+            }
             Divider()
                 .overlay(theme.colors.border)
             actionList
@@ -111,6 +114,7 @@ struct PromptPanelView: View {
                 .font(theme.typography.promptInputFont)
                 .foregroundStyle(theme.colors.textPrimary)
                 .focused($isQueryFocused)
+                .disabled(viewModel.submissionDisabledMessage != nil)
                 .onSubmit { viewModel.submit() }
         }
         .padding(.horizontal, theme.spacing.md)
@@ -123,6 +127,25 @@ struct PromptPanelView: View {
         .overlay(
             RoundedRectangle(cornerRadius: theme.radius.md)
                 .strokeBorder(theme.colors.border, lineWidth: 0.5)
+        )
+    }
+
+    private func submissionDisabledBanner(_ message: String) -> some View {
+        HStack(spacing: theme.spacing.sm) {
+            Image(systemName: "wifi.exclamationmark")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(theme.colors.accent)
+            Text(message)
+                .font(theme.typography.captionFont)
+                .foregroundStyle(theme.colors.textSecondary)
+                .lineLimit(2)
+        }
+        .padding(.horizontal, theme.spacing.md)
+        .padding(.vertical, theme.spacing.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: theme.radius.sm)
+                .fill(theme.colors.accentSubtle)
         )
     }
 

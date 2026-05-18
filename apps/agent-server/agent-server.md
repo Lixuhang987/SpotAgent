@@ -13,7 +13,7 @@
 | 文件 | 职责 |
 |------|------|
 | `src/server.ts` | 启动入口；`startServer` 注入式构造，`startDefaultServer` 是组合根（拉起 store / blobStore / bridge / registry / policy / runtime / SessionPersistence / SessionRuntimeOrchestrator / SessionRouter） |
-| `src/SessionRouter.ts` | 协议路由层：处理 `list_sessions_request` / `load_session_request` / `delete_session_request`，并把 `user_message` 委托给 runtime 编排层 |
+| `src/SessionRouter.ts` | 协议路由层：处理 `open_session` / `list_sessions_request` / `load_session_request` / `delete_session_request`；`open_session` 回 `session_snapshot` 用于桌面端重连续联，并把 `user_message` 委托给 runtime 编排层 |
 | `src/SessionRuntimeOrchestrator.ts` | 一轮用户消息编排：确保 session、持久化 user message、等待 pending summary、跑 `AgentRuntime`、翻译 runtime event、落库最终 messages / audit events |
 | `src/SessionPersistence.ts` | 会话持久化封装：唯一直接持有 `SessionStore` 的 agent-server 模块，负责 CRUD、标题生成、历史读取、messages / events 写入，并把 image attachment 交给 BlobStore |
 | `src/MessageTranslator.ts` | 纯函数：`AgentRuntimeEvent` ↔ `SessionMessage` / `SessionEvent` 翻译（`toSessionMessage` / `toAuditEvent` / `agentMessagesToConversation` / `composeUserContent` / `deriveTitle` / `toErrorMessage`）。`composeUserContent` 会把 image attachment 写入 BlobStore 并渲染 image STUB；新增 tool_message 形态只改这里 |
@@ -52,6 +52,8 @@ sequenceDiagram
 4. `user_message`（首次出现）→ `boundSessionId = message.sessionId`，并 `permissionBridge.bindSession(...)` 把这条 socket 注册为该会话的审批回流通道。
 
 随后所有未命中上述分支的消息都交给 `router.receive(message, send)`，由 `SessionRouter` 决定如何处理。
+
+其中 `open_session` 是 SessionWindow 的订阅 / 恢复握手：客户端首次连接与断线重连都会发送它；若 store 中已有对应 session，server 回 `session_snapshot`，让窗口在 agent-server 重启后恢复消息列表与状态。
 
 ## 与文件系统约定
 

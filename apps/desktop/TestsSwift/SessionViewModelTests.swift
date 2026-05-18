@@ -52,4 +52,27 @@ final class SessionViewModelTests: XCTestCase {
         XCTAssertEqual(model.error, "Could not connect to the server.")
         XCTAssertEqual(model.status, "failed")
     }
+
+    @MainActor
+    func testDisconnectedConnectionStateShowsReconnectMessageWithoutAddingAssistantBubble() {
+        let model = SessionViewModel(sessionID: "session-1", socketClient: .noop)
+
+        model.handle(.connectionState(.reconnecting))
+
+        XCTAssertEqual(model.connectionState, .reconnecting)
+        XCTAssertEqual(model.connectionMessage, "连接已断开，正在自动重连…")
+        XCTAssertTrue(model.messages.isEmpty)
+        XCTAssertNil(model.error)
+    }
+
+    @MainActor
+    func testConnectedStateClearsConnectionMessage() {
+        let model = SessionViewModel(sessionID: "session-1", socketClient: .noop)
+
+        model.handle(.connectionState(.reconnecting))
+        model.handle(.connectionState(.connected))
+
+        XCTAssertEqual(model.connectionState, .connected)
+        XCTAssertNil(model.connectionMessage)
+    }
 }

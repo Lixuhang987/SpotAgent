@@ -17,6 +17,9 @@ struct SessionWindowView: View {
             VStack(spacing: 0) {
                 statusHeader
                 Divider().overlay(theme.colors.border)
+                if let connectionMessage = viewModel.connectionMessage {
+                    connectionBanner(connectionMessage)
+                }
                 messageList
                 if let error = viewModel.error {
                     errorBanner(error)
@@ -108,15 +111,39 @@ struct SessionWindowView: View {
             }
             .buttonStyle(.plain)
             Circle()
-                .fill(viewModel.status == "running" ? theme.colors.accent : theme.colors.textSecondary.opacity(0.4))
+                .fill(statusColor)
                 .frame(width: 8, height: 8)
-            Text(viewModel.status)
+            Text(statusLabel)
                 .font(theme.typography.captionFont)
                 .foregroundStyle(theme.colors.textSecondary)
             Spacer()
         }
         .padding(.horizontal, theme.spacing.xl)
         .padding(.vertical, theme.spacing.md)
+    }
+
+    private var statusColor: Color {
+        switch viewModel.connectionState {
+        case .connected:
+            return viewModel.status == "running" ? theme.colors.accent : theme.colors.textSecondary.opacity(0.4)
+        case .connecting, .reconnecting:
+            return theme.colors.accent
+        case .disconnected:
+            return theme.colors.error
+        }
+    }
+
+    private var statusLabel: String {
+        switch viewModel.connectionState {
+        case .connected:
+            return viewModel.status
+        case .connecting:
+            return "connecting"
+        case .reconnecting:
+            return "reconnecting"
+        case .disconnected:
+            return "disconnected"
+        }
     }
 
     private var messageList: some View {
@@ -131,6 +158,21 @@ struct SessionWindowView: View {
             .padding(theme.spacing.xl)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    private func connectionBanner(_ message: String) -> some View {
+        HStack(spacing: theme.spacing.sm) {
+            Image(systemName: "wifi.exclamationmark")
+                .foregroundStyle(theme.colors.accent)
+                .font(.system(size: 12))
+            Text(message)
+                .font(theme.typography.captionFont)
+                .foregroundStyle(theme.colors.textSecondary)
+        }
+        .padding(.horizontal, theme.spacing.xl)
+        .padding(.vertical, theme.spacing.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(theme.colors.accentSubtle)
     }
 
     private func errorBanner(_ error: String) -> some View {
@@ -212,7 +254,9 @@ struct SessionWindowView: View {
                 .textFieldStyle(.plain)
                 .font(theme.typography.bodyFont)
                 .foregroundStyle(theme.colors.textPrimary)
+                .disabled(!viewModel.canSendPrompt)
                 .onSubmit {
+                    guard viewModel.canSendPrompt else { return }
                     let currentDraft = draft
                     draft = ""
                     viewModel.sendPrompt(currentDraft)

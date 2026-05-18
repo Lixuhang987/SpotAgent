@@ -24,7 +24,8 @@
 - **错误恢复**：子进程非零退出码触发自动重启，指数退避 `2^n` 秒（封顶 30s），最多 `maxRestartAttempts = 5` 次；
   - 重启次数超限时通过 `onFatalError(message)` 通知 Coordinator，弹原生 `NSAlert`（"确定" / "查看日志"，后者打开 `~/.spotAgent/`）。
   - `userRequestedStop`（来自 `stop()`）与 `exitCode == 0` 都不会触发重启。
-  - 可用性变化通过 `onAvailabilityChange(Bool)` 暴露给 Coordinator。
+  - 可用性变化通过 `onAvailabilityChange(Bool)` 暴露给 `AgentServerHealth`；`AgentServerHealth.onAvailabilityChange(Bool, String?)` 再把可提交状态同步给 PromptPanel。
+  - server 不可用期间 PromptPanel 阻止新 prompt 提交并保留草稿；server 恢复可用后自动解除阻止。
 
 ## 编辑此目录的约束
 
@@ -35,6 +36,6 @@
 ## 与其他模块的关系
 
 - [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 在 `bootstrap()` 调 `start()`，在 `shutdown()` 调 `stop()`；订阅 `onAvailabilityChange` 与 `onFatalError`。
-- [SessionWindow](/Users/mu9/proj/handAgent/apps/desktop/Sources/SessionWindow/session-window.md) 通过 `ws://127.0.0.1:4317/api/session` 连接子进程。
+- [SessionWindow](/Users/mu9/proj/handAgent/apps/desktop/Sources/SessionWindow/session-window.md) 通过 `ws://127.0.0.1:4317/api/session` 连接子进程；socket 断开后自动重连并重发 `open_session` 获取 `session_snapshot`。
 - [PlatformBridge](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/PlatformBridge/platform-bridge.md) 走同一端口的反向 WebSocket。
 - 启动错误传递给首个 `SessionViewModel.start(startupError:)`，作为 error 气泡展示。

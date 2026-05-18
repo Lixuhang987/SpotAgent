@@ -49,6 +49,38 @@ final class PromptPanelViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testSubmitIsBlockedWhenAgentServerUnavailableAndKeepsDraft() {
+        let actions = makeTestActions()
+        let vm = PromptPanelViewModel(actions: actions)
+        var submitted: String?
+        vm.onSubmit = { draft, _ in submitted = draft }
+
+        vm.draft = "hello"
+        vm.setSubmissionEnabled(false, message: "agent-server 已断开，正在尝试重连…")
+        vm.submit()
+
+        XCTAssertNil(submitted)
+        XCTAssertEqual(vm.draft, "hello")
+        XCTAssertEqual(vm.submissionDisabledMessage, "agent-server 已断开，正在尝试重连…")
+    }
+
+    @MainActor
+    func testSubmitWorksAfterAgentServerBecomesAvailableAgain() {
+        let actions = makeTestActions()
+        let vm = PromptPanelViewModel(actions: actions)
+        var submitted: String?
+        vm.onSubmit = { draft, _ in submitted = draft }
+
+        vm.draft = "hello"
+        vm.setSubmissionEnabled(false, message: "agent-server 已断开，正在尝试重连…")
+        vm.setSubmissionEnabled(true, message: nil)
+        vm.submit()
+
+        XCTAssertEqual(submitted, "hello")
+        XCTAssertNil(vm.submissionDisabledMessage)
+    }
+
+    @MainActor
     func testSubmitActionCallsPerformAndOnHide() {
         let actions = makeTestActions()
         let vm = PromptPanelViewModel(actions: actions)

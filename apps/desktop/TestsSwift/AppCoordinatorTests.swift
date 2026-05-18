@@ -67,6 +67,39 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testSubmitPromptDoesNotCreateSessionWhileAgentServerUnavailable() async throws {
+        final class StubServer: AgentServerStarting {
+            var lastStartupError: String?
+            var fatalErrorMessage: String?
+            var isAvailable = true
+            var onAvailabilityChange: ((Bool) -> Void)?
+            var onFatalError: ((String) -> Void)?
+            func start() throws {}
+            func stop() {}
+        }
+        let stub = StubServer()
+        let services = AppServices(
+            agentServer: stub,
+            agentServerURL: URL(string: "ws://127.0.0.1:0/noop")!,
+            platformBridgeFactory: { _ in nil },
+            hotkeyRegistrar: NopHotkeyRegistrar(),
+            sessionWindowPresenter: NopSessionWindowPresenter(),
+            settingsWindowPresenter: NopSettingsWindowPresenter(),
+            fatalAlertPresenter: NopFatalAlertPresenter(),
+            setActivationPolicy: { _ in },
+            showsStatusBubble: false
+        )
+        let coordinator = AppCoordinator(services: services)
+
+        stub.onAvailabilityChange?(false)
+        try await Task.sleep(for: .milliseconds(10))
+        coordinator.send(.submitPrompt("hello", attachments: []))
+
+        XCTAssertTrue(coordinator.sessionViewModels.isEmpty)
+        XCTAssertEqual(coordinator.agentServerError, "agent-server 已断开，正在尝试重连…")
+    }
+
+    @MainActor
     func testInjectedAgentServerStartIsCalledOnBootstrap() throws {
         final class StubServer: AgentServerStarting {
             var lastStartupError: String?

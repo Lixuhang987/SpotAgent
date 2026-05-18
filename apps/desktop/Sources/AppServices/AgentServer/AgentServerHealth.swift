@@ -5,6 +5,7 @@ import Foundation
 @MainActor
 final class AgentServerHealth {
     private(set) var errorMessage: String?
+    var onAvailabilityChange: ((Bool, String?) -> Void)?
 
     @ObservationIgnored private let agentServer: any AgentServerStarting
     @ObservationIgnored private let fatalAlertPresenter: any FatalAlertPresenting
@@ -26,22 +27,28 @@ final class AgentServerHealth {
                 guard let self else { return }
                 if available {
                     self.errorMessage = nil
+                    self.onAvailabilityChange?(true, nil)
                 } else if self.errorMessage == nil {
                     self.errorMessage = "agent-server 已断开，正在尝试重连…"
+                    self.onAvailabilityChange?(false, self.errorMessage)
                 }
             }
         }
         agentServer.onFatalError = { [weak self] message in
             Task { @MainActor in
-                self?.errorMessage = message
-                self?.presentFatalAlert(message: message)
+                guard let self else { return }
+                self.errorMessage = message
+                self.onAvailabilityChange?(false, message)
+                self.presentFatalAlert(message: message)
             }
         }
         do {
             try agentServer.start()
             errorMessage = nil
+            onAvailabilityChange?(true, nil)
         } catch {
             errorMessage = agentServer.lastStartupError ?? error.localizedDescription
+            onAvailabilityChange?(false, errorMessage)
         }
     }
 

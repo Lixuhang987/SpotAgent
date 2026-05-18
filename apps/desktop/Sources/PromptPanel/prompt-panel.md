@@ -6,8 +6,8 @@
 
 | 文件 | 职责 |
 |------|------|
-| `PromptPanelView.swift` | 纯 UI：输入框 + action 列表 + 附件 chip（图片 chip 可点击触发 QuickLook 预览），绑定 ViewModel 状态，消费 Theme token |
-| `PromptPanelViewModel.swift` | `@Observable` 状态：`draft` / `focusSeed` / `filteredActions` / `attachments`；`onSubmit` / `onHide` / `onOpenSettings` / `onPreviewImage` 回调出口 |
+| `PromptPanelView.swift` | 纯 UI：输入框 + action 列表 + 附件 chip（图片 chip 可点击触发 QuickLook 预览）+ server 不可用提示，绑定 ViewModel 状态，消费 Theme token |
+| `PromptPanelViewModel.swift` | `@Observable` 状态：`draft` / `focusSeed` / `filteredActions` / `attachments` / `submissionDisabledMessage`；`onSubmit` / `onHide` / `onOpenSettings` / `onPreviewImage` 回调出口 |
 | `PromptPanelController.swift` | `NSPanel` 生命周期、`NSEvent` 局部监听、ViewModel 注入、持有 `QuickLookPreviewController` |
 | `PromptPanelWindow.swift` | `NSPanel` 子类，处理失焦自动隐藏 |
 | `PromptPanelStyles.swift` | `PromptPanelContainerModifier` / `ActionRowModifier` |
@@ -25,6 +25,8 @@ Coordinator
 Hotkey → Coordinator.send(.togglePromptPanel) → Controller.toggle()
                                               └─ 显示时 ViewModel.focusSeed += 1（驱动 View 重新聚焦输入框）
 键盘事件 → NSEvent 局部监听 → ESC 隐藏 / shortcut 匹配 ViewModel.filteredActions → ViewModel.submitAction()
+AgentServerHealth.onAvailabilityChange → Controller.setSubmissionEnabled(...)
+                                      └─ server 不可用时 ViewModel.submit() 保留 draft，不上抛 onSubmit
 ```
 
 ## 编辑此目录的约束
@@ -36,11 +38,13 @@ Hotkey → Coordinator.send(.togglePromptPanel) → Controller.toggle()
 - **Styles 抽取阈值**：跨 View 复用的样式才放 `PromptPanelStyles.swift`；一次性样式写在 View 里，避免 ViewModifier 爆炸。
 - **窗口与拖动区域**：`NSPanel` 自身设为 `isOpaque = false` + `backgroundColor = .clear`，可见背景全部由 SwiftUI `promptPanelContainer()` 的圆角 + ultraThinMaterial 提供，避免顶部"标题栏条"和主体颜色不一致。`isMovableByWindowBackground = true` 让任何空白处都能拖；首行的 input 框宽度固定（左上角紧凑，带 surface 背景与 border），右侧是齿轮按钮，中间留出的 `Spacer` 区域天然成为不显眼的拖动手柄。新增首行控件时不要让控件铺满整行，必须保留中间的拖动空隙。
 - **PromptAction.filter 大小写不敏感**：title 与 keywords 两路匹配；新增匹配维度需保持纯函数 + 单元测试。
+- **server 不可用时不丢草稿**：`submissionDisabledMessage != nil` 时输入框禁用并显示提示，`submit()` 直接返回，不清空 `draft` / `attachments`。
 - **测试**：[PromptPanelViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/PromptPanelViewModelTests.swift) 覆盖 draft 提交 / 过滤 / action 触发；[PromptActionTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/PromptActionTests.swift) 覆盖过滤逻辑。
 
 ## 与其他模块的关系
 
 - 由 [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 持有并注入 actions。
 - 提交 prompt 后由 Coordinator 创建 [SessionWindow](/Users/mu9/proj/handAgent/apps/desktop/Sources/SessionWindow/session-window.md) 与 `SessionViewModel`。
+- [AgentServer](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/AgentServer/agent-server.md) 可用性变化会同步到 `setSubmissionEnabled`，避免重启期间提交新 prompt。
 - "打开设置" action 由 Coordinator 路由到 [Settings](/Users/mu9/proj/handAgent/apps/desktop/Sources/Settings/settings.md) 窗口。
 - 全局热键来自 [AppServices/Hotkey](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Hotkey/hotkey.md)。

@@ -12,7 +12,7 @@ desktop ↔ agent-server 的 WebSocket 协议。所有跨进程消息走 `Sessio
 
 | 分类 | 类型 | 方向 |
 |------|------|------|
-| 会话生命周期 | `open_session` | desktop → server |
+| 会话生命周期 | `open_session` | desktop → server（首次连接 / 重连订阅） |
 | | `user_message` | desktop → server |
 | | `assistant_message_start` / `_delta` / `_end` | server → desktop |
 | | `tool_message`（`MessageTranslator` 把 `tool_call` → `running`，`tool_result` → `completed`/`failed`） | server → desktop |
@@ -40,6 +40,12 @@ desktop ↔ agent-server 的 WebSocket 协议。所有跨进程消息走 `Sessio
   payload: <按 type 分支>,
 }
 ```
+
+## 会话恢复握手
+
+- SessionWindow 首次连接和 socket 断线重连后都会发送 `open_session`。
+- agent-server 若在 store 中找到对应 `sessionId`，会返回 `session_snapshot`，用于恢复窗口内的消息列表和状态。
+- 如果 session 不存在，`open_session` 不创建新会话；首次用户输入仍由 `user_message` 创建并触发 runtime。
 
 ## 附件
 

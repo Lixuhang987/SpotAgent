@@ -18,7 +18,7 @@
 - **状态私有化**：`sessionViewModels`、`sessionWindows`、`settingsWindow` 等对外只读，外部不能直接增删，全部由 `handleXxx` 私有方法管理。
 - **测试模式走 DI**：`AppServices.testing()` 注入 nop 替身（`NopAgentServerService` / `NopSessionWindowPresenter` / `NopSettingsWindowPresenter` / `NopHotkeyRegistrar` / `NopFatalAlertPresenter`），生产路径不再保留 `skipServerStart` 布尔旁路。
 - **窗口 / Alert 构造交给 presenter**：`SessionWindowPresenting` / `SettingsWindowPresenting` / `FatalAlertPresenting` 协议在 [AppServices](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/app-services.md) 层统一暴露，Coordinator 不再 `import AppKit` 构造 `NSWindow` / `NSHostingController` / `NSAlert`。
-- **agent-server 健康状态独立**：`AgentServerHealth` 持有 `errorMessage` + start/stop + fatal alert 触发，Coordinator 仅暴露 `agentServerError` 转发字段。
+- **agent-server 健康状态独立**：`AgentServerHealth` 持有 `errorMessage` + start/stop + fatal alert 触发，Coordinator 暴露 `agentServerError` 转发字段，并把可用性同步给 PromptPanel；server 不可用时拒绝 `submitPrompt` 并保留面板草稿。
 
 ## 当前 Action 列表
 
@@ -35,6 +35,7 @@ statusBubbleTapped(String?)
 
 - 持有 `PromptPanelController`、`StatusBubbleController`，通过它们驱动 `NSPanel` / `NSWindow`。
 - 持有 `AgentServerService`、`SessionRegistry`、`AgentSettingsStore`（来自 AppServices 层）。
+- 通过 `AgentServerHealth.onAvailabilityChange` 驱动 [PromptPanel](/Users/mu9/proj/handAgent/apps/desktop/Sources/PromptPanel/prompt-panel.md) 的提交启停状态。
 - 通过 `makeSettingsViewModel()` / `makeShortcutActions()` 暴露给 SwiftUI Scene 用于构造 Settings 窗口。
 - 通过 `setActivationPolicy` 注入与 `AppActivationPolicyCoordinator` 协作切换 `.regular` / `.accessory`。
 

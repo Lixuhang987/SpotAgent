@@ -45,6 +45,8 @@ export class SessionRouter {
 
   async receive(message: SessionMessage, push: PushMessage = () => {}): Promise<void> {
     switch (message.type) {
+      case "open_session":
+        return this.handleOpenSession(message, push);
       case "list_sessions_request":
         return this.handleListSessions(message, push);
       case "load_session_request":
@@ -56,6 +58,26 @@ export class SessionRouter {
       default:
         return;
     }
+  }
+
+  private async handleOpenSession(
+    message: Extract<SessionMessage, { type: "open_session" }>,
+    push: PushMessage,
+  ): Promise<void> {
+    const session = await this.persistence.getSession(message.sessionId);
+    if (!session) return;
+
+    const messages = await this.persistence.getConversationMessages(message.sessionId);
+    push({
+      type: "session_snapshot",
+      sessionId: message.sessionId,
+      messageId: message.messageId,
+      timestamp: this.now(),
+      payload: {
+        messages,
+        status: "idle",
+      },
+    });
   }
 
   private async handleListSessions(

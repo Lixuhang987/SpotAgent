@@ -1,5 +1,12 @@
 import Foundation
 
+enum SessionConnectionState: Equatable {
+    case disconnected
+    case connecting
+    case connected
+    case reconnecting
+}
+
 struct SessionListItem: Equatable, Identifiable {
     let id: String
     let title: String?
@@ -19,6 +26,7 @@ enum SessionEvent: Equatable {
     case sessionSnapshot(messages: [SessionBubble], status: String)
     case sessionList(sessions: [SessionListItem])
     case sessionLoaded(targetSessionId: String, title: String?, messages: [SessionBubble])
+    case connectionState(SessionConnectionState)
 
     static func == (lhs: SessionEvent, rhs: SessionEvent) -> Bool {
         switch (lhs, rhs) {
@@ -44,26 +52,72 @@ enum SessionEvent: Equatable {
             return a == b
         case let (.sessionLoaded(a1, a2, a3), .sessionLoaded(b1, b2, b3)):
             return a1 == b1 && a2 == b2 && a3 == b3
+        case let (.connectionState(a), .connectionState(b)):
+            return a == b
         default:
             return false
         }
     }
 }
 
-final class SessionSocketClient {
+protocol SessionWebSocketTask: AnyObject {
+    func resume()
+    func cancel(with closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?)
+    func send(
+        _ message: URLSessionWebSocketTask.Message,
+        completionHandler: @escaping @Sendable (Error?) -> Void
+    )
+    func receive(
+        completionHandler: @escaping @Sendable (Result<URLSessionWebSocketTask.Message, Error>) -> Void
+    )
+}
+
+extension URLSessionWebSocketTask: SessionWebSocketTask {}
+
+protocol SessionSocketTransport {
+    func makeWebSocketTask(with url: URL) -> any SessionWebSocketTask
+}
+
+final class URLSessionSocketTransport: SessionSocketTransport {
+    private let session: URLSession
+
+    init(session: URLSession = .shared) {
+        self.session = session
+    }
+
+    func makeWebSocketTask(with url: URL) -> any SessionWebSocketTask {
+        session.webSocketTask(with: url)
+    }
+}
+
+final class SessionSocketClient: @unchecked Sendable {
     var onEvent: ((SessionEvent) -> Void)?
 
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
     private let serverURL: URL?
-    private let session: URLSession
+    private let transport: any SessionSocketTransport
+    private let reconnectDelay: TimeInterval
 
     private var currentSessionID: String?
-    private var socketTask: URLSessionWebSocketTask?
+    private var socketTask: (any SessionWebSocketTask)?
+    private var reconnectWorkItem: DispatchWorkItem?
+    private var userRequestedDisconnect = false
 
     init(serverURL: URL?, session: URLSession = .shared) {
         self.serverURL = serverURL
-        self.session = session
+        self.transport = URLSessionSocketTransport(session: session)
+        self.reconnectDelay = 2
+    }
+
+    init(
+        serverURL: URL?,
+        transport: any SessionSocketTransport,
+        reconnectDelay: TimeInterval = 2
+    ) {
+        self.serverURL = serverURL
+        self.transport = transport
+        self.reconnectDelay = reconnectDelay
     }
 
     static var noop: SessionSocketClient {
@@ -72,19 +126,37 @@ final class SessionSocketClient {
 
     func connect(sessionID: String) {
         currentSessionID = sessionID
+        userRequestedDisconnect = false
 
         guard let serverURL, socketTask == nil else { return }
+        openSocket(serverURL: serverURL, state: .connecting)
+    }
 
-        let socketTask = session.webSocketTask(with: serverURL)
+    private func openSocket(serverURL: URL, state: SessionConnectionState?) {
+        reconnectWorkItem?.cancel()
+        reconnectWorkItem = nil
+
+        if let state {
+            onEvent?(.connectionState(state))
+        }
+
+        let socketTask = transport.makeWebSocketTask(with: serverURL)
         self.socketTask = socketTask
         socketTask.resume()
         receiveNextMessage()
-        sendOpenSession(sessionID: sessionID)
+        onEvent?(.connectionState(.connected))
+        if let currentSessionID {
+            sendOpenSession(sessionID: currentSessionID)
+        }
     }
 
     func disconnect() {
+        userRequestedDisconnect = true
+        reconnectWorkItem?.cancel()
+        reconnectWorkItem = nil
         socketTask?.cancel(with: .goingAway, reason: nil)
         socketTask = nil
+        onEvent?(.connectionState(.disconnected))
     }
 
     func sendUserMessage(
@@ -117,7 +189,7 @@ final class SessionSocketClient {
         send(envelope, on: socketTask)
     }
 
-    private func send<T: Encodable>(_ envelope: T, on socketTask: URLSessionWebSocketTask) {
+    private func send<T: Encodable>(_ envelope: T, on socketTask: any SessionWebSocketTask) {
         guard let data = try? encoder.encode(envelope),
               let text = String(data: data, encoding: .utf8) else {
             return
@@ -161,15 +233,41 @@ final class SessionSocketClient {
 
                 self.receiveNextMessage()
             case .failure(let error):
-                self.onEvent?(
-                    .error(
-                        messageID: UUID().uuidString,
-                        message: error.localizedDescription,
-                        timestamp: Self.timestamp()
-                    )
-                )
                 self.socketTask = nil
+                self.scheduleReconnect(after: error)
             }
+        }
+    }
+
+    private func scheduleReconnect(after error: Error) {
+        if userRequestedDisconnect {
+            return
+        }
+
+        guard serverURL != nil else {
+            onEvent?(
+                .error(
+                    messageID: UUID().uuidString,
+                    message: error.localizedDescription,
+                    timestamp: Self.timestamp()
+                )
+            )
+            return
+        }
+
+        onEvent?(.connectionState(.reconnecting))
+        reconnectWorkItem?.cancel()
+
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, let serverURL = self.serverURL, !self.userRequestedDisconnect else { return }
+            self.openSocket(serverURL: serverURL, state: nil)
+        }
+        reconnectWorkItem = work
+
+        if reconnectDelay <= 0 {
+            work.perform()
+        } else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + reconnectDelay, execute: work)
         }
     }
 

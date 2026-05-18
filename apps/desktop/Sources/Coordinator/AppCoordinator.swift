@@ -63,6 +63,7 @@ final class AppCoordinator {
         setupPromptPanel()
         setupHotkey()
         setupStatusBubble()
+        setupAgentServerHealth()
         agentServerHealth.start()
         startPlatformBridge()
         if services.showsStatusBubble {
@@ -123,6 +124,13 @@ final class AppCoordinator {
         }
     }
 
+    private func setupAgentServerHealth() {
+        agentServerHealth.onAvailabilityChange = { [weak self] available, message in
+            guard let self else { return }
+            self.promptPanelController.setSubmissionEnabled(available, message: message)
+        }
+    }
+
     private func setupHotkey() {
         services.hotkeyRegistrar.registerShowPromptPanel { [weak self] in
             Task { @MainActor in self?.send(.togglePromptPanel) }
@@ -154,6 +162,12 @@ final class AppCoordinator {
     }
 
     private func handleSubmitPrompt(_ draft: String, attachments: [PromptAttachmentResult]) {
+        if let agentServerError {
+            promptPanelController.setSubmissionEnabled(false, message: agentServerError)
+            promptPanelController.show()
+            return
+        }
+
         guard let prompt = PromptSubmission.compose(draft: draft, attachments: attachments) else { return }
 
         let sessionID = UUID().uuidString

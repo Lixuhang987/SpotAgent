@@ -2,7 +2,7 @@
 
 本文只保留当前仍需修复、补齐或端到端验证的事项。已由代码实现并有测试覆盖的历史项不再保留在 TODO 中；实现细节见对应模块文档与 [architecture-review.md](/Users/mu9/proj/handAgent/docs/architecture-review.md)。
 
-最后核对日期：2026-05-18。
+最后核对日期：2026-05-19。
 
 ## P0 — 需要修复的产品闭环缺口
 
@@ -162,22 +162,9 @@
 
 **依赖**：无。
 
-### 12. agent-server 断线重连 UX 验证
-
-**现状**：`AgentServerService` 已实现子进程指数退避重启与 fatal alert；SessionSocketClient 断线后会发 error，但自动重连订阅与 PromptPanel 提交禁用策略仍需验证/补齐。
-
-**验收标准**：
-
-- server 崩溃时 SessionWindow 显示连接断开状态。
-- server 重启成功后，现有 SessionWindow 能重新订阅或明确提示用户刷新。
-- 重启期间 PromptPanel 不允许提交，或显示排队/不可用状态。
-- 连续失败过限时 alert 的“查看日志”路径可用。
-
-**依赖**：无。
-
 ## P3 — 长期能力
 
-### 13. 多 provider LLM 支持
+### 12. 多 provider LLM 支持
 
 **现状**：生产路径只有 `VercelClient`，OpenAI 兼容 API 通过 `responses/chat/completion` 切换。
 
@@ -190,7 +177,7 @@
 
 **依赖**：建议在真实 streaming 和多模态 content part 后做。
 
-### 14. 用户自定义 tool / 插件系统
+### 13. 用户自定义 tool / 插件系统
 
 **现状**：所有 tool 都是 builtin，随代码构建。
 

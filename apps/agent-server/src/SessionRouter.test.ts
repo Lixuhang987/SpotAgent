@@ -104,6 +104,105 @@ describe("SessionRouter", () => {
     ]);
   });
 
+  it("returns a session snapshot when open_session reconnects to stored history", async () => {
+    const store = new InMemorySessionStore();
+    const persistence = new SessionPersistence(
+      store,
+      () => "2026-05-18T00:00:00.000Z",
+    );
+    const router = new SessionRouter(
+      {
+        async handleUserMessage() {},
+      },
+      persistence,
+      () => "2026-05-18T00:02:00.000Z",
+    );
+    const pushed: SessionMessage[] = [];
+
+    await store.create({
+      id: "session-reconnect",
+      createdAt: "2026-05-18T00:00:00.000Z",
+    });
+    await store.appendMessages(
+      "session-reconnect",
+      [
+        { role: "user", content: "hello" },
+        { role: "assistant", content: "hi" },
+      ],
+      "2026-05-18T00:01:00.000Z",
+    );
+
+    await router.receive(
+      {
+        type: "open_session",
+        sessionId: "session-reconnect",
+        messageId: "open-1",
+        timestamp: "2026-05-18T00:02:00.000Z",
+        payload: {},
+      },
+      (message) => pushed.push(message),
+    );
+
+    expect(pushed).toEqual([
+      {
+        type: "session_snapshot",
+        sessionId: "session-reconnect",
+        messageId: "open-1",
+        timestamp: "2026-05-18T00:02:00.000Z",
+        payload: {
+          messages: [
+            {
+              id: "msg-0",
+              role: "user",
+              text: "hello",
+              status: "completed",
+              createdAt: "1970-01-01T00:00:00.000Z",
+              updatedAt: "1970-01-01T00:00:00.000Z",
+            },
+            {
+              id: "msg-1",
+              role: "assistant",
+              text: "hi",
+              status: "completed",
+              createdAt: "1970-01-01T00:00:00.000Z",
+              updatedAt: "1970-01-01T00:00:00.000Z",
+            },
+          ],
+          status: "idle",
+        },
+      },
+    ]);
+  });
+
+  it("does not create a session when open_session targets missing history", async () => {
+    const persistence = new SessionPersistence(
+      new InMemorySessionStore(),
+      () => "2026-05-18T00:00:00.000Z",
+    );
+    const router = new SessionRouter(
+      {
+        async handleUserMessage() {},
+      },
+      persistence,
+      () => "2026-05-18T00:02:00.000Z",
+    );
+    const pushed: SessionMessage[] = [];
+
+    await router.receive(
+      {
+        type: "open_session",
+        sessionId: "missing-session",
+        messageId: "open-1",
+        timestamp: "2026-05-18T00:02:00.000Z",
+        payload: {},
+      },
+      (message) => pushed.push(message),
+    );
+
+    expect(pushed).toEqual([]);
+    expect(await persistence.getSession("missing-session")).toBeNull();
+  });
+
   it("dispatches deletes and user messages to their owning modules", async () => {
     const persistence = new SessionPersistence(
       new InMemorySessionStore(),

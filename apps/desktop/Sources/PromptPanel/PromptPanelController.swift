@@ -62,6 +62,10 @@ final class PromptPanelController {
         viewModel?.appendAttachment(attachment)
     }
 
+    func setSubmissionEnabled(_ enabled: Bool, message: String?) {
+        viewModel?.setSubmissionEnabled(enabled, message: message)
+    }
+
     func show() {
         ensurePanel()
         guard let panel else { return }

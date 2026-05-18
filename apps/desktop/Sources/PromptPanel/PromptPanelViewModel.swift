@@ -7,6 +7,7 @@ final class PromptPanelViewModel {
     var draft = ""
     var focusSeed = 0
     var attachments: [PromptAttachmentResult] = []
+    private(set) var submissionDisabledMessage: String?
 
     var onSubmit: ((String, [PromptAttachmentResult]) -> Void)?
     var onHide: (() -> Void)?
@@ -46,9 +47,14 @@ final class PromptPanelViewModel {
         attachments = []
     }
 
+    func setSubmissionEnabled(_ enabled: Bool, message: String?) {
+        submissionDisabledMessage = enabled ? nil : message
+    }
+
     func submit() {
         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        guard submissionDisabledMessage == nil else { return }
         let payload = attachments.filter {
             if case .selectionError = $0 { return false }
             return true

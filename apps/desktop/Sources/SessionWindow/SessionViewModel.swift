@@ -20,6 +20,9 @@ final class SessionViewModel {
     private(set) var error: String?
     private(set) var pendingPermissionRequests: [SessionPermissionRequest] = []
     private(set) var historyList: [SessionListItem] = []
+    private(set) var connectionState: SessionConnectionState = .disconnected
+    private(set) var connectionMessage: String?
+    var canSendPrompt: Bool { connectionState == .connected }
 
     let sessionID: String
     @ObservationIgnored let socketClient: SessionSocketClient
@@ -138,6 +141,18 @@ final class SessionViewModel {
             messages = bubbles
             status = "idle"
             error = nil
+        case .connectionState(let state):
+            connectionState = state
+            switch state {
+            case .connected:
+                connectionMessage = nil
+            case .connecting:
+                connectionMessage = "正在连接 agent-server…"
+            case .reconnecting:
+                connectionMessage = "连接已断开，正在自动重连…"
+            case .disconnected:
+                connectionMessage = "连接已断开。"
+            }
         }
     }
 
