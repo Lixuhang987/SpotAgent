@@ -83,7 +83,7 @@ flowchart TD
 - 已实现：热键唤起、PromptPanel、PromptPanel attachment、文本选区采集、区域截图采集入口、SessionWindow、SessionWindow 自动重连基础逻辑、会话历史侧栏、状态气泡、设置页（模型 / 快捷键 / workspace）、`AgentRuntime` 循环、builtin tool 注册、workspace 沙箱文件工具、权限审批协议、会话审计事件、平台反向 IPC。
 - 已实现的 macOS 平台能力：剪贴板、前台 App、窗口列表、ScreenCaptureKit 截图（display / window / region target）。PromptPanel 的手动区域圈选入口保留 `screencapture -i`。
 - 已预留但未完成：OCR、accessibility、真实 token streaming、多模态图片消息、会话 interrupt / Stop、插件 tool、独立平台 RPC 协议拆分。
-- 待收尾：图片附件已落 Blob/Stub 但尚不能被 LLM 直接理解；SessionWindow 当前用户气泡尚不展示附件；workspace / permission 文件缓存仍需失效策略；tool 设置 UI 与热加载尚未完成；快捷键修改配置不会生效；权限气泡、工作区 UI 与 SessionWindow 自动重连还需要端到端手工验证。
+- 待收尾：图片附件已落 Blob/Stub 但尚不能被 LLM 直接理解；SessionWindow 当前用户气泡尚不展示附件；workspace / permission 文件缓存仍需失效策略；tool 设置 UI 与热加载尚未完成；权限气泡、工作区 UI 与 SessionWindow 自动重连还需要端到端手工验证。
 - Since the project hasn’t gone live yet, there’s no need to consider compatibility.
 
 ## 开发规范
