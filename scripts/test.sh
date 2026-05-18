@@ -8,7 +8,10 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_ROOT"
 
 pnpm exec vitest run \
-  apps/agent-server/src/SessionManager.test.ts \
+  apps/agent-server/src/MessageTranslator.test.ts \
+  apps/agent-server/src/SessionPersistence.test.ts \
+  apps/agent-server/src/SessionRuntimeOrchestrator.test.ts \
+  apps/agent-server/src/SessionRouter.test.ts \
   apps/agent-server/src/SettingsBackedLLMClient.test.ts \
   apps/agent-server/src/WebSocketPlatformBridge.test.ts \
   packages/core/tests/model-settings.test.ts \

@@ -48,5 +48,5 @@
 
 ## 相关文档
 
-- 调用方：[apps/agent-server/agent-server.md](/Users/mu9/proj/handAgent/apps/agent-server/agent-server.md)（`SessionManager` 是唯一消费者）
+- 调用方：[apps/agent-server/agent-server.md](/Users/mu9/proj/handAgent/apps/agent-server/agent-server.md)（`SessionPersistence` 是 agent-server 内唯一直接消费者）
 - 消息模型：[runtime/runtime.md](/Users/mu9/proj/handAgent/packages/core/src/runtime/runtime.md)

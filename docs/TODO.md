@@ -16,8 +16,8 @@
   - 依赖：无。
 
 - [x] **10.2 tool_message 真实 emit + permission_request.arguments 透传**
-  - 现状：`AgentRuntime` emit 了 `tool_call` / `tool_result` / `permission_decision`，但 `SessionManager.toSessionMessage` 只翻译 assistant 三事件，其余丢弃。desktop 看不到 tool 实时进度。`permission_request.arguments` 在 Swift 侧被硬编码为空字典。
-  - 改法：① `SessionManager` 把 `tool_call` → `tool_message(status: running)`，`tool_result` → `tool_message(status: completed|failed)`；② Swift 侧解码 `permission_request.payload.arguments`。
+  - 现状：`AgentRuntime` emit 了 `tool_call` / `tool_result` / `permission_decision`，但当时的会话翻译层只翻译 assistant 三事件，其余丢弃。desktop 看不到 tool 实时进度。`permission_request.arguments` 在 Swift 侧被硬编码为空字典。
+  - 改法：① 会话翻译层把 `tool_call` → `tool_message(status: running)`，`tool_result` → `tool_message(status: completed|failed)`；② Swift 侧解码 `permission_request.payload.arguments`。
   - 验收：desktop 上调 `clipboard.read` 能看到 tool bubble 实时出现；权限气泡能显示具体参数。
   - 依赖：无。
 
@@ -35,10 +35,10 @@
   - 验收：Coordinator 无 `NSWindow` / `NSHostingController` / `NSAlert` 直接构造；新增窗口类型不改 Coordinator。
   - 依赖：10.3。
 
-- [ ] **10.5 拆 SessionManager（god class → 4 个模块）**
+- [x] **10.5 拆 SessionManager（god class → 4 个模块）**
   - 现状：单文件做协议路由 + 持久化 + 翻译 + LLM 编排。
   - 改法：拆为 `SessionRouter`（路由）/ `SessionRuntimeOrchestrator`（跑 runtime + 翻译事件）/ `SessionPersistence`（写 store）/ `MessageTranslator`（AgentMessage ↔ ConversationMessage）。
-  - 验收：`SessionManager.test.ts` 拆为 4 个文件；新增 `tool_message` emit 不需要改其它模块。
+  - 验收：`SessionManager.test.ts` 拆为 `SessionRouter.test.ts` / `SessionRuntimeOrchestrator.test.ts` / `SessionPersistence.test.ts` / `MessageTranslator.test.ts`；新增 `tool_message` emit 不需要改其它模块。
   - 依赖：10.2。
 
 - [x] **10.6 defineTool 工厂 + schema 单一源**
@@ -141,7 +141,7 @@ docs/superpowers/specs/2026-05-18-blob-stub-abstraction-design.md
   - 阻塞：2.2、2.3。
 
 - [ ] **2.2 选区未传入 WebSocket**（文本选区已接通；图片附件已落 Blob/Stub，但 LLM 仍没有 vision 解读能力）
-  - 现状：文本选区已通过 `user_message.attachments` 传到 agent-server 并拼入 prompt；image 附件会写入 BlobStore 并在 user message 中渲染 image STUB，LLM 可以看到 blob 引用但不能直接理解图像内容。
+  - 现状：文本选区已通过 `user_message.attachments` 传到 agent-server 并拼入 prompt；`MessageTranslator.composeUserContent` 会把 image 附件写入 BlobStore 并在 user message 中渲染 image STUB，LLM 可以看到 blob 引用但不能直接理解图像内容。
   - 用户场景：即便 2.1 完成，附件仍然不会被传到 agent-server，相当于半截功能。
   - 验收标准：
     - `sendUserMessage` 接受 `selection: SelectionPayload?` 参数。

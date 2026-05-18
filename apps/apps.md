@@ -28,7 +28,7 @@ flowchart LR
 ### 2. 会话交互
 
 - 用户提交 prompt 后，`AppCoordinator` 创建 `SessionWindow` 与 `SessionViewModel`。
-- `SessionSocketClient` 通过 `agent-server` 发送 `SessionMessage`，由后端 `SessionManager` 驱动 `AgentRuntime`。
+- `SessionSocketClient` 通过 `agent-server` 发送 `SessionMessage`，由后端 `SessionRouter` 路由并交给 `SessionRuntimeOrchestrator` 驱动 `AgentRuntime`。
 
 ### 3. 平台能力反向 IPC
 
