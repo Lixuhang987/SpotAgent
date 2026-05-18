@@ -25,8 +25,8 @@ async function makeRegistryWithDefault(): Promise<{
 describe("file tools", () => {
   it("writes and reads workspace files via workspaceId", async () => {
     const { registry, workspaceId } = await makeRegistryWithDefault();
-    const writeTool = new FileWriteTool(registry);
-    const readTool = new FileReadTool(registry);
+    const writeTool = FileWriteTool.create(registry);
+    const readTool = FileReadTool.create(registry);
 
     await writeTool.call({
       workspaceId,
@@ -47,7 +47,7 @@ describe("file tools", () => {
 
   it("rejects path escape attempts", async () => {
     const { registry, workspaceId } = await makeRegistryWithDefault();
-    const writeTool = new FileWriteTool(registry);
+    const writeTool = FileWriteTool.create(registry);
 
     await expect(
       writeTool.call({ workspaceId, relativePath: "../outside.md", content: "nope" })
@@ -56,7 +56,7 @@ describe("file tools", () => {
 
   it("rejects absolute relativePath", async () => {
     const { registry, workspaceId } = await makeRegistryWithDefault();
-    const writeTool = new FileWriteTool(registry);
+    const writeTool = FileWriteTool.create(registry);
 
     await expect(
       writeTool.call({ workspaceId, relativePath: "/etc/passwd", content: "nope" })
@@ -65,7 +65,7 @@ describe("file tools", () => {
 
   it("rejects unknown workspaceId", async () => {
     const { registry } = await makeRegistryWithDefault();
-    const writeTool = new FileWriteTool(registry);
+    const writeTool = FileWriteTool.create(registry);
 
     await expect(
       writeTool.call({
@@ -78,7 +78,7 @@ describe("file tools", () => {
 
   it("can write nested files by creating parent directories", async () => {
     const { registry, workspaceId, rootPath } = await makeRegistryWithDefault();
-    const writeTool = new FileWriteTool(registry);
+    const writeTool = FileWriteTool.create(registry);
 
     const result = await writeTool.call({
       workspaceId,
@@ -101,8 +101,8 @@ describe("file tools", () => {
     await writeFile(join(outsideRoot, "secret.txt"), "top-secret", "utf8");
     await symlink(outsideRoot, join(rootPath, "linked-outside"));
 
-    const readTool = new FileReadTool(registry);
-    const writeTool = new FileWriteTool(registry);
+    const readTool = FileReadTool.create(registry);
+    const writeTool = FileWriteTool.create(registry);
 
     await expect(
       readTool.call({ workspaceId, relativePath: "linked-outside/secret.txt" })
@@ -120,7 +120,7 @@ describe("file tools", () => {
     await writeFile(outsideTarget, "original", "utf8");
     await symlink(outsideTarget, join(rootPath, "trap.md"));
 
-    const writeTool = new FileWriteTool(registry);
+    const writeTool = FileWriteTool.create(registry);
 
     await expect(
       writeTool.call({ workspaceId, relativePath: "trap.md", content: "pwn" })
@@ -130,7 +130,7 @@ describe("file tools", () => {
 
   it("rejects writes that exceed the size cap", async () => {
     const { registry, workspaceId } = await makeRegistryWithDefault();
-    const writeTool = new FileWriteTool(registry);
+    const writeTool = FileWriteTool.create(registry);
     const oversized = "x".repeat(10 * 1024 * 1024 + 1);
 
     await expect(

@@ -1,49 +1,33 @@
 import { lstat, mkdir, rename, unlink, writeFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import { dirname } from "node:path";
-import type { AgentTool } from "../AgentTool.ts";
+import { z } from "zod";
+import { defineTool } from "../defineTool.ts";
 import type { WorkspaceRegistry } from "../../workspace/Workspace.ts";
 import {
+  isNotFoundError,
   normalizeWorkspaceRelativePath,
   resolveWorkspace,
   resolveWritePathWithinWorkspace,
-} from "./FileReadTool.ts";
+} from "./workspace-path.ts";
 
-export type FileWriteToolInput = {
-  workspaceId: string;
-  relativePath: string;
-  content: string;
-};
+const InputSchema = z.object({
+  workspaceId: z.string().describe("目标 workspace 的 id"),
+  relativePath: z.string().describe("相对 workspace rootPath 的路径，禁止使用绝对路径"),
+  content: z.string(),
+});
 
-export type FileWriteToolOutput = {
-  workspaceId: string;
-  relativePath: string;
-  bytesWritten: number;
-};
+export type FileWriteToolInput = z.infer<typeof InputSchema>;
+export type FileWriteToolOutput = { workspaceId: string; relativePath: string; bytesWritten: number };
 
 export const FILE_WRITE_MAX_BYTES = 10 * 1024 * 1024;
 
-export class FileWriteTool implements AgentTool<FileWriteToolInput, FileWriteToolOutput> {
-  name = "file.write";
-  description =
-    "写入指定 workspace 内的文本文件。调用前若不确定 workspace，先调 `workspace.list`，匹配模糊时调 `workspace.askUser`。";
-  inputSchema = {
-    type: "object",
-    properties: {
-      workspaceId: { type: "string", description: "目标 workspace 的 id" },
-      relativePath: {
-        type: "string",
-        description: "相对 workspace rootPath 的路径，禁止使用绝对路径",
-      },
-      content: { type: "string" },
-    },
-    required: ["workspaceId", "relativePath", "content"],
-    additionalProperties: false,
-  } as const;
-
-  constructor(private readonly registry: WorkspaceRegistry) {}
-
-  async call(input: FileWriteToolInput): Promise<FileWriteToolOutput> {
+export const FileWriteTool = defineTool<FileWriteToolInput, FileWriteToolOutput, WorkspaceRegistry>({
+  name: "file.write",
+  description:
+    "写入指定 workspace 内的文本文件。调用前若不确定 workspace，先调 `workspace.list`，匹配模糊时调 `workspace.askUser`。",
+  inputSchema: InputSchema,
+  run: async (input, registry): Promise<FileWriteToolOutput> => {
     const bytesWritten = Buffer.byteLength(input.content, "utf8");
     if (bytesWritten > FILE_WRITE_MAX_BYTES) {
       throw new Error(
@@ -51,7 +35,7 @@ export class FileWriteTool implements AgentTool<FileWriteToolInput, FileWriteToo
       );
     }
 
-    const workspace = await resolveWorkspace(this.registry, input.workspaceId);
+    const workspace = await resolveWorkspace(registry, input.workspaceId);
     const absolutePath = await resolveWritePathWithinWorkspace(
       workspace.rootPath,
       input.relativePath,
@@ -66,8 +50,8 @@ export class FileWriteTool implements AgentTool<FileWriteToolInput, FileWriteToo
       relativePath: await normalizeWorkspaceRelativePath(workspace.rootPath, absolutePath),
       bytesWritten,
     };
-  }
-}
+  },
+});
 
 async function ensureTargetIsNotSymlink(absolutePath: string, relativePath: string): Promise<void> {
   try {
@@ -92,13 +76,4 @@ async function atomicWriteFile(absolutePath: string, content: string): Promise<v
     await unlink(tempPath).catch(() => undefined);
     throw error;
   }
-}
-
-function isNotFoundError(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: string }).code === "ENOENT"
-  );
 }

@@ -9,6 +9,7 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.78"
+    "@ai-sdk/anthropic": "^3.0.78",
+    "zod": "^4.4.3"
   }
 }

@@ -34,19 +34,19 @@ export function registerBuiltinTools(
   const settings = options.settings ?? { allowlist: null, denylist: [] };
 
   const candidates: AgentTool[] = [
-    new ClipboardReadTool(options.platform),
-    new FrontmostAppTool(options.platform),
-    new WindowListTool(options.platform),
-    new ScreenCaptureTool(options.platform),
-    new OCRTool(options.platform),
-    new AccessibilitySnapshotTool(options.platform),
-    new AccessibilityActionTool(options.platform),
+    ClipboardReadTool.create(options.platform),
+    FrontmostAppTool.create(options.platform),
+    WindowListTool.create(options.platform),
+    ScreenCaptureTool.create(options.platform),
+    OCRTool.create(options.platform),
+    AccessibilitySnapshotTool.create(options.platform),
+    AccessibilityActionTool.create(options.platform),
   ];
 
   if (options.workspaceRegistry) {
-    candidates.push(new WorkspaceListTool(options.workspaceRegistry));
-    candidates.push(new FileReadTool(options.workspaceRegistry));
-    candidates.push(new FileWriteTool(options.workspaceRegistry));
+    candidates.push(WorkspaceListTool.create(options.workspaceRegistry));
+    candidates.push(FileReadTool.create(options.workspaceRegistry));
+    candidates.push(FileWriteTool.create(options.workspaceRegistry));
   }
 
   const disabled: { name: string; reason: string }[] = [];

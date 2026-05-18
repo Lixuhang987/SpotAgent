@@ -1,69 +1,29 @@
-import type { AgentTool } from "../AgentTool.ts";
+import { z } from "zod";
+import { defineTool } from "../defineTool.ts";
 import type {
   PlatformAdapter,
   ScreenCaptureRequest,
   ScreenCaptureResult,
 } from "../../platform/PlatformAdapter.ts";
 
-export type ScreenCaptureToolInput = ScreenCaptureRequest;
-export type ScreenCaptureToolOutput = ScreenCaptureResult;
+const ScreenTarget = z.union([
+  z.object({ kind: z.literal("screen"), screenId: z.string().optional() }).strict(),
+  z.object({ kind: z.literal("display"), displayId: z.string().optional() }).strict(),
+  z.object({ kind: z.literal("window"), windowId: z.number() }).strict(),
+  z.object({
+    kind: z.literal("region"),
+    x: z.number(),
+    y: z.number(),
+    width: z.number(),
+    height: z.number(),
+  }).strict(),
+]);
 
-export class ScreenCaptureTool implements AgentTool<ScreenCaptureToolInput, ScreenCaptureToolOutput> {
-  name = "screen.capture";
-  description = "截图当前屏幕或指定目标";
-  inputSchema = {
-    type: "object",
-    properties: {
-      target: {
-        oneOf: [
-          {
-            type: "object",
-            properties: {
-              kind: { const: "screen" },
-              screenId: { type: "string" },
-            },
-            required: ["kind"],
-            additionalProperties: false,
-          },
-          {
-            type: "object",
-            properties: {
-              kind: { const: "display" },
-              displayId: { type: "string" },
-            },
-            required: ["kind"],
-            additionalProperties: false,
-          },
-          {
-            type: "object",
-            properties: {
-              kind: { const: "window" },
-              windowId: { type: "number" },
-            },
-            required: ["kind", "windowId"],
-            additionalProperties: false,
-          },
-          {
-            type: "object",
-            properties: {
-              kind: { const: "region" },
-              x: { type: "number" },
-              y: { type: "number" },
-              width: { type: "number" },
-              height: { type: "number" },
-            },
-            required: ["kind", "x", "y", "width", "height"],
-            additionalProperties: false,
-          },
-        ],
-      },
-    },
-    additionalProperties: false,
-  } as const;
+const InputSchema = z.object({ target: ScreenTarget.optional() });
 
-  constructor(private readonly platform: PlatformAdapter) {}
-
-  async call(input: ScreenCaptureToolInput): Promise<ScreenCaptureToolOutput> {
-    return this.platform.captureScreen(input);
-  }
-}
+export const ScreenCaptureTool = defineTool<z.infer<typeof InputSchema>, ScreenCaptureResult, PlatformAdapter>({
+  name: "screen.capture",
+  description: "截图当前屏幕或指定目标",
+  inputSchema: InputSchema,
+  run: async (input, platform) => platform.captureScreen(input as ScreenCaptureRequest),
+});

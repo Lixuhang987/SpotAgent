@@ -92,10 +92,10 @@ describe("context tools", () => {
   it("registers task 6 tool schemas", () => {
     const platform = new FakePlatformAdapter();
     const registry = new ToolRegistry([
-      new ScreenCaptureTool(platform),
-      new OCRTool(platform),
-      new AccessibilitySnapshotTool(platform),
-      new AccessibilityActionTool(platform),
+      ScreenCaptureTool.create(platform),
+      OCRTool.create(platform),
+      AccessibilitySnapshotTool.create(platform),
+      AccessibilityActionTool.create(platform),
     ]);
 
     expect(registry.list().map((tool) => tool.name)).toEqual([
@@ -109,16 +109,16 @@ describe("context tools", () => {
   it("delegates calls to the platform adapter", async () => {
     const platform = new FakePlatformAdapter();
 
-    const screenshot = await new ScreenCaptureTool(platform).call({
+    const screenshot = await ScreenCaptureTool.create(platform).call({
       target: { kind: "display", displayId: "main" },
     });
-    const ocr = await new OCRTool(platform).call({
+    const ocr = await OCRTool.create(platform).call({
       imageBase64: "ZmFrZS1pbWFnZQ==",
     });
-    const snapshot = await new AccessibilitySnapshotTool(platform).call({
+    const snapshot = await AccessibilitySnapshotTool.create(platform).call({
       kind: "frontmost_app",
     });
-    const action = await new AccessibilityActionTool(platform).call({
+    const action = await AccessibilityActionTool.create(platform).call({
       target: { kind: "element", elementId: "confirm-button" },
       action: { kind: "press" },
     });

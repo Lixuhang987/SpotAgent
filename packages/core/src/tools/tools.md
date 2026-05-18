@@ -7,9 +7,11 @@
 | 文件 | 职责 |
 |------|------|
 | `AgentTool.ts` | `AgentTool<TInput, TOutput>` 接口：`name / description / inputSchema (JSON Schema) / call(input)` |
+| `defineTool.ts` | `defineTool({ name, description, inputSchema (zod), run })` 工厂：`zod` schema 自动转 JSON Schema 2019-09，返回带 `.create(deps)` 的 `ToolFactory<TInput, TOutput, TDeps>` |
 | `ToolRegistry.ts` | Map 包装；`register / get / list`，重名抛错；`list()` 返回 `RegisteredTool`（去掉 `call`），供 `LLMClient.complete` 使用 |
 | `registerBuiltins.ts` | 组合根：根据 `PlatformAdapter` + 可选 `WorkspaceRegistry` + `ToolSettings` 装配 candidates，过 allowlist/denylist 后注册 |
-| `builtins/*.ts` | 9 个 builtin tool 实现 |
+| `builtins/*.ts` | 9 个 builtin tool 实现，全部用 `defineTool` 工厂表达 |
+| `builtins/workspace-path.ts` | `file.read` / `file.write` 共享的 workspace 路径校验工具：拒绝绝对路径与 `..` 越狱、`realpath` 后再次校验 |
 
 ## 9 个 builtin tool
 
@@ -48,7 +50,7 @@ flowchart LR
 - tool name 一律点号风格（`category.action`），描述要包含调用场景与边界条件，方便 LLM 自决策。
 - 不要在 tool 内部直接 `import "node:fs"` 与平台无关的 IO；platform 类 tool 必须经 `PlatformAdapter`，文件类 tool 必须经 `WorkspaceRegistry`。
 - 工具结果优先返回**可序列化对象**（runtime 自动 JSON.stringify）；返回字符串只用于人类阅读场景。
-- 入参 JSON Schema 与 TS 类型当前手写，必须双向对齐；推荐未来引入 `zod`/`@sinclair/typebox` 单一源（架构改进项）。
+- 入参 schema 单一源：写 `zod` schema 即可，`defineTool` 自动派生 JSON Schema 与 TS 类型；不要再手写 JSON Schema 字面量。
 
 ## 相关文档
 
