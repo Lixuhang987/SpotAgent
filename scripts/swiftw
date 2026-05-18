@@ -12,13 +12,17 @@ mkdir -p "$CLANG_CACHE_DIR" "$SWIFT_CACHE_DIR"
 export CLANG_MODULE_CACHE_PATH="$CLANG_CACHE_DIR"
 export SWIFT_MODULECACHE_PATH="$SWIFT_CACHE_DIR"
 
-if [[ "${1:-}" == "test" ]]; then
+if [[ "${1:-}" == "test" || "${1:-}" == "build" ]]; then
 
-  tmp_log="$(mktemp -t swiftw-test.XXXXXX)"
+  tmp_log="$(mktemp -t "swiftw-${1:-swift}.XXXXXX")"
   trap 'rm -f "$tmp_log"' EXIT
 
   if swift "$@" >"$tmp_log" 2>&1; then
-    echo "SUCCESS"
+    if [[ "${1:-}" == "build" ]]; then
+      echo "success"
+    else
+      echo "SUCCESS"
+    fi
     exit 0
   else
     status=$?

@@ -7,6 +7,8 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
+bash "$PROJECT_ROOT/scripts/swiftw.test.sh"
+
 pnpm exec vitest run \
   apps/agent-server/src/MessageTranslator.test.ts \
   apps/agent-server/src/SessionPersistence.test.ts \
