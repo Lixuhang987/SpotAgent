@@ -4,16 +4,18 @@ import SwiftUI
 
 @MainActor
 final class ProductionHotkeyRegistrar: HotkeyRegistering {
+    private let registrar = NamedHotkeyRegistrar()
+
     func registerShowPromptPanel(handler: @escaping () -> Void) {
-        KeyboardShortcuts.onKeyUp(for: .showPromptPanel) { handler() }
+        registrar.register(name: .showPromptPanel, handler: handler)
     }
 
     func registerCaptureSelection(handler: @escaping () -> Void) {
-        KeyboardShortcuts.onKeyUp(for: .captureSelection) { handler() }
+        registrar.register(name: .captureSelection, handler: handler)
     }
 
     func registerCaptureRegion(handler: @escaping () -> Void) {
-        KeyboardShortcuts.onKeyUp(for: .captureRegion) { handler() }
+        registrar.register(name: .captureRegion, handler: handler)
     }
 }
 
