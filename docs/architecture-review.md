@@ -18,10 +18,10 @@
 
 负面（驱动后续 TODO 的根因）：
 
-- **产品闭环仍有缺口**：图片附件已写入 Blob/Stub，但尚未接入 vision 或多模态消息；SessionWindow 当前用户气泡不展示本轮附件；快捷键修改配置不会在运行中的桌面 App 生效。
+- **产品闭环仍有缺口**：图片附件已写入 Blob/Stub，但尚未接入 vision 或多模态消息；SessionWindow 当前用户气泡不展示本轮附件。
 - **协议表面与运行时仍有不对齐**：`tool_message` 与 `permission_request.arguments` 已接通；剩余主要是"伪流式" assistant_message_delta、`interrupt` 帧未处理、平台 RPC 与会话协议混在同一个 `SessionMessage` union。
-- **缓存边界**：`FilePermissionPolicy.cache` / `FileWorkspaceRegistry.cache` 一次性加载、不监听文件；Settings 修改 workspace 或撤销权限后，agent-server 重启前看不到。`SettingsBackedLLMClient` 也仍在每次 complete 时同步读盘并重建 `VercelClient`。
-- **可靠性盲区**：`ProductionSessionWindowPresenter` / `ProductionSettingsWindowPresenter` 通过 `NotificationCenter.default.addObserver` 监听窗口关闭但未持有 observer token；`WebSocketPlatformBridge.attach` 会静默覆盖旧 bridge socket。
+- **缓存边界**：workspace / permission 文件缓存已通过文件戳刷新；剩余主要是 `SettingsBackedLLMClient` 仍在每次 complete 时同步读盘并重建 `VercelClient`，tool 设置也还缺热加载。
+- **可靠性盲区**：生产窗口 presenter 已通过 `WindowCloseObservation` 持有并释放关闭 observer token；剩余主要是 `WebSocketPlatformBridge.attach` 会静默覆盖旧 bridge socket。
 - **能力暴露早于实现**：`ocr.read` / `accessibility.snapshot` / `accessibility.action` 已注册为 builtin tool，但 macOS provider 仍返回 `not_implemented`。
 
 ### 0.2 改进路线建议（按依赖顺序）
@@ -36,9 +36,9 @@
 
 当前优先级：
 
-1. 图片附件多模态消息、当前用户气泡附件回显、快捷键配置生效链路修复。
-2. workspace / permission 缓存失效、settings / tool 设置热加载。
-3. 修 `NotificationCenter` observer 生命周期、`WebSocketPlatformBridge` 多连接与多会话绑定。
+1. 图片附件多模态消息、当前用户气泡附件回显。
+2. settings / tool 设置热加载。
+3. `WebSocketPlatformBridge` 多连接与多会话绑定。
 4. 给 `LLMClient` 真实流式接口，并补会话 `interrupt` / Stop。
 5. 收敛 `SessionMessage` 的协议混用（§2.2）与跨包 path alias（§2.1）。
 
@@ -54,7 +54,7 @@
 
 1. 给 `AppServices.testing()` 暴露更多可选替身参数，减少测试里手写生产依赖。
 2. 补一个轻量 `AppServices` 装配测试，覆盖默认 init 不抛异常。
-3. 生产 presenter 关闭通知的 observer 生命周期仍需修复（见 §5.4）。
+3. 继续补一个轻量 `AppServices` 装配测试，覆盖默认生产组合根可构造。
 
 ---
 
@@ -68,7 +68,7 @@
 - `SettingsLifecycleTests` 覆盖 openOrFocus / handleClosed。
 - `AppCoordinatorTests` 通过 `AppServices.testing()` 覆盖设置窗口、会话创建、server 不可用、bootstrap 启动。
 
-**剩余问题**：生产窗口 presenter 仍用 `NotificationCenter.default.addObserver(...)` 监听关闭且未持有 token；这是 presenter 层可靠性问题，不再是 Coordinator 职责拆分问题（见 §5.4 与 [TODO](/Users/mu9/proj/handAgent/docs/TODO.md) P1）。
+**已收尾**：生产窗口 presenter 的关闭 observer 已收敛到 `WindowCloseObservation`，由 presenter 持有 token 并在首次关闭通知时释放；该问题不再属于 Coordinator 职责拆分风险。
 
 ---
 
@@ -402,16 +402,16 @@ private async loadIfChanged(): Promise<void> {
 
 ---
 
-### 5.4 生产窗口 presenter 的 `NotificationCenter` 观察者未释放
+### 5.4 生产窗口 presenter 的 `NotificationCenter` 观察者释放（已修）
 
-**现状**：`ProductionSessionWindowPresenter.present` 与 `ProductionSettingsWindowPresenter.present` 用 `NotificationCenter.default.addObserver(forName:object:queue:)` 监听 `NSWindow.willCloseNotification`，但不持有返回的 token。窗口销毁后通知中心仍持有闭包直到通知中心释放 observer。
+**已修**：`ProductionSessionWindowPresenter.present` 与 `ProductionSettingsWindowPresenter.present` 通过 `WindowCloseObservation` 监听 `NSWindow.willCloseNotification`。presenter 按窗口 `ObjectIdentifier` 持有观察器，首次关闭通知会先移除 observer token，再触发关闭回调并从 presenter 字典中移除。
 
-**建议改法**：用 `NSWindowDelegate.windowWillClose` 替换，或由 presenter 持有 token 并在窗口关闭时 remove。由于 Coordinator 已不再持有窗口对象，释放逻辑应留在 presenter / lifecycle 边界内，不要倒灌回 Coordinator。
+**边界**：释放逻辑留在 presenter / lifecycle 边界内，没有倒灌回 Coordinator。
 
-**验收**：
+**测试覆盖**：
 
-- 反复打开/关闭 SessionWindow 与 SettingsWindow，close 回调每个窗口只触发一次。
-- 增加 presenter 级测试或 lifecycle 集成测试覆盖 observer/token 释放。
+- `WindowCloseObservationTests` 覆盖单个窗口重复 close notification 只触发一次。
+- `WindowCloseObservationTests` 覆盖 20 次关闭循环不会重复调用 close 回调，并验证 token 已释放。
 
 ---
 

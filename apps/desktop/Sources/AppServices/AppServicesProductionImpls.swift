@@ -1,4 +1,4 @@
-import AppKit
+@preconcurrency import AppKit
 import KeyboardShortcuts
 import SwiftUI
 
@@ -21,6 +21,8 @@ final class ProductionHotkeyRegistrar: HotkeyRegistering {
 
 @MainActor
 final class ProductionSessionWindowPresenter: SessionWindowPresenting {
+    private var closeObservations: [ObjectIdentifier: WindowCloseObservation] = [:]
+
     func present(
         sessionID: String,
         viewModel: SessionViewModel,
@@ -36,11 +38,12 @@ final class ProductionSessionWindowPresenter: SessionWindowPresenting {
         window.center()
 
         let sendableOnClose = SendableClosure(closure: onClose)
-        NotificationCenter.default.addObserver(
-            forName: NSWindow.willCloseNotification,
+        let windowID = ObjectIdentifier(window)
+        closeObservations[windowID] = WindowCloseObservation(
             object: window,
             queue: .main
-        ) { _ in
+        ) { [weak self] in
+            self?.closeObservations[windowID] = nil
             Task { @MainActor in sendableOnClose.closure() }
         }
 
@@ -52,6 +55,8 @@ final class ProductionSessionWindowPresenter: SessionWindowPresenting {
 
 @MainActor
 final class ProductionSettingsWindowPresenter: SettingsWindowPresenting {
+    private var closeObservations: [ObjectIdentifier: WindowCloseObservation] = [:]
+
     func present(
         settingsViewModel: AgentSettingsViewModel,
         workspaceViewModel: WorkspaceSettingsViewModel,
@@ -76,11 +81,12 @@ final class ProductionSettingsWindowPresenter: SettingsWindowPresenting {
         window.hasShadow = true
 
         let sendableOnClose = SendableClosure(closure: onClose)
-        NotificationCenter.default.addObserver(
-            forName: NSWindow.willCloseNotification,
+        let windowID = ObjectIdentifier(window)
+        closeObservations[windowID] = WindowCloseObservation(
             object: window,
             queue: .main
-        ) { _ in
+        ) { [weak self] in
+            self?.closeObservations[windowID] = nil
             Task { @MainActor in sendableOnClose.closure() }
         }
 
@@ -117,4 +123,54 @@ final class ProductionFatalAlertPresenter: FatalAlertPresenting {
 
 private struct SendableClosure: @unchecked Sendable {
     let closure: () -> Void
+}
+
+@MainActor
+final class WindowCloseObservation {
+    private let notificationCenter: NotificationCenter
+    private var observer: NSObjectProtocol?
+    private var onClose: (() -> Void)?
+
+    var isObserving: Bool {
+        observer != nil
+    }
+
+    init(
+        notificationCenter: NotificationCenter = .default,
+        notificationName: Notification.Name = NSWindow.willCloseNotification,
+        object: AnyObject,
+        queue: OperationQueue? = .main,
+        onClose: @escaping () -> Void
+    ) {
+        self.notificationCenter = notificationCenter
+        self.onClose = onClose
+        self.observer = notificationCenter.addObserver(
+            forName: notificationName,
+            object: object,
+            queue: queue
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.handleClose()
+            }
+        }
+    }
+
+    deinit {
+        if let observer {
+            notificationCenter.removeObserver(observer)
+        }
+    }
+
+    func cancel() {
+        guard let observer else { return }
+        notificationCenter.removeObserver(observer)
+        self.observer = nil
+        onClose = nil
+    }
+
+    private func handleClose() {
+        guard observer != nil, let callback = onClose else { return }
+        cancel()
+        callback()
+    }
 }
