@@ -23,7 +23,7 @@ describe("WorkspaceListTool", () => {
       rootPath: join(await mkdtemp(join(tmpdir(), "notes-")), "x"),
     });
 
-    const tool = new WorkspaceListTool(registry);
+    const tool = WorkspaceListTool.create(registry);
     const result = await tool.call({});
 
     expect(result.workspaces).toHaveLength(2);

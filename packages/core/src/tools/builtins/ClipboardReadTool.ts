@@ -1,26 +1,16 @@
-import type { AgentTool } from "../AgentTool.ts";
+import { z } from "zod";
+import { defineTool } from "../defineTool.ts";
 import type { PlatformAdapter } from "../../platform/PlatformAdapter.ts";
 
-export type ClipboardReadToolInput = Record<string, never>;
+const InputSchema = z.object({});
 
-export type ClipboardReadToolOutput = {
-  text: string | null;
-};
+export type ClipboardReadToolOutput = { text: string | null };
 
-export class ClipboardReadTool implements AgentTool<ClipboardReadToolInput, ClipboardReadToolOutput> {
-  name = "clipboard.read";
-  description = "读取当前剪贴板文本";
-  inputSchema = {
-    type: "object",
-    properties: {},
-    additionalProperties: false,
-  } as const;
-
-  constructor(private readonly platform: PlatformAdapter) {}
-
-  async call(): Promise<ClipboardReadToolOutput> {
-    return {
-      text: await this.platform.currentClipboardText(),
-    };
-  }
-}
+export const ClipboardReadTool = defineTool<z.infer<typeof InputSchema>, ClipboardReadToolOutput, PlatformAdapter>({
+  name: "clipboard.read",
+  description: "读取当前剪贴板文本",
+  inputSchema: InputSchema,
+  run: async (_input, platform) => ({
+    text: await platform.currentClipboardText(),
+  }),
+});

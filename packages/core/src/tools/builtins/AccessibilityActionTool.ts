@@ -1,88 +1,35 @@
-import type { AgentTool } from "../AgentTool.ts";
+import { z } from "zod";
+import { defineTool } from "../defineTool.ts";
 import type {
   AccessibilityActionRequest,
   AccessibilityActionResult,
   PlatformAdapter,
 } from "../../platform/PlatformAdapter.ts";
 
-export type AccessibilityActionToolInput = AccessibilityActionRequest;
-export type AccessibilityActionToolOutput = AccessibilityActionResult;
+const TargetSchema = z.union([
+  z.object({ kind: z.literal("frontmost_app") }).strict(),
+  z.object({ kind: z.literal("window"), windowId: z.number().optional() }).strict(),
+  z.object({ kind: z.literal("element"), elementId: z.string() }).strict(),
+]);
 
-export class AccessibilityActionTool
-  implements AgentTool<AccessibilityActionToolInput, AccessibilityActionToolOutput>
-{
-  name = "accessibility.action";
-  description = "执行无障碍交互动作";
-  inputSchema = {
-    type: "object",
-    properties: {
-      target: {
-        oneOf: [
-          {
-            type: "object",
-            properties: {
-              kind: { const: "frontmost_app" },
-            },
-            required: ["kind"],
-            additionalProperties: false,
-          },
-          {
-            type: "object",
-            properties: {
-              kind: { const: "window" },
-              windowId: { type: "number" },
-            },
-            required: ["kind"],
-            additionalProperties: false,
-          },
-          {
-            type: "object",
-            properties: {
-              kind: { const: "element" },
-              elementId: { type: "string" },
-            },
-            required: ["kind", "elementId"],
-            additionalProperties: false,
-          },
-        ],
-      },
-      action: {
-        oneOf: [
-          {
-            type: "object",
-            properties: {
-              kind: { const: "press" },
-            },
-            required: ["kind"],
-            additionalProperties: false,
-          },
-          {
-            type: "object",
-            properties: {
-              kind: { const: "click" },
-            },
-            required: ["kind"],
-            additionalProperties: false,
-          },
-          {
-            type: "object",
-            properties: {
-              kind: { const: "set_value" },
-              value: { type: "string" },
-            },
-            required: ["kind", "value"],
-            additionalProperties: false,
-          },
-        ],
-      },
-    },
-    required: ["target", "action"],
-    additionalProperties: false,
-  } as const;
+const ActionSchema = z.union([
+  z.object({ kind: z.literal("press") }).strict(),
+  z.object({ kind: z.literal("click") }).strict(),
+  z.object({ kind: z.literal("set_value"), value: z.string() }).strict(),
+]);
 
-  constructor(private readonly platform: PlatformAdapter) {}
+const InputSchema = z.object({
+  target: TargetSchema,
+  action: ActionSchema,
+});
 
-  async call(input: AccessibilityActionToolInput): Promise<AccessibilityActionToolOutput> {
-    return this.platform.performAccessibilityAction(input);
-  }
-}
+export const AccessibilityActionTool = defineTool<
+  z.infer<typeof InputSchema>,
+  AccessibilityActionResult,
+  PlatformAdapter
+>({
+  name: "accessibility.action",
+  description: "执行无障碍交互动作",
+  inputSchema: InputSchema,
+  run: async (input, platform) => platform.performAccessibilityAction(input as AccessibilityActionRequest),
+});

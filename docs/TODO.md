@@ -41,7 +41,7 @@
   - 验收：`SessionManager.test.ts` 拆为 4 个文件；新增 `tool_message` emit 不需要改其它模块。
   - 依赖：10.2。
 
-- [ ] **10.6 defineTool 工厂 + schema 单一源**
+- [x] **10.6 defineTool 工厂 + schema 单一源**
   - 现状：9 个 builtin tool 是近乎相同的 class，JSON Schema 与 TS 类型手动双向维护。
   - 改法：引入 `zod` 或 `@sinclair/typebox`，提供 `defineTool({ name, description, schema, run })` 工厂；builtin 每个文件回到 1 个表达式。
   - 验收：`tools/builtins/*.ts` 总行数下降 > 50%；新增 tool 在 30 行以内。

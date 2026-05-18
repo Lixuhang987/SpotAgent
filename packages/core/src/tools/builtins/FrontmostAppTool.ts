@@ -1,21 +1,14 @@
-import type { AgentTool } from "../AgentTool.ts";
+import { z } from "zod";
+import { defineTool } from "../defineTool.ts";
 import type { PlatformAdapter } from "../../platform/PlatformAdapter.ts";
 
-export type FrontmostAppToolInput = Record<string, never>;
+const InputSchema = z.object({});
+
 export type FrontmostAppToolOutput = Awaited<ReturnType<PlatformAdapter["frontmostAppInfo"]>>;
 
-export class FrontmostAppTool implements AgentTool<FrontmostAppToolInput, FrontmostAppToolOutput> {
-  name = "app.frontmost";
-  description = "读取当前前台 App 信息";
-  inputSchema = {
-    type: "object",
-    properties: {},
-    additionalProperties: false,
-  } as const;
-
-  constructor(private readonly platform: PlatformAdapter) {}
-
-  async call(): Promise<FrontmostAppToolOutput> {
-    return this.platform.frontmostAppInfo();
-  }
-}
+export const FrontmostAppTool = defineTool<z.infer<typeof InputSchema>, FrontmostAppToolOutput, PlatformAdapter>({
+  name: "app.frontmost",
+  description: "读取当前前台 App 信息",
+  inputSchema: InputSchema,
+  run: async (_input, platform) => platform.frontmostAppInfo(),
+});

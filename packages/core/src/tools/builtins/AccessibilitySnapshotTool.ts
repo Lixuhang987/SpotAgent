@@ -1,37 +1,26 @@
-import type { AgentTool } from "../AgentTool.ts";
+import { z } from "zod";
+import { defineTool } from "../defineTool.ts";
 import type {
   AccessibilityNodeSnapshot,
   AccessibilitySnapshotTarget,
   PlatformAdapter,
 } from "../../platform/PlatformAdapter.ts";
 
-export type AccessibilitySnapshotToolInput = AccessibilitySnapshotTarget;
-export type AccessibilitySnapshotToolOutput = AccessibilityNodeSnapshot;
+const InputSchema = z.object({
+  kind: z.enum(["frontmost_app", "app", "window", "element"]),
+  bundleId: z.string().optional(),
+  pid: z.number().optional(),
+  windowId: z.number().optional(),
+  elementId: z.string().optional(),
+});
 
-export class AccessibilitySnapshotTool
-  implements AgentTool<AccessibilitySnapshotToolInput, AccessibilitySnapshotToolOutput>
-{
-  name = "accessibility.snapshot";
-  description = "读取无障碍树快照";
-  inputSchema = {
-    type: "object",
-    properties: {
-      kind: {
-        type: "string",
-        enum: ["frontmost_app", "app", "window", "element"],
-      },
-      bundleId: { type: "string" },
-      pid: { type: "number" },
-      windowId: { type: "number" },
-      elementId: { type: "string" },
-    },
-    required: ["kind"],
-    additionalProperties: false,
-  } as const;
-
-  constructor(private readonly platform: PlatformAdapter) {}
-
-  async call(input: AccessibilitySnapshotToolInput): Promise<AccessibilitySnapshotToolOutput> {
-    return this.platform.accessibilitySnapshot(input);
-  }
-}
+export const AccessibilitySnapshotTool = defineTool<
+  z.infer<typeof InputSchema>,
+  AccessibilityNodeSnapshot,
+  PlatformAdapter
+>({
+  name: "accessibility.snapshot",
+  description: "读取无障碍树快照",
+  inputSchema: InputSchema,
+  run: async (input, platform) => platform.accessibilitySnapshot(input as AccessibilitySnapshotTarget),
+});

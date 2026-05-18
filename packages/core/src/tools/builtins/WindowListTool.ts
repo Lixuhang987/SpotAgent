@@ -1,21 +1,14 @@
-import type { AgentTool } from "../AgentTool.ts";
+import { z } from "zod";
+import { defineTool } from "../defineTool.ts";
 import type { PlatformAdapter } from "../../platform/PlatformAdapter.ts";
 
-export type WindowListToolInput = Record<string, never>;
+const InputSchema = z.object({});
+
 export type WindowListToolOutput = Awaited<ReturnType<PlatformAdapter["frontmostWindowList"]>>;
 
-export class WindowListTool implements AgentTool<WindowListToolInput, WindowListToolOutput> {
-  name = "window.list";
-  description = "读取当前窗口列表";
-  inputSchema = {
-    type: "object",
-    properties: {},
-    additionalProperties: false,
-  } as const;
-
-  constructor(private readonly platform: PlatformAdapter) {}
-
-  async call(): Promise<WindowListToolOutput> {
-    return this.platform.frontmostWindowList();
-  }
-}
+export const WindowListTool = defineTool<z.infer<typeof InputSchema>, WindowListToolOutput, PlatformAdapter>({
+  name: "window.list",
+  description: "读取当前窗口列表",
+  inputSchema: InputSchema,
+  run: async (_input, platform) => platform.frontmostWindowList(),
+});
