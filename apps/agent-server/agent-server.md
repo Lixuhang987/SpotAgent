@@ -13,7 +13,8 @@
 | 文件 | 职责 |
 |------|------|
 | `src/server.ts` | 启动入口；`startServer` 注入式构造，`startDefaultServer` 是组合根（拉起 store / bridge / registry / policy / SessionManager） |
-| `src/SessionManager.ts` | 会话生命周期 god class：处理 `user_message` / `list_sessions_request` / `load_session_request` / `delete_session_request`；持久化用户消息、跑 runtime、回流 SessionMessage |
+| `src/SessionManager.ts` | 会话生命周期协调：处理 `user_message` / `list_sessions_request` / `load_session_request` / `delete_session_request`；持久化用户消息、跑 runtime、回流 SessionMessage。翻译逻辑已抽到 `MessageTranslator.ts` |
+| `src/MessageTranslator.ts` | 纯函数：`AgentRuntimeEvent` ↔ `SessionMessage` / `SessionEvent` 翻译（`toSessionMessage` / `toAuditEvent` / `agentMessagesToConversation` / `composeUserContent` / `deriveTitle` / `toErrorMessage`）。新增 tool_message 形态只改这里 |
 | `src/SettingsBackedLLMClient.ts` | 每次 `complete` 同步读 `~/.spotAgent/settings.json` 重建 `VercelClient`；注入 `FileNetworkLogger` 把 LLM 网络调用 JSONL 落盘 |
 | `src/WebSocketPlatformBridge.ts` | 实现 core 的 `PlatformBridge` 接口；通过 `attach(send)` 接管来自 desktop 的反向 socket，按 `requestId` 关联 `platform_request` / `platform_response`，60s 超时 |
 | `src/SessionPermissionBridge.ts` | 实现 `FilePermissionPolicy` 的 `AskResolver`：把 `permission_request` 推到 desktop，按 `requestId` 等回 `permission_response`，60s 超时视为 deny |

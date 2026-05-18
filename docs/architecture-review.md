@@ -199,39 +199,17 @@ protocol SettingsWindowFactory {
 
 ## 3. 协议与运行时一致性
 
-### 3.1 `tool_message` 在协议里定义了，但 server 从不 emit
+### 3.1 `tool_message` 在协议里定义了，但 server 从不 emit（已修）
 
-**现状**：`SessionMessage.tool_message` 协议变体存在，但 `SessionManager.toSessionMessage` 只翻译 `assistant_message_*` 三个事件；`tool_call`、`tool_result`、`permission_decision`、`runtime_error` 都被 runtime emit 了又被 server 静悄悄丢掉。
+**已修**：`SessionManager.toSessionMessage` 现在把 runtime 的 `tool_call` 翻译为 `tool_message(status: "running")`，把 `tool_result` 翻译为 `tool_message(status: "completed" | "failed")`，两条共享 `${sessionId}-${toolCallId}` 作为 messageId。`AgentRuntime` 的 `tool_result` 事件加上了 `toolName` 字段，方便 server 直接拼到 `payload.name`。`SessionManager.test.ts` 新增 "translates tool_call/tool_result events into tool_message frames" 用例。
 
-**问题**：
-
-- desktop 端 `SessionWindow` 看不到 tool 实时进度，只能靠会话结束后从文件审计回填，UX 与 Cursor / Claude Code 的"工具实时显示"差距大。
-- 上层用户 / 测试容易误以为协议已"接通"。
-
-**建议改法**：
-
-1. 在 `SessionRuntimeOrchestrator`（见 §1.3）里把 runtime 的 `tool_call` 翻译为 `tool_message(status: "running")`，`tool_result` 翻译为 `tool_message(status: "completed" | "failed")`。
-2. desktop 侧 `SessionViewModel` 已经有 `tool_message` 处理路径，确认渲染。
-3. 给 `permission_decision` 也补一条对应的 `SessionMessage`（建议新增 `permission_decision` 类型，或复用 `tool_message` 的 status）。
-
-**验收**：
-
-- 在 desktop 上调一次 `clipboard.read`，能看到 SessionWindow 实时出现 tool bubble，并随结果转 completed。
-- `SessionManagerTests` 增加针对 tool_message 流的 case。
+**未做**：`permission_decision` 仍未单独转成 `SessionMessage`；当前由 `permission_request` / `permission_response` 一对协议覆盖，等到有 UX 需要再补。
 
 ---
 
-### 3.2 `permission_request.arguments` 在 desktop 侧被吞
+### 3.2 `permission_request.arguments` 在 desktop 侧被吞（已修）
 
-**现状**：core 的 `permission_request.payload.arguments` 字段已定义，但 `SessionSocketClient.IncomingPayload.decodeEvent` 把 arguments 硬编码为 `[:]`。
-
-**问题**：用户看到询问气泡时只知道 "agent 想调 file.write"，看不到具体写哪个 workspace、哪个文件，无法做出明智决策。
-
-**建议改法**：在 `SessionSocketClient.swift` 解码 `permission_request` 时把 `payload.arguments` 用 `[String: AnyCodable]`（或 `JSONValue`）形式透传到 `SessionViewModel.pendingPermissionRequests`，气泡 UI 增加"查看参数"折叠区。
-
-**验收**：
-
-- 第一次让 LLM 调 `file.write` 时气泡能显示 `workspaceId`、`relativePath`、`content` 摘要。
+**已修**：`SessionSocketClient.swift` 在解码 `permission_request` 时调用新增的 `extractPermissionArgumentsJSON`，从原始 JSON 二次解析 `payload.arguments` 并以 sortedKeys + prettyPrinted 输出 JSON 字符串，透传给 `SessionPermissionRequest.argumentsJSON`；`SessionWindowView` 在气泡里以等宽字体展示参数 JSON。`SessionSocketClientTests` 覆盖了正常 payload 与缺省 payload 的回退场景。
 - `SessionViewModelTests` 增加 arguments 透传 case。
 
 ---

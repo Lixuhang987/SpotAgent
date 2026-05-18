@@ -9,6 +9,7 @@ struct SessionBubble: Identifiable, Equatable {
 struct SessionPermissionRequest: Identifiable, Equatable {
     let id: String
     let toolName: String
+    let argumentsJSON: String
 }
 
 @Observable
@@ -127,9 +128,9 @@ final class SessionViewModel {
             self.messages = messages
             self.status = status
             error = nil
-        case .permissionRequest(let requestId, let toolName, _):
+        case .permissionRequest(let requestId, let toolName, let argumentsJSON):
             pendingPermissionRequests.append(
-                SessionPermissionRequest(id: requestId, toolName: toolName)
+                SessionPermissionRequest(id: requestId, toolName: toolName, argumentsJSON: argumentsJSON)
             )
         case .sessionList(let sessions):
             historyList = sessions

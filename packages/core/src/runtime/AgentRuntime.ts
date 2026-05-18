@@ -40,6 +40,7 @@ export type AgentRuntimeEvent =
   | {
       type: "tool_result";
       toolCallId: string;
+      toolName: string;
       status: "success" | "error";
       output: string;
       durationMs: number;
@@ -177,6 +178,7 @@ export class AgentRuntime {
           onEvent({
             type: "tool_result",
             toolCallId: toolCall.id,
+            toolName: toolCall.name,
             status: "error",
             output: DENY_TOOL_RESULT_TEXT,
             durationMs: 0,
@@ -213,6 +215,7 @@ export class AgentRuntime {
         onEvent({
           type: "tool_result",
           toolCallId: toolCall.id,
+          toolName: toolCall.name,
           status: toolStatus,
           output: truncateOutput(toolContent),
           durationMs,

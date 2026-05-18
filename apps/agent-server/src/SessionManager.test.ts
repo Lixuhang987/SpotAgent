@@ -462,6 +462,55 @@ describe("SessionManager", () => {
     expect(seenRunOptions).toEqual([{ sessionId: "session-perm" }]);
   });
 
+  it("translates tool_call/tool_result events into tool_message frames", async () => {
+    const pushed: SessionMessage[] = [];
+    const manager = new SessionManager(
+      {
+        async runWithMessages(messages: AgentMessage[], onEvent) {
+          onEvent({
+            type: "tool_call",
+            toolCallId: "tc-1",
+            toolName: "clipboard.read",
+            input: {},
+          });
+          onEvent({
+            type: "tool_result",
+            toolCallId: "tc-1",
+            toolName: "clipboard.read",
+            status: "success",
+            output: "hello",
+            durationMs: 5,
+          });
+          return { messages, bubbles: [] };
+        },
+      },
+      (m) => pushed.push(m),
+      { now: () => "2026-05-18T00:00:00.000Z" },
+    );
+
+    await manager.receive(createUserMessage("session-tool", "read clipboard", "user-1"));
+
+    const toolFrames = pushed.filter((m) => m.type === "tool_message") as Extract<
+      SessionMessage,
+      { type: "tool_message" }
+    >[];
+    expect(toolFrames).toHaveLength(2);
+    expect(toolFrames[0]).toEqual({
+      type: "tool_message",
+      sessionId: "session-tool",
+      messageId: "session-tool-tc-1",
+      timestamp: "2026-05-18T00:00:00.000Z",
+      payload: { name: "clipboard.read", text: "{}", status: "running" },
+    });
+    expect(toolFrames[1]).toEqual({
+      type: "tool_message",
+      sessionId: "session-tool",
+      messageId: "session-tool-tc-1",
+      timestamp: "2026-05-18T00:00:00.000Z",
+      payload: { name: "clipboard.read", text: "hello", status: "completed" },
+    });
+  });
+
   it("records tool call events for audit", async () => {
     const store = new InMemorySessionStore();
     const manager = new SessionManager(

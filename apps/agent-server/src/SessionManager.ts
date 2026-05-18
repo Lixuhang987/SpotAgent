@@ -6,9 +6,7 @@ import type {
 } from "../../../packages/core/src/runtime/AgentRuntime.ts";
 import type {
   SessionMessage,
-  UserMessageAttachment,
 } from "../../../packages/core/src/protocol/SessionMessage.ts";
-import type { ConversationMessage } from "../../../packages/core/src/conversation/ConversationMessage.ts";
 import type {
   SessionStore,
   SessionSummary,
@@ -16,6 +14,14 @@ import type {
   PersistedSession,
 } from "../../../packages/core/src/storage/index.ts";
 import { InMemorySessionStore } from "../../../packages/core/src/storage/index.ts";
+import {
+  agentMessagesToConversation,
+  composeUserContent,
+  deriveTitle,
+  toAuditEvent,
+  toErrorMessage,
+  toSessionMessage,
+} from "./MessageTranslator.ts";
 
 type RuntimeLike = {
   runWithMessages(
@@ -154,7 +160,6 @@ export class SessionManager {
       const result = await this.runtime.runWithMessages(
         nextMessages,
         (event) => {
-          const push = pushMessage ?? this.pushMessage;
           const sessionMessage = toSessionMessage(message.sessionId, event, this.now());
           if (sessionMessage) {
             push(sessionMessage);
@@ -177,7 +182,6 @@ export class SessionManager {
         await this.store.appendEvents(message.sessionId, events);
       }
     } catch (error) {
-      const push = pushMessage ?? this.pushMessage;
       push({
         type: "error",
         sessionId: message.sessionId,
@@ -201,142 +205,4 @@ export class SessionManager {
 
 function generateSessionId(): string {
   return `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function composeUserContent(
-  text: string,
-  attachments: UserMessageAttachment[] | undefined,
-): string {
-  if (!attachments || attachments.length === 0) return text;
-  const parts: string[] = [text];
-  for (const attachment of attachments) {
-    if (attachment.kind === "text_selection") {
-      parts.push(`[选区]\n${attachment.text}`);
-    } else if (attachment.kind === "image") {
-      parts.push(`[图片附件: ${attachment.mimeType} (${attachment.id})]`);
-    }
-  }
-  return parts.join("\n\n");
-}
-
-function deriveTitle(text: string): string {
-  const trimmed = text.trim().replace(/\n.*/s, "");
-  if (trimmed.length <= 50) return trimmed;
-  return trimmed.slice(0, 47) + "...";
-}
-
-function toErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-  return "Agent runtime failed.";
-}
-
-function toSessionMessage(
-  sessionId: string,
-  event: AgentRuntimeEvent,
-  timestamp: string,
-):
-  | Extract<
-      SessionMessage,
-      | { type: "assistant_message_start" }
-      | { type: "assistant_message_delta" }
-      | { type: "assistant_message_end" }
-    >
-  | null {
-  switch (event.type) {
-    case "assistant_message_start":
-      return {
-        type: "assistant_message_start",
-        sessionId,
-        messageId: `${sessionId}-${event.messageId}`,
-        timestamp,
-        payload: event.payload,
-      };
-    case "assistant_message_delta":
-      return {
-        type: "assistant_message_delta",
-        sessionId,
-        messageId: `${sessionId}-${event.messageId}`,
-        timestamp,
-        payload: event.payload,
-      };
-    case "assistant_message_end":
-      return {
-        type: "assistant_message_end",
-        sessionId,
-        messageId: `${sessionId}-${event.messageId}`,
-        timestamp,
-        payload: event.payload,
-      };
-    case "tool_call":
-    case "tool_result":
-    case "runtime_error":
-      return null;
-  }
-}
-
-function agentMessagesToConversation(messages: AgentMessage[]): ConversationMessage[] {
-  return messages.map((msg, idx) => {
-    const id = `msg-${idx}`;
-    const now = new Date(0).toISOString();
-    if (msg.role === "tool") {
-      return {
-        id,
-        role: "tool",
-        text: msg.content,
-        status: "completed",
-        createdAt: now,
-        updatedAt: now,
-        toolCall: { name: msg.name },
-      };
-    }
-    return {
-      id,
-      role: msg.role,
-      text: typeof msg.content === "string" ? msg.content : "",
-      status: "completed",
-      createdAt: now,
-      updatedAt: now,
-    };
-  });
-}
-
-function toAuditEvent(event: AgentRuntimeEvent, timestamp: string): SessionEvent | null {
-  switch (event.type) {
-    case "tool_call":
-      return {
-        type: "tool_call",
-        timestamp,
-        toolCallId: event.toolCallId,
-        toolName: event.toolName,
-        input: event.input,
-      };
-    case "tool_result":
-      return {
-        type: "tool_result",
-        timestamp,
-        toolCallId: event.toolCallId,
-        status: event.status,
-        output: event.output,
-        durationMs: event.durationMs,
-      };
-    case "permission_decision":
-      return {
-        type: "permission_request",
-        timestamp,
-        toolName: event.toolName,
-        action: event.decision,
-        granted: event.decision === "allow",
-      };
-    case "runtime_error":
-      return {
-        type: "error",
-        timestamp,
-        message: event.message,
-        code: event.code,
-      };
-    default:
-      return null;
-  }
 }
