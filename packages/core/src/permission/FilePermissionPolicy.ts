@@ -49,7 +49,7 @@ export class FilePermissionPolicy implements PermissionPolicy {
 
   async check(request: PermissionRequest): Promise<PermissionDecision> {
     const key = this.keyFor(request);
-    const sessionRule = this.sessionRules.get(key);
+    const sessionRule = this.sessionRules.get(this.sessionKey(request, key));
     if (sessionRule) return sessionRule;
 
     const persisted = this.loadSync().find((r) => r.argHash === key);
@@ -71,7 +71,7 @@ export class FilePermissionPolicy implements PermissionPolicy {
 
     const key = this.keyFor(request);
     if (resolution.remember === "session") {
-      this.sessionRules.set(key, resolution.decision);
+      this.sessionRules.set(this.sessionKey(request, key), resolution.decision);
       return;
     }
 
@@ -94,12 +94,25 @@ export class FilePermissionPolicy implements PermissionPolicy {
     await this.persist(rules);
   }
 
+  clearSessionRules(sessionId: string): void {
+    const prefix = `${sessionId}::`;
+    for (const key of this.sessionRules.keys()) {
+      if (key.startsWith(prefix)) {
+        this.sessionRules.delete(key);
+      }
+    }
+  }
+
   private keyFor(request: PermissionRequest): string {
     const stable = stableStringify(request.arguments);
     const hash = createHash("sha256")
       .update(`${request.toolName}::${stable}`)
       .digest("hex");
     return hash;
+  }
+
+  private sessionKey(request: PermissionRequest, argHash: string): string {
+    return `${request.sessionId ?? ""}::${argHash}`;
   }
 
   private loadSync(): PersistedRule[] {

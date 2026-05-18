@@ -6,16 +6,19 @@ import { SessionManager } from "./SessionManager.ts";
 import { FileSessionStore } from "../../../packages/core/src/storage/index.ts";
 import { WebSocketPlatformBridge } from "./WebSocketPlatformBridge.ts";
 import { SessionPermissionBridge } from "./SessionPermissionBridge.ts";
+import type { FilePermissionPolicy } from "../../../packages/core/src/permission/FilePermissionPolicy.ts";
 
 export async function startServer({
   manager,
   bridge,
   permissionBridge,
+  permissionPolicy,
   port = 4317,
 }: {
   manager: SessionManager;
   bridge?: WebSocketPlatformBridge;
   permissionBridge?: SessionPermissionBridge;
+  permissionPolicy?: FilePermissionPolicy;
   port?: number;
 }) {
   const { WebSocketServer } = await import("ws");
@@ -61,6 +64,7 @@ export async function startServer({
       }
       if (boundSessionId && permissionBridge) {
         permissionBridge.unbindSession(boundSessionId);
+        permissionPolicy?.clearSessionRules(boundSessionId);
       }
     });
   });
@@ -139,7 +143,13 @@ export async function startDefaultServer(port = 4317) {
     { store },
   );
 
-  return startServer({ manager, bridge: platformBridge, permissionBridge, port });
+  return startServer({
+    manager,
+    bridge: platformBridge,
+    permissionBridge,
+    permissionPolicy,
+    port,
+  });
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
