@@ -11,6 +11,12 @@
 - 已通过 `bash ./scripts/swiftw test`
 - 已通过 `bash ./scripts/swiftw build`
 
+## 本轮实机 QA 进度（2026-05-19）
+
+- 已归档：mock LLM 主链路基础、文本选区附件、区域截图附件、Workspace 设置与文件 tool 基础链路、权限审批「仅本次」路径。详见 [archive.md](./archive.md)。
+- 已确认缺陷：部分 tool completed UI 气泡展示入参而非实际 tool result。详见 [bugs.md](./bugs.md)。
+- 仍需继续验证：会话历史完整删除/恢复路径、权限拒绝 / 本会话 / 始终允许 / 超时 / 关闭取消、agent-server 崩溃恢复、tool 设置热加载、workspace.askUser、多会话 platform request 隔离、real LLM vision 与真实 token streaming。
+
 ## 主链路（P0）
 
 1. 启动桌面应用。
@@ -105,7 +111,6 @@
 ### 多模态图片附件
 
 43. 使用 `captureRegion` 截取一个区域，提交 prompt「描述这张图片」，确认 LLM 能基于图片内容给出真实描述（非占位文本）。
-44. 检查 `~/.spotAgent/sessions/<id>.json`，确认 user message 中图片以 blob reference 存储，不是裸 base64。
 
 ### 真实流式输出
 
@@ -136,3 +141,4 @@
 - P0：普通唤起 PromptPanel 会自动采集当前选区（应只在 captureSelection 路径采集）。
 - P1：状态气泡不会随 SessionWindow 失败状态更新。
 - P1：worktree 启动时 agent-server 使用了主仓库路径。
+- P1：部分 tool completed UI 气泡展示入参而非实际 tool result。

@@ -24,6 +24,13 @@
 - 测试 prompt 返回 `Failed after 3 attempts. Last error: Gateway Timeout`。
 - 属于上游模型服务超时，不直接判断为产品代码缺陷。产品 UI 对错误的展示是可见的。
 
+### mock-llm 不能证明真实 vision 与 token streaming
+
+- 2026-05-19 本轮实机 QA 使用 `bash ./scripts/package-app.sh --mock-llm` 打包启动。
+- 图片附件链路可验证到 Quick Look、SessionWindow 摘要、blob stub 持久化；但 `[mock:image-summary]` 只返回固定文本，不能证明真实 LLM 基于图片内容描述。
+- `[mock:assistant-ok]` 为一次性 mock assistant 回复，不能证明真实 token delta 至少 5 段逐段更新。
+- 结论：第 43、45 项需要 real LLM 环境单独验证。
+
 ---
 
 ## 已修复 bug
@@ -113,5 +120,41 @@
 **期望**：agent-server 应使用同一 worktree 下的 `apps/agent-server/src/server.ts`。若无法定位同一 worktree，应在 UI 或日志中明确暴露启动路径。
 
 **根因边界**：`AgentServerService.locateRepositoryRoot()` 的候选包含 `Bundle.main.executableURL`、`Bundle.main.resourceURL`、`Bundle.main.bundleURL` 和当前工作目录，定位结果落到了主仓库而非 worktree。
+
+**发现日期**：2026-05-19
+
+---
+
+### 5. Tool message UI 在部分 tool 结果中展示了入参而非实际结果
+
+**严重级别**：P1
+
+**现象**：tool 实际执行结果已经正确写入 session 持久化，但 SessionWindow 可见 tool 气泡在部分场景展示的是调用入参摘要，而不是 tool result。
+
+**复现步骤**：
+
+1. 使用 mock LLM 打包启动：`bash ./scripts/package-app.sh --mock-llm`。
+2. 提交 `[mock:workspace-list] QA workspace.list`。
+3. 授权 `workspace.list` 后观察 SessionWindow。
+4. 提交 `[mock:path-escape] QA 越狱写入拦截`。
+5. 授权 `file.write` 后观察 SessionWindow。
+
+**实际结果**：
+
+- `workspace.list` UI 气泡显示 `workspace.list: {}`，但 session 文件中的 tool result 包含完整 workspace 列表。
+- 越狱 `file.write` UI 气泡显示 `{"workspaceId":"qa-workspace","relativePath":"../../etc/passwd","content":"should be rejected"}`，但 session 文件中的 tool result 是 `Path escapes workspace root: ../../etc/passwd`。
+
+**期望结果**：SessionWindow 的 completed tool 气泡应展示实际 tool result；错误结果应显示明确错误文案，而不是继续显示 tool 入参。
+
+**证据**：
+
+- `~/.spotAgent/sessions/FC95D6F1-415C-41A8-89A8-FAB137DBDEDA.json` 中 `workspace.list` 的 `tool_result.output` 包含 `default`、`tmp`、`qa-workspace`、`handagent-test`。
+- `~/.spotAgent/sessions/AC07B7E0-9852-48A0-B38D-DC8016DE3352.json` 中 `file.write` 的 `tool_result.status` 为 `error`，`output` 为 `Path escapes workspace root: ../../etc/passwd`。
+
+**初步调用链 / 根因边界**：
+
+- agent-server 持久化：`AgentRuntime` 已正确写入 `tool_result` event，说明 runtime/tool 层结果正常。
+- UI 展示：SessionWindow 收到 `tool_message` 后可能保留了 running 阶段的 arguments 文本，或 MessageTranslator / ViewModel 合并 completed tool message 时未用 result text 覆盖旧文本。
+- 下一步应从 `SessionRuntimeOrchestrator` 下发 `tool_message`、`MessageTranslator` 转换和 `SessionViewModel` 合并消息三处追踪。
 
 **发现日期**：2026-05-19
