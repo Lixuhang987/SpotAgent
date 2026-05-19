@@ -14,7 +14,7 @@
 ## 本轮实机 QA 进度（2026-05-20）
 
 - 已归档：mock LLM 主链路基础、文本选区附件、showPromptPanel 不自动注入前台选区、区域截图附件、Workspace 设置与文件 tool 基础链路、权限审批「仅本次」路径、权限审批记忆 / 拒绝 / 超时 / 永久规则撤销、Tool 设置热加载、会话历史入口与删除确认、agent-server 崩溃恢复、状态气泡失败状态同步、缺少 apiKey 错误可见。详见 [archive.md](./archive.md)。
-- 已确认缺陷：部分 tool completed UI 气泡展示入参而非实际 tool result。详见 [bugs.md](./bugs.md)。
+- 已修复并加入回归检查：worktree 启动路径、tool completed UI 展示实际 result。详见 [bugs.md](./bugs.md)。
 - 仍需继续验证：权限关闭窗口取消挂起请求、workspace.askUser、多会话 platform request 隔离、real LLM vision 与真实 token streaming。
 
 ## 新增待验收能力（2026-05-20）
@@ -60,6 +60,8 @@
     - 再调 `file.write({workspaceId, relativePath: "hello.txt", content})`，路径落到 `~/Desktop/handagent-test/hello.txt`。
 18. 输入「读取上面那个文件」，确认 `file.read` 返回正文。
 19. 验证沙箱：尝试让 LLM 写 `../../etc/passwd`，确认 tool 返回明确的越狱错误，文件不创建。
+    - 回归检查：使用 mock LLM 提交 `[mock:workspace-list] QA workspace.list` 并授权后，SessionWindow 的 tool 气泡应显示 workspace 列表结果，而不是 `workspace.list: {}`。
+    - 回归检查：使用 mock LLM 提交 `[mock:path-escape] QA 越狱写入拦截` 并授权后，SessionWindow 的 tool 气泡应显示 `Path escapes workspace root: ../../etc/passwd`，而不是 `file.write` 入参 JSON。
 
 ## 会话历史入口（P2）
 
@@ -183,6 +185,4 @@
 
 ## 已知问题（待修复）
 
-当前已知 bug 见 [bugs.md](./bugs.md)。主要包括：
-
-- P1：部分 tool completed UI 气泡展示入参而非实际 tool result。
+当前没有已确认且未修复的 bug；继续以 [bugs.md](./bugs.md) 为准，发现新缺陷时补充到该文件。

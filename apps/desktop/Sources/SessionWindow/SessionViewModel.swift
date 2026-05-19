@@ -350,7 +350,12 @@ final class SessionViewModel {
             self.status = status == "completed" ? "idle" : status
             shouldNotifyStateChanged = true
         case .toolMessage(let messageID, let name, let text, _, _):
-            messages.append(SessionBubble(id: messageID, role: "tool", text: "\(name): \(text)"))
+            let displayText = "\(name): \(text)"
+            if let index = messages.firstIndex(where: { $0.id == messageID && $0.role == "tool" }) {
+                messages[index].text = displayText
+            } else {
+                messages.append(SessionBubble(id: messageID, role: "tool", text: displayText))
+            }
             shouldNotifyStateChanged = true
         case .status(let value):
             status = value

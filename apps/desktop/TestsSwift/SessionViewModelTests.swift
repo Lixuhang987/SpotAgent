@@ -179,6 +179,57 @@ final class SessionViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testTerminalToolMessageReplacesRunningArgumentsBubble() {
+        let model = SessionViewModel(sessionID: "session-1", socketClient: .noop)
+
+        model.handle(
+            .toolMessage(
+                messageID: "session-1-workspace-list",
+                name: "workspace.list",
+                text: "{}",
+                status: "running",
+                timestamp: "2026-05-20T00:00:00.000Z"
+            )
+        )
+        model.handle(
+            .toolMessage(
+                messageID: "session-1-workspace-list",
+                name: "workspace.list",
+                text: #" [{"id":"qa-workspace","name":"QA","description":"QA workspace","isDefault":false}] "#,
+                status: "completed",
+                timestamp: "2026-05-20T00:00:00.100Z"
+            )
+        )
+        model.handle(
+            .toolMessage(
+                messageID: "session-1-path-escape",
+                name: "file.write",
+                text: #"{"workspaceId":"qa-workspace","relativePath":"../../etc/passwd","content":"should be rejected"}"#,
+                status: "running",
+                timestamp: "2026-05-20T00:00:01.000Z"
+            )
+        )
+        model.handle(
+            .toolMessage(
+                messageID: "session-1-path-escape",
+                name: "file.write",
+                text: "Path escapes workspace root: ../../etc/passwd",
+                status: "failed",
+                timestamp: "2026-05-20T00:00:01.100Z"
+            )
+        )
+
+        XCTAssertEqual(
+            model.messages.map(\.text),
+            [
+                #"workspace.list:  [{"id":"qa-workspace","name":"QA","description":"QA workspace","isDefault":false}] "#,
+                "file.write: Path escapes workspace root: ../../etc/passwd",
+            ]
+        )
+        XCTAssertEqual(model.messages.map(\.id), ["session-1-workspace-list", "session-1-path-escape"])
+    }
+
+    @MainActor
     func testWorkspaceAskRequestsAreQueuedAndResolvedInOrder() {
         let model = SessionViewModel(sessionID: "session-1", socketClient: .noop)
 

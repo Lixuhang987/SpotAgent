@@ -43,7 +43,7 @@ PromptPanel 最近会话 / HistoryWindow 恢复
 - `userMessage / assistantMessageStart` → 追加新气泡，`status = "running"`，清空 `error`；本地 `sendPrompt` 追加 user bubble 时会把附件转成 `SessionAttachmentSummary`
 - `assistantMessageDelta` → 找到对应 `messageID` 气泡追加文本（无匹配则丢弃，避免乱序写入）
 - `assistantMessageEnd(status: "completed")` → `status = "idle"`；`interrupted` 等其他 status 透传
-- `toolMessage` → 追加 role 为 `tool` 的气泡，文本格式 `"\(name): \(text)"`
+- `toolMessage` → running 阶段追加 role 为 `tool` 的气泡，文本格式 `"\(name): \(text)"`；后续相同 `messageID` 的 completed/failed 结果更新该气泡文本，避免 UI 保留入参摘要
 - `status` → 直接覆盖；非 `failed` 时清错误
 - `error` → `status = "failed"`，记录 `error`；若上一条 assistant 文本与错误重复则去重
 - `sessionSnapshot` → 全量替换 messages + status；对历史 user message 解析 `[选区]` 与 image `STUB`，归一为附件摘要后展示
