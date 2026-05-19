@@ -2,7 +2,7 @@
 
 本文记录当前已知但尚未修复的 bug。功能待办继续放在 [TODO.md](/Users/mu9/proj/handAgent/docs/TODO.md)，架构问题继续放在 [architecture-review.md](/Users/mu9/proj/handAgent/docs/architecture-review.md)。
 
-最后核对日期：2026-05-19。
+最后核对日期：2026-05-20。
 
 ## 修 bug 约束
 
@@ -29,7 +29,7 @@
 - 2026-05-19 本轮实机 QA 使用 `bash ./scripts/package-app.sh --mock-llm` 打包启动。
 - 图片附件链路可验证到 Quick Look、SessionWindow 摘要、blob stub 持久化；但 `[mock:image-summary]` 只返回固定文本，不能证明真实 LLM 基于图片内容描述。
 - `[mock:assistant-ok]` 为一次性 mock assistant 回复，不能证明真实 token delta 至少 5 段逐段更新。
-- 结论：第 43、45 项需要 real LLM 环境单独验证。
+- 结论：第 44、45 项需要 real LLM 环境单独验证。
 
 ---
 
@@ -55,8 +55,6 @@
 - `HotkeyRegistrarTests.testNamedHotkeyRebindsHandlerWhenShortcutChanges` 覆盖同名 `KeyboardShortcuts.Name` 更新后运行中 handler 重新绑定到新配置。
 - `HotkeyRegistrarTests.testPromptActionShortcutLabelReadsUpdatedStoredShortcut` 覆盖 PromptAction 快捷键从存储读取更新值。
 
-## 当前 bug
-
 ### 2. 普通唤起 PromptPanel 会自动采集当前选区
 
 **严重级别**：P0
@@ -72,18 +70,29 @@
 
 **期望**：普通 `showPromptPanel` 只打开输入面板并聚焦输入框，不采集选区。只有 `captureSelection` 快捷键路径才采集选区并展示 textSelection chip。
 
-**根因边界**：`PromptPanelController.show()` 内固定调用 `captureSelectionIfPossible()`，未区分唤起来源。
+**状态**：已修复。
 
-**调用链**：
+**根因边界**：`PromptPanelController.show()` 内固定调用 `captureSelectionIfPossible()`，导致普通 `showPromptPanel` / `togglePromptPanel` 与用户主动 `captureSelection` 共用同一采集入口。修复后 `PromptPanelController.show()` 只负责窗口展示与聚焦；文本选区采集只保留在 `PromptCaptureCoordinator.captureSelectionAndShow()` 的主动快捷键路径。
 
-- `AppCoordinator.setupHotkey()` → `.showPromptPanel` → `send(.togglePromptPanel)`
-- `send(.togglePromptPanel)` → `PromptPanelController.toggle()`
-- `PromptPanelController.show()` → `captureSelectionIfPossible()`
-- `captureSelectionIfPossible()` → `MacSelectionCaptureProvider.captureSelectedText()` → append `.textSelection`
+**checkpoint 与结论**：
+
+- `AppCoordinator.setupHotkey()` -> `.showPromptPanel` -> `send(.togglePromptPanel)`：路径保持不变，仍只进入面板显示分支。
+- `send(.togglePromptPanel)` -> `PromptPanelController.toggle()` -> `show()`：已验证失败点在 `show()` 内隐式调用 selection provider；修复后 `PromptPanelController` 不再持有 selection provider，回归测试证明普通 `show()` 不会追加 `.textSelection` 附件。
+- `captureSelection` 热键 -> `PromptCaptureCoordinator.captureSelectionAndShow()`：主动采集路径仍在 `show()` 前调用 `SelectionCaptureProvider.captureSelectedText()`，不依赖 `PromptPanelController.show()` 的副作用。
+
+**验证**：
+
+- 修复前 RED 证据：临时定向测试把 provider 注入 `PromptPanelController.show()` 后失败，inverted expectation 被触发，且 `viewModel.attachments` 出现 `textSelection("implicit selection")`。
+- 修复后 `bash ./scripts/swiftw test --filter PromptPanelControllerTests` 通过；真实执行了 `testShowDoesNotAppendSelectionAttachment` 与 `testCaptureSelectionCoordinatorStillAppendsSelectionBeforeShowingPanel`。
+- 修复后 `bash ./scripts/swiftw test` 通过。
 
 **发现日期**：2026-05-19（commit 环境：`codex/real-launch-qa-report` 分支）
 
+**修复日期**：2026-05-20
+
 ---
+
+## 当前 bug
 
 ### 3. 状态气泡不会随 SessionWindow 失败状态更新
 

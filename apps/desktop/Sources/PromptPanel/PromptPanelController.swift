@@ -8,7 +8,6 @@ final class PromptPanelController {
     private var panel: PromptPanelWindow?
     private var eventMonitor: Any?
     private var viewModel: PromptPanelViewModel?
-    private var selectionProvider: SelectionCaptureProvider?
     private let quickLookController = QuickLookPreviewController()
 
     var onSubmit: ((String, [PromptAttachmentResult]) -> Void)?
@@ -16,10 +15,6 @@ final class PromptPanelController {
 
     func configure(viewModel: PromptPanelViewModel) {
         self.viewModel = viewModel
-    }
-
-    func setSelectionProvider(_ provider: SelectionCaptureProvider?) {
-        self.selectionProvider = provider
     }
 
     func register(actions: [PromptAction]) {
@@ -77,7 +72,6 @@ final class PromptPanelController {
         panel.makeKey()
         NSApp.activate(ignoringOtherApps: true)
         installEventMonitor()
-        captureSelectionIfPossible()
     }
 
     func hide() {
@@ -96,22 +90,6 @@ final class PromptPanelController {
             hide()
         } else {
             show()
-        }
-    }
-
-    private func captureSelectionIfPossible() {
-        guard let selectionProvider, let viewModel else { return }
-        let attachmentId = "selection-\(UUID().uuidString)"
-        Task { @MainActor in
-            let result = await selectionProvider.captureSelectedText()
-            switch result {
-            case .selected(let text):
-                viewModel.appendAttachment(.textSelection(id: attachmentId, text: text))
-            case .empty:
-                break
-            case .error(let message):
-                viewModel.appendAttachment(.selectionError(id: attachmentId, message: message))
-            }
         }
     }
 

@@ -158,7 +158,6 @@ final class AppCoordinator {
 
     private func setupPromptPanel() {
         refreshPromptActions()
-        promptPanelController.setSelectionProvider(MacSelectionCaptureProvider())
         promptPanelController.onSubmit = { [weak self] draft, attachments in
             self?.send(.submitPrompt(draft, attachments: attachments))
         }
