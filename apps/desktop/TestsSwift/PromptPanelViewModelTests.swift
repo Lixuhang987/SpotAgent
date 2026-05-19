@@ -22,6 +22,25 @@ final class PromptPanelViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testUpdateActionsReplacesFilteredActions() {
+        let vm = PromptPanelViewModel(actions: makeTestActions())
+
+        vm.updateActions([
+            PromptAction(
+                id: "recent-session-1",
+                title: "最近会话：API 设计",
+                keywords: ["history", "session"],
+                defaultShortcut: nil,
+                perform: {}
+            )
+        ])
+
+        vm.draft = "history"
+
+        XCTAssertEqual(vm.filteredActions.map(\.id), ["recent-session-1"])
+    }
+
+    @MainActor
     func testSubmitCallsOnSubmitWithTrimmedDraft() {
         let actions = makeTestActions()
         let vm = PromptPanelViewModel(actions: actions)

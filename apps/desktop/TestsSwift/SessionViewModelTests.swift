@@ -193,4 +193,31 @@ final class SessionViewModelTests: XCTestCase {
         XCTAssertEqual(model.pendingWorkspaceAskRequests.map(\.id), ["ask-2"])
         XCTAssertEqual(model.visibleWorkspaceAskRequest?.id, "ask-2")
     }
+
+    @MainActor
+    func testHistoryDeleteRequiresConfirmation() {
+        let model = SessionViewModel(sessionID: "session-1", socketClient: .noop)
+        model.handle(
+            .sessionList(
+                sessions: [
+                    SessionListItem(
+                        id: "history-1",
+                        title: "历史会话",
+                        updatedAt: "2026-05-19T00:00:00.000Z",
+                        messageCount: 2
+                    )
+                ]
+            )
+        )
+
+        model.requestDeleteSession("history-1")
+
+        XCTAssertEqual(model.pendingHistoryDeletionID, "history-1")
+        XCTAssertEqual(model.historyList.map(\.id), ["history-1"])
+
+        model.confirmDeleteSession()
+
+        XCTAssertNil(model.pendingHistoryDeletionID)
+        XCTAssertTrue(model.historyList.isEmpty)
+    }
 }

@@ -17,20 +17,7 @@
 
 **依赖**：无。`session` scope 已按 `sessionId` 隔离并在 socket 关闭时清理。
 
-### 2. 会话历史入口补齐
-
-**现状**：后端 `list/load/delete` 已实现，SessionWindow 左侧历史侧栏已落地；PromptPanel 最近会话 action 与独立历史窗口未实现。
-
-**验收标准**：
-
-- PromptPanel action 列表支持最近会话过滤和恢复。
-- 独立历史窗口支持搜索、预览、恢复、删除。
-- 删除前二次确认。
-- 多窗口恢复同一会话时行为明确，避免状态漂移。
-
-**依赖**：无。
-
-### 3. OCR 与 Accessibility 平台能力落地
+### 2. OCR 与 Accessibility 平台能力落地
 
 **现状**：`ocr.read`、`accessibility.snapshot`、`accessibility.action` 已作为 builtin tool 注册并暴露给 LLM，但 macOS 侧 `MacPlatformProvider` 对这三个 method 统一返回 `not_implemented`。
 
@@ -46,7 +33,7 @@
 
 **依赖**：macOS 权限提示与审计文案应与 permission UI 对齐。
 
-### 4. 会话中断 / Stop
+### 3. 会话中断 / Stop
 
 **现状**：协议里已有 `interrupt` 帧，但 `SessionRouter` 未处理，SessionWindow 也没有 Stop 按钮；一旦 LLM 请求或 tool 调用耗时较长，用户只能关闭窗口或等待。
 
@@ -64,7 +51,7 @@
 
 ## P3 — 长期能力
 
-### 5. 多 provider LLM 支持
+### 4. 多 provider LLM 支持
 
 **现状**：生产路径只有 `VercelClient`，OpenAI 兼容 API 通过 `responses/chat/completion` 切换。仓库依赖中已有 `@ai-sdk/anthropic`，但尚未接入到 provider factory。
 
@@ -77,7 +64,7 @@
 
 **依赖**：provider capability 需要声明是否支持当前已落地的多模态 content part、tool calling 与 streaming。
 
-### 6. 用户自定义 tool / 插件系统
+### 5. 用户自定义 tool / 插件系统
 
 **现状**：所有 tool 都是 builtin，随代码构建。
 

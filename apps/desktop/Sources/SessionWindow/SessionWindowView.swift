@@ -35,6 +35,16 @@ struct SessionWindowView: View {
             }
         }
         .background(theme.colors.background)
+        .alert("删除会话？", isPresented: pendingHistoryDeleteBinding) {
+            Button("取消", role: .cancel) {
+                viewModel.cancelDeleteSession()
+            }
+            Button("删除", role: .destructive) {
+                viewModel.confirmDeleteSession()
+            }
+        } message: {
+            Text("删除后无法恢复本地历史文件。")
+        }
     }
 
     private var historySidebar: some View {
@@ -64,7 +74,7 @@ struct SessionWindowView: View {
                         historyRow(item)
                             .contextMenu {
                                 Button("删除", role: .destructive) {
-                                    viewModel.deleteSession(item.id)
+                                    viewModel.requestDeleteSession(item.id)
                                 }
                             }
                     }
@@ -134,6 +144,15 @@ struct SessionWindowView: View {
         case .disconnected:
             return theme.colors.error
         }
+    }
+
+    private var pendingHistoryDeleteBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.pendingHistoryDeletionID != nil },
+            set: { isPresented in
+                if !isPresented { viewModel.cancelDeleteSession() }
+            }
+        )
     }
 
     private var statusLabel: String {

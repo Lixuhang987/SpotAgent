@@ -11,7 +11,10 @@ final class AppCoordinator {
         case submitPrompt(String, attachments: [PromptAttachmentResult])
         case submitAction(PromptAction)
         case openSettings
+        case openHistory
+        case restoreSession(String)
         case settingsWindowClosed
+        case historyWindowClosed
         case sessionClosed(String)
         case statusBubbleTapped(String?)
     }
@@ -23,6 +26,7 @@ final class AppCoordinator {
     @ObservationIgnored private let agentServerHealth: AgentServerHealth
     @ObservationIgnored private let sessionLifecycle: SessionLifecycle
     @ObservationIgnored private let settingsLifecycle: SettingsLifecycle
+    @ObservationIgnored private let historyLifecycle: HistoryLifecycle
     @ObservationIgnored private let activationPolicy = AppActivationPolicyCoordinator()
     @ObservationIgnored private var platformBridgeService: (any PlatformBridgeRunning)?
     @ObservationIgnored private lazy var promptPanelController = PromptPanelController()
@@ -34,15 +38,29 @@ final class AppCoordinator {
         selectionProvider: MacSelectionCaptureProvider(),
         regionProvider: MacRegionCaptureProvider()
     )
-    @ObservationIgnored private lazy var promptActions: [PromptAction] = [
+    @ObservationIgnored private lazy var basePromptActions: [PromptAction] = [
         PromptAction(
             id: "open-settings",
             title: "打开设置",
             keywords: ["settings", "preferences", "shortcut", "hotkey"],
             defaultShortcut: .init(.comma, modifiers: [.command]),
             perform: { [weak self] in self?.send(.openSettings) }
+        ),
+        PromptAction(
+            id: "open-history",
+            title: "会话历史",
+            keywords: ["history", "recent", "session"],
+            defaultShortcut: nil,
+            perform: { [weak self] in self?.send(.openHistory) }
         )
     ]
+    @ObservationIgnored private lazy var historyViewModel: SessionHistoryViewModel = {
+        let viewModel = SessionHistoryViewModel(store: services.sessionHistoryStore)
+        viewModel.onRestore = { [weak self] sessionID in
+            self?.send(.restoreSession(sessionID))
+        }
+        return viewModel
+    }()
 
     convenience init() { self.init(services: AppServices()) }
 
@@ -62,6 +80,11 @@ final class AppCoordinator {
         )
         self.settingsLifecycle = SettingsLifecycle(
             windowPresenter: services.settingsWindowPresenter,
+            activationPolicy: activationPolicy,
+            setActivationPolicy: services.setActivationPolicy
+        )
+        self.historyLifecycle = HistoryLifecycle(
+            windowPresenter: services.historyWindowPresenter,
             activationPolicy: activationPolicy,
             setActivationPolicy: services.setActivationPolicy
         )
@@ -89,10 +112,12 @@ final class AppCoordinator {
     func send(_ action: Action) {
         switch action {
         case .showPromptPanel:
+            refreshPromptActions()
             promptPanelController.show()
         case .hidePromptPanel:
             promptPanelController.hide()
         case .togglePromptPanel:
+            refreshPromptActions()
             promptPanelController.toggle()
         case .submitPrompt(let draft, let attachments):
             handleSubmitPrompt(draft, attachments: attachments)
@@ -101,10 +126,17 @@ final class AppCoordinator {
             promptPanelController.hide()
         case .openSettings:
             handleOpenSettings()
+        case .openHistory:
+            handleOpenHistory()
+        case .restoreSession(let sessionID):
+            handleRestoreSession(sessionID)
         case .settingsWindowClosed:
             settingsLifecycle.handleClosed()
+        case .historyWindowClosed:
+            historyLifecycle.handleClosed()
         case .sessionClosed(let sessionID):
             sessionLifecycle.close(sessionID)
+            refreshPromptActions()
         case .statusBubbleTapped(let sessionID):
             handleStatusBubbleTap(sessionID)
         }
@@ -122,10 +154,10 @@ final class AppCoordinator {
         PermissionRulesViewModel()
     }
 
-    func makeShortcutActions() -> [PromptAction] { promptActions }
+    func makeShortcutActions() -> [PromptAction] { basePromptActions }
 
     private func setupPromptPanel() {
-        promptPanelController.register(actions: promptActions)
+        refreshPromptActions()
         promptPanelController.setSelectionProvider(MacSelectionCaptureProvider())
         promptPanelController.onSubmit = { [weak self] draft, attachments in
             self?.send(.submitPrompt(draft, attachments: attachments))
@@ -191,8 +223,43 @@ final class AppCoordinator {
         )
     }
 
+    private func handleOpenHistory() {
+        historyViewModel.refresh()
+        historyLifecycle.openOrFocus(
+            historyViewModel: historyViewModel,
+            onRestoreSession: { [weak self] sessionID in
+                self?.send(.restoreSession(sessionID))
+            },
+            onClosed: { [weak self] in self?.send(.historyWindowClosed) }
+        )
+    }
+
+    private func handleRestoreSession(_ sessionID: String) {
+        _ = sessionLifecycle.restore(sessionID: sessionID) { [weak self] id in
+            self?.send(.sessionClosed(id))
+        }
+    }
+
     private func handleStatusBubbleTap(_ sessionID: String?) {
         if let sessionID, sessionLifecycle.focus(sessionID) { return }
         promptPanelController.show()
+    }
+
+    private func refreshPromptActions() {
+        promptPanelController.register(actions: buildPromptActions())
+    }
+
+    private func buildPromptActions() -> [PromptAction] {
+        basePromptActions + services.sessionHistoryStore.list().prefix(8).map { item in
+            PromptAction(
+                id: "recent-session-\(item.id)",
+                title: "最近会话：\(item.title ?? item.id)",
+                keywords: [item.id, item.title ?? "", item.preview, "recent", "history", "session"],
+                defaultShortcut: nil,
+                perform: { [weak self] in
+                    self?.send(.restoreSession(item.id))
+                }
+            )
+        }
     }
 }

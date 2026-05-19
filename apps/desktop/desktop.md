@@ -1,6 +1,6 @@
 # desktop
 
-`apps/desktop` 是 macOS 宿主层：应用生命周期、PromptPanel、SessionWindow、StatusBubble、Settings 与全局热键。
+`apps/desktop` 是 macOS 宿主层：应用生命周期、PromptPanel、SessionWindow、HistoryWindow、StatusBubble、Settings 与全局热键。
 
 ## 架构红线（编辑此目录前必读）
 
@@ -14,7 +14,7 @@
 
 ### 2. 模块布局：View + ViewModel + Controller + Styles
 
-每个独立 UI 模块（PromptPanel / SessionWindow / StatusBubble / Settings）按四件套拆分：
+每个独立 UI 模块（PromptPanel / SessionWindow / HistoryWindow / StatusBubble / Settings）按四件套拆分：
 
 - **View**：纯 SwiftUI，只读 ViewModel 状态、消费 `@Environment(\.appTheme)`，不直接调 `NSEvent` / `NSPanel` / 系统 API。
 - **ViewModel**：`@Observable` 状态机；不持有 `View` / `Color` / `Font`；跨模块意图通过闭包出口（`onSubmit` / `onTap` / `onHide`）暴露。
@@ -52,9 +52,9 @@
 - [Coordinator/](Sources/Coordinator/coordinator.md) — `AppCoordinator` 单向事件流
 - [Theme/](Sources/Theme/theme.md) — 视觉 token 与 Environment 注入
 - [PromptPanel/](Sources/PromptPanel/prompt-panel.md) — 命令面板 View+ViewModel+Controller+Styles
-- [SessionWindow/](Sources/SessionWindow/session-window.md) — 会话窗口、历史侧栏、权限气泡与 WebSocket 客户端
+- [SessionWindow/](Sources/SessionWindow/session-window.md) — 会话窗口、独立历史窗口、历史侧栏、权限气泡与 WebSocket 客户端
 - [StatusBubble/](Sources/StatusBubble/status-bubble.md) — 右下角状态气泡
-- [Settings/](Sources/Settings/settings.md) — 设置窗口 TabView 容器（model / shortcut / workspace 三个 Tab）
+- [Settings/](Sources/Settings/settings.md) — 设置窗口 Tab 容器（model / tools / permissions / shortcuts / workspaces）
 - [AppServices/](Sources/AppServices/app-services.md) — 跨模块共享服务（AgentServer / AgentSettings / Hotkey / Lifecycle / PlatformBridge / SelectionCapture / Session）
 
 ## 入口与启动流程
@@ -126,11 +126,11 @@ sequenceDiagram
 - `.imageRegion(base64:mimeType:)`：用户区域截图（来自 `MacRegionCaptureProvider`，保留 `screencapture -i` 作为用户主动圈选入口）。
 - `.selectionError(message:)`：采集失败，UI 以禁用 chip + tooltip 反馈。
 
-`PromptAction(id, title, keywords, defaultShortcut, perform)`：命令面板可触发的动作；`shortcutName` 计算属性生成 `KeyboardShortcuts.Name("action.\(id)")`。
+`PromptAction(id, title, keywords, defaultShortcut, perform)`：命令面板可触发的动作；`shortcutName` 计算属性生成 `KeyboardShortcuts.Name("action.\(id)")`。Coordinator 会注入固定 action（设置 / 历史窗口）并在面板显示前追加最近会话 action。
 
 ## 注意事项
 
 - agent-server 是 desktop app fork 的长驻子进程，**修改 TS 源码必须重启 desktop app**，无 hot reload。
 - `AgentServerService` 已实现指数退避重启（最多 5 次），多次失败时通过 `onFatalError` 回调上抛 Coordinator 弹原生 alert（详见 [agent-server.md](Sources/AppServices/AgentServer/agent-server.md)）。
 - node 子进程 stdout/stderr 通过 Pipe 捕获但未暴露 UI（仅防 fd 泄漏）。
-- 设置窗口与 Session 窗口共享 `AppActivationPolicyCoordinator`，全部关闭后 app 切回 `.accessory`。
+- 设置窗口、历史窗口与 Session 窗口共享 `AppActivationPolicyCoordinator`，全部关闭后 app 切回 `.accessory`。

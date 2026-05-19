@@ -211,6 +211,7 @@ final class SessionViewModel {
     private(set) var pendingPermissionRequests: [SessionPermissionRequest] = []
     private(set) var pendingWorkspaceAskRequests: [SessionWorkspaceAskRequest] = []
     private(set) var historyList: [SessionListItem] = []
+    private(set) var pendingHistoryDeletionID: String?
     private(set) var connectionState: SessionConnectionState = .disconnected
     private(set) var connectionMessage: String?
     var canSendPrompt: Bool { connectionState == .connected }
@@ -257,6 +258,20 @@ final class SessionViewModel {
     func deleteSession(_ targetSessionId: String) {
         socketClient.sendDeleteSession(sessionID: sessionID, targetSessionId: targetSessionId)
         historyList.removeAll { $0.id == targetSessionId }
+    }
+
+    func requestDeleteSession(_ targetSessionId: String) {
+        pendingHistoryDeletionID = targetSessionId
+    }
+
+    func cancelDeleteSession() {
+        pendingHistoryDeletionID = nil
+    }
+
+    func confirmDeleteSession() {
+        guard let targetSessionId = pendingHistoryDeletionID else { return }
+        pendingHistoryDeletionID = nil
+        deleteSession(targetSessionId)
     }
 
     func start(

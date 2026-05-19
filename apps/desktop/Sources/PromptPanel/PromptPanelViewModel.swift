@@ -14,13 +14,17 @@ final class PromptPanelViewModel {
     var onOpenSettings: (() -> Void)?
     var onPreviewImage: ((PromptAttachmentResult) -> Void)?
 
-    @ObservationIgnored private let actions: [PromptAction]
+    @ObservationIgnored private var actions: [PromptAction]
 
     var filteredActions: [PromptAction] {
         PromptAction.filter(actions, query: draft)
     }
 
     init(actions: [PromptAction]) {
+        self.actions = actions
+    }
+
+    func updateActions(_ actions: [PromptAction]) {
         self.actions = actions
     }
 
