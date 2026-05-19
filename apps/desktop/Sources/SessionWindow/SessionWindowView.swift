@@ -180,10 +180,10 @@ struct SessionWindowView: View {
     private func attachmentRow(_ attachment: SessionAttachmentSummary) -> some View {
         HStack(alignment: .top, spacing: theme.spacing.sm) {
             Image(systemName: attachment.kind == "image" ? "photo" : "text.quote")
-                .font(.system(size: 12, weight: .medium))
+                .font(theme.typography.captionFont)
                 .foregroundStyle(theme.colors.accent)
-                .frame(width: 14)
-            VStack(alignment: .leading, spacing: 2) {
+                .frame(width: theme.spacing.lg)
+            VStack(alignment: .leading, spacing: theme.spacing.xs) {
                 HStack(spacing: theme.spacing.sm) {
                     Text(attachment.title)
                         .font(theme.typography.captionFont)

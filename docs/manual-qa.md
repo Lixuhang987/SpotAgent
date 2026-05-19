@@ -28,7 +28,7 @@
 10. 在任意 App 中选中一段文字，按 `captureSelection` 热键，确认 PromptPanel 弹出且输入框上方出现 textSelection chip；chip 可点击移除。
 11. 没有任何文字选中时再按一次，确认 PromptPanel 仅弹出，无 chip（`SelectionCaptureResult.empty`）。
 12. 按 `captureRegion` 热键进入 macOS 系统圈选 UI，画一个矩形完成截图，确认 PromptPanel 弹出且出现 imageRegion chip；点 chip 触发 QuickLook 内嵌预览，按 ESC 取消圈选时不弹 PromptPanel。
-13. 提交带 chip 的 prompt，到 SessionWindow 后确认 agent-server 可收到 `attachments` 字段并写入会话持久化。注意：当前窗口的本地用户气泡只回显 prompt 文本，不展示附件摘要；这是 [TODO](/Users/mu9/proj/handAgent/docs/TODO.md) 中待修 UI 缺口。文本选区会在服务端拼入 user content，图片附件当前被 `composeUserContent()` 写成 image STUB，LLM 看不到真实图像字节。
+13. 提交带 chip 的 prompt，到 SessionWindow 后确认当前用户气泡显示附件数量与类型（`text_selection` / `image`），agent-server 可收到 `attachments` 字段并写入会话持久化。文本选区会在服务端拼入 user content，图片附件当前被 `composeUserContent()` 写成 image STUB，LLM 仍看不到真实图像字节。
 
 ## 工作区与文件 tool（P2）
 
@@ -60,7 +60,7 @@
 ## 通过标准
 
 - 主链路全部跑通；
-- 文本附件能从用户输入流转到 agent-server；当前 SessionWindow 附件回显仍待补齐。图片附件能传输并落 Blob，但尚未进入多模态 LLM 消息；
+- 文本附件能从用户输入流转到 agent-server，并在当前 SessionWindow 用户气泡中显示附件摘要；图片附件能传输、回显摘要并落 Blob，但尚未进入多模态 LLM 消息；
 - file tool 严格沙箱化，越狱被拒；
 - 权限审批 UI 不阻塞其他会话，决策被持久化；权限规则管理 UI 是后续项；
 - agent-server 崩溃可自动重启，过限有可见反馈；现有会话自动重连订阅需实机验证；

@@ -19,7 +19,7 @@
 
 - `baseUrl` 可留空，运行时会自动回退到 `https://api.openai.com/v1`。
 - `api` 当前支持 `responses`、`chat`、`completion`。
-- `agent-server` 会在每次模型请求前重新读取这份文件，因此修改设置后无需重启桌面宿主。
+- `agent-server` 会在每次模型请求前检查这份文件的文件戳；文件变化后会重新读取，因此修改设置后无需重启桌面宿主。
 
 2. 安装 workspace 依赖。
 
@@ -37,7 +37,7 @@ bash ./scripts/swiftw run HandAgentDesktop
 
 ### 模型配置排查
 
-- 本地 `apps/agent-server/src/server.ts` 会通过 `SettingsBackedLLMClient` 在每次请求前读取 `~/.spotAgent/settings.json`。
+- 本地 `apps/agent-server/src/server.ts` 会通过 `SettingsBackedLLMClient` 在每次请求前检查 `~/.spotAgent/settings.json` 的文件戳，配置变化后重新读取。
 - `VercelClient` 会根据配置里的 `api` 选择 `responses`、`chat` 或 `completion` provider model。
 - 如果提交 prompt 后看到 `Missing apiKey in ~/.spotAgent/settings.json. 请先在设置页完成模型配置。`，说明当前设置文件里没有有效的 `apiKey`。
 - 如果提交 prompt 后看到 `Could not connect to the server`，优先检查本地 `agent-server` 是否成功启动，而不要先把问题归因到 API key。

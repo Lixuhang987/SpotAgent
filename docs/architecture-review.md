@@ -18,9 +18,9 @@
 
 负面（驱动后续 TODO 的根因）：
 
-- **产品闭环仍有缺口**：图片附件已写入 Blob/Stub，但尚未接入 vision 或多模态消息；SessionWindow 当前用户气泡不展示本轮附件。
+- **产品闭环仍有缺口**：图片附件已写入 Blob/Stub，SessionWindow 已展示当前与历史用户气泡的附件摘要；剩余缺口是图片尚未接入 vision 或多模态消息。
 - **协议表面与运行时仍有不对齐**：`tool_message` 与 `permission_request.arguments` 已接通；剩余主要是"伪流式" assistant_message_delta、`interrupt` 帧未处理、平台 RPC 与会话协议混在同一个 `SessionMessage` union。
-- **缓存边界**：workspace / permission 文件缓存已通过文件戳刷新；剩余主要是 `SettingsBackedLLMClient` 仍在每次 complete 时同步读盘并重建 `VercelClient`，tool 设置也还缺热加载。
+- **缓存边界**：workspace / permission 文件缓存已通过文件戳刷新；`SettingsBackedLLMClient` 也已按 settings 文件戳缓存并复用 `VercelClient`；剩余主要是 tool 设置还缺热加载。
 - **可靠性盲区**：生产窗口 presenter 已通过 `WindowCloseObservation` 持有并释放关闭 observer token；剩余主要是 `WebSocketPlatformBridge.attach` 会静默覆盖旧 bridge socket。
 - **能力暴露早于实现**：`ocr.read` / `accessibility.snapshot` / `accessibility.action` 已注册为 builtin tool，但 macOS provider 仍返回 `not_implemented`。
 
@@ -36,8 +36,8 @@
 
 当前优先级：
 
-1. 图片附件多模态消息、当前用户气泡附件回显。
-2. settings / tool 设置热加载。
+1. 图片附件多模态消息。
+2. tool 设置 UI 与热加载。
 3. `WebSocketPlatformBridge` 多连接与多会话绑定。
 4. 给 `LLMClient` 真实流式接口，并补会话 `interrupt` / Stop。
 5. 收敛 `SessionMessage` 的协议混用（§2.2）与跨包 path alias（§2.1）。
@@ -209,26 +209,20 @@
 
 ---
 
-### 3.5 当前用户气泡不展示附件
+### 3.5 当前用户气泡附件摘要（已修）
 
-**现状**：`PromptSubmission` 会把 text selection / image attachment 通过 `SessionSocketClient.sendUserMessage(... attachments)` 发到 agent-server；`MessageTranslator.composeUserContent` 也会在持久化 user message 中拼入选区文本和 image STUB。但当前 SessionWindow 里本轮提交的 user bubble 是 `SessionViewModel.sendPrompt()` 本地先追加的，只包含 trimmed prompt，不包含附件数量、类型或预览。
+**已修**：`SessionViewModel.sendPrompt(_:attachments:)` 本地追加 user bubble 时，会把 `UserMessageAttachmentPayload` 归一成 `SessionAttachmentSummary`，显示附件数量、类型与文本选区 / 图片占位信息。`session_snapshot` 与 `load_session_response` 恢复历史消息时，也会把持久化文本中的 `[选区]` 与 image `STUB` 解析为同样的附件摘要展示形态。
 
-**问题**：
+**修复效果**：
 
-- 用户在当前窗口无法确认本轮请求实际带了哪些附件；
-- 当前本地回显与 `session_snapshot` / `load_session_response` 中从持久化恢复的 user message 形态可能不一致；
-- 图片多模态落地前，附件不可见会让排查更困难。
+- 用户在当前窗口可确认本轮请求实际带了哪些附件；
+- 当前本地回显与历史恢复消息的展示形态一致；
+- 图片多模态落地前，附件摘要仍能作为调试线索。
 
-**建议改法**：
+**测试覆盖**：
 
-1. 让 `SessionBubble` 或 user bubble text 支持附件摘要，当前最小方案是在本地 user message 后追加 `[附件 ×N]` 与类型列表。
-2. 历史恢复时复用同一渲染规则，避免当前窗口与 snapshot 不一致。
-3. 图片预览可复用 PromptPanel 的 QuickLook 路径，也可以先提供明确的图片占位入口。
-
-**验收**：
-
-- `SessionViewModelTests` 覆盖带附件提交后的 user bubble 文本或 attachment view model。
-- 带 text selection 和 imageRegion 提交后，当前窗口无需重连即可看到附件信息。
+- `SessionViewModelTests.testSendPromptWithAttachmentsAddsUserBubbleAttachmentDisplayState`
+- `SessionViewModelTests.testHistoricalUserMessagesNormalizeAttachmentDisplayState`
 
 ---
 
@@ -257,44 +251,32 @@
 
 ## 4. 测试与可演化性
 
-### 4.1 builtin tool 模板代码（已完成基础版，运行时校验待补）
+### 4.1 builtin tool 模板代码（已修）
 
-**现状**：`defineTool({ name, description, inputSchema, run })` 已落地，builtin tool 已改为 zod schema 单一源并自动生成 JSON Schema。当前生产注册 10 个 builtin tool：7 个平台类 + `workspace.list` + `file.read` + `file.write`。
-
-**剩余问题**：tool 工厂目前只用 zod schema 生成 JSON Schema，`call(input)` 没有执行 `inputSchema.parse`。模型返回畸形参数时，错误由各 tool 内部偶然抛出，字段路径和文案不稳定。
+**现状**：`defineTool({ name, description, inputSchema, run })` 已落地，builtin tool 已改为 zod schema 单一源并自动生成 JSON Schema。`create(deps).call(input)` 会在调用 `run` 前执行同一个 zod schema 的 `safeParse`，失败时返回包含 tool name 与字段路径的统一可读错误。当前生产注册 10 个 builtin tool：7 个平台类 + `workspace.list` + `file.read` + `file.write`。
 
 **已完成**：
 
 - `packages/core/src/tools/defineTool.ts` 提供工厂。
 - `packages/core/src/tools/builtins/*.ts` 使用 zod schema。
 - `packages/core/src/tools/tools.md` 已补 tool 编写约束。
-
-**后续验收**：
-
-- `defineTool` 在 `call(input)` 时执行 parse / safeParse。
-- 统一错误文案包含 tool name 与字段路径。
-- `register-builtins.test.ts` 或新增 `defineTool.test.ts` 增加输入校验失败用例（类型错误、缺必填、未知字段）。
+- `packages/core/tests/define-tool.test.ts` 覆盖类型错误、缺必填、strict object 未知字段，以及 JSON Schema 输出不变。
 
 ---
 
-### 4.2 settings 同步 IO 在 LLM 热路径
+### 4.2 settings 同步 IO 在 LLM 热路径（已修）
 
-**现状**：`SettingsBackedLLMClient.complete` 每次调用都 `existsSync + readFileSync`，并新建 `VercelClient` 实例。
+**现状**：`SettingsBackedLLMClient.complete` 每次调用先读取 `~/.spotAgent/settings.json` 的 `mtimeMs + size` 文件戳；文件戳未变化时复用已缓存的 `VercelClient`，文件戳变化后重读 settings，并只在有效 LLM 配置变化时重建 client。
 
-**问题**：
+**修复效果**：
 
-- 同步 IO 阻塞 event loop；
-- HTTP keep-alive、ai-sdk 内部缓存全部废弃。
+- settings 未变化时不再反复同步读盘；
+- HTTP keep-alive 与 ai-sdk 内部缓存可随 `VercelClient` 实例复用；
+- settings 写盘后下一次 `complete` 可见，保留热加载语义。
 
-**建议改法**：
+**测试覆盖**：
 
-1. 引入 `loadModelSettingsCached(homeDir, mtimePolicyMs = 1000)`：维护 mtime + 上次内存值，间隔内不读盘。
-2. `SettingsBackedLLMClient` 维护一个 `client + lastSettingsHash`，settings 不变时复用。
-3. desktop 侧仍可保留 500ms 轮询写盘策略（保持"改完即生效"），但读盘开销不再 N 倍放大。
-
-**验收**：
-
-- `vercel-client.test.ts` 增加"100 次 complete 期间，loadModelSettings 实际只走盘 ≤ 2 次"。
+- `SettingsBackedLLMClient.test.ts` 覆盖 100 次 `complete` 时 settings 读取次数小于等于 2、文件戳变化后重载并按有效配置决定是否重建 client、`summarizerModel` 路径与 network logger 透传。
 
 ---
 
