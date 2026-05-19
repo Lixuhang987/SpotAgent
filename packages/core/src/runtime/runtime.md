@@ -6,7 +6,7 @@
 
 | 文件 | 职责 |
 |------|------|
-| `AgentMessage.ts` | LLM 面向的消息判别联合：`user / assistant(+toolCalls?) / tool / system` |
+| `AgentMessage.ts` | LLM 面向的消息判别联合：`user / assistant(+toolCalls?) / tool / system`；user content 支持字符串或 `text/image` 多模态 parts |
 | `ToolCallEnvelope.ts` | `{ id, name, arguments }` 三元组，连接 LLM 输出与 ToolRegistry |
 | `AgentSession.ts` | 把 `AgentSessionInput`（prompt + 可选选区）归一化为首轮 user message；当前未在 agent-server 主链路使用，仅作为脚本入口 |
 | `AgentRuntime.ts` | 主循环：调 `LLMClient.complete` → 写 assistant 消息 → 检查 toolCalls → 走权限策略 → 调 `ToolRegistry` → 把 tool 结果回灌成 tool message，循环 ≤ `maxTurns` |
@@ -19,7 +19,7 @@
 flowchart TD
   A[runWithMessages(messages, onEvent, {sessionId})] --> A1[await pending turn summaries]
   A1 --> B[turn ← 0]
-  B --> C[LLMClient.complete(messages, registry.list())]
+  B --> C[LLMClient.complete(messages, registry.list(), {blobStore?})]
   C --> D[push assistant message]
   D --> E{toolCalls.length > 0?}
   E -- 否 --> S[start async TurnSummarizer]
@@ -55,6 +55,7 @@ flowchart TD
 - `permissionPolicy = AllowAllPermissionPolicy()`：仅在测试 / 脚本场景默认放行；生产由 `agent-server` 注入 `FilePermissionPolicy(askResolver)`。
 - `serializeToolResult` 把非字符串结果用 `JSON.stringify`，循环引用降级为 `[unserializable tool result]`。
 - 带 `stubByDefault` 的 tool 若输入里显式传 `cached=turn|persist`，runtime 会把序列化结果写入注入的 `BlobStore`，并把 tool message content 渲染成 STUB。
+- runtime 不解析持久化 image STUB；agent-server 会在调用 runtime 前把用户主动提交的 image STUB 转成多模态 image part，runtime 只负责把注入的 `BlobStore` 继续透传给 `LLMClient`。
 - `cached=turn` 的 tool message 在本 turn 内保留完整 body；turn 自然结束后 `TurnSummarizer` 异步压缩，下一次 LLM 调用前 `waitForPendingSummaries()` 会等待并应用 summary。
 - `truncateOutput` 按 UTF-8 字节判长度，但截断时按 JS 字符索引切片（已知潜在 bug，见架构改进）。
 

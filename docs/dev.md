@@ -39,6 +39,7 @@ bash ./scripts/swiftw run HandAgentDesktop
 
 - 本地 `apps/agent-server/src/server.ts` 会通过 `SettingsBackedLLMClient` 在每次请求前检查 `~/.spotAgent/settings.json` 的文件戳，配置变化后重新读取。
 - `VercelClient` 会根据配置里的 `api` 选择 `responses`、`chat` 或 `completion` provider model。
+- 图片附件会先保存为本地 blob 与 session STUB；进入 LLM 请求前才展开为多模态 image part。`api=completion` 不支持图片，请使用 `responses` 或 `chat`。
 - 如果提交 prompt 后看到 `Missing apiKey in ~/.spotAgent/settings.json. 请先在设置页完成模型配置。`，说明当前设置文件里没有有效的 `apiKey`。
 - 如果提交 prompt 后看到 `Could not connect to the server`，优先检查本地 `agent-server` 是否成功启动，而不要先把问题归因到 API key。
 - 如果模型请求打到了错误的 provider 地址，先检查 `baseUrl` 是否与目标服务要求的 OpenAI 兼容入口一致。

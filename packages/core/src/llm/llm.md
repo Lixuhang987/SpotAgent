@@ -6,18 +6,18 @@ LLMClient 抽象 + 当前唯一实现 `VercelClient`（OpenAI 兼容网关）。
 
 | 文件 | 职责 |
 |------|------|
-| `LLMClient.ts` | `LLMClient.complete(messages, tools): Promise<LLMCompletion>`；`LLMCompletion = { message: assistant, toolCalls? }` |
+| `LLMClient.ts` | `LLMClient.complete(messages, tools, options?): Promise<LLMCompletion>`；`options.blobStore` 用于按需展开多模态图片；`LLMCompletion = { message: assistant, toolCalls? }` |
 | `OpenAIConfig.ts` | `resolveOpenAIApiKey` / `resolveOpenAIBaseURL`：从环境或入参里取，缺 `apiKey` 时抛带中文文案的明确错误（指向 settings 页） |
-| `VercelAdapters.ts` | 内部 `AgentMessage[]` ↔ Vercel AI SDK `ModelMessage[]` 翻译；`sanitizeToolName` 把 `file.read` → `file_read`（OpenAI 网关不允许点号） |
+| `VercelAdapters.ts` | 内部 `AgentMessage[]` ↔ Vercel AI SDK `ModelMessage[]` 翻译；把 user image part 的 blobId 读取成 SDK image part；`sanitizeToolName` 把 `file.read` → `file_read`（OpenAI 网关不允许点号） |
 | `VercelClient.ts` | 实例化 `@ai-sdk/openai` provider，按 `api ∈ {responses, chat, completion}` 选择 model；可注入 `NetworkLogger` 把请求 / 响应 JSONL 落盘 |
 
 ## 调用关系
 
 ```
 AgentRuntime
-  └─ LLMClient.complete(messages, registry.list())
+  └─ LLMClient.complete(messages, registry.list(), {blobStore?})
        └─ VercelClient
-            ├─ toVercelMessages(messages)        ← AgentMessage → ModelMessage
+            ├─ toVercelMessages(messages, {blobStore}) ← AgentMessage → ModelMessage
             ├─ toVercelTools(tools)              ← RegisteredTool → ToolSet（点号转下划线）
             ├─ provider.chat/completion/responses(model)
             ├─ generateText({ model, messages, tools })  ← 可注入
@@ -30,9 +30,11 @@ AgentRuntime
 ## 设计要点
 
 - **settings mtime cache**：生产路径走 `agent-server/SettingsBackedLLMClient`，每次 `complete` 先检查 `~/.spotAgent/settings.json` 的 `mtimeMs + size` stamp；stamp 未变复用现有 `VercelClient`，stamp 变化后重读 settings，并只在有效 LLM 配置变化时新建 `VercelClient`。用户改 settings 写盘后，下一次 `complete` 可见。
+- **多模态图片**：`AgentMessage.user.content` 支持字符串或 `text/image` content parts。agent-server 持久化时仍保存 image STUB，调用 runtime 前才转为 `{ type: "image"; blobId; mimeType }`；`VercelAdapters` 需要 `options.blobStore` 才能读取 bytes 并生成 AI SDK image part。
 - **伪流式**：`complete` 是非流式，但 `AgentRuntime` 会人工切成 `start/delta/end` 三事件，desktop UI 看不到真实 token streaming（架构改进项）。
 - **tool 命名**：core 内部 tool 名一律点号风格（`file.read`），`VercelAdapters` 在适配层做 `file_read` 转换；冲突时抛 `Tool name collision after sanitization`。
 - **legacy `provider.completion()`**：当前默认 `defaultModelSettings.api = "responses"`；`VercelClient` 构造默认 `api = "chat"`。两个默认不一致，但生产路径全程透传 settings，无实际冲突。
+- **completion API 限制**：`api = "completion"` 不支持 image content；`VercelClient` 会在调用 provider 前抛出明确错误，要求改用 `chat` 或 `responses`。
 - **DI 入口**：`VercelClientOptions.networkLogger` 注入 `FileNetworkLogger` 可把请求 / 响应 body 落到 `~/.spotAgent/log/<YYYY-MM-DD>/network-NNN.jsonl`；`VercelClientDependencies.{createOpenAI, generateText}` 仅供测试替换。
 
 ## 编辑此目录的约束

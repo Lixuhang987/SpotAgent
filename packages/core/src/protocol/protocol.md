@@ -54,7 +54,7 @@ desktop ↔ agent-server 的 WebSocket 协议。所有跨进程消息走 `Sessio
 - `text_selection`：纯文本选区。
 - `image`：base64 图片（`image/png | image/jpeg | image/webp`）。
 
-注：`MessageTranslator.composeUserContent` 会把 `image` 附件写入 BlobStore，并在 user message 中插入空 body 的 image STUB；原始 base64 不进入 LLM 上下文。后续图像理解应通过独立 tool 按 blobId 读取。
+注：`MessageTranslator.composeUserContent` 会把 `image` 附件写入 BlobStore，并在持久化 user message 中插入空 body 的 image STUB；原始 base64 不进入会话历史。agent-server 在调用 runtime 前会把 image STUB 展开为 `{ type: "image"; blobId; mimeType }`，由 LLM adapter 按需读取 blob 并发送多模态消息。
 
 ## 平台 RPC 帧
 

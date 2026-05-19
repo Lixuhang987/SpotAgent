@@ -1,5 +1,6 @@
 import { jsonSchema, tool, type JSONValue, type ModelMessage, type ToolSet } from "ai";
-import type { AgentMessage } from "../runtime/AgentMessage.ts";
+import type { BlobStore } from "../blob/BlobStore.ts";
+import type { AgentImageContentPart, AgentMessage } from "../runtime/AgentMessage.ts";
 import type { RegisteredTool } from "../tools/ToolRegistry.ts";
 
 // OpenAI 兼容网关要求 tool name 匹配 ^[a-zA-Z0-9_-]+$，
@@ -8,13 +9,30 @@ export function sanitizeToolName(name: string): string {
   return name.replace(/[^a-zA-Z0-9_-]/g, "_");
 }
 
-export function toVercelMessages(messages: AgentMessage[]): ModelMessage[] {
-  return messages.map((message) => {
+export type VercelMessageAdapterOptions = {
+  blobStore?: BlobStore;
+};
+
+export async function toVercelMessages(
+  messages: AgentMessage[],
+  options: VercelMessageAdapterOptions = {},
+): Promise<ModelMessage[]> {
+  return Promise.all(messages.map(async (message) => {
     switch (message.role) {
       case "user":
         return {
           role: "user",
-          content: message.content,
+          content: typeof message.content === "string"
+            ? message.content
+            : await Promise.all(message.content.map((part) => {
+                if (part.type === "text") {
+                  return Promise.resolve({
+                    type: "text" as const,
+                    text: part.text,
+                  });
+                }
+                return toVercelImagePart(part, options);
+              })),
         };
       case "assistant": {
         if (!message.toolCalls || message.toolCalls.length === 0) {
@@ -62,7 +80,16 @@ export function toVercelMessages(messages: AgentMessage[]): ModelMessage[] {
           content: message.content,
         };
     }
-  });
+  }));
+}
+
+export function hasImageContent(messages: AgentMessage[]): boolean {
+  return messages.some(
+    (message) =>
+      message.role === "user" &&
+      Array.isArray(message.content) &&
+      message.content.some((part) => part.type === "image"),
+  );
 }
 
 export function toVercelTools(tools: RegisteredTool[]): ToolSet {
@@ -100,4 +127,25 @@ function toToolResultOutput(content: string) {
       value: content,
     };
   }
+}
+
+async function toVercelImagePart(
+  part: AgentImageContentPart,
+  options: VercelMessageAdapterOptions,
+) {
+  if (!options.blobStore) {
+    throw new Error("Image content requires a BlobStore.");
+  }
+  const record = await options.blobStore.get(part.blobId);
+  if (!record) {
+    throw new Error(`Image blob not found: ${part.blobId}`);
+  }
+  if (record.kind !== "image") {
+    throw new Error(`Blob is not an image: ${part.blobId}`);
+  }
+  return {
+    type: "image" as const,
+    image: await options.blobStore.readContent(part.blobId),
+    mediaType: part.mimeType,
+  };
 }

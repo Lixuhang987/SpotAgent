@@ -111,7 +111,8 @@ export class AgentRuntime {
     for (let turn = 0; turn < this.maxTurns; turn += 1) {
       const completion = await this.client.complete(
         nextMessages,
-        this.toolRegistry.list()
+        this.toolRegistry.list(),
+        this.blobStore ? { blobStore: this.blobStore } : undefined,
       );
       const assistantMessage =
         completion.toolCalls && completion.toolCalls.length > 0

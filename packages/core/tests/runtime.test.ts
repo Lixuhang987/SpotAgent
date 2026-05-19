@@ -109,6 +109,27 @@ class FakeTurnSummarizer implements TurnSummarizerLike {
 }
 
 describe("AgentRuntime", () => {
+  it("passes the configured blob store into the LLM client", async () => {
+    const blobStore = new MemoryBlobStore();
+    let seenOptions: unknown;
+    const runtime = new AgentRuntime(
+      {
+        async complete(_messages: AgentMessage[], _tools: unknown[], options?: unknown) {
+          seenOptions = options;
+          return {
+            message: { role: "assistant" as const, content: "ok" },
+          };
+        },
+      },
+      new ToolRegistry(),
+      { blobStore },
+    );
+
+    await runtime.runWithMessages([{ role: "user", content: "hello" }]);
+
+    expect(seenOptions).toEqual({ blobStore });
+  });
+
   it("executes tool calls and returns the final assistant message", async () => {
     const client = {
       async complete(messages: AgentMessage[], tools: unknown[]) {

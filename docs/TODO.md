@@ -4,26 +4,9 @@
 
 最后核对日期：2026-05-19。
 
-## P0 — 需要修复的产品闭环缺口
-
-### 1. 图片附件真实进入多模态消息
-
-**现状**：PromptPanel 已能采集 `imageRegion` 并通过 `user_message.attachments` 发到 agent-server；`MessageTranslator.composeUserContent()` 已把图片写入 BlobStore，并在 user message 中插入空 body 的 image STUB。原始 base64 不再进入 LLM 上下文，但 LLM 仍不能直接理解图像内容。
-
-**用户场景**：用户圈选屏幕区域后问“这张图里有什么”，模型应能直接基于图片内容回答，而不是只看到占位文本。
-
-**验收标准**：
-
-- 新增 vision / `image.describe` tool，按 blobId 读取图片并输出文本描述；或让 `AgentMessage.user.content` 支持 `string | AgentContentPart[]` 并映射到 AI SDK 多模态消息。
-- 图片理解路径仍遵守“屏幕上下文不默认注入”的边界，只处理用户主动提供的图片附件或 LLM 显式读取的 blob。
-- 截屏后让 LLM 描述图片内容，能给出真实描述。
-- 增加 image blob 读取 / vision 映射测试与 runtime fake provider 测试。
-
-**依赖**：无。文本附件与 WebSocket attachment 链路已接通。
-
 ## P1 — 需要修复的可靠性与协议边界
 
-### 2. SessionMessage 拆分会话协议与平台 RPC
+### 1. SessionMessage 拆分会话协议与平台 RPC
 
 **现状**：`SessionMessage` 同时承载会话帧和平台反向 RPC，平台通道依赖 `sessionId = "_platform"` 魔法值。
 
@@ -35,7 +18,7 @@
 
 **依赖**：无。
 
-### 3. WebSocketPlatformBridge 多连接与多会话绑定
+### 2. WebSocketPlatformBridge 多连接与多会话绑定
 
 **现状**：`WebSocketPlatformBridge.attach(send)` 会静默覆盖上一条 bridge socket；`server.ts` 每条普通 socket 只保存一个 `boundSessionId`，同一 socket 如果未来承载多个 session，权限回流与 `session` scope 清理会绑定到首次 `user_message`。
 
@@ -50,7 +33,7 @@
 
 **依赖**：无。
 
-### 4. 跨包 path alias
+### 3. 跨包 path alias
 
 **现状**：`apps/agent-server/src/*.ts` 仍通过 `../../../packages/core/src/...` reach into core；仓库当前也没有 `tsconfig*.json` path alias 配置。
 
@@ -64,7 +47,7 @@
 
 ## P2 — 运行时与 UX 增强
 
-### 5. LLMClient 真实流式接口
+### 4. LLMClient 真实流式接口
 
 **现状**：`LLMClient.complete()` 返回完整结果，`AgentRuntime` 人工发出 `start + 单次 delta + end`，桌面端看到的是伪流式。
 
@@ -78,7 +61,7 @@
 
 **依赖**：会话路由 / 编排 / 持久化拆分已完成。
 
-### 6. tool 设置 UI 与热加载
+### 5. tool 设置 UI 与热加载
 
 **现状**：core 已有 `ToolSettings` 与 `registerBuiltinTools(... settings)`，支持 `tools.allowlist / tools.denylist`；但 Settings 窗口没有 tool 管理 Tab，agent-server 只在启动时 `loadToolSettings()` 一次，保存设置后不会影响已启动的 registry。
 
@@ -93,7 +76,7 @@
 
 **依赖**：建议复用 `SettingsBackedLLMClient` 已采用的 settings 文件戳失效策略。
 
-### 7. workspace.askUser tool
+### 6. workspace.askUser tool
 
 **现状**：`workspace.list` 已落地；`workspace.askUser` 暂未实现。当前 file tool description 已提示“模糊时调 `workspace.askUser`”，但 registry 中没有这个 tool。
 
@@ -109,7 +92,7 @@
 
 **依赖**：权限气泡 UI 可作为交互样式参考。
 
-### 8. 权限规则管理 UI 与端到端验证
+### 7. 权限规则管理 UI 与端到端验证
 
 **现状**：`FilePermissionPolicy`、`SessionPermissionBridge`、`AgentRuntime` 权限拦截、`SessionSocketClient` 解码、`SessionWindowView` 内联气泡都已实现。剩余风险在 UI 端到端验证和永久规则管理。
 
@@ -121,7 +104,7 @@
 
 **依赖**：无。`session` scope 已按 `sessionId` 隔离并在 socket 关闭时清理。
 
-### 9. 会话历史入口补齐
+### 8. 会话历史入口补齐
 
 **现状**：后端 `list/load/delete` 已实现，SessionWindow 左侧历史侧栏已落地；PromptPanel 最近会话 action 与独立历史窗口未实现。
 
@@ -134,7 +117,7 @@
 
 **依赖**：无。
 
-### 10. OCR 与 Accessibility 平台能力落地
+### 9. OCR 与 Accessibility 平台能力落地
 
 **现状**：`ocr.read`、`accessibility.snapshot`、`accessibility.action` 已作为 builtin tool 注册并暴露给 LLM，但 macOS 侧 `MacPlatformProvider` 对这三个 method 统一返回 `not_implemented`。
 
@@ -150,7 +133,7 @@
 
 **依赖**：macOS 权限提示与审计文案应与 permission UI 对齐。
 
-### 11. 会话中断 / Stop
+### 10. 会话中断 / Stop
 
 **现状**：协议里已有 `interrupt` 帧，但 `SessionRouter` 未处理，SessionWindow 也没有 Stop 按钮；一旦 LLM 请求或 tool 调用耗时较长，用户只能关闭窗口或等待。
 
@@ -168,7 +151,7 @@
 
 ## P3 — 长期能力
 
-### 12. 多 provider LLM 支持
+### 11. 多 provider LLM 支持
 
 **现状**：生产路径只有 `VercelClient`，OpenAI 兼容 API 通过 `responses/chat/completion` 切换。仓库依赖中已有 `@ai-sdk/anthropic`，但尚未接入到 provider factory。
 
@@ -179,9 +162,9 @@
 - 至少接入第二个 provider 验证消息、stream、tool call 归一化。
 - provider capability 显式声明是否支持 tool calling / multimodal / streaming。
 
-**依赖**：建议在真实 streaming 和多模态 content part 后做。
+**依赖**：建议在真实 streaming 后做；provider capability 需要声明是否支持当前已落地的多模态 content part。
 
-### 13. 用户自定义 tool / 插件系统
+### 12. 用户自定义 tool / 插件系统
 
 **现状**：所有 tool 都是 builtin，随代码构建。
 

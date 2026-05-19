@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { BlobRecord } from "../../../packages/core/src/blob/BlobRecord.ts";
 import type { BlobStore } from "../../../packages/core/src/blob/BlobStore.ts";
 import {
+  agentMessagesToRuntimeMessages,
   agentMessagesToConversation,
   composeUserContent,
   deriveTitle,
@@ -208,6 +209,32 @@ describe("MessageTranslator", () => {
     await expect(blobStore.readContent("blob-1")).resolves.toEqual(Buffer.from("png-bytes"));
     expect(deriveTitle("  第一行标题\n第二行不要进入标题")).toBe("第一行标题");
     expect(deriveTitle("x".repeat(60))).toBe(`${"x".repeat(47)}...`);
+  });
+
+  it("expands persisted image stubs into runtime multimodal user content", async () => {
+    const blobStore = new MemoryBlobStore();
+    const persisted = await composeUserContent(
+      "描述图片",
+      [
+        {
+          kind: "image",
+          id: "img-1",
+          mimeType: "image/png",
+          base64: Buffer.from("png-bytes").toString("base64"),
+        },
+      ],
+      blobStore,
+    );
+
+    expect(agentMessagesToRuntimeMessages([{ role: "user", content: persisted }])).toEqual([
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "描述图片" },
+          { type: "image", blobId: "blob-1", mimeType: "image/png" },
+        ],
+      },
+    ]);
   });
 
   it("normalizes runtime errors", () => {

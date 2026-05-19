@@ -4,7 +4,7 @@ import type { SessionMessage, UserMessageAttachment } from "../../../packages/co
 import type { ConversationMessage } from "../../../packages/core/src/conversation/ConversationMessage.ts";
 import type { SessionEvent } from "../../../packages/core/src/storage/index.ts";
 import type { BlobStore } from "../../../packages/core/src/blob/BlobStore.ts";
-import { renderStub } from "../../../packages/core/src/runtime/Stub.ts";
+import { parseStub, renderStub } from "../../../packages/core/src/runtime/Stub.ts";
 
 export function toSessionMessage(
   sessionId: string,
@@ -139,6 +139,23 @@ export function agentMessagesToConversation(messages: AgentMessage[]): Conversat
   });
 }
 
+export function agentMessagesToRuntimeMessages(messages: AgentMessage[]): AgentMessage[] {
+  return messages.map((message) => {
+    if (message.role !== "user" || typeof message.content !== "string") {
+      return message;
+    }
+
+    const content = parseRuntimeUserContent(message.content);
+    if (typeof content === "string") {
+      return message;
+    }
+    return {
+      ...message,
+      content,
+    };
+  });
+}
+
 export async function composeUserContent(
   text: string,
   attachments: UserMessageAttachment[] | undefined,
@@ -185,6 +202,57 @@ function stringifyToolInput(input: Record<string, unknown>): string {
   } catch {
     return "";
   }
+}
+
+function parseRuntimeUserContent(content: string): Extract<AgentMessage, { role: "user" }>["content"] {
+  const stubPattern = /\[STUB [^\]]*\]\n[\s\S]*?\n?\[\/STUB\]/g;
+  const parts: Exclude<Extract<AgentMessage, { role: "user" }>["content"], string> = [];
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = stubPattern.exec(content)) !== null) {
+    appendTextPart(parts, content.slice(cursor, match.index));
+    const stubText = match[0];
+    try {
+      const stub = parseStub(stubText);
+      if (stub.kind === "image") {
+        const mimeType = mimeTypeForPath(stub.path);
+        if (mimeType) {
+          parts.push({ type: "image", blobId: stub.id, mimeType });
+        } else {
+          appendTextPart(parts, stubText);
+        }
+      } else {
+        appendTextPart(parts, stubText);
+      }
+    } catch {
+      appendTextPart(parts, stubText);
+    }
+    cursor = match.index + stubText.length;
+  }
+
+  appendTextPart(parts, content.slice(cursor));
+  if (!parts.some((part) => part.type === "image")) {
+    return content;
+  }
+  return parts;
+}
+
+function appendTextPart(
+  parts: Exclude<Extract<AgentMessage, { role: "user" }>["content"], string>,
+  text: string,
+): void {
+  const normalized = text.trim();
+  if (!normalized) return;
+  parts.push({ type: "text", text: normalized });
+}
+
+function mimeTypeForPath(path: string): "image/png" | "image/jpeg" | "image/webp" | undefined {
+  const lower = path.toLowerCase();
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".webp")) return "image/webp";
+  return undefined;
 }
 
 function imageExtension(mimeType: Extract<UserMessageAttachment, { kind: "image" }>["mimeType"]): string {

@@ -53,7 +53,7 @@ export function createLoggingFetch(options: LoggingFetchOptions): typeof fetch {
 
 function tryParseBody(body: unknown): unknown {
   if (body === undefined || body === null) return null;
-  if (typeof body === "string") return tryParseJson(body);
+  if (typeof body === "string") return redactImagePayloads(tryParseJson(body));
   if (body instanceof URLSearchParams) return body.toString();
   if (body instanceof ArrayBuffer || ArrayBuffer.isView(body)) {
     return `[binary ${"byteLength" in body ? body.byteLength : "?"} bytes]`;
@@ -68,4 +68,26 @@ function tryParseJson(text: string): unknown {
   } catch {
     return text;
   }
+}
+
+function redactImagePayloads(value: unknown): unknown {
+  if (typeof value === "string") {
+    return value.startsWith("data:image/") ? "[redacted image data URI]" : value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => redactImagePayloads(item));
+  }
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  const record = value as Record<string, unknown>;
+  return Object.fromEntries(
+    Object.entries(record).map(([key, entry]) => {
+      if (record.type === "image" && key === "image") {
+        return [key, "[redacted image payload]"];
+      }
+      return [key, redactImagePayloads(entry)];
+    }),
+  );
 }
