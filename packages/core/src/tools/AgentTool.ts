@@ -1,9 +1,14 @@
 export type AgentToolInputSchema = Record<string, unknown>;
 
+export type AgentToolCallContext = {
+  sessionId?: string;
+  toolCallId?: string;
+};
+
 export interface AgentTool<TInput = unknown, TOutput = unknown> {
   name: string;
   description: string;
   inputSchema: AgentToolInputSchema;
   stubByDefault?: boolean;
-  call(input: TInput): Promise<TOutput>;
+  call(input: TInput, context?: AgentToolCallContext): Promise<TOutput>;
 }

@@ -15,6 +15,7 @@ import {
   SessionPermissionBridge,
   type SessionBindingToken,
 } from "./SessionPermissionBridge.ts";
+import { SessionWorkspaceAskBridge } from "./SessionWorkspaceAskBridge.ts";
 import type { FilePermissionPolicy } from "@handagent/core/permission/FilePermissionPolicy.ts";
 
 type SessionSocket = {
@@ -32,15 +33,18 @@ export function attachSessionSocketHandlers(
     bridge,
     permissionBridge,
     permissionPolicy,
+    workspaceAskBridge,
   }: {
     router: SessionRouter;
     bridge?: WebSocketPlatformBridge;
     permissionBridge?: SessionPermissionBridge;
     permissionPolicy?: FilePermissionPolicy;
+    workspaceAskBridge?: SessionWorkspaceAskBridge;
   },
 ): void {
   let bridgeToken: BridgeToken | null = null;
   const boundSessions = new Map<string, SessionBindingToken>();
+  const workspaceAskBoundSessions = new Map<string, SessionBindingToken>();
   const sendSession = (outgoing: SessionMessage) => {
     socket.send(JSON.stringify(outgoing));
   };
@@ -61,22 +65,34 @@ export function attachSessionSocketHandlers(
     }
 
     if (message.type === "permission_response" && permissionBridge) {
-      const token = boundSessions.get(sessionIdFromPermissionRequestId(message.payload.requestId));
+      const token = boundSessions.get(sessionIdFromRequestId(message.payload.requestId));
       if (token !== undefined) {
         permissionBridge.handleResponse(message.payload, token);
       }
       return;
     }
 
-    if (
-      message.type === "user_message" &&
-      permissionBridge &&
-      !boundSessions.has(message.sessionId)
-    ) {
-      boundSessions.set(
-        message.sessionId,
-        permissionBridge.bindSession(message.sessionId, sendSession),
-      );
+    if (message.type === "workspace_ask_response" && workspaceAskBridge) {
+      const token = workspaceAskBoundSessions.get(sessionIdFromRequestId(message.payload.requestId));
+      if (token !== undefined) {
+        workspaceAskBridge.handleResponse(message.payload, token);
+      }
+      return;
+    }
+
+    if (message.type === "user_message") {
+      if (permissionBridge && !boundSessions.has(message.sessionId)) {
+        boundSessions.set(
+          message.sessionId,
+          permissionBridge.bindSession(message.sessionId, sendSession),
+        );
+      }
+      if (workspaceAskBridge && !workspaceAskBoundSessions.has(message.sessionId)) {
+        workspaceAskBoundSessions.set(
+          message.sessionId,
+          workspaceAskBridge.bindSession(message.sessionId, sendSession),
+        );
+      }
     }
 
     await router.receive(message, sendSession);
@@ -92,7 +108,11 @@ export function attachSessionSocketHandlers(
         permissionPolicy?.clearSessionRules(sessionId);
       }
     }
+    for (const [sessionId, token] of workspaceAskBoundSessions) {
+      workspaceAskBridge?.unbindSession(sessionId, token);
+    }
     boundSessions.clear();
+    workspaceAskBoundSessions.clear();
   });
 }
 
@@ -100,7 +120,7 @@ function isPlatformBridgeMessage(message: SocketMessage): message is PlatformBri
   return "channel" in message && message.channel === "platform";
 }
 
-function sessionIdFromPermissionRequestId(requestId: string): string {
+function sessionIdFromRequestId(requestId: string): string {
   const separator = requestId.lastIndexOf(":");
   return separator === -1 ? requestId : requestId.slice(0, separator);
 }
@@ -110,12 +130,14 @@ export async function startServer({
   bridge,
   permissionBridge,
   permissionPolicy,
+  workspaceAskBridge,
   port = 4317,
 }: {
   router: SessionRouter;
   bridge?: WebSocketPlatformBridge;
   permissionBridge?: SessionPermissionBridge;
   permissionPolicy?: FilePermissionPolicy;
+  workspaceAskBridge?: SessionWorkspaceAskBridge;
   port?: number;
 }) {
   const { WebSocketServer } = await import("ws");
@@ -127,6 +149,7 @@ export async function startServer({
       bridge,
       permissionBridge,
       permissionPolicy,
+      workspaceAskBridge,
     });
   });
 
@@ -147,26 +170,26 @@ export async function handleSocketMessage(
 export async function startDefaultServer(port = 4317) {
   const [
     { AgentRuntime },
-    { registerBuiltinTools },
     { RemotePlatformAdapter },
     { FileWorkspaceRegistry },
     { FilePermissionPolicy },
-    { loadToolSettings },
     { SettingsBackedLLMClient },
+    { SettingsBackedToolRegistry },
     { FileNetworkLogger },
     { FilesystemBlobStore },
     { TurnSummarizer },
+    { MockLLMClient },
   ] = await Promise.all([
     import("@handagent/core/runtime/AgentRuntime.ts"),
-    import("@handagent/core/tools/registerBuiltins.ts"),
     import("@handagent/core/platform/RemotePlatformAdapter.ts"),
     import("@handagent/core/workspace/FileWorkspaceRegistry.ts"),
     import("@handagent/core/permission/FilePermissionPolicy.ts"),
-    import("@handagent/core/config/ToolSettings.ts"),
     import("./SettingsBackedLLMClient.ts"),
+    import("./SettingsBackedToolRegistry.ts"),
     import("@handagent/core/logging/FileNetworkLogger.ts"),
     import("@handagent/core/blob/FilesystemBlobStore.ts"),
     import("@handagent/core/runtime/TurnSummarizer.ts"),
+    import("@handagent/core/llm/MockLLMClient.ts"),
   ]);
 
   const spotDir = join(homedir(), ".spotAgent");
@@ -182,18 +205,14 @@ export async function startDefaultServer(port = 4317) {
   await workspaceRegistry.getDefault();
 
   const platformBridge = new WebSocketPlatformBridge();
+  const workspaceAskBridge = new SessionWorkspaceAskBridge();
   const platform = new RemotePlatformAdapter({ bridge: platformBridge });
-  const toolSettings = loadToolSettings();
-  const { registry, registered, disabled } = registerBuiltinTools({
+  const toolRegistry = new SettingsBackedToolRegistry({
     platform,
     workspaceRegistry,
-    settings: toolSettings,
+    workspaceAskResolver: workspaceAskBridge.ask,
   });
-
-  console.log(`[agent-server] registered tools: ${registered.join(", ") || "(none)"}`);
-  for (const d of disabled) {
-    console.log(`[agent-server] disabled tool ${d.name}: ${d.reason}`);
-  }
+  toolRegistry.refresh();
 
   const permissionBridge = new SessionPermissionBridge();
   const permissionPolicy = new FilePermissionPolicy({
@@ -201,16 +220,32 @@ export async function startDefaultServer(port = 4317) {
     askResolver: permissionBridge.ask,
   });
 
-  const runtime = new AgentRuntime(new SettingsBackedLLMClient({ networkLogger }), registry, {
+  const llmMode = resolveLLMMode();
+  const llmClient = llmMode === "mock"
+    ? new MockLLMClient()
+    : new SettingsBackedLLMClient({ networkLogger });
+  const summarizer = llmMode === "mock"
+    ? undefined
+    : new TurnSummarizer({
+        client: new SettingsBackedLLMClient({ networkLogger, purpose: "summarizer" }),
+      blobStore,
+    });
+  console.log(`[agent-server] llm mode: ${llmMode}`);
+
+  const runtime = new AgentRuntime(llmClient, toolRegistry.registry, {
     permissionPolicy,
     blobStore,
-    turnSummarizer: new TurnSummarizer({
-      client: new SettingsBackedLLMClient({ networkLogger, purpose: "summarizer" }),
-      blobStore,
-    }),
+    turnSummarizer: summarizer,
   });
   const persistence = new SessionPersistence(store, undefined, blobStore);
-  const orchestrator = new SessionRuntimeOrchestrator(runtime, persistence);
+  const orchestrator = new SessionRuntimeOrchestrator(
+    runtime,
+    persistence,
+    undefined,
+    () => {
+      toolRegistry.refresh();
+    },
+  );
   const router = new SessionRouter(orchestrator, persistence);
 
   return startServer({
@@ -218,8 +253,15 @@ export async function startDefaultServer(port = 4317) {
     bridge: platformBridge,
     permissionBridge,
     permissionPolicy,
+    workspaceAskBridge,
     port,
   });
+}
+
+export type LLMMode = "settings" | "mock";
+
+export function resolveLLMMode(env: Record<string, string | undefined> = process.env): LLMMode {
+  return env.HANDAGENT_LLM_MODE === "mock" ? "mock" : "settings";
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

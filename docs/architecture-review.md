@@ -19,8 +19,8 @@
 负面（驱动后续 TODO 的根因）：
 
 - **产品闭环进展**：图片附件已写入 Blob/Stub，SessionWindow 已展示当前与历史用户气泡的附件摘要，agent-server 会在调用 runtime 前把 image STUB 展开为 LLM 多模态 content part。
-- **协议表面与运行时仍有不对齐**：`tool_message` 与 `permission_request.arguments` 已接通；剩余主要是"伪流式" assistant_message_delta 与 `interrupt` 帧未处理。平台 RPC 与会话协议的混用已通过 `PlatformBridgeMessage` 拆分修正。
-- **缓存边界**：workspace / permission 文件缓存已通过文件戳刷新；`SettingsBackedLLMClient` 也已按 settings 文件戳缓存并复用 `VercelClient`；剩余主要是 tool 设置还缺热加载。
+- **协议表面与运行时仍有不对齐**：`tool_message`、`permission_request.arguments` 与真实 assistant token delta 已接通；剩余主要是 `interrupt` 帧未处理。平台 RPC 与会话协议的混用已通过 `PlatformBridgeMessage` 拆分修正。
+- **缓存边界**：workspace / permission 文件缓存已通过文件戳刷新；`SettingsBackedLLMClient` 已按 settings 文件戳缓存并复用 `VercelClient`；tool registry 也已通过 `SettingsBackedToolRegistry` 在每轮 user message 前按 settings 文件戳刷新。
 - **可靠性盲区**：生产窗口 presenter 已通过 `WindowCloseObservation` 持有并释放关闭 observer token；`WebSocketPlatformBridge` 已用 fencing token 处理重复 attach 与旧 socket 关闭。
 - **能力暴露早于实现**：`ocr.read` / `accessibility.snapshot` / `accessibility.action` 已注册为 builtin tool，但 macOS provider 仍返回 `not_implemented`。
 
@@ -36,9 +36,9 @@
 
 当前优先级：
 
-1. tool 设置 UI 与热加载。
-2. 给 `LLMClient` 真实流式接口，并补会话 `interrupt` / Stop。
-3. 收敛 `SessionMessage` 的协议混用（§2.2）。
+1. `workspace.askUser` tool。
+2. 补会话 `interrupt` / Stop。
+3. 权限规则管理 UI 与端到端验证。
 
 ---
 
@@ -151,9 +151,9 @@
 
 ---
 
-### 3.3 "伪流式"消息
+### 3.3 "伪流式"消息（已修）
 
-**现状**：`AgentRuntime.runWithMessages` 在每轮 `LLMClient.complete` 返回后，把整段 assistant 文本拆成 `start + 一次 delta + end` 发出来。
+**原状**：`AgentRuntime.runWithMessages` 在每轮 `LLMClient.complete` 返回后，把整段 assistant 文本拆成 `start + 一次 delta + end` 发出来。
 
 **问题**：
 
@@ -161,24 +161,22 @@
 - desktop UI 没法做真正的 token streaming 体验；
 - 后续接 Anthropic / Ollama 等 provider 时也仍然要"先攒再放"，丧失流式优势。
 
-**建议改法**：
+**已修**：
 
-1. 把 `LLMClient.complete` 重命名为 `LLMClient.run`，签名变为返回 `AsyncIterable<LLMStreamEvent>`：`text-delta` / `tool-call` / `done`。
-2. `VercelClient` 改用 `streamText`，把 SDK 的事件流映射为统一事件。
-3. `AgentRuntime` 里直接转发 stream，不再合成假 delta。
+1. `LLMClient` 主接口改为 `stream(...): AsyncIterable<LLMStreamEvent>`，事件包含 `text_delta` / `tool_call` / `message_end`。
+2. `VercelClient` 改用 AI SDK `streamText().fullStream`，把 SDK `text-delta` / `tool-call` 归一化为 core 事件。
+3. `AgentRuntime` 直接消费 stream，把每段 `text_delta` 转发为 `assistant_message_delta`；legacy `complete()` fake 仅通过 helper 兼容。
 
-这是 [TODO](/Users/mu9/proj/handAgent/docs/TODO.md) 中真实 streaming 的扩展，建议把"流式"也并入 `LLMClient` 抽象重做。
-
-**验收**：
+**测试覆盖**：
 
 - `bash ./scripts/test.sh` 中新增 `runtime-stream.test.ts` 用 fake provider 输出多段 token，runtime 按顺序 emit `text-delta`。
-- desktop 上看到 token 级 streaming（>= 5 段 delta）。
+- `vercel-client.test.ts` 覆盖 AI SDK `fullStream` 中的 text delta 与 tool call 映射。
 
 ---
 
 ### 3.4 图片附件多模态消息（已修）
 
-**已修**：`MessageTranslator.composeUserContent` 仍会把 `UserMessageAttachment.image` 写入 BlobStore，并在持久化 user message 中插入空 body 的 image STUB；原始 base64 不进入会话历史。`SessionRuntimeOrchestrator` 调用 runtime 前会通过 `agentMessagesToRuntimeMessages()` 把 image STUB 展开为 `{ type: "image"; blobId; mimeType }` content part，`AgentRuntime` 把注入的 `BlobStore` 透传给 `LLMClient.complete()`，`VercelAdapters.toVercelMessages()` 再读取 blob bytes 并映射为 AI SDK image part。
+**已修**：`MessageTranslator.composeUserContent` 仍会把 `UserMessageAttachment.image` 写入 BlobStore，并在持久化 user message 中插入空 body 的 image STUB；原始 base64 不进入会话历史。`SessionRuntimeOrchestrator` 调用 runtime 前会通过 `agentMessagesToRuntimeMessages()` 把 image STUB 展开为 `{ type: "image"; blobId; mimeType }` content part，`AgentRuntime` 把注入的 `BlobStore` 透传给 `LLMClient.stream()`，`VercelAdapters.toVercelMessages()` 再读取 blob bytes 并映射为 AI SDK image part。
 
 **边界**：
 
@@ -254,7 +252,7 @@
 
 ### 4.2 settings 同步 IO 在 LLM 热路径（已修）
 
-**现状**：`SettingsBackedLLMClient.complete` 每次调用先读取 `~/.spotAgent/settings.json` 的 `mtimeMs + size` 文件戳；文件戳未变化时复用已缓存的 `VercelClient`，文件戳变化后重读 settings，并只在有效 LLM 配置变化时重建 client。
+**现状**：`SettingsBackedLLMClient.stream` / `complete` 每次调用先读取 `~/.spotAgent/settings.json` 的 `mtimeMs + size` 文件戳；文件戳未变化时复用已缓存的 `VercelClient`，文件戳变化后重读 settings，并只在有效 LLM 配置变化时重建 client。
 
 **修复效果**：
 
@@ -264,30 +262,26 @@
 
 **测试覆盖**：
 
-- `SettingsBackedLLMClient.test.ts` 覆盖 100 次 `complete` 时 settings 读取次数小于等于 2、文件戳变化后重载并按有效配置决定是否重建 client、`summarizerModel` 路径与 network logger 透传。
+- `SettingsBackedLLMClient.test.ts` 覆盖 100 次 LLM 请求时 settings 读取次数小于等于 2、文件戳变化后重载并按有效配置决定是否重建 client、`summarizerModel` 路径与 network logger 透传。
 
 ---
 
-### 4.2.1 tool settings 只在 agent-server 启动时读取
+### 4.2.1 tool settings 热加载与 UI（已修）
 
-**现状**：`ToolSettings` 支持 `tools.allowlist / tools.denylist`，`registerBuiltinTools` 也能按配置过滤 registry。但 `startDefaultServer` 只在启动时 `loadToolSettings()` 一次；Settings UI 也没有 tool 管理入口。
+**现状**：`ToolSettings` 支持 `tools.allowlist / tools.denylist`，`registerBuiltinTools` 能按配置过滤 registry。`SettingsBackedToolRegistry` 已在 agent-server 启动时创建，并在每轮 user message 进入 runtime 前按 `settings.json` 文件戳刷新同一个 `ToolRegistry` 实例；Settings UI 已新增"工具"Tab，保存后下一轮 LLM 请求会看到最新工具列表。
 
-**问题**：
+**修复效果**：
 
-- 用户无法在 UI 中启停高风险 tool；
-- 即使手改 `settings.json`，已启动的 agent-server registry 也不会变化；
-- 与模型设置“改完下次请求生效”的行为不一致。
+- 用户可在 UI 中启停高风险 tool；
+- `llm` 与 `tools` 共享同一个 `settings.json`，Swift store 写任一配置组都保留另一个配置组；
+- denylist 保存后，下一轮 `LLMClient.stream(messages, tools)` 的 tools 不再包含对应 tool。
 
-**建议改法**：
+**测试覆盖**：
 
-1. Settings 增加 tool 管理 tab，写 `tools.allowlist / tools.denylist`。
-2. agent-server 引入 registry factory 或可替换 registry，在每轮请求前按 settings mtime 刷新。
-3. 与 `SettingsBackedLLMClient` 的缓存失效策略共用 settings loader，避免两套 watcher。
-
-**验收**：
-
-- denylist 保存后，下一轮 `LLMClient.complete(messages, tools)` 的 tools 不再包含对应 tool。
-- UI / loader / registerBuiltinTools 都有测试覆盖。
+- `register-builtins.test.ts` 覆盖同一个 registry 随 settings 变化重新注册；
+- `SettingsBackedToolRegistry.test.ts` 覆盖文件戳变化后刷新与 stamp 未变跳过；
+- `SessionRuntimeOrchestrator.test.ts` 覆盖 runtime 前调用刷新钩子；
+- `AgentSettingsStoreTests.swift` / `ToolSettingsViewModelTests.swift` 覆盖 tools denylist 保存、allowlist 保留和 UI view model 状态。
 
 ---
 
@@ -327,7 +321,7 @@ private async loadIfChanged(): Promise<void> {
 **剩余建议**：
 
 - 继续补 desktop 端权限气泡的手工端到端验证。
-- Settings 增加永久权限规则查看 / 撤销 UI。
+- Settings 权限页已支持永久规则查看 / 撤销，仍需继续覆盖完整权限气泡端到端路径。
 
 ---
 

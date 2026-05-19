@@ -134,4 +134,26 @@ final class SessionLifecycleTests: XCTestCase {
 
         XCTAssertTrue(lifecycle.viewModels.isEmpty)
     }
+
+    @MainActor
+    func testRestoreExistingSessionFocusesOpenWindowWithoutSubmittingPrompt() {
+        let registry = SessionRegistry()
+        let presenter = SpySessionWindowPresenter()
+        let lifecycle = SessionLifecycle(
+            registry: registry,
+            windowPresenter: presenter,
+            agentServerURL: URL(string: "ws://127.0.0.1:0/noop")!,
+            activationPolicy: AppActivationPolicyCoordinator(),
+            setActivationPolicy: { _ in }
+        )
+
+        let prompt = PromptSubmission.compose(draft: "hello", attachments: [])!
+        let sessionID = lifecycle.open(prompt: prompt, startupError: nil) { _ in }
+
+        lifecycle.close(sessionID)
+        XCTAssertTrue(lifecycle.restore(sessionID: sessionID))
+        XCTAssertEqual(lifecycle.viewModels[sessionID]?.messages.map(\.text), [])
+        XCTAssertEqual(lifecycle.viewModels[sessionID]?.sessionID, sessionID)
+        XCTAssertEqual(presenter.presentCallCount, 2)
+    }
 }

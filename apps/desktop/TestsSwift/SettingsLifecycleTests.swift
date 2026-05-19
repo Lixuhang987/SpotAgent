@@ -16,6 +16,8 @@ final class SettingsLifecycleTests: XCTestCase {
 
         lifecycle.openOrFocus(
             settingsViewModel: AgentSettingsViewModel(store: AgentSettingsStore()),
+            toolSettingsViewModel: ToolSettingsViewModel(store: AgentSettingsStore()),
+            permissionRulesViewModel: PermissionRulesViewModel(),
             workspaceViewModel: WorkspaceSettingsViewModel(),
             shortcutActions: [],
             onClosed: {}
@@ -37,12 +39,16 @@ final class SettingsLifecycleTests: XCTestCase {
 
         lifecycle.openOrFocus(
             settingsViewModel: AgentSettingsViewModel(store: AgentSettingsStore()),
+            toolSettingsViewModel: ToolSettingsViewModel(store: AgentSettingsStore()),
+            permissionRulesViewModel: PermissionRulesViewModel(),
             workspaceViewModel: WorkspaceSettingsViewModel(),
             shortcutActions: [],
             onClosed: {}
         )
         lifecycle.openOrFocus(
             settingsViewModel: AgentSettingsViewModel(store: AgentSettingsStore()),
+            toolSettingsViewModel: ToolSettingsViewModel(store: AgentSettingsStore()),
+            permissionRulesViewModel: PermissionRulesViewModel(),
             workspaceViewModel: WorkspaceSettingsViewModel(),
             shortcutActions: [],
             onClosed: {}
@@ -62,6 +68,8 @@ final class SettingsLifecycleTests: XCTestCase {
 
         lifecycle.openOrFocus(
             settingsViewModel: AgentSettingsViewModel(store: AgentSettingsStore()),
+            toolSettingsViewModel: ToolSettingsViewModel(store: AgentSettingsStore()),
+            permissionRulesViewModel: PermissionRulesViewModel(),
             workspaceViewModel: WorkspaceSettingsViewModel(),
             shortcutActions: [],
             onClosed: {}

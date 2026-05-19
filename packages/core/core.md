@@ -33,8 +33,9 @@ TypeScript workspace 包名为 `@handagent/core`。应用层代码应通过 `@ha
 flowchart TD
   A[AgentSession.open] --> B[buildInitialUserMessage]
   B --> C[AgentRuntime.run]
-  C --> D[LLMClient.complete]
-  D --> E{toolCalls?}
+  C --> D[LLMClient.stream]
+  D --> D1[assistant delta events]
+  D1 --> E{toolCalls?}
   E -- 否 --> F[AgentRunResult]
   E -- 是 --> G[ToolRegistry.get]
   G --> H[AgentTool.call]

@@ -19,6 +19,24 @@ final class SessionViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testAppendsMultipleAssistantDeltasInOrder() {
+        let model = SessionViewModel(sessionID: "session-1", socketClient: .noop)
+
+        model.handle(.assistantMessageStart(messageID: "m1", timestamp: "2026-05-14T00:00:00.000Z"))
+        for (index, text) in ["这", "是", "真", "流", "式"].enumerated() {
+            model.handle(
+                .assistantMessageDelta(
+                    messageID: "m1",
+                    text: text,
+                    timestamp: "2026-05-14T00:00:00.\(index + 1)00Z"
+                )
+            )
+        }
+
+        XCTAssertEqual(model.messages.last?.text, "这是真流式")
+    }
+
+    @MainActor
     func testStartShowsStartupErrorWithoutSendingPrompt() {
         let model = SessionViewModel(sessionID: "session-1", socketClient: .noop)
 
@@ -140,5 +158,66 @@ final class SessionViewModelTests: XCTestCase {
         XCTAssertEqual(bubble.attachmentSummaryText, "附件 ×2 · text_selection / image")
         XCTAssertEqual(bubble.attachments.map(\.kind), ["text_selection", "image"])
         XCTAssertEqual(bubble.attachments[0].detail, "let x = 1")
+    }
+
+    @MainActor
+    func testWorkspaceAskRequestsAreQueuedAndResolvedInOrder() {
+        let model = SessionViewModel(sessionID: "session-1", socketClient: .noop)
+
+        model.handle(
+            .workspaceAskRequest(
+                requestId: "ask-1",
+                prompt: "第一次",
+                candidates: [
+                    WorkspaceAskCandidate(id: "docs", name: "文档", description: "产品文档", isDefault: false),
+                    WorkspaceAskCandidate(id: "code", name: "代码", description: "源码", isDefault: true),
+                ]
+            )
+        )
+        model.handle(
+            .workspaceAskRequest(
+                requestId: "ask-2",
+                prompt: "第二次",
+                candidates: [
+                    WorkspaceAskCandidate(id: "docs", name: "文档", description: "产品文档", isDefault: false),
+                    WorkspaceAskCandidate(id: "code", name: "代码", description: "源码", isDefault: true),
+                ]
+            )
+        )
+
+        XCTAssertEqual(model.pendingWorkspaceAskRequests.map(\.id), ["ask-1", "ask-2"])
+        XCTAssertEqual(model.visibleWorkspaceAskRequest?.id, "ask-1")
+
+        model.resolveWorkspaceAsk(requestId: "ask-1", workspaceId: "docs")
+
+        XCTAssertEqual(model.pendingWorkspaceAskRequests.map(\.id), ["ask-2"])
+        XCTAssertEqual(model.visibleWorkspaceAskRequest?.id, "ask-2")
+    }
+
+    @MainActor
+    func testHistoryDeleteRequiresConfirmation() {
+        let model = SessionViewModel(sessionID: "session-1", socketClient: .noop)
+        model.handle(
+            .sessionList(
+                sessions: [
+                    SessionListItem(
+                        id: "history-1",
+                        title: "历史会话",
+                        updatedAt: "2026-05-19T00:00:00.000Z",
+                        messageCount: 2
+                    )
+                ]
+            )
+        )
+
+        model.requestDeleteSession("history-1")
+
+        XCTAssertEqual(model.pendingHistoryDeletionID, "history-1")
+        XCTAssertEqual(model.historyList.map(\.id), ["history-1"])
+
+        model.confirmDeleteSession()
+
+        XCTAssertNil(model.pendingHistoryDeletionID)
+        XCTAssertTrue(model.historyList.isEmpty)
     }
 }

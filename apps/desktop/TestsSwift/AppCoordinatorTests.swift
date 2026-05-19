@@ -100,6 +100,16 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testRestoreSessionActionDelegatesToHistoryEntry() {
+        let coordinator = AppCoordinator(services: AppServices.testing())
+
+        coordinator.send(.restoreSession("session-1"))
+
+        XCTAssertEqual(coordinator.sessionViewModels.keys.first, "session-1")
+        XCTAssertEqual(coordinator.sessionViewModels["session-1"]?.messages.map(\.text), [])
+    }
+
+    @MainActor
     func testInjectedAgentServerStartIsCalledOnBootstrap() throws {
         final class StubServer: AgentServerStarting {
             var lastStartupError: String?
@@ -139,6 +149,8 @@ final class StubSettingsWindowPresenter: SettingsWindowPresenting {
 
     func present(
         settingsViewModel: AgentSettingsViewModel,
+        toolSettingsViewModel: ToolSettingsViewModel,
+        permissionRulesViewModel: PermissionRulesViewModel,
         workspaceViewModel: WorkspaceSettingsViewModel,
         shortcutActions: [PromptAction],
         onClose: @escaping () -> Void

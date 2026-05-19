@@ -67,6 +67,10 @@ describe("FilePermissionPolicy", () => {
         arguments: { relativePath: "x.md", workspaceId: "default" },
       }),
     ).toBe("allow");
+    expect(fresh.listPersistedRules()[0].arguments).toEqual({
+      workspaceId: "default",
+      relativePath: "x.md",
+    });
   });
 
   it("once-scope rule is not remembered", async () => {

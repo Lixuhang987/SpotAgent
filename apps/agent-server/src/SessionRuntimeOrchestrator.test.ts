@@ -224,6 +224,7 @@ describe("SessionRuntimeOrchestrator", () => {
 
   it("waits for pending summaries before passing history into runtime", async () => {
     const runtimeCalls: AgentMessage[][] = [];
+    const order: string[] = [];
     const persistence = new SessionPersistence(
       new InMemorySessionStore(),
       () => "2026-05-11T00:00:00.000Z",
@@ -231,15 +232,20 @@ describe("SessionRuntimeOrchestrator", () => {
     const orchestrator = new SessionRuntimeOrchestrator(
       {
         async waitForPendingSummaries(messages: AgentMessage[] = []) {
+          order.push("summary");
           messages.push({ role: "system", content: "summary ready" });
         },
         async runWithMessages(messages: AgentMessage[]) {
+          order.push("runtime");
           runtimeCalls.push(messages.map((message) => ({ ...message })));
           return { messages, bubbles: [] };
         },
       },
       persistence,
       () => "2026-05-11T00:00:00.000Z",
+      () => {
+        order.push("refresh");
+      },
     );
 
     await orchestrator.handleUserMessage(
@@ -253,6 +259,7 @@ describe("SessionRuntimeOrchestrator", () => {
         { role: "system", content: "summary ready" },
       ],
     ]);
+    expect(order).toEqual(["refresh", "summary", "runtime"]);
   });
 
   it("passes image attachments to runtime as multimodal content while persisting stubs", async () => {

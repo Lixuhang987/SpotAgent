@@ -19,6 +19,13 @@ export class ToolRegistry {
     this.tools.set(tool.name, tool);
   }
 
+  replaceAll(tools: AgentTool[]): void {
+    this.tools.clear();
+    for (const tool of tools) {
+      this.register(tool);
+    }
+  }
+
   get(name: string): AgentTool | undefined {
     return this.tools.get(name);
   }

@@ -27,7 +27,7 @@ flowchart TD
 
 ### 分层职责
 
-- `apps/desktop`：负责宿主生命周期、热键、PromptPanel、SessionWindow、状态气泡，以及通过 `MacPlatformProvider` 实现 macOS 原生能力（ScreenCaptureKit / NSWorkspace / NSPasteboard 等）。
+- `apps/desktop`：负责宿主生命周期、热键、PromptPanel、SessionWindow、独立历史窗口、状态气泡，以及通过 `MacPlatformProvider` 实现 macOS 原生能力（ScreenCaptureKit / NSWorkspace / NSPasteboard 等）。
 - `apps/agent-server`：负责本地 WebSocket session 桥、会话路由、持久化封装和 runtime 驱动。
 - `packages/core`：负责会话输入归一化、消息模型、tool 注册、LLM/tool 循环、`RemotePlatformAdapter` 通过 `PlatformBridge` 接口向桌面 App 请求平台能力。
 
@@ -40,8 +40,9 @@ flowchart TD
   C --> D[Swift 创建 SessionWindow 与 SessionSocketClient]
   D --> E[agent-server 接收 SessionMessage]
   E --> F[AgentRuntime.run]
-  F --> G[LLMClient.complete]
-  G --> H{返回 toolCalls?}
+  F --> G[LLMClient.stream]
+  G --> G1[转发 token delta]
+  G1 --> H{返回 toolCalls?}
   H -- 否 --> I[SwiftUI 渲染消息列表]
   H -- 是 --> J[ToolRegistry.get]
   J --> K[AgentTool.call]
@@ -88,7 +89,11 @@ flowchart TD
   - `id: string`
   - `name: string`
   - `arguments: Record<string, unknown>`
-- `LLMCompletion`
+- `LLMStreamEvent`
+  - `text_delta`
+  - `tool_call`
+  - `message_end`
+- `LLMCompletion`（兼容聚合结果）
   - `message: assistant message`
   - `toolCalls?: ToolCallEnvelope[]`
 - `AgentRunResult`
@@ -144,7 +149,7 @@ flowchart TD
 
 跨进程协议分为两个判别联合：
 
-- `SessionMessage` 覆盖会话生命周期、历史读写和权限审批：`open_session` / `user_message` / `assistant_message_start|delta|end` / `tool_message` / `status` / `interrupt` / `session_snapshot` / `error` / `list_sessions_*` / `load_session_*` / `delete_session_request` / `permission_request|response`。
+- `SessionMessage` 覆盖会话生命周期、历史读写、权限审批和 workspace 选择：`open_session` / `user_message` / `assistant_message_start|delta|end` / `tool_message` / `status` / `interrupt` / `session_snapshot` / `error` / `list_sessions_*` / `load_session_*` / `delete_session_request` / `permission_request|response` / `workspace_ask_request|response`。
 - `PlatformBridgeMessage` 覆盖平台反向 IPC：`channel: "platform"` + `platform_bridge_hello` / `platform_request` / `platform_response`。
 
 详见 [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md)。
@@ -154,6 +159,7 @@ flowchart TD
 - 当前桌面壳已经切到 `PromptPanel + SessionWindow + StatusBubble`。
 - `agent-server` 通过 `SessionRouter + SessionRuntimeOrchestrator + SessionPersistence + SessionStore` 管理会话并驱动 runtime。
 - `packages/core/src/storage` 提供持久化会话存储，默认使用 `FileSessionStore` 将会话写入 `~/.spotAgent/sessions/`。
+- 桌面端通过 `SessionHistoryStore` 读取同一目录，为 PromptPanel 最近会话 action 与独立 HistoryWindow 提供搜索、预览、恢复和删除入口；恢复同一 sessionId 时优先聚焦已有窗口，未打开时等待 `open_session` 快照恢复。
 - `packages/core` 已经定义完整的 tool、platform DTO。
 - macOS 平台能力由 `apps/desktop` 内的 `MacPlatformProvider` 实现：剪贴板（`NSPasteboard`）、前台 App（`NSWorkspace`）、窗口列表（`CGWindowListCopyWindowInfo`）、屏幕截图（`ScreenCaptureKit` + `SCScreenshotManager`，支持 display / window / region 三种 target）；OCR 与 accessibility 仍未完成。
 - 桌面 App 通过 `PlatformBridgeService` 与 `agent-server` 维护一条独立 WebSocket 反向通道，core 侧通过 `RemotePlatformAdapter` 调用平台能力。

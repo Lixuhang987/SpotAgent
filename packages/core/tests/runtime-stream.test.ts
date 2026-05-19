@@ -3,6 +3,7 @@ import { AgentRuntime } from "../src/runtime/AgentRuntime";
 import { ToolRegistry } from "../src/tools/ToolRegistry";
 import type { AgentTool } from "../src/tools/AgentTool";
 import type { AgentMessage } from "../src/runtime/AgentMessage";
+import type { LLMStreamEvent } from "../src/llm/LLMClient";
 
 class FakeTool implements AgentTool {
   name = "echo";
@@ -22,6 +23,82 @@ class FakeTool implements AgentTool {
 }
 
 describe("AgentRuntime runWithMessages", () => {
+  it("forwards multiple LLM text deltas in order", async () => {
+    const events: unknown[] = [];
+    const streamEvents: LLMStreamEvent[] = [
+      { type: "text_delta", text: "这" },
+      { type: "text_delta", text: "是" },
+      { type: "text_delta", text: "真" },
+      { type: "text_delta", text: "流" },
+      { type: "text_delta", text: "式" },
+      {
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: "这是真流式",
+        },
+      },
+    ];
+    const client = {
+      async *stream() {
+        yield* streamEvents;
+      },
+    };
+
+    const runtime = new AgentRuntime(client, new ToolRegistry());
+    const result = await runtime.runWithMessages([{ role: "user", content: "stream" }], (event) => {
+      events.push(event);
+    });
+
+    expect(events).toEqual([
+      {
+        type: "assistant_message_start",
+        messageId: "assistant-1",
+        payload: { role: "assistant" },
+      },
+      {
+        type: "assistant_message_delta",
+        messageId: "assistant-1",
+        payload: { text: "这" },
+      },
+      {
+        type: "assistant_message_delta",
+        messageId: "assistant-1",
+        payload: { text: "是" },
+      },
+      {
+        type: "assistant_message_delta",
+        messageId: "assistant-1",
+        payload: { text: "真" },
+      },
+      {
+        type: "assistant_message_delta",
+        messageId: "assistant-1",
+        payload: { text: "流" },
+      },
+      {
+        type: "assistant_message_delta",
+        messageId: "assistant-1",
+        payload: { text: "式" },
+      },
+      {
+        type: "assistant_message_end",
+        messageId: "assistant-1",
+        payload: { status: "completed" },
+      },
+    ]);
+    expect(result.messages.at(-1)).toEqual({
+      role: "assistant",
+      content: "这是真流式",
+    });
+    expect(result.bubbles).toEqual([
+      {
+        id: "assistant-1",
+        text: "这是真流式",
+      },
+    ]);
+  });
+
   it("preserves assistant toolCalls in message history and emits minimal assistant streaming events", async () => {
     const seenTurns: AgentMessage[][] = [];
     const events: unknown[] = [];
@@ -45,22 +122,45 @@ describe("AgentRuntime runWithMessages", () => {
       },
     ];
     const client = {
-      async complete(messages: AgentMessage[], tools: unknown[]) {
+      async *stream(messages: AgentMessage[], tools: unknown[]) {
         void tools;
         seenTurns.push(messages.map((message) => ({ ...message })));
         const lastMessage = messages[messages.length - 1];
 
         if (lastMessage.role === "user") {
-          return {
+          yield {
+            type: "text_delta",
+            text: "先调用",
+          };
+          yield {
+            type: "text_delta",
+            text: "工具",
+          };
+          yield {
+            type: "tool_call",
+            toolCall: firstToolCalls[0],
+          };
+          yield {
+            type: "message_end",
             message: {
               role: "assistant",
               content: "先调用工具",
             },
             toolCalls: firstToolCalls,
           };
+          return;
         }
 
-        return {
+        yield {
+          type: "text_delta",
+          text: "工具",
+        };
+        yield {
+          type: "text_delta",
+          text: "已完成",
+        };
+        yield {
+          type: "message_end",
           message: {
             role: "assistant",
             content: "工具已完成",
@@ -108,12 +208,37 @@ describe("AgentRuntime runWithMessages", () => {
       {
         type: "assistant_message_delta",
         messageId: "assistant-1",
-        payload: { text: "先调用工具" },
+        payload: { text: "先调用" },
+      },
+      {
+        type: "assistant_message_delta",
+        messageId: "assistant-1",
+        payload: { text: "工具" },
       },
       {
         type: "assistant_message_end",
         messageId: "assistant-1",
         payload: { status: "completed" },
+      },
+      {
+        type: "tool_call",
+        toolCallId: "call-1",
+        toolName: "echo",
+        input: {
+          value: "from-history",
+        },
+      },
+      {
+        type: "tool_result",
+        toolCallId: "call-1",
+        toolName: "echo",
+        status: "success",
+        output: JSON.stringify({
+          echoed: {
+            value: "from-history",
+          },
+        }),
+        durationMs: expect.any(Number),
       },
       {
         type: "assistant_message_start",
@@ -123,7 +248,12 @@ describe("AgentRuntime runWithMessages", () => {
       {
         type: "assistant_message_delta",
         messageId: "assistant-2",
-        payload: { text: "工具已完成" },
+        payload: { text: "工具" },
+      },
+      {
+        type: "assistant_message_delta",
+        messageId: "assistant-2",
+        payload: { text: "已完成" },
       },
       {
         type: "assistant_message_end",

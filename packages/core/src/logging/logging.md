@@ -32,7 +32,7 @@ agent-server / SettingsBackedLLMClient
   └─ new VercelClient({ networkLogger: new FileNetworkLogger({ baseDir: ~/.spotAgent/log }) })
        └─ createLoggingFetch({ logger, baseFetch })
             └─ provider.<chat|completion|responses>(model)
-                 └─ generateText(...)  ← 内部走包装后的 fetch
+                 └─ streamText(...)  ← 内部走包装后的 fetch
 ```
 
 ## 当前限制

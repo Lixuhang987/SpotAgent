@@ -1,13 +1,13 @@
 # PromptPanel 模块
 
-全局热键唤起的命令面板：输入 prompt、展示并触发 PromptAction、跳转设置。架构是 **View + ViewModel + Controller + Styles** 四件套。
+全局热键唤起的命令面板：输入 prompt、展示并触发 PromptAction、跳转设置、过滤并恢复最近会话。架构是 **View + ViewModel + Controller + Styles** 四件套。
 
 ## 文件
 
 | 文件 | 职责 |
 |------|------|
 | `PromptPanelView.swift` | 纯 UI：输入框 + action 列表 + 附件 chip（图片 chip 可点击触发 QuickLook 预览）+ server 不可用提示，绑定 ViewModel 状态，消费 Theme token |
-| `PromptPanelViewModel.swift` | `@Observable` 状态：`draft` / `focusSeed` / `filteredActions` / `attachments` / `submissionDisabledMessage`；`onSubmit` / `onHide` / `onOpenSettings` / `onPreviewImage` 回调出口 |
+| `PromptPanelViewModel.swift` | `@Observable` 状态：`draft` / `focusSeed` / `filteredActions` / `attachments` / `submissionDisabledMessage`；支持 `updateActions(_:)` 刷新静态 action 与最近会话 action；`onSubmit` / `onHide` / `onOpenSettings` / `onPreviewImage` 回调出口 |
 | `PromptPanelController.swift` | `NSPanel` 生命周期、`NSEvent` 局部监听、ViewModel 注入、持有 `QuickLookPreviewController` |
 | `PromptPanelWindow.swift` | `NSPanel` 子类，处理失焦自动隐藏 |
 | `PromptPanelStyles.swift` | `PromptPanelContainerModifier` / `ActionRowModifier` |
@@ -18,8 +18,9 @@
 
 ```
 Coordinator
-  └─ 注入 PromptAction 列表 → Controller.register(actions:)
+  └─ 注入 PromptAction 列表（设置 / 历史窗口 / 最近会话）→ Controller.register(actions:)
                             └─ 创建 ViewModel(actions:)
+                            └─ 已创建 ViewModel 时调用 updateActions(_:)
                             └─ ViewModel.onSubmit/onHide/onOpenSettings 回调到 Controller
                                                                        └─ 转发给 Coordinator.send(.xxx)
 Hotkey → Coordinator.send(.togglePromptPanel) → Controller.toggle()
@@ -29,12 +30,15 @@ AgentServerHealth.onAvailabilityChange → Controller.setSubmissionEnabled(...)
                                       └─ server 不可用时 ViewModel.submit() 保留 draft，不上抛 onSubmit
 ```
 
+最近会话 action 在每次 `showPromptPanel / togglePromptPanel` 前由 Coordinator 重新读取 `SessionHistoryStore.list()` 生成，按持久化会话 `updatedAt` 倒序取前 8 条。点击最近会话 action 会走 `AppCoordinator.Action.restoreSession(id)`，由 `SessionLifecycle.restore` 聚焦已打开窗口或按既有 sessionId 创建新的 SessionWindow。
+
 ## 编辑此目录的约束
 
 - **View 只读 ViewModel**：不要让 View 直接调 `NSEvent` / `NSPanel` / `KeyboardShortcuts.*` API，键盘与窗口副作用全部在 Controller。
 - **ViewModel 不持有 SwiftUI 类型**：不要让 `@Observable` class 引入 `View` / `Color` / `Font`；只暴露 plain Swift 状态与回调。
 - **Controller 是窗口管理 + 事件监听层**：不直接写消息循环或会话逻辑，所有跨模块意图通过 `onSubmit` / `onOpenSettings` 闭包出口给 Coordinator。
 - **Action 默认快捷键**：在 `register(actions:)` 中**仅当用户未自定义时**写入默认值，不要每次启动覆盖用户配置。
+- **动态 action 刷新**：Controller 可多次 `register(actions:)`；首次创建 ViewModel，后续只刷新 ViewModel action 列表。新增动态 action 不要覆盖已有用户自定义快捷键。
 - **Styles 抽取阈值**：跨 View 复用的样式才放 `PromptPanelStyles.swift`；一次性样式写在 View 里，避免 ViewModifier 爆炸。
 - **窗口与拖动区域**：`NSPanel` 自身设为 `isOpaque = false` + `backgroundColor = .clear`，可见背景全部由 SwiftUI `promptPanelContainer()` 的圆角 + ultraThinMaterial 提供，避免顶部"标题栏条"和主体颜色不一致。`isMovableByWindowBackground = true` 让任何空白处都能拖；首行的 input 框宽度固定（左上角紧凑，带 surface 背景与 border），右侧是齿轮按钮，中间留出的 `Spacer` 区域天然成为不显眼的拖动手柄。新增首行控件时不要让控件铺满整行，必须保留中间的拖动空隙。
 - **PromptAction.filter 大小写不敏感**：title 与 keywords 两路匹配；新增匹配维度需保持纯函数 + 单元测试。
@@ -47,4 +51,5 @@ AgentServerHealth.onAvailabilityChange → Controller.setSubmissionEnabled(...)
 - 提交 prompt 后由 Coordinator 创建 [SessionWindow](/Users/mu9/proj/handAgent/apps/desktop/Sources/SessionWindow/session-window.md) 与 `SessionViewModel`。
 - [AgentServer](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/AgentServer/agent-server.md) 可用性变化会同步到 `setSubmissionEnabled`，避免重启期间提交新 prompt。
 - "打开设置" action 由 Coordinator 路由到 [Settings](/Users/mu9/proj/handAgent/apps/desktop/Sources/Settings/settings.md) 窗口。
+- "会话历史" 与最近会话 action 由 Coordinator 路由到 [SessionWindow](/Users/mu9/proj/handAgent/apps/desktop/Sources/SessionWindow/session-window.md) 的历史窗口 / 会话恢复能力。
 - 全局热键来自 [AppServices/Hotkey](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Hotkey/hotkey.md)。

@@ -177,6 +177,7 @@ final class AgentServerService: AgentServerStarting, @unchecked Sendable {
         let existingNodePath = environment["NODE_PATH"].flatMap { $0.isEmpty ? nil : $0 }
         environment["NODE_PATH"] = (extraNodePaths + [existingNodePath].compactMap { $0 })
             .joined(separator: separator)
+        AgentServerRuntimeMode.apply(to: &environment, resourcesURL: Bundle.main.resourceURL)
         return environment
     }
 

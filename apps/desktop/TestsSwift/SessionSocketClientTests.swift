@@ -80,6 +80,62 @@ final class SessionSocketClientTests: XCTestCase {
         let json = SessionSocketClient.extractPermissionArgumentsJSON(from: Data(raw.utf8))
         XCTAssertEqual(json, "{}")
     }
+
+    func testDecodesWorkspaceAskRequest() {
+        let transport = RecordingSessionSocketTransport()
+        let client = SessionSocketClient(
+            serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
+            transport: transport,
+            reconnectDelay: 0
+        )
+        var events: [SessionEvent] = []
+        client.onEvent = { events.append($0) }
+
+        client.connect(sessionID: "session-1")
+        transport.tasks[0].receiveString(
+            """
+            {
+              "type": "workspace_ask_request",
+              "sessionId": "session-1",
+              "messageId": "m1",
+              "timestamp": "2026-05-19T00:00:00.000Z",
+              "payload": {
+                "requestId": "r1",
+                "toolCallId": "tc1",
+                "prompt": "请选择 workspace",
+                "candidates": [
+                  { "id": "docs", "name": "文档", "description": "产品文档", "isDefault": false },
+                  { "id": "code", "name": "代码", "description": "源码", "isDefault": true }
+                ],
+                "timeoutMs": 60000
+              }
+            }
+            """
+        )
+
+        XCTAssertTrue(
+            events.contains(
+                .workspaceAskRequest(
+                    requestId: "r1",
+                    prompt: "请选择 workspace",
+                    candidates: [
+                        WorkspaceAskCandidate(
+                            id: "docs",
+                            name: "文档",
+                            description: "产品文档",
+                            isDefault: false
+                        ),
+                        WorkspaceAskCandidate(
+                            id: "code",
+                            name: "代码",
+                            description: "源码",
+                            isDefault: true
+                        ),
+                    ]
+                )
+            )
+        )
+    }
 }
 
 private final class RecordingSessionSocketTransport: SessionSocketTransport {
@@ -123,5 +179,9 @@ private final class RecordingSessionWebSocketTask: SessionWebSocketTask {
 
     func failReceive() {
         receiveHandler?(.failure(URLError(.cannotConnectToHost)))
+    }
+
+    func receiveString(_ text: String) {
+        receiveHandler?(.success(.string(text)))
     }
 }

@@ -36,32 +36,14 @@ final class SessionLifecycle {
         onSessionClosed: @escaping @MainActor (String) -> Void
     ) -> String {
         let sessionID = UUID().uuidString
-        let viewModel = SessionViewModel(
-            sessionID: sessionID,
-            socketClient: SessionSocketClient(serverURL: agentServerURL)
-        )
+        let viewModel = makeViewModel(sessionID: sessionID)
 
-        viewModels[sessionID] = viewModel
-        registry.upsert(
-            SessionSummary(
-                sessionId: sessionID,
-                isRunning: true,
-                latestSummary: prompt.summary,
-                lastActiveAt: .now,
-                windowIsOpen: true
-            )
-        )
-
-        if let window = windowPresenter.present(
+        present(
             sessionID: sessionID,
             viewModel: viewModel,
-            onClose: {
-                Task { @MainActor in onSessionClosed(sessionID) }
-            }
-        ) {
-            windows[sessionID] = window
-            setActivationPolicy(activationPolicy.policyAfterUpdatingOpenSessionWindows(by: 1))
-        }
+            summary: prompt.summary,
+            onSessionClosed: onSessionClosed
+        )
 
         viewModel.start(
             initialPrompt: prompt.composed,
@@ -70,6 +52,24 @@ final class SessionLifecycle {
         )
 
         return sessionID
+    }
+
+    @discardableResult
+    func restore(
+        sessionID: String,
+        onSessionClosed: @escaping @MainActor (String) -> Void = { _ in }
+    ) -> Bool {
+        if focus(sessionID) { return true }
+
+        let viewModel = makeViewModel(sessionID: sessionID)
+        present(
+            sessionID: sessionID,
+            viewModel: viewModel,
+            summary: registry.summaries[sessionID]?.latestSummary ?? "",
+            onSessionClosed: onSessionClosed
+        )
+        viewModel.start(initialPrompt: "", startupError: nil)
+        return true
     }
 
     func close(_ sessionID: String) {
@@ -103,5 +103,41 @@ final class SessionLifecycle {
         viewModels.values.forEach { $0.stop() }
         viewModels.removeAll()
         windows.removeAll()
+    }
+
+    private func makeViewModel(sessionID: String) -> SessionViewModel {
+        SessionViewModel(
+            sessionID: sessionID,
+            socketClient: SessionSocketClient(serverURL: agentServerURL)
+        )
+    }
+
+    private func present(
+        sessionID: String,
+        viewModel: SessionViewModel,
+        summary: String,
+        onSessionClosed: @escaping @MainActor (String) -> Void
+    ) {
+        viewModels[sessionID] = viewModel
+        registry.upsert(
+            SessionSummary(
+                sessionId: sessionID,
+                isRunning: true,
+                latestSummary: summary,
+                lastActiveAt: .now,
+                windowIsOpen: true
+            )
+        )
+
+        if let window = windowPresenter.present(
+            sessionID: sessionID,
+            viewModel: viewModel,
+            onClose: {
+                Task { @MainActor in onSessionClosed(sessionID) }
+            }
+        ) {
+            windows[sessionID] = window
+            setActivationPolicy(activationPolicy.policyAfterUpdatingOpenSessionWindows(by: 1))
+        }
     }
 }

@@ -6,7 +6,7 @@ desktop ↔ agent-server 的 WebSocket 协议。会话流量走 `SessionMessage`
 
 | 文件 | 职责 |
 |------|------|
-| `SessionMessage.ts` | `SessionMessage`（会话、历史、权限审批帧）/ `SessionListEntry` / `UserMessageAttachment` |
+| `SessionMessage.ts` | `SessionMessage`（会话、历史、权限审批、workspace 选择帧）/ `SessionListEntry` / `WorkspaceAskCandidate` / `UserMessageAttachment` |
 | `PlatformBridgeMessage.ts` | `PlatformBridgeMessage`（平台反向 RPC 帧）/ `PlatformResponsePayload` |
 
 ## 消息分类
@@ -26,6 +26,8 @@ desktop ↔ agent-server 的 WebSocket 协议。会话流量走 `SessionMessage`
 | | `delete_session_request` | desktop → server |
 | 权限审批 | `permission_request` | server → desktop |
 | | `permission_response` | desktop → server |
+| Workspace 选择 | `workspace_ask_request` | server → desktop |
+| | `workspace_ask_response` | desktop → server |
 | 平台反向 IPC | `platform_bridge_hello` | desktop → server（`channel: "platform"`，标识此 socket 是 bridge 通道） |
 | | `platform_request` | server → desktop（`channel: "platform"`） |
 | | `platform_response` | desktop → server（`channel: "platform"`） |
@@ -68,6 +70,46 @@ desktop ↔ agent-server 的 WebSocket 协议。会话流量走 `SessionMessage`
 - `image`：base64 图片（`image/png | image/jpeg | image/webp`）。
 
 注：`MessageTranslator.composeUserContent` 会把 `image` 附件写入 BlobStore，并在持久化 user message 中插入空 body 的 image STUB；原始 base64 不进入会话历史。agent-server 在调用 runtime 前会把 image STUB 展开为 `{ type: "image"; blobId; mimeType }`，由 LLM adapter 按需读取 blob 并发送多模态消息。
+
+## Workspace 选择
+
+`workspace.askUser` 通过会话协议向当前 SessionWindow 发起内联选择，而不是复用权限审批或平台 RPC。
+
+```json
+{
+  "type": "workspace_ask_request",
+  "sessionId": "...",
+  "messageId": "...",
+  "timestamp": "...",
+  "payload": {
+    "requestId": "...",
+    "toolCallId": "...",
+    "prompt": "请选择 workspace",
+    "candidates": [
+      { "id": "docs", "name": "文档", "description": "产品文档", "isDefault": false }
+    ],
+    "timeoutMs": 60000
+  }
+}
+```
+
+桌面端回复：
+
+```json
+{
+  "type": "workspace_ask_response",
+  "sessionId": "...",
+  "messageId": "...",
+  "timestamp": "...",
+  "payload": {
+    "requestId": "...",
+    "workspaceId": "docs",
+    "cancelled": false
+  }
+}
+```
+
+用户取消、超时、会话关闭或没有活动 SessionWindow 时，tool 返回 `{ "cancelled": true }`。
 
 ## 平台 RPC 帧
 

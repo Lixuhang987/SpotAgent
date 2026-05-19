@@ -24,6 +24,18 @@ class FakeTool implements AgentTool {
   }
 }
 
+class ContextCapturingTool implements AgentTool {
+  name = "context.capture";
+  description = "capture runtime context";
+  inputSchema = { type: "object", additionalProperties: false } as const;
+  seenContext: unknown;
+
+  async call(_input: unknown, context?: unknown): Promise<unknown> {
+    this.seenContext = context;
+    return { ok: true };
+  }
+}
+
 class StubbedTool implements AgentTool {
   name = "file.read";
   description = "read file";
@@ -174,6 +186,42 @@ describe("AgentRuntime", () => {
     expect(result.bubbles.at(-1)).toEqual({
       id: "assistant-2",
       text: "done",
+    });
+  });
+
+  it("passes session context into tool calls", async () => {
+    const tool = new ContextCapturingTool();
+    const client = {
+      async complete(messages: AgentMessage[]) {
+        const lastMessage = messages[messages.length - 1];
+        if (lastMessage.role === "user") {
+          return {
+            message: { role: "assistant" as const, content: "calling tool" },
+            toolCalls: [
+              {
+                id: "tool-ctx",
+                name: "context.capture",
+                arguments: {},
+              },
+            ],
+          };
+        }
+
+        return {
+          message: { role: "assistant" as const, content: "done" },
+          toolCalls: [],
+        };
+      },
+    };
+    const runtime = new AgentRuntime(client, new ToolRegistry([tool]));
+
+    await runtime.runWithMessages([{ role: "user", content: "hello" }], () => {}, {
+      sessionId: "session-ctx",
+    });
+
+    expect(tool.seenContext).toEqual({
+      sessionId: "session-ctx",
+      toolCallId: "tool-ctx",
     });
   });
 

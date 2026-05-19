@@ -51,6 +51,8 @@ final class PromptPanelController {
                 guard let self, let panel = self.panel, panel.isVisible else { return }
                 panel.makeKey()
             }
+        } else {
+            viewModel?.updateActions(actions)
         }
     }
 

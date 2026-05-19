@@ -15,8 +15,18 @@ protocol SessionWindowPresenting {
 protocol SettingsWindowPresenting {
     func present(
         settingsViewModel: AgentSettingsViewModel,
+        toolSettingsViewModel: ToolSettingsViewModel,
+        permissionRulesViewModel: PermissionRulesViewModel,
         workspaceViewModel: WorkspaceSettingsViewModel,
         shortcutActions: [PromptAction],
+        onClose: @escaping () -> Void
+    ) -> NSWindow?
+}
+
+@MainActor
+protocol HistoryWindowPresenting {
+    func present(
+        historyViewModel: SessionHistoryViewModel,
         onClose: @escaping () -> Void
     ) -> NSWindow?
 }
@@ -38,11 +48,13 @@ final class AppServices {
     let agentServer: any AgentServerStarting
     let sessionRegistry: SessionRegistry
     let settingsStore: AgentSettingsStore
+    let sessionHistoryStore: SessionHistoryStore
     let agentServerURL: URL
     let platformBridgeFactory: @MainActor (URL) -> (any PlatformBridgeRunning)?
     let hotkeyRegistrar: any HotkeyRegistering
     let sessionWindowPresenter: any SessionWindowPresenting
     let settingsWindowPresenter: any SettingsWindowPresenting
+    let historyWindowPresenter: any HistoryWindowPresenting
     let fatalAlertPresenter: any FatalAlertPresenting
     let setActivationPolicy: @MainActor (NSApplication.ActivationPolicy) -> Void
     let showsStatusBubble: Bool
@@ -51,6 +63,7 @@ final class AppServices {
         agentServer: any AgentServerStarting = AgentServerService(),
         sessionRegistry: SessionRegistry = SessionRegistry(),
         settingsStore: AgentSettingsStore = AgentSettingsStore(),
+        sessionHistoryStore: SessionHistoryStore = SessionHistoryStore(),
         agentServerURL: URL = URL(string: "ws://127.0.0.1:4317/api/session")!,
         platformBridgeFactory: @escaping @MainActor (URL) -> (any PlatformBridgeRunning)? = { url in
             PlatformBridgeService(serverURL: url)
@@ -58,6 +71,7 @@ final class AppServices {
         hotkeyRegistrar: any HotkeyRegistering = ProductionHotkeyRegistrar(),
         sessionWindowPresenter: any SessionWindowPresenting = ProductionSessionWindowPresenter(),
         settingsWindowPresenter: any SettingsWindowPresenting = ProductionSettingsWindowPresenter(),
+        historyWindowPresenter: any HistoryWindowPresenting = ProductionHistoryWindowPresenter(),
         fatalAlertPresenter: any FatalAlertPresenting = ProductionFatalAlertPresenter(),
         setActivationPolicy: @escaping @MainActor (NSApplication.ActivationPolicy) -> Void = {
             NSApplication.shared.setActivationPolicy($0)
@@ -67,11 +81,13 @@ final class AppServices {
         self.agentServer = agentServer
         self.sessionRegistry = sessionRegistry
         self.settingsStore = settingsStore
+        self.sessionHistoryStore = sessionHistoryStore
         self.agentServerURL = agentServerURL
         self.platformBridgeFactory = platformBridgeFactory
         self.hotkeyRegistrar = hotkeyRegistrar
         self.sessionWindowPresenter = sessionWindowPresenter
         self.settingsWindowPresenter = settingsWindowPresenter
+        self.historyWindowPresenter = historyWindowPresenter
         self.fatalAlertPresenter = fatalAlertPresenter
         self.setActivationPolicy = setActivationPolicy
         self.showsStatusBubble = showsStatusBubble
@@ -88,6 +104,7 @@ final class AppServices {
             hotkeyRegistrar: NopHotkeyRegistrar(),
             sessionWindowPresenter: NopSessionWindowPresenter(),
             settingsWindowPresenter: settingsWindowPresenter,
+            historyWindowPresenter: NopHistoryWindowPresenter(),
             fatalAlertPresenter: NopFatalAlertPresenter(),
             setActivationPolicy: setActivationPolicy,
             showsStatusBubble: false
@@ -124,10 +141,19 @@ final class NopSessionWindowPresenter: SessionWindowPresenting {
 final class NopSettingsWindowPresenter: SettingsWindowPresenting {
     func present(
         settingsViewModel: AgentSettingsViewModel,
+        toolSettingsViewModel: ToolSettingsViewModel,
+        permissionRulesViewModel: PermissionRulesViewModel,
         workspaceViewModel: WorkspaceSettingsViewModel,
         shortcutActions: [PromptAction],
         onClose: @escaping () -> Void
     ) -> NSWindow? {
+        nil
+    }
+}
+
+@MainActor
+final class NopHistoryWindowPresenter: HistoryWindowPresenting {
+    func present(historyViewModel: SessionHistoryViewModel, onClose: @escaping () -> Void) -> NSWindow? {
         nil
     }
 }

@@ -196,6 +196,12 @@ struct SessionPermissionRequest: Identifiable, Equatable {
     let argumentsJSON: String
 }
 
+struct SessionWorkspaceAskRequest: Identifiable, Equatable {
+    let id: String
+    let prompt: String
+    let candidates: [WorkspaceAskCandidate]
+}
+
 @Observable
 @MainActor
 final class SessionViewModel {
@@ -203,10 +209,15 @@ final class SessionViewModel {
     private(set) var status: String = "idle"
     private(set) var error: String?
     private(set) var pendingPermissionRequests: [SessionPermissionRequest] = []
+    private(set) var pendingWorkspaceAskRequests: [SessionWorkspaceAskRequest] = []
     private(set) var historyList: [SessionListItem] = []
+    private(set) var pendingHistoryDeletionID: String?
     private(set) var connectionState: SessionConnectionState = .disconnected
     private(set) var connectionMessage: String?
     var canSendPrompt: Bool { connectionState == .connected }
+    var visibleWorkspaceAskRequest: SessionWorkspaceAskRequest? {
+        pendingWorkspaceAskRequests.first
+    }
 
     let sessionID: String
     @ObservationIgnored let socketClient: SessionSocketClient
@@ -226,6 +237,16 @@ final class SessionViewModel {
         pendingPermissionRequests.removeAll { $0.id == requestId }
     }
 
+    func resolveWorkspaceAsk(requestId: String, workspaceId: String?) {
+        socketClient.sendWorkspaceAskResponse(
+            sessionID: sessionID,
+            requestId: requestId,
+            workspaceId: workspaceId,
+            cancelled: workspaceId == nil
+        )
+        pendingWorkspaceAskRequests.removeAll { $0.id == requestId }
+    }
+
     func refreshHistory() {
         socketClient.sendListSessions(sessionID: sessionID)
     }
@@ -237,6 +258,20 @@ final class SessionViewModel {
     func deleteSession(_ targetSessionId: String) {
         socketClient.sendDeleteSession(sessionID: sessionID, targetSessionId: targetSessionId)
         historyList.removeAll { $0.id == targetSessionId }
+    }
+
+    func requestDeleteSession(_ targetSessionId: String) {
+        pendingHistoryDeletionID = targetSessionId
+    }
+
+    func cancelDeleteSession() {
+        pendingHistoryDeletionID = nil
+    }
+
+    func confirmDeleteSession() {
+        guard let targetSessionId = pendingHistoryDeletionID else { return }
+        pendingHistoryDeletionID = nil
+        deleteSession(targetSessionId)
     }
 
     func start(
@@ -316,6 +351,10 @@ final class SessionViewModel {
         case .permissionRequest(let requestId, let toolName, let argumentsJSON):
             pendingPermissionRequests.append(
                 SessionPermissionRequest(id: requestId, toolName: toolName, argumentsJSON: argumentsJSON)
+            )
+        case .workspaceAskRequest(let requestId, let prompt, let candidates):
+            pendingWorkspaceAskRequests.append(
+                SessionWorkspaceAskRequest(id: requestId, prompt: prompt, candidates: candidates)
             )
         case .sessionList(let sessions):
             historyList = sessions

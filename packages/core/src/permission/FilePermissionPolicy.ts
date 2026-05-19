@@ -15,6 +15,7 @@ type PersistedRule = {
   argHash: string;
   decision: "allow" | "deny";
   createdAt: string;
+  arguments?: Record<string, unknown>;
 };
 
 type PersistedFile = {
@@ -87,6 +88,7 @@ export class FilePermissionPolicy implements PermissionPolicy {
       argHash: key,
       decision: resolution.decision,
       createdAt: this.now(),
+      arguments: request.arguments,
     });
     await this.persist(rules);
   }
