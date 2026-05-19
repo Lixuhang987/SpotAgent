@@ -21,7 +21,7 @@
 - **产品闭环进展**：图片附件已写入 Blob/Stub，SessionWindow 已展示当前与历史用户气泡的附件摘要，agent-server 会在调用 runtime 前把 image STUB 展开为 LLM 多模态 content part。
 - **协议表面与运行时仍有不对齐**：`tool_message` 与 `permission_request.arguments` 已接通；剩余主要是"伪流式" assistant_message_delta、`interrupt` 帧未处理、平台 RPC 与会话协议混在同一个 `SessionMessage` union。
 - **缓存边界**：workspace / permission 文件缓存已通过文件戳刷新；`SettingsBackedLLMClient` 也已按 settings 文件戳缓存并复用 `VercelClient`；剩余主要是 tool 设置还缺热加载。
-- **可靠性盲区**：生产窗口 presenter 已通过 `WindowCloseObservation` 持有并释放关闭 observer token；剩余主要是 `WebSocketPlatformBridge.attach` 会静默覆盖旧 bridge socket。
+- **可靠性盲区**：生产窗口 presenter 已通过 `WindowCloseObservation` 持有并释放关闭 observer token；`WebSocketPlatformBridge` 已用 fencing token 处理重复 attach 与旧 socket 关闭。
 - **能力暴露早于实现**：`ocr.read` / `accessibility.snapshot` / `accessibility.action` 已注册为 builtin tool，但 macOS provider 仍返回 `not_implemented`。
 
 ### 0.2 改进路线建议（按依赖顺序）
@@ -37,9 +37,8 @@
 当前优先级：
 
 1. tool 设置 UI 与热加载。
-2. `WebSocketPlatformBridge` 多连接与多会话绑定。
-3. 给 `LLMClient` 真实流式接口，并补会话 `interrupt` / Stop。
-4. 收敛 `SessionMessage` 的协议混用（§2.2）。
+2. 给 `LLMClient` 真实流式接口，并补会话 `interrupt` / Stop。
+3. 收敛 `SessionMessage` 的协议混用（§2.2）。
 
 ---
 
@@ -329,7 +328,7 @@ private async loadIfChanged(): Promise<void> {
 
 ### 4.4 `session` scope 权限规则隔离（已修）
 
-**已修**：`FilePermissionPolicy.sessionRules` 的 key 已改为 `${sessionId}::${argHash}`，`server.ts` 在 socket 关闭时调用 `permissionPolicy.clearSessionRules(boundSessionId)` 清理对应会话规则。`file-permission-policy.test.ts` 覆盖了两个 sessionId 互不影响与定向清理。
+**已修**：`FilePermissionPolicy.sessionRules` 的 key 已改为 `${sessionId}::${argHash}`，`server.ts` 在 socket 关闭时遍历该 socket 绑定过的 `boundSessionIds`，逐个调用 `permissionPolicy.clearSessionRules(sessionId)` 清理对应会话规则。`file-permission-policy.test.ts` 覆盖了两个 sessionId 互不影响与定向清理，`server.test.ts` 覆盖同一 socket 多 session close 清理。
 
 **剩余建议**：
 
@@ -348,24 +347,20 @@ private async loadIfChanged(): Promise<void> {
 
 ---
 
-### 5.2 `WebSocketPlatformBridge` 单 bridge / 单 session 假设
+### 5.2 `WebSocketPlatformBridge` 单 bridge / 单 session 假设（已修）
 
-**现状**：
+**已修**：
 
-- `attach(send)` 静默覆盖前一个 send，第二个 desktop 连接会偷走 bridge。
-- `server.ts` 的 `boundSessionId` 一旦设定就不再变，单 socket 多 session 切换不可用；关闭时也只清理首次绑定的 session 权限回流和 session-scope 规则。
+- `WebSocketPlatformBridge.attach(send)` 返回递增 fencing token；新 bridge attach 会把旧 token 下的 pending platform request 以 `PlatformBridgeOfflineError` 失败，错误原因包含 `desktop bridge replaced`。
+- `detach(token)` 只在 token 仍是 current 时生效，旧 socket close 不会摘掉新 bridge。
+- `call()` 把 pending request 绑定到创建时的 token；`handleResponse(payload, token)` 只处理 token 匹配的 pending request，旧 socket 晚到 response 会被忽略。
+- `server.ts` 已抽出 `attachSessionSocketHandlers`，每个 socket 保存 `bridgeToken` 和 `boundSessions: Map<sessionId, bindingToken>`；同 socket 同 session 的后续 `user_message` 复用原 token，close 时只清理仍由该 socket token 持有的权限回流和 session-scope 规则，旧 socket close 不会删除新 socket 的同 session 绑定。
 
-**问题**：未来"多窗口同时连"或"重连恢复"会撞墙。
+**测试覆盖**：
 
-**建议改法**（轻量）：
-
-1. `attach` 增加 fencing token，新 attach 用更高 token 才覆盖；旧 socket 收到 disconnect 通知。
-2. `boundSessionId` 改为 `boundSessionIds: Set<string>`，每条 `user_message` 都尝试 bind。
-
-**验收**：
-
-- 新增 `WebSocketPlatformBridge.test.ts` 多 attach 场景：第二次 attach 后第一条 socket 收到 detach 通知。
-- 新增 socket 多 session 场景：同一 socket 连续发送两个 session 的 `user_message` 后，权限请求能发回正确窗口，close 时两者都清理。
+- `WebSocketPlatformBridge.test.ts` 覆盖重复 attach、旧 token detach、旧 token response 隔离。
+- `server.test.ts` 覆盖同 socket 多 session 绑定 / close 清理，以及 bridge socket close 按 attach 返回 token detach。
+- `SessionPermissionBridge.test.ts` 覆盖多 session 权限请求路由与单 session unbind 不影响其他 session。
 
 ---
 

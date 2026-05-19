@@ -104,6 +104,89 @@ describe("WebSocketPlatformBridge", () => {
     await expect(promise).rejects.toBeInstanceOf(PlatformBridgeOfflineError);
   });
 
+  it("rejects pending requests when a newer attach replaces the bridge", async () => {
+    const bridge = new WebSocketPlatformBridge();
+    const firstSent: SessionMessage[] = [];
+    bridge.attach((msg) => firstSent.push(msg));
+
+    const promise = bridge.call("clipboard.read", {}, 5_000);
+    expect(firstSent).toHaveLength(1);
+
+    const rejection = promise.then(
+      () => "resolved",
+      (error) => error,
+    );
+    bridge.attach(() => {});
+
+    await Promise.resolve();
+    const outcome = await Promise.race([rejection, Promise.resolve("pending")]);
+    expect(outcome).toBeInstanceOf(PlatformBridgeOfflineError);
+    expect((outcome as Error).message).toContain("desktop bridge replaced");
+  });
+
+  it("keeps the current bridge attached when an older token detaches", async () => {
+    const bridge = new WebSocketPlatformBridge();
+    const firstToken = bridge.attach(() => {});
+    const secondSent: SessionMessage[] = [];
+    const secondToken = bridge.attach((msg) => secondSent.push(msg));
+
+    bridge.detach(firstToken, "old desktop disconnected");
+
+    const promise = bridge.call<string>("clipboard.read", {});
+    promise.catch(() => {});
+    const req = secondSent[0];
+    expect(req.type).toBe("platform_request");
+    if (req.type !== "platform_request") throw new Error("type");
+
+    bridge.handleResponse(
+      {
+        requestId: req.payload.requestId,
+        status: "ok",
+        result: "current",
+      },
+      secondToken,
+    );
+
+    await expect(promise).resolves.toBe("current");
+  });
+
+  it("ignores a response from an older bridge token for a current request", async () => {
+    const bridge = new WebSocketPlatformBridge();
+    const oldToken = bridge.attach(() => {});
+    const sent: SessionMessage[] = [];
+    const currentToken = bridge.attach((msg) => sent.push(msg));
+
+    const promise = bridge.call<string>("clipboard.read", {});
+    const req = sent[0];
+    if (req.type !== "platform_request") throw new Error("type");
+
+    bridge.handleResponse(
+      {
+        requestId: req.payload.requestId,
+        status: "ok",
+        result: "stale",
+      },
+      oldToken,
+    );
+
+    const outcome = await Promise.race([
+      promise,
+      new Promise((resolve) => setTimeout(() => resolve("pending"), 0)),
+    ]);
+    expect(outcome).toBe("pending");
+
+    bridge.handleResponse(
+      {
+        requestId: req.payload.requestId,
+        status: "ok",
+        result: "current",
+      },
+      currentToken,
+    );
+
+    await expect(promise).resolves.toBe("current");
+  });
+
   it("ignores responses with unknown requestId", () => {
     const bridge = new WebSocketPlatformBridge();
     bridge.handleResponse({ requestId: "ghost", status: "ok", result: null });

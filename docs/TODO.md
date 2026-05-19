@@ -18,24 +18,9 @@
 
 **依赖**：无。
 
-### 2. WebSocketPlatformBridge 多连接与多会话绑定
-
-**现状**：`WebSocketPlatformBridge.attach(send)` 会静默覆盖上一条 bridge socket；`server.ts` 每条普通 socket 只保存一个 `boundSessionId`，同一 socket 如果未来承载多个 session，权限回流与 `session` scope 清理会绑定到首次 `user_message`。
-
-**用户场景**：桌面端重连、重复启动 bridge 或未来多窗口复用 socket 时，旧连接应明确失效，权限请求应路由到正确 session，不应被新连接静默“偷走”。
-
-**验收标准**：
-
-- `attach` 引入 fencing token 或显式 detach 通知；旧 bridge 被替换时 pending platform request 明确失败。
-- `server.ts` 把单个 `boundSessionId` 改为 `Set<string>`，每条 `user_message` 都绑定对应 session。
-- socket close 时清理该 socket 绑定过的所有 session 权限回流与 session-scope 规则。
-- 新增 `WebSocketPlatformBridge.test.ts` 多 attach 覆盖，以及 `server`/`SessionPermissionBridge` 多 session 绑定测试。
-
-**依赖**：无。
-
 ## P2 — 运行时与 UX 增强
 
-### 3. LLMClient 真实流式接口
+### 2. LLMClient 真实流式接口
 
 **现状**：`LLMClient.complete()` 返回完整结果，`AgentRuntime` 人工发出 `start + 单次 delta + end`，桌面端看到的是伪流式。
 
@@ -49,7 +34,7 @@
 
 **依赖**：会话路由 / 编排 / 持久化拆分已完成。
 
-### 4. tool 设置 UI 与热加载
+### 3. tool 设置 UI 与热加载
 
 **现状**：core 已有 `ToolSettings` 与 `registerBuiltinTools(... settings)`，支持 `tools.allowlist / tools.denylist`；但 Settings 窗口没有 tool 管理 Tab，agent-server 只在启动时 `loadToolSettings()` 一次，保存设置后不会影响已启动的 registry。
 
@@ -64,7 +49,7 @@
 
 **依赖**：建议复用 `SettingsBackedLLMClient` 已采用的 settings 文件戳失效策略。
 
-### 5. workspace.askUser tool
+### 4. workspace.askUser tool
 
 **现状**：`workspace.list` 已落地；`workspace.askUser` 暂未实现。当前 file tool description 已提示“模糊时调 `workspace.askUser`”，但 registry 中没有这个 tool。
 
@@ -80,7 +65,7 @@
 
 **依赖**：权限气泡 UI 可作为交互样式参考。
 
-### 6. 权限规则管理 UI 与端到端验证
+### 5. 权限规则管理 UI 与端到端验证
 
 **现状**：`FilePermissionPolicy`、`SessionPermissionBridge`、`AgentRuntime` 权限拦截、`SessionSocketClient` 解码、`SessionWindowView` 内联气泡都已实现。剩余风险在 UI 端到端验证和永久规则管理。
 
@@ -92,7 +77,7 @@
 
 **依赖**：无。`session` scope 已按 `sessionId` 隔离并在 socket 关闭时清理。
 
-### 7. 会话历史入口补齐
+### 6. 会话历史入口补齐
 
 **现状**：后端 `list/load/delete` 已实现，SessionWindow 左侧历史侧栏已落地；PromptPanel 最近会话 action 与独立历史窗口未实现。
 
@@ -105,7 +90,7 @@
 
 **依赖**：无。
 
-### 8. OCR 与 Accessibility 平台能力落地
+### 7. OCR 与 Accessibility 平台能力落地
 
 **现状**：`ocr.read`、`accessibility.snapshot`、`accessibility.action` 已作为 builtin tool 注册并暴露给 LLM，但 macOS 侧 `MacPlatformProvider` 对这三个 method 统一返回 `not_implemented`。
 
@@ -121,7 +106,7 @@
 
 **依赖**：macOS 权限提示与审计文案应与 permission UI 对齐。
 
-### 9. 会话中断 / Stop
+### 8. 会话中断 / Stop
 
 **现状**：协议里已有 `interrupt` 帧，但 `SessionRouter` 未处理，SessionWindow 也没有 Stop 按钮；一旦 LLM 请求或 tool 调用耗时较长，用户只能关闭窗口或等待。
 
@@ -139,7 +124,7 @@
 
 ## P3 — 长期能力
 
-### 10. 多 provider LLM 支持
+### 9. 多 provider LLM 支持
 
 **现状**：生产路径只有 `VercelClient`，OpenAI 兼容 API 通过 `responses/chat/completion` 切换。仓库依赖中已有 `@ai-sdk/anthropic`，但尚未接入到 provider factory。
 
@@ -152,7 +137,7 @@
 
 **依赖**：建议在真实 streaming 后做；provider capability 需要声明是否支持当前已落地的多模态 content part。
 
-### 11. 用户自定义 tool / 插件系统
+### 10. 用户自定义 tool / 插件系统
 
 **现状**：所有 tool 都是 builtin，随代码构建。
 

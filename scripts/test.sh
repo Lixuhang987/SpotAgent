@@ -12,10 +12,12 @@ bash "$PROJECT_ROOT/scripts/swiftw.test.sh"
 pnpm exec vitest run \
   apps/agent-server/src/MessageTranslator.test.ts \
   apps/agent-server/src/SessionPersistence.test.ts \
+  apps/agent-server/src/SessionPermissionBridge.test.ts \
   apps/agent-server/src/SessionRuntimeOrchestrator.test.ts \
   apps/agent-server/src/SessionRouter.test.ts \
   apps/agent-server/src/SettingsBackedLLMClient.test.ts \
   apps/agent-server/src/WebSocketPlatformBridge.test.ts \
+  apps/agent-server/src/server.test.ts \
   apps/agent-server/src/path-alias.test.ts \
   packages/core/tests/model-settings.test.ts \
   packages/core/tests/openai-config.test.ts \

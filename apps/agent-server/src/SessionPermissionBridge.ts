@@ -3,8 +3,11 @@ import type { AskResolver } from "@handagent/core/permission/FilePermissionPolic
 import type { SessionMessage } from "@handagent/core/protocol/SessionMessage.ts";
 
 type Send = (message: SessionMessage) => void;
+export type SessionBindingToken = number;
 
 type Pending = {
+  sessionId: string;
+  token: SessionBindingToken;
   resolve: (resolution: {
     decision: "allow" | "deny";
     remember?: "once" | "session" | "always";
@@ -18,27 +21,37 @@ export type SessionPermissionBridgeOptions = {
 };
 
 export class SessionPermissionBridge {
-  private readonly sessions = new Map<string, Send>();
+  private readonly sessions = new Map<string, { token: SessionBindingToken; send: Send }>();
   private readonly pending = new Map<string, Pending>();
   private readonly defaultTimeoutMs: number;
+  private nextBindingToken = 0;
 
   constructor(options: SessionPermissionBridgeOptions = {}) {
     this.defaultTimeoutMs = options.defaultTimeoutMs ?? 60_000;
   }
 
-  bindSession(sessionId: string, send: Send): void {
-    this.sessions.set(sessionId, send);
+  bindSession(sessionId: string, send: Send): SessionBindingToken {
+    const token = ++this.nextBindingToken;
+    this.sessions.set(sessionId, { token, send });
+    return token;
   }
 
-  unbindSession(sessionId: string): void {
-    this.sessions.delete(sessionId);
-    for (const [requestId, pending] of this.pending) {
-      if (requestId.startsWith(`${sessionId}:`)) {
-        clearTimeout(pending.timeout);
-        pending.resolve({ decision: "deny", reason: "session closed" });
-        this.pending.delete(requestId);
+  unbindSession(sessionId: string, token?: SessionBindingToken): boolean {
+    const binding = this.sessions.get(sessionId);
+    if (!binding) {
+      if (token !== undefined) {
+        this.failPendingForToken(sessionId, token);
       }
+      return false;
     }
+    if (token !== undefined && binding.token !== token) {
+      this.failPendingForToken(sessionId, token);
+      return false;
+    }
+
+    this.sessions.delete(sessionId);
+    this.failPendingForToken(sessionId, binding.token);
+    return true;
   }
 
   ask: AskResolver = async (request) => {
@@ -46,8 +59,8 @@ export class SessionPermissionBridge {
     if (!sessionId) {
       return { decision: "deny", reason: "no session id" };
     }
-    const send = this.sessions.get(sessionId);
-    if (!send) {
+    const binding = this.sessions.get(sessionId);
+    if (!binding) {
       return { decision: "deny", reason: "no active socket" };
     }
 
@@ -60,9 +73,14 @@ export class SessionPermissionBridge {
         resolve({ decision: "deny", reason: "permission request timed out" });
       }, timeoutMs);
 
-      this.pending.set(requestId, { resolve, timeout });
+      this.pending.set(requestId, {
+        sessionId,
+        token: binding.token,
+        resolve,
+        timeout,
+      });
 
-      send({
+      binding.send({
         type: "permission_request",
         sessionId,
         messageId: requestId,
@@ -83,9 +101,13 @@ export class SessionPermissionBridge {
     decision: "allow" | "deny";
     scope?: "once" | "session" | "always";
     reason?: string;
-  }): void {
+  }, token?: SessionBindingToken): void {
     const pending = this.pending.get(payload.requestId);
     if (!pending) return;
+    if (token !== undefined && pending.token !== token) return;
+    const binding = this.sessions.get(pending.sessionId);
+    if (!binding || binding.token !== pending.token) return;
+
     clearTimeout(pending.timeout);
     this.pending.delete(payload.requestId);
     pending.resolve({
@@ -93,5 +115,14 @@ export class SessionPermissionBridge {
       remember: payload.scope,
       reason: payload.reason,
     });
+  }
+
+  private failPendingForToken(sessionId: string, token: SessionBindingToken): void {
+    for (const [requestId, pending] of this.pending) {
+      if (pending.sessionId !== sessionId || pending.token !== token) continue;
+      clearTimeout(pending.timeout);
+      pending.resolve({ decision: "deny", reason: "session closed" });
+      this.pending.delete(requestId);
+    }
   }
 }
