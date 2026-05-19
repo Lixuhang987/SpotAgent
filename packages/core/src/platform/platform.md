@@ -18,11 +18,11 @@ agent-server 内 tool.call(input)
   └─ ScreenCaptureTool / WindowListTool / ...
        └─ RemotePlatformAdapter.captureScreen(req)
             └─ PlatformBridge.call("screen.capture", req)
-                 └─ WebSocketPlatformBridge: 包装 platform_request 帧
+                 └─ WebSocketPlatformBridge: 包装 PlatformBridgeMessage.platform_request 帧
                       └─ ws → desktop
                            └─ PlatformBridgeService 收到，分发给 MacPlatformProvider
                                 └─ ScreenCaptureKit / NSPasteboard / NSWorkspace ...
-                           └─ platform_response 帧回流
+                           └─ PlatformBridgeMessage.platform_response 帧回流
                  ← 解析 + 校验 status
             ← Promise resolve / reject 三种类型化错误
 ```
@@ -34,7 +34,7 @@ agent-server 内 tool.call(input)
   - `Offline`：bridge 未 attach（desktop 还没 hello），立即抛，不等待。
   - `Timeout`：默认 15s 超时；区域截图等耗时方法可调高。
   - `Remote`：desktop 端实现明确返回错误（如 `not_implemented`、权限被拒）。
-- **消息载荷**：所有 RPC 走 `SessionMessage.platform_request / platform_response`，`sessionId` 用魔法值 `"_platform"`（见 [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md)）。
+- **消息载荷**：所有 RPC 走 `PlatformBridgeMessage.platform_request / platform_response`，外层带 `channel: "platform"`，不占用会话 `sessionId`（见 [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md)）。
 - **resolution 字段**：所有出参带 `"best_effort"` 字面量；目前是占位（未来扩展 `"exact" / "estimated"` 等档位用）。
 
 ## 编辑此目录的约束

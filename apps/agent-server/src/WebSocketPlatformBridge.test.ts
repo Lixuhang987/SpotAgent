@@ -5,10 +5,10 @@ import {
   PlatformBridgeRemoteError,
   PlatformBridgeTimeoutError,
 } from "@handagent/core/platform/PlatformBridge.ts";
-import type { SessionMessage } from "@handagent/core/protocol/SessionMessage.ts";
+import type { PlatformBridgeMessage } from "@handagent/core/protocol/PlatformBridgeMessage.ts";
 
-function captureSends(bridge: WebSocketPlatformBridge): SessionMessage[] {
-  const sent: SessionMessage[] = [];
+function captureSends(bridge: WebSocketPlatformBridge): PlatformBridgeMessage[] {
+  const sent: PlatformBridgeMessage[] = [];
   bridge.attach((msg) => sent.push(msg));
   return sent;
 }
@@ -28,7 +28,9 @@ describe("WebSocketPlatformBridge", () => {
     const promise = bridge.call<string>("clipboard.read", {});
     expect(sent).toHaveLength(1);
     const req = sent[0];
+    expect(req.channel).toBe("platform");
     expect(req.type).toBe("platform_request");
+    expect("sessionId" in req).toBe(false);
     if (req.type !== "platform_request") throw new Error("type");
 
     bridge.handleResponse({
@@ -106,7 +108,7 @@ describe("WebSocketPlatformBridge", () => {
 
   it("rejects pending requests when a newer attach replaces the bridge", async () => {
     const bridge = new WebSocketPlatformBridge();
-    const firstSent: SessionMessage[] = [];
+    const firstSent: PlatformBridgeMessage[] = [];
     bridge.attach((msg) => firstSent.push(msg));
 
     const promise = bridge.call("clipboard.read", {}, 5_000);
@@ -127,7 +129,7 @@ describe("WebSocketPlatformBridge", () => {
   it("keeps the current bridge attached when an older token detaches", async () => {
     const bridge = new WebSocketPlatformBridge();
     const firstToken = bridge.attach(() => {});
-    const secondSent: SessionMessage[] = [];
+    const secondSent: PlatformBridgeMessage[] = [];
     const secondToken = bridge.attach((msg) => secondSent.push(msg));
 
     bridge.detach(firstToken, "old desktop disconnected");
@@ -153,7 +155,7 @@ describe("WebSocketPlatformBridge", () => {
   it("ignores a response from an older bridge token for a current request", async () => {
     const bridge = new WebSocketPlatformBridge();
     const oldToken = bridge.attach(() => {});
-    const sent: SessionMessage[] = [];
+    const sent: PlatformBridgeMessage[] = [];
     const currentToken = bridge.attach((msg) => sent.push(msg));
 
     const promise = bridge.call<string>("clipboard.read", {});

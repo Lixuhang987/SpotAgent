@@ -146,32 +146,6 @@ export type SessionMessage =
       messageId: string;
       timestamp: string;
       payload: { targetSessionId: string };
-    }
-  | {
-      type: "platform_bridge_hello";
-      sessionId: string;
-      messageId: string;
-      timestamp: string;
-      payload: { agent: string };
-    }
-  | {
-      type: "platform_request";
-      sessionId: string;
-      messageId: string;
-      timestamp: string;
-      payload: {
-        requestId: string;
-        method: string;
-        args: unknown;
-        timeoutMs?: number;
-      };
-    }
-  | {
-      type: "platform_response";
-      sessionId: string;
-      messageId: string;
-      timestamp: string;
-      payload: PlatformResponsePayload;
     };
 
 export type SessionListEntry = {
@@ -193,17 +167,4 @@ export type UserMessageAttachment =
       id: string;
       mimeType: "image/png" | "image/jpeg" | "image/webp";
       base64: string;
-    };
-
-export type PlatformResponsePayload =
-  | {
-      requestId: string;
-      status: "ok";
-      result: unknown;
-    }
-  | {
-      requestId: string;
-      status: "error";
-      message: string;
-      code?: string;
     };

@@ -18,7 +18,7 @@
 | `workspace/` | [workspace/workspace.md](/Users/mu9/proj/handAgent/packages/core/src/workspace/workspace.md) | 显式 workspace 沙箱 + 默认播种 |
 | `config/` | [config/config.md](/Users/mu9/proj/handAgent/packages/core/src/config/config.md) | settings.json 模型与 tool 设置解析 |
 | `logging/` | [logging/logging.md](/Users/mu9/proj/handAgent/packages/core/src/logging/logging.md) | LLM 网络日志 JSONL 落盘 |
-| `protocol/` | [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md) | desktop ↔ agent-server WS 协议（20 个 SessionMessage 变体） |
+| `protocol/` | [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md) | desktop ↔ agent-server WS 协议（SessionMessage + PlatformBridgeMessage） |
 | `conversation/` | [conversation/conversation.md](/Users/mu9/proj/handAgent/packages/core/src/conversation/conversation.md) | UI / 持久化用 ConversationMessage 模型 |
 | `selection/` | [selection/selection.md](/Users/mu9/proj/handAgent/packages/core/src/selection/selection.md) | 用户主动选区抽象 |
 
@@ -66,8 +66,8 @@
 
 ### 7. 跨进程协议
 
-- desktop 与 agent-server 走 `ws://127.0.0.1:4317/api/session`，所有帧都是 `SessionMessage`。
-- 反向平台 IPC 复用同一 socket，标记 `sessionId = "_platform"`。
+- desktop 与 agent-server 走 `ws://127.0.0.1:4317/api/session`；会话帧是 `SessionMessage`，平台反向 IPC 帧是 `PlatformBridgeMessage`。
+- 反向平台 IPC 复用同一 WebSocket 入口，但通过 `channel: "platform"` 显式分流。
 - 字段说明详见 [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md)。
 
 ## 当前实现特点与已知改进项

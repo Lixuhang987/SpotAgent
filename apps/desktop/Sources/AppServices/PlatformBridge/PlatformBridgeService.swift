@@ -7,25 +7,43 @@ protocol PlatformBridgeRunning: AnyObject {
 }
 
 @MainActor
+protocol PlatformBridgeSocketTransport {
+    func makeWebSocketTask(with url: URL) -> any SessionWebSocketTask
+}
+
+@MainActor
+final class URLSessionPlatformBridgeTransport: PlatformBridgeSocketTransport {
+    private let session: URLSession
+
+    init(session: URLSession = .shared) {
+        self.session = session
+    }
+
+    func makeWebSocketTask(with url: URL) -> any SessionWebSocketTask {
+        session.webSocketTask(with: url)
+    }
+}
+
+@MainActor
 final class PlatformBridgeService: PlatformBridgeRunning {
     private let serverURL: URL
-    private let session: URLSession
+    private let transport: PlatformBridgeSocketTransport
     private let provider: PlatformProvider
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
-    private var socketTask: URLSessionWebSocketTask?
+    private var socketTask: (any SessionWebSocketTask)?
     private var reconnectWorkItem: DispatchWorkItem?
     private var stopped = false
 
     init(
         serverURL: URL,
         provider: PlatformProvider = MacPlatformProvider(),
-        session: URLSession = .shared
+        transport: PlatformBridgeSocketTransport = URLSessionPlatformBridgeTransport()
     ) {
         self.serverURL = serverURL
         self.provider = provider
-        self.session = session
+        self.transport = transport
     }
 
     func start() {
@@ -43,17 +61,17 @@ final class PlatformBridgeService: PlatformBridgeRunning {
 
     private func connect() {
         guard !stopped, socketTask == nil else { return }
-        let task = session.webSocketTask(with: serverURL)
+        let task = transport.makeWebSocketTask(with: serverURL)
         socketTask = task
         task.resume()
         sendHello(on: task)
         receiveNext()
     }
 
-    private func sendHello(on task: URLSessionWebSocketTask) {
+    private func sendHello(on task: any SessionWebSocketTask) {
         let envelope: [String: Any] = [
+            "channel": "platform",
             "type": "platform_bridge_hello",
-            "sessionId": "_platform",
             "messageId": UUID().uuidString,
             "timestamp": Self.timestamp(),
             "payload": ["agent": "macos-desktop"],
@@ -92,6 +110,8 @@ final class PlatformBridgeService: PlatformBridgeRunning {
             return
         }
         guard
+            let channel = envelope["channel"] as? String,
+            channel == "platform",
             let type = envelope["type"] as? String,
             type == "platform_request",
             let payload = envelope["payload"] as? [String: Any],
@@ -133,8 +153,8 @@ final class PlatformBridgeService: PlatformBridgeRunning {
             if let value { responsePayload[key] = value }
         }
         let envelope: [String: Any] = [
+            "channel": "platform",
             "type": "platform_response",
-            "sessionId": "_platform",
             "messageId": UUID().uuidString,
             "timestamp": Self.timestamp(),
             "payload": responsePayload,
@@ -142,7 +162,7 @@ final class PlatformBridgeService: PlatformBridgeRunning {
         sendJSON(envelope, on: task)
     }
 
-    private func sendJSON(_ object: [String: Any], on task: URLSessionWebSocketTask) {
+    private func sendJSON(_ object: [String: Any], on task: any SessionWebSocketTask) {
         guard
             let data = try? JSONSerialization.data(withJSONObject: object, options: []),
             let string = String(data: data, encoding: .utf8)
