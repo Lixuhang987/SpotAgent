@@ -1,15 +1,17 @@
 # Settings 模块
 
-设置窗口的容器与各 Tab 视图。当前四个 Tab：模型配置（代理 `AgentSettingsStore`）、工具管理（代理 `ToolSettingsViewModel`）、快捷键配置（KeyboardShortcuts.Recorder）、工作区管理（代理 `WorkspaceSettingsViewModel`）。窗口本身由 Coordinator 用 `NSWindow + NSHostingController` 管理（不使用 SwiftUI `Settings` scene，因为需要主动 `openOrFocus` 控制）。
+设置窗口的容器与各 Tab 视图。当前五个 Tab：模型配置（代理 `AgentSettingsStore`）、工具管理（代理 `ToolSettingsViewModel`）、权限规则管理（代理 `PermissionRulesViewModel`）、快捷键配置（KeyboardShortcuts.Recorder）、工作区管理（代理 `WorkspaceSettingsViewModel`）。窗口本身由 Coordinator 用 `NSWindow + NSHostingController` 管理（不使用 SwiftUI `Settings` scene，因为需要主动 `openOrFocus` 控制）。
 
 ## 文件
 
 | 文件 | 职责 |
 |------|------|
-| `SettingsView.swift` | 设置容器，挂"模型" / "工具" / "快捷键" / "工作区"四个 Tab，统一暗色背景 |
+| `SettingsView.swift` | 设置容器，挂"模型" / "工具" / "权限" / "快捷键" / "工作区"五个 Tab，统一暗色背景 |
 | `AgentSettingsViewModel.swift` | `@Observable` 代理：把 `AgentSettingsStore.settings` 包装成可双向绑定的属性，写时自动 trim |
 | `ToolSettingsViewModel.swift` | `@Observable` 代理：把 `AgentSettingsStore.toolSettings` 包装成工具目录 + 启用/禁用切换，写时自动同步到 `settings.json` |
 | `ToolSettingsView.swift` | 工具管理 UI：builtin tool 列表、风险提示、开关切换 |
+| `PermissionRulesViewModel.swift` | `@Observable` 代理：直接读写 `~/.spotAgent/permissions.json`，展示永久规则并支持按 `argHash` 撤销 |
+| `PermissionRulesView.swift` | 权限规则 UI：toolName / decision / createdAt / 参数摘要列表 + 撤销按钮 |
 | `ShortcutSettingsView.swift` | 全局热键 + PromptAction 快捷键的 `KeyboardShortcuts.Recorder` 列表 |
 | `WorkspaceSettingsView.swift` | 工作区列表 + 添加 / 编辑 / 删除 UI；NSOpenPanel 选目录 + 表单 sheet |
 | `WorkspaceSettingsViewModel.swift` | `@Observable` 代理：直接读写 `~/.spotAgent/workspaces.json`（与 core 侧 `FileWorkspaceRegistry` 共享文件） |
@@ -22,16 +24,18 @@
 ```
 Coordinator.send(.openSettings)
   └─ SettingsLifecycle.openOrFocus(...)
-       └─ SettingsView(settingsViewModel:, toolSettingsViewModel:, shortcutActions:, workspaceViewModel:)
+       └─ SettingsView(settingsViewModel:, toolSettingsViewModel:, permissionRulesViewModel:, shortcutActions:, workspaceViewModel:)
             ├─ AgentSettingsView(viewModel:)        // → AgentSettingsStore.update → 写 ~/.spotAgent/settings.json
             ├─ ToolSettingsView(viewModel:)         // → AgentSettingsStore.updateToolSettings → 写 ~/.spotAgent/settings.json（同文件保留 llm / tools）
+            ├─ PermissionRulesView(viewModel:)      // → 写 ~/.spotAgent/permissions.json；FilePermissionPolicy 下次 check 自动重读
             ├─ ShortcutSettingsView(actions:)       // KeyboardShortcuts.Recorder 直写 UserDefaults
-            └─ WorkspaceSettingsView(viewModel:)    // → 写 ~/.spotAgent/workspaces.json，agent-server 启动时由 FileWorkspaceRegistry 重新加载
+            └─ WorkspaceSettingsView(viewModel:)    // → 写 ~/.spotAgent/workspaces.json；FileWorkspaceRegistry 下次访问自动重读
   └─ 生产 presenter 通过 WindowCloseObservation 持有关闭通知 token，收到 NSWindow.willCloseNotification 后释放 token → Coordinator.send(.settingsWindowClosed)
 ```
 
-`~/.spotAgent/workspaces.json` 是 desktop（写）与 agent-server（读，启动时一次）共享的注册表文件；当前版本 desktop 写入后需要重启 agent-server 子进程才能让 LLM 看到新 workspace（无 watcher）。
+`~/.spotAgent/workspaces.json` 是 desktop（写）与 agent-server（读）共享的注册表文件；`FileWorkspaceRegistry` 每次访问前按文件状态戳自动重读，无需重启 agent-server。
 `~/.spotAgent/settings.json` 现在同时保存 `llm` 与 `tools` 两个顶层字段：`AgentSettingsStore` 通过单一 `update(_:)` / `updateToolSettings(_:)` 入口原子写入，避免模型配置与工具 allowlist / denylist 互相覆盖。
+`~/.spotAgent/permissions.json` 由 agent-server 的 `FilePermissionPolicy` 写入永久规则；Settings 只做列表查看和撤销，撤销后 policy 会在下一次 `check / listPersistedRules / revoke / remember(always)` 前按文件戳自动重读。
 
 ## 编辑此目录的约束
 
@@ -41,7 +45,7 @@ Coordinator.send(.openSettings)
 - **Tab 增加规则**：新建 Tab 在 `SettingsView` 内增 `Tab(...)`；Tab 内如果有副作用则配套加 ViewModel；纯展示可直接写 View。
 - **视觉风格**：设置页面使用 `settingsCard()` 卡片容器 + `SettingsFieldStyle` 输入框 + `SettingsRow` 行布局，与 PromptPanel / SessionWindow 保持统一暗色玻璃风格。不要使用系统 `Form` / `GroupBox` / `.grouped` 样式。窗口标题栏设为透明 + fullSizeContentView，与 SessionWindow 一致。
 - **不要在 Settings 里读 LLM/tool 运行态**：宿主层不组装 LLM 消息，`api`/`baseURL`/`apiKey` 和工具开关只是写入 settings.json；agent-server 侧每次模型请求自己读模型配置，每轮 user message 前刷新 tool registry。
-- **测试**：[AgentSettingsViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/AgentSettingsViewModelTests.swift) 用临时 home 目录验证读写串通；[AgentSettingsStoreTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/AgentSettingsStoreTests.swift) 覆盖磁盘 IO + 轮询。
+- **测试**：[AgentSettingsViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/AgentSettingsViewModelTests.swift) 用临时 home 目录验证读写串通；[AgentSettingsStoreTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/AgentSettingsStoreTests.swift) 覆盖磁盘 IO + 轮询；[PermissionRulesViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/PermissionRulesViewModelTests.swift) 覆盖权限规则读取、参数摘要和撤销写回。
 
 ## 与其他模块的关系
 

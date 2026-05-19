@@ -6,15 +6,14 @@
 
 ## P2 — 运行时与 UX 增强
 
-### 1. 权限规则管理 UI 与端到端验证
+### 1. 权限审批端到端验证
 
-**现状**：`FilePermissionPolicy`、`SessionPermissionBridge`、`AgentRuntime` 权限拦截、`SessionSocketClient` 解码、`SessionWindowView` 内联气泡都已实现。剩余风险在 UI 端到端验证和永久规则管理。
+**现状**：`FilePermissionPolicy`、`SessionPermissionBridge`、`AgentRuntime` 权限拦截、`SessionSocketClient` 解码、`SessionWindowView` 内联气泡都已实现。Settings 已增加权限规则列表，可查看和撤销 `~/.spotAgent/permissions.json` 中的永久规则；新写入的永久规则会保存 `arguments` 供 UI 展示关键参数摘要。剩余风险在真实桌面端到端验证。
 
 **验收标准**：
 
 - 手工验证 `once / session / always / deny / timeout / close session` 全路径。
-- Settings 增加权限规则列表，支持查看和撤销 `~/.spotAgent/permissions.json` 中的永久规则。
-- UI 中展示 toolName、关键参数摘要、decision、createdAt。
+- Settings 权限规则列表手工验证：展示 toolName、关键参数摘要、decision、createdAt，并能撤销永久规则。
 
 **依赖**：无。`session` scope 已按 `sessionId` 隔离并在 socket 关闭时清理。
 

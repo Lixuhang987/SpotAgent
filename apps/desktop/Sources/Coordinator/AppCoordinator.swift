@@ -118,6 +118,10 @@ final class AppCoordinator {
         ToolSettingsViewModel(store: services.settingsStore)
     }
 
+    func makePermissionRulesViewModel() -> PermissionRulesViewModel {
+        PermissionRulesViewModel()
+    }
+
     func makeShortcutActions() -> [PromptAction] { promptActions }
 
     private func setupPromptPanel() {
@@ -180,6 +184,7 @@ final class AppCoordinator {
         settingsLifecycle.openOrFocus(
             settingsViewModel: makeSettingsViewModel(),
             toolSettingsViewModel: makeToolSettingsViewModel(),
+            permissionRulesViewModel: makePermissionRulesViewModel(),
             workspaceViewModel: WorkspaceSettingsViewModel(),
             shortcutActions: makeShortcutActions(),
             onClosed: { [weak self] in self?.send(.settingsWindowClosed) }

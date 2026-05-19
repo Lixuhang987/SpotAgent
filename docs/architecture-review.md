@@ -321,7 +321,7 @@ private async loadIfChanged(): Promise<void> {
 **剩余建议**：
 
 - 继续补 desktop 端权限气泡的手工端到端验证。
-- Settings 增加永久权限规则查看 / 撤销 UI。
+- Settings 权限页已支持永久规则查看 / 撤销，仍需继续覆盖完整权限气泡端到端路径。
 
 ---
 

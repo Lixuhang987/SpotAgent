@@ -46,7 +46,7 @@
 20. 选择「拒绝」时，确认 LLM 收到「用户拒绝执行该 tool」的伪造 tool message 并能继续推进，不卡死。
 21. 询问超时（默认 60s）保持沉默，确认按 deny 处理。
 22. 关闭 SessionWindow 时若有挂起请求，确认全部被取消，不留僵尸。
-23. 查看 `~/.spotAgent/permissions.json`，确认「始终允许」规则已写入。当前 Settings 尚无权限规则管理 UI，撤销永久规则需要后续补齐。
+23. 查看 `~/.spotAgent/permissions.json`，确认「始终允许」规则已写入，并在 Settings → 权限中确认 toolName、参数摘要、decision、createdAt 可见，点击「撤销」后规则从 UI 和文件中移除。
 
 ## agent-server 崩溃恢复（P3）
 
@@ -62,6 +62,6 @@
 - 主链路全部跑通；
 - 文本附件能从用户输入流转到 agent-server，并在当前 SessionWindow 用户气泡中显示附件摘要；图片附件能传输、回显摘要、落 Blob，并进入多模态 LLM 消息；
 - file tool 严格沙箱化，越狱被拒；
-- 权限审批 UI 不阻塞其他会话，决策被持久化；权限规则管理 UI 是后续项；
+- 权限审批 UI 不阻塞其他会话，决策被持久化；Settings 权限页可以查看和撤销永久规则；
 - agent-server 崩溃可自动重启，过限有可见反馈；现有会话自动重连订阅需实机验证；
 - 所有错误路径均有明确文案，不出现静默失败。

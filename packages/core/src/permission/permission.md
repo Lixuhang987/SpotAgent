@@ -43,13 +43,17 @@ flowchart TD
       "toolName": "file.write",
       "argHash": "<sha256>",
       "decision": "allow",
-      "createdAt": "2026-05-17T..."
+      "createdAt": "2026-05-17T...",
+      "arguments": {
+        "workspaceId": "default",
+        "relativePath": "notes/today.md"
+      }
     }
   ]
 }
 ```
 
-`stableStringify` 保证字段顺序无关，使得相同语义的入参产生相同 hash。
+`stableStringify` 保证字段顺序无关，使得相同语义的入参产生相同 hash；`arguments` 保存原始入参摘要，供 Settings UI 展示规则含义，旧规则缺少该字段时仍按 `argHash` 生效。
 
 ## 编辑此目录的约束
 
