@@ -127,8 +127,6 @@
 
 ---
 
-## 当前 bug
-
 ### 4. worktree 启动时 agent-server 使用了主仓库路径
 
 **严重级别**：P1
@@ -143,11 +141,26 @@
 
 **期望**：agent-server 应使用同一 worktree 下的 `apps/agent-server/src/server.ts`。若无法定位同一 worktree，应在 UI 或日志中明确暴露启动路径。
 
-**根因边界**：`AgentServerService.locateRepositoryRoot()` 的候选包含 `Bundle.main.executableURL`、`Bundle.main.resourceURL`、`Bundle.main.bundleURL` 和当前工作目录，定位结果落到了主仓库而非 worktree。
+**根因边界**：`AgentServerService.locateRepositoryRoot()` 的候选包含 `Bundle.main.executableURL`、`Bundle.main.resourceURL`、`Bundle.main.bundleURL` 和当前工作目录，但候选顺序优先 Bundle 路径。worktree 内 `bash ./scripts/swiftw run HandAgentDesktop` 可能复用主仓库构建产物路径，导致 Bundle 候选先命中主仓库，当前 worktree cwd 没有机会作为 repo root。
+
+**状态**：已修复。
+
+**checkpoint 与结论**：
+
+- `bash ./scripts/swiftw run HandAgentDesktop` -> 进程 cwd：`scripts/swiftw` 在当前 worktree 内执行 `swift run`，应把 `FileManager.default.currentDirectoryPath` 暴露给桌面进程；失败点不在脚本参数传递。
+- `AgentServerService.locateRepositoryRoot()` -> repo root 选择：修复前 RED 测试证明当 Bundle 候选和 currentDirectory 候选都指向有效仓库时，旧顺序会返回 Bundle 所在主仓库；修复后 `AgentServerRepositoryRootLocator` 优先检查 currentDirectory，再回退到 Bundle 候选。
+- repo root -> node 子进程：`launchProcess()` 继续用解析出的 repo root 同时设置 `process.currentDirectoryURL`、`NODE_PATH` 和 `apps/agent-server/src/server.ts` 绝对入口；因此 root 选择修正后，agent-server 命令行与模块解析都落在同一 worktree。
+
+**验证**：
+
+- 修复前 RED 证据：临时恢复旧候选顺序后，`bash ./scripts/swiftw test --filter 'AgentServerRuntimeModeTests/testRepositoryRootLocatorPrefersCurrentWorktreeOverBundleRepository'` 失败，实际解析为 `/repo/main-repo` 而非 `/repo/worktree-repo`。
+- 修复后同一测试通过。
 
 **发现日期**：2026-05-19
 
 ---
+
+## 当前 bug
 
 ### 5. Tool message UI 在部分 tool 结果中展示了入参而非实际结果
 

@@ -76,6 +76,11 @@
 
 已于 2026-05-20 通过 mock-llm 实机 QA 验证并归档，详见 [archive.md](./archive.md)「agent-server 崩溃恢复」。
 
+## worktree 启动路径（P1）
+
+34. 在 `.worktrees/<name>/` 下修改或临时标记 `apps/agent-server/src/server.ts`，执行 `bash ./scripts/swiftw run HandAgentDesktop`。
+35. 确认 node 子进程命令行、日志或可观测行为来自当前 worktree 下的 `apps/agent-server/src/server.ts`，而不是主仓库路径。
+
 ## 通过标准
 
 - 主链路全部跑通；
@@ -84,6 +89,7 @@
 - file tool 严格沙箱化，越狱被拒；
 - 权限审批 UI 不阻塞其他会话，决策被持久化；Settings 权限页可以查看和撤销永久规则；
 - agent-server 崩溃可自动重启，过限有可见反馈；现有会话自动重连订阅可恢复；
+- worktree 内启动桌面端时，agent-server 使用同一 worktree 下的源码与依赖路径；
 - 所有错误路径均有明确文案，不出现静默失败。
 
 ---
@@ -170,5 +176,4 @@
 
 当前已知 bug 见 [bugs.md](./bugs.md)。主要包括：
 
-- P1：worktree 启动时 agent-server 使用了主仓库路径。
 - P1：部分 tool completed UI 气泡展示入参而非实际 tool result。

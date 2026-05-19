@@ -182,43 +182,13 @@ final class AgentServerService: AgentServerStarting, @unchecked Sendable {
     }
 
     private func locateRepositoryRoot() -> URL? {
-        let fileManager = FileManager.default
-        let candidates: [URL] = [
-            Bundle.main.executableURL,
-            Bundle.main.resourceURL,
-            Bundle.main.bundleURL,
-            URL(fileURLWithPath: fileManager.currentDirectoryPath)
-        ].compactMap { $0 }
-
-        for candidate in candidates {
-            if let root = findRepositoryRoot(startingAt: candidate) {
-                return root
-            }
-        }
-
-        return nil
-    }
-
-    private func findRepositoryRoot(startingAt url: URL) -> URL? {
-        let fileManager = FileManager.default
-        var current = url.standardizedFileURL
-
-        while true {
-            let packageManifest = current.appendingPathComponent("Package.swift")
-            let serverPath = current.appendingPathComponent(agentServerRelativePath)
-
-            if fileManager.fileExists(atPath: packageManifest.path),
-               fileManager.fileExists(atPath: serverPath.path) {
-                return current
-            }
-
-            let parent = current.deletingLastPathComponent()
-            if parent.path == current.path {
-                return nil
-            }
-
-            current = parent
-        }
+        AgentServerRepositoryRootLocator(agentServerRelativePath: agentServerRelativePath)
+            .locate(
+                bundleExecutableURL: Bundle.main.executableURL,
+                bundleResourceURL: Bundle.main.resourceURL,
+                bundleURL: Bundle.main.bundleURL,
+                currentDirectoryURL: URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            )
     }
 
     private func locateNodeExecutable() -> String? {
@@ -241,5 +211,53 @@ final class AgentServerService: AgentServerStarting, @unchecked Sendable {
         }
 
         return nil
+    }
+}
+
+struct AgentServerRepositoryRootLocator {
+    let agentServerRelativePath: String
+    var fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+
+    func locate(
+        bundleExecutableURL: URL?,
+        bundleResourceURL: URL?,
+        bundleURL: URL?,
+        currentDirectoryURL: URL
+    ) -> URL? {
+        let candidates: [URL] = [
+            currentDirectoryURL,
+            bundleExecutableURL,
+            bundleResourceURL,
+            bundleURL,
+        ].compactMap { $0 }
+
+        for candidate in candidates {
+            if let root = findRepositoryRoot(startingAt: candidate) {
+                return root
+            }
+        }
+
+        return nil
+    }
+
+    func findRepositoryRoot(startingAt url: URL) -> URL? {
+        var current = url.standardizedFileURL
+
+        while true {
+            let packageManifest = current.appendingPathComponent("Package.swift")
+            let serverPath = current.appendingPathComponent(agentServerRelativePath)
+
+            if fileExists(packageManifest.path),
+               fileExists(serverPath.path) {
+                return current
+            }
+
+            let parent = current.deletingLastPathComponent()
+            if parent.path == current.path {
+                return nil
+            }
+
+            current = parent
+        }
     }
 }
