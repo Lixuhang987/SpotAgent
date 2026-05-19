@@ -32,6 +32,7 @@ pnpm exec vitest run \
   packages/core/tests/selection.test.ts \
   packages/core/tests/context-tools.test.ts \
   packages/core/tests/file-tools.test.ts \
+  packages/core/tests/plugin-tools.test.ts \
   packages/core/tests/file-session-store.test.ts \
   packages/core/tests/vercel-client.test.ts \
   packages/core/tests/workspace-registry.test.ts \

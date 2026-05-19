@@ -73,6 +73,27 @@ describe("FilePermissionPolicy", () => {
     });
   });
 
+  it("does not reuse file tool allow rules for plugin tools with the same arguments", async () => {
+    const policy = new FilePermissionPolicy({ filePath });
+    const args = { workspaceId: "default", relativePath: "x.md" };
+    await policy.remember(
+      {
+        toolName: "file.write",
+        arguments: args,
+        toolCallId: "tc-file",
+      },
+      { decision: "allow", remember: "always" },
+    );
+
+    expect(
+      await policy.check({
+        toolName: "plugin.writer",
+        arguments: args,
+        toolCallId: "tc-plugin",
+      }),
+    ).toBe("ask");
+  });
+
   it("once-scope rule is not remembered", async () => {
     const policy = new FilePermissionPolicy({ filePath });
     const req = {

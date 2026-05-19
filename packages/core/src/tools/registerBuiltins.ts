@@ -29,12 +29,14 @@ export type RegisterBuiltinToolsResult = {
   disabled: { name: string; reason: string }[];
 };
 
-export function registerBuiltinTools(
-  options: RegisterBuiltinToolsOptions,
-): RegisterBuiltinToolsResult {
-  const registry = options.registry ?? new ToolRegistry();
-  const settings = options.settings ?? { allowlist: null, denylist: [] };
+export type BuiltinToolCandidatesResult = {
+  candidates: AgentTool[];
+  disabled: { name: string; reason: string }[];
+};
 
+export function buildBuiltinToolCandidates(
+  options: Omit<RegisterBuiltinToolsOptions, "registry" | "settings">,
+): BuiltinToolCandidatesResult {
   const candidates: AgentTool[] = [
     ClipboardReadTool.create(options.platform),
     FrontmostAppTool.create(options.platform),
@@ -44,6 +46,8 @@ export function registerBuiltinTools(
     AccessibilitySnapshotTool.create(options.platform),
     AccessibilityActionTool.create(options.platform),
   ];
+
+  const disabled: { name: string; reason: string }[] = [];
 
   if (options.workspaceRegistry) {
     candidates.push(WorkspaceListTool.create(options.workspaceRegistry));
@@ -59,7 +63,6 @@ export function registerBuiltinTools(
     }
   }
 
-  const disabled: { name: string; reason: string }[] = [];
   if (!options.workspaceRegistry) {
     disabled.push(
       { name: "workspace.list", reason: "workspace registry not provided" },
@@ -74,6 +77,16 @@ export function registerBuiltinTools(
       reason: "workspace ask resolver not provided",
     });
   }
+
+  return { candidates, disabled };
+}
+
+export function registerBuiltinTools(
+  options: RegisterBuiltinToolsOptions,
+): RegisterBuiltinToolsResult {
+  const registry = options.registry ?? new ToolRegistry();
+  const settings = options.settings ?? { allowlist: null, denylist: [] };
+  const { candidates, disabled } = buildBuiltinToolCandidates(options);
 
   const candidateNames = candidates.map((t) => t.name);
   const filtered = filterToolNames(candidateNames, settings);
