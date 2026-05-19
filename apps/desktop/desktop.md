@@ -113,7 +113,7 @@ sequenceDiagram
 
 - desktop 侧 `AgentSettingsStore` 启动读一次 + 500ms 轮询；写入走 `update(_:)` 原子写。
 - agent-server 侧 `SettingsBackedLLMClient.stream()` / `complete()` 每次先检查 `settings.json` 文件戳，配置未变化时复用已缓存的 `VercelClient`。
-- 同一文件也支持 `tools.allowlist / tools.denylist`，但当前 Settings UI 尚未暴露 tool 管理，agent-server 也只在启动时读取 tool settings。
+- 同一文件也支持 `tools.allowlist / tools.denylist`，Settings UI 的"工具"Tab 可切换 builtin tool；agent-server 每轮 user message 进入 runtime 前按文件戳刷新 tool registry。
 - 修改后下一次 LLM 请求即生效，无需重启。
 
 ### `PromptAttachmentResult` / `PromptAction`（[PromptPanel](Sources/PromptPanel/prompt-panel.md)）

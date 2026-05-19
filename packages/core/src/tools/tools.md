@@ -8,7 +8,7 @@
 |------|------|
 | `AgentTool.ts` | `AgentTool<TInput, TOutput>` 接口：`name / description / inputSchema (JSON Schema) / call(input)`；可选 `stubByDefault` 声明 runtime 可把结果写成 Blob/Stub |
 | `defineTool.ts` | `defineTool({ name, description, inputSchema (zod), stubByDefault?, run })` 工厂：`zod` schema 自动转 JSON Schema 2019-09；`.create(deps)` 生成的 `call(input)` 会先用同一个 schema 做运行时入参校验，再调用 `run` |
-| `ToolRegistry.ts` | Map 包装；`register / get / list`，重名抛错；`list()` 返回 `RegisteredTool`（去掉 `call`），供 `LLMClient.stream` 使用 |
+| `ToolRegistry.ts` | Map 包装；`register / replaceAll / get / list`，单次注册重名抛错，`replaceAll()` 供 settings 热加载原地刷新；`list()` 返回 `RegisteredTool`（去掉 `call`），供 `LLMClient.stream` 使用 |
 | `registerBuiltins.ts` | 组合根：根据 `PlatformAdapter` + 可选 `WorkspaceRegistry` + `ToolSettings` 装配 candidates，过 allowlist/denylist 后注册 |
 | `builtins/*.ts` | 10 个 builtin tool 实现，全部用 `defineTool` 工厂表达 |
 | `builtins/workspace-path.ts` | `file.read` / `file.write` 共享的 workspace 路径校验工具：拒绝绝对路径与 `..` 越狱、`realpath` 后再次校验 |
@@ -32,17 +32,18 @@
 
 ```mermaid
 flowchart LR
-  A[startDefaultServer] --> B[loadToolSettings]
-  A --> C[FileWorkspaceRegistry]
+  A[startDefaultServer / before run refresh] --> B[SettingsBackedToolRegistry.refresh]
+  B --> C[loadToolSettings]
+  A --> W[FileWorkspaceRegistry]
   A --> D[RemotePlatformAdapter]
-  B & C & D --> E[registerBuiltinTools]
+  C & W & D --> E[registerBuiltinTools]
   E --> F[candidates = 7 platform tools + 3 workspace tools]
   E --> G[filterToolNames（denylist 优先 > allowlist）]
-  G --> H[registry.register]
+  G --> H[registry.replaceAll]
   H --> I[返回 {registry, registered, disabled}]
 ```
 
-`disabled` 列表回流到 `console.log`，便于排错；当 `workspaceRegistry` 缺失时，三个 file/workspace tool 直接进 disabled。
+`SettingsBackedToolRegistry` 在 agent-server 启动和每轮 user message 进入 runtime 前按 `settings.json` 文件戳刷新；`disabled` 列表回流到 `console.log`，便于排错；当 `workspaceRegistry` 缺失时，三个 file/workspace tool 直接进 disabled。
 
 ## 编辑此目录的约束
 

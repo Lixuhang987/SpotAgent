@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { registerBuiltinTools } from "../src/tools/registerBuiltins.ts";
 import { OfflinePlatformAdapter } from "../src/platform/OfflinePlatformAdapter.ts";
 import { FileWorkspaceRegistry } from "../src/workspace/FileWorkspaceRegistry.ts";
+import { ToolRegistry } from "../src/tools/ToolRegistry.ts";
 
 async function makeRegistry() {
   const dir = await mkdtemp(join(tmpdir(), "register-builtins-"));
@@ -80,6 +81,30 @@ describe("registerBuiltinTools", () => {
 
     expect(registered.sort()).toEqual(["clipboard.read", "file.read"]);
     expect(disabled.some((d) => d.name === "screen.capture")).toBe(true);
+  });
+
+  it("re-registers tools into an existing registry when settings change", async () => {
+    const platform = new OfflinePlatformAdapter();
+    const workspaceRegistry = await makeRegistry();
+    const registry = new ToolRegistry();
+
+    registerBuiltinTools({
+      registry,
+      platform,
+      workspaceRegistry,
+      settings: { allowlist: null, denylist: [] },
+    });
+    expect(registry.get("screen.capture")).toBeDefined();
+
+    registerBuiltinTools({
+      registry,
+      platform,
+      workspaceRegistry,
+      settings: { allowlist: null, denylist: ["screen.capture"] },
+    });
+
+    expect(registry.get("screen.capture")).toBeUndefined();
+    expect(registry.list().map((tool) => tool.name)).not.toContain("screen.capture");
   });
 
   it("OfflinePlatformAdapter throws helpful error when adapter is invoked", async () => {

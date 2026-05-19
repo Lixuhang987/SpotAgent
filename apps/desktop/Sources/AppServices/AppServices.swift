@@ -15,6 +15,7 @@ protocol SessionWindowPresenting {
 protocol SettingsWindowPresenting {
     func present(
         settingsViewModel: AgentSettingsViewModel,
+        toolSettingsViewModel: ToolSettingsViewModel,
         workspaceViewModel: WorkspaceSettingsViewModel,
         shortcutActions: [PromptAction],
         onClose: @escaping () -> Void
@@ -124,6 +125,7 @@ final class NopSessionWindowPresenter: SessionWindowPresenting {
 final class NopSettingsWindowPresenter: SettingsWindowPresenting {
     func present(
         settingsViewModel: AgentSettingsViewModel,
+        toolSettingsViewModel: ToolSettingsViewModel,
         workspaceViewModel: WorkspaceSettingsViewModel,
         shortcutActions: [PromptAction],
         onClose: @escaping () -> Void

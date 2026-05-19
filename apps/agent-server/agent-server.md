@@ -18,6 +18,7 @@
 | `src/SessionPersistence.ts` | 会话持久化封装：唯一直接持有 `SessionStore` 的 agent-server 模块，负责 CRUD、标题生成、历史读取、messages / events 写入，并把 image attachment 交给 BlobStore |
 | `src/MessageTranslator.ts` | 纯函数：`AgentRuntimeEvent` ↔ `SessionMessage` / `SessionEvent` 翻译（`toSessionMessage` / `toAuditEvent` / `agentMessagesToConversation` / `agentMessagesToRuntimeMessages` / `composeUserContent` / `deriveTitle` / `toErrorMessage`）。`composeUserContent` 会把 image attachment 写入 BlobStore 并渲染 image STUB；`agentMessagesToRuntimeMessages` 在进入 runtime 前把 image STUB 转为多模态 image part；新增 tool_message 形态只改这里 |
 | `src/SettingsBackedLLMClient.ts` | 每次 `complete` 先检查 `~/.spotAgent/settings.json` 的 `mtimeMs + size` stamp；stamp 未变复用已缓存的 `VercelClient`，stamp 变化后重读 settings，并只在有效 LLM 配置变化时重建 client；会把 `complete` options（例如 `blobStore`）透传给内部 client；可用 `purpose=summarizer` 读取 `summarizerModel`；注入 `FileNetworkLogger` 把 LLM 网络调用 JSONL 落盘 |
+| `src/SettingsBackedToolRegistry.ts` | 按 `~/.spotAgent/settings.json` 的 `mtimeMs + size` stamp 热加载 `tools.allowlist / tools.denylist`，并原地刷新同一个 `ToolRegistry` 实例；`SessionRuntimeOrchestrator` 每次新一轮 user message 进入 runtime 前调用 `refresh()` |
 | `src/WebSocketPlatformBridge.ts` | 实现 core 的 `PlatformBridge` 接口；通过 `attach(send)` 接管来自 desktop 的 `channel: "platform"` 反向 socket 并返回 fencing token，按 `requestId + token` 关联 `platform_request` / `platform_response`，60s 超时 |
 | `src/SessionPermissionBridge.ts` | 实现 `FilePermissionPolicy` 的 `AskResolver`：把 `permission_request` 推到 desktop，按 `requestId + session binding token` 等回 `permission_response`，60s 超时视为 deny |
 
@@ -33,7 +34,7 @@ sequenceDiagram
   Server->>Core: 动态 import runtime / tools / platform / workspace / permission / config / logging
   Server->>Server: 构造 FileSessionStore / FilesystemBlobStore / FileNetworkLogger / FileWorkspaceRegistry
   Server->>Server: 构造 WebSocketPlatformBridge + RemotePlatformAdapter
-  Server->>Server: registerBuiltinTools(...) → registry / disabled list
+  Server->>Server: SettingsBackedToolRegistry.refresh() → registerBuiltinTools(...) → registry / disabled list
   Server->>Server: SessionPermissionBridge + FilePermissionPolicy(askResolver)
   Server->>Server: AgentRuntime(LLMClient, registry, {policy, blobStore, turnSummarizer})
   Server->>Server: SessionPersistence(store, blobStore)
@@ -61,7 +62,7 @@ socket 关闭时，若该 socket 持有 bridge token，会调用 `bridge.detach(
 
 | 路径 | 写入方 | 读取方 | 说明 |
 |------|--------|--------|------|
-| `~/.spotAgent/settings.json` | desktop（`AgentSettingsStore`） | agent-server（LLM 路径按 `mtimeMs + size` 失效重读；tool settings 启动读一次） | 模型配置 + tool allowlist/denylist |
+| `~/.spotAgent/settings.json` | desktop（`AgentSettingsStore`） | agent-server（LLM 路径按 `mtimeMs + size` 失效重读；tool registry 在每轮 user message 前按同一文件戳刷新） | 模型配置 + tool allowlist/denylist |
 | `~/.spotAgent/sessions/<id>.json` | agent-server（`FileSessionStore`） | agent-server | `PersistedSession` |
 | `~/.spotAgent/blobs/<YYYY-MM-DD>/<uuid>.*` | agent-server（`FilesystemBlobStore`） | agent-server / LLM adapter / 后续 tool | 图片附件与大段 tool 输出的原始内容；图片只在进入 LLM 请求前按 blobId 读取 |
 | `~/.spotAgent/blobs/<YYYY-MM-DD>/<uuid>.meta.json` | agent-server（`FilesystemBlobStore` / `TurnSummarizer`） | agent-server | Blob 元数据与可选 summary |
@@ -91,6 +92,7 @@ socket 关闭时，若该 socket 持有 bridge token，会调用 `bridge.detach(
 - [MessageTranslator.ts](/Users/mu9/proj/handAgent/apps/agent-server/src/MessageTranslator.ts)
 - [SessionPermissionBridge.ts](/Users/mu9/proj/handAgent/apps/agent-server/src/SessionPermissionBridge.ts)
 - [SettingsBackedLLMClient.ts](/Users/mu9/proj/handAgent/apps/agent-server/src/SettingsBackedLLMClient.ts)
+- [SettingsBackedToolRegistry.ts](/Users/mu9/proj/handAgent/apps/agent-server/src/SettingsBackedToolRegistry.ts)
 - [WebSocketPlatformBridge.ts](/Users/mu9/proj/handAgent/apps/agent-server/src/WebSocketPlatformBridge.ts)
 - 协议参考：[protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md)
 - 桌面侧反向 IPC：[PlatformBridge](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/PlatformBridge/platform-bridge.md)

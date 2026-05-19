@@ -20,7 +20,7 @@
 
 - **产品闭环进展**：图片附件已写入 Blob/Stub，SessionWindow 已展示当前与历史用户气泡的附件摘要，agent-server 会在调用 runtime 前把 image STUB 展开为 LLM 多模态 content part。
 - **协议表面与运行时仍有不对齐**：`tool_message`、`permission_request.arguments` 与真实 assistant token delta 已接通；剩余主要是 `interrupt` 帧未处理。平台 RPC 与会话协议的混用已通过 `PlatformBridgeMessage` 拆分修正。
-- **缓存边界**：workspace / permission 文件缓存已通过文件戳刷新；`SettingsBackedLLMClient` 也已按 settings 文件戳缓存并复用 `VercelClient`；剩余主要是 tool 设置还缺热加载。
+- **缓存边界**：workspace / permission 文件缓存已通过文件戳刷新；`SettingsBackedLLMClient` 已按 settings 文件戳缓存并复用 `VercelClient`；tool registry 也已通过 `SettingsBackedToolRegistry` 在每轮 user message 前按 settings 文件戳刷新。
 - **可靠性盲区**：生产窗口 presenter 已通过 `WindowCloseObservation` 持有并释放关闭 observer token；`WebSocketPlatformBridge` 已用 fencing token 处理重复 attach 与旧 socket 关闭。
 - **能力暴露早于实现**：`ocr.read` / `accessibility.snapshot` / `accessibility.action` 已注册为 builtin tool，但 macOS provider 仍返回 `not_implemented`。
 
@@ -36,9 +36,9 @@
 
 当前优先级：
 
-1. tool 设置 UI 与热加载。
+1. `workspace.askUser` tool。
 2. 补会话 `interrupt` / Stop。
-3. 收敛 `SessionMessage` 的协议混用（§2.2）。
+3. 权限规则管理 UI 与端到端验证。
 
 ---
 
@@ -266,26 +266,22 @@
 
 ---
 
-### 4.2.1 tool settings 只在 agent-server 启动时读取
+### 4.2.1 tool settings 热加载与 UI（已修）
 
-**现状**：`ToolSettings` 支持 `tools.allowlist / tools.denylist`，`registerBuiltinTools` 也能按配置过滤 registry。但 `startDefaultServer` 只在启动时 `loadToolSettings()` 一次；Settings UI 也没有 tool 管理入口。
+**现状**：`ToolSettings` 支持 `tools.allowlist / tools.denylist`，`registerBuiltinTools` 能按配置过滤 registry。`SettingsBackedToolRegistry` 已在 agent-server 启动时创建，并在每轮 user message 进入 runtime 前按 `settings.json` 文件戳刷新同一个 `ToolRegistry` 实例；Settings UI 已新增"工具"Tab，保存后下一轮 LLM 请求会看到最新工具列表。
 
-**问题**：
+**修复效果**：
 
-- 用户无法在 UI 中启停高风险 tool；
-- 即使手改 `settings.json`，已启动的 agent-server registry 也不会变化；
-- 与模型设置“改完下次请求生效”的行为不一致。
-
-**建议改法**：
-
-1. Settings 增加 tool 管理 tab，写 `tools.allowlist / tools.denylist`。
-2. agent-server 引入 registry factory 或可替换 registry，在每轮请求前按 settings mtime 刷新。
-3. 与 `SettingsBackedLLMClient` 的缓存失效策略共用 settings loader，避免两套 watcher。
-
-**验收**：
-
+- 用户可在 UI 中启停高风险 tool；
+- `llm` 与 `tools` 共享同一个 `settings.json`，Swift store 写任一配置组都保留另一个配置组；
 - denylist 保存后，下一轮 `LLMClient.stream(messages, tools)` 的 tools 不再包含对应 tool。
-- UI / loader / registerBuiltinTools 都有测试覆盖。
+
+**测试覆盖**：
+
+- `register-builtins.test.ts` 覆盖同一个 registry 随 settings 变化重新注册；
+- `SettingsBackedToolRegistry.test.ts` 覆盖文件戳变化后刷新与 stamp 未变跳过；
+- `SessionRuntimeOrchestrator.test.ts` 覆盖 runtime 前调用刷新钩子；
+- `AgentSettingsStoreTests.swift` / `ToolSettingsViewModelTests.swift` 覆盖 tools denylist 保存、allowlist 保留和 UI view model 状态。
 
 ---
 

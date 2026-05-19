@@ -147,23 +147,21 @@ export async function handleSocketMessage(
 export async function startDefaultServer(port = 4317) {
   const [
     { AgentRuntime },
-    { registerBuiltinTools },
     { RemotePlatformAdapter },
     { FileWorkspaceRegistry },
     { FilePermissionPolicy },
-    { loadToolSettings },
     { SettingsBackedLLMClient },
+    { SettingsBackedToolRegistry },
     { FileNetworkLogger },
     { FilesystemBlobStore },
     { TurnSummarizer },
   ] = await Promise.all([
     import("@handagent/core/runtime/AgentRuntime.ts"),
-    import("@handagent/core/tools/registerBuiltins.ts"),
     import("@handagent/core/platform/RemotePlatformAdapter.ts"),
     import("@handagent/core/workspace/FileWorkspaceRegistry.ts"),
     import("@handagent/core/permission/FilePermissionPolicy.ts"),
-    import("@handagent/core/config/ToolSettings.ts"),
     import("./SettingsBackedLLMClient.ts"),
+    import("./SettingsBackedToolRegistry.ts"),
     import("@handagent/core/logging/FileNetworkLogger.ts"),
     import("@handagent/core/blob/FilesystemBlobStore.ts"),
     import("@handagent/core/runtime/TurnSummarizer.ts"),
@@ -183,17 +181,11 @@ export async function startDefaultServer(port = 4317) {
 
   const platformBridge = new WebSocketPlatformBridge();
   const platform = new RemotePlatformAdapter({ bridge: platformBridge });
-  const toolSettings = loadToolSettings();
-  const { registry, registered, disabled } = registerBuiltinTools({
+  const toolRegistry = new SettingsBackedToolRegistry({
     platform,
     workspaceRegistry,
-    settings: toolSettings,
   });
-
-  console.log(`[agent-server] registered tools: ${registered.join(", ") || "(none)"}`);
-  for (const d of disabled) {
-    console.log(`[agent-server] disabled tool ${d.name}: ${d.reason}`);
-  }
+  toolRegistry.refresh();
 
   const permissionBridge = new SessionPermissionBridge();
   const permissionPolicy = new FilePermissionPolicy({
@@ -201,7 +193,7 @@ export async function startDefaultServer(port = 4317) {
     askResolver: permissionBridge.ask,
   });
 
-  const runtime = new AgentRuntime(new SettingsBackedLLMClient({ networkLogger }), registry, {
+  const runtime = new AgentRuntime(new SettingsBackedLLMClient({ networkLogger }), toolRegistry.registry, {
     permissionPolicy,
     blobStore,
     turnSummarizer: new TurnSummarizer({
@@ -210,7 +202,14 @@ export async function startDefaultServer(port = 4317) {
     }),
   });
   const persistence = new SessionPersistence(store, undefined, blobStore);
-  const orchestrator = new SessionRuntimeOrchestrator(runtime, persistence);
+  const orchestrator = new SessionRuntimeOrchestrator(
+    runtime,
+    persistence,
+    undefined,
+    () => {
+      toolRegistry.refresh();
+    },
+  );
   const router = new SessionRouter(orchestrator, persistence);
 
   return startServer({

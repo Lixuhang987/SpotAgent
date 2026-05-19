@@ -6,22 +6,7 @@
 
 ## P2 — 运行时与 UX 增强
 
-### 1. tool 设置 UI 与热加载
-
-**现状**：core 已有 `ToolSettings` 与 `registerBuiltinTools(... settings)`，支持 `tools.allowlist / tools.denylist`；但 Settings 窗口没有 tool 管理 Tab，agent-server 只在启动时 `loadToolSettings()` 一次，保存设置后不会影响已启动的 registry。
-
-**用户场景**：用户应能在设置页禁用高风险 tool（例如 `clipboard.read` / `screen.capture` / `file.write`），并在保存后让后续会话立即按新规则暴露工具。
-
-**验收标准**：
-
-- Settings 增加 tool 管理入口，展示 builtin tool、说明、启用状态与风险提示。
-- 写入 `~/.spotAgent/settings.json` 的 `tools.allowlist / tools.denylist` 字段。
-- agent-server 支持 tool 设置热加载：settings 变化后新一轮 LLM 请求使用最新 registry，或明确重启子进程并恢复可用状态。
-- 测试覆盖 denylist 保存后 registry 不再暴露对应 tool。
-
-**依赖**：建议复用 `SettingsBackedLLMClient` 已采用的 settings 文件戳失效策略。
-
-### 2. workspace.askUser tool
+### 1. workspace.askUser tool
 
 **现状**：`workspace.list` 已落地；`workspace.askUser` 暂未实现。当前 file tool description 已提示“模糊时调 `workspace.askUser`”，但 registry 中没有这个 tool。
 
@@ -37,7 +22,7 @@
 
 **依赖**：权限气泡 UI 可作为交互样式参考。
 
-### 3. 权限规则管理 UI 与端到端验证
+### 2. 权限规则管理 UI 与端到端验证
 
 **现状**：`FilePermissionPolicy`、`SessionPermissionBridge`、`AgentRuntime` 权限拦截、`SessionSocketClient` 解码、`SessionWindowView` 内联气泡都已实现。剩余风险在 UI 端到端验证和永久规则管理。
 
@@ -49,7 +34,7 @@
 
 **依赖**：无。`session` scope 已按 `sessionId` 隔离并在 socket 关闭时清理。
 
-### 4. 会话历史入口补齐
+### 3. 会话历史入口补齐
 
 **现状**：后端 `list/load/delete` 已实现，SessionWindow 左侧历史侧栏已落地；PromptPanel 最近会话 action 与独立历史窗口未实现。
 
@@ -62,7 +47,7 @@
 
 **依赖**：无。
 
-### 5. OCR 与 Accessibility 平台能力落地
+### 4. OCR 与 Accessibility 平台能力落地
 
 **现状**：`ocr.read`、`accessibility.snapshot`、`accessibility.action` 已作为 builtin tool 注册并暴露给 LLM，但 macOS 侧 `MacPlatformProvider` 对这三个 method 统一返回 `not_implemented`。
 
@@ -78,7 +63,7 @@
 
 **依赖**：macOS 权限提示与审计文案应与 permission UI 对齐。
 
-### 6. 会话中断 / Stop
+### 5. 会话中断 / Stop
 
 **现状**：协议里已有 `interrupt` 帧，但 `SessionRouter` 未处理，SessionWindow 也没有 Stop 按钮；一旦 LLM 请求或 tool 调用耗时较长，用户只能关闭窗口或等待。
 
@@ -96,7 +81,7 @@
 
 ## P3 — 长期能力
 
-### 7. 多 provider LLM 支持
+### 6. 多 provider LLM 支持
 
 **现状**：生产路径只有 `VercelClient`，OpenAI 兼容 API 通过 `responses/chat/completion` 切换。仓库依赖中已有 `@ai-sdk/anthropic`，但尚未接入到 provider factory。
 
@@ -109,7 +94,7 @@
 
 **依赖**：provider capability 需要声明是否支持当前已落地的多模态 content part、tool calling 与 streaming。
 
-### 8. 用户自定义 tool / 插件系统
+### 7. 用户自定义 tool / 插件系统
 
 **现状**：所有 tool 都是 builtin，随代码构建。
 

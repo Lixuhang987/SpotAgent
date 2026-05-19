@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Bindable var settingsViewModel: AgentSettingsViewModel
+    @Bindable var toolSettingsViewModel: ToolSettingsViewModel
     @Bindable var workspaceViewModel: WorkspaceSettingsViewModel
     let shortcutActions: [PromptAction]
     @Environment(\.appTheme) private var theme
@@ -9,6 +10,7 @@ struct SettingsView: View {
 
     private let tabs: [SettingsTabItem] = [
         SettingsTabItem(id: "model", title: "模型", icon: "cpu"),
+        SettingsTabItem(id: "tools", title: "工具", icon: "slider.horizontal.3"),
         SettingsTabItem(id: "shortcuts", title: "快捷键", icon: "keyboard"),
         SettingsTabItem(id: "workspaces", title: "工作区", icon: "folder"),
     ]
@@ -29,6 +31,8 @@ struct SettingsView: View {
         switch selectedTab {
         case "model":
             AgentSettingsView(viewModel: settingsViewModel)
+        case "tools":
+            ToolSettingsView(viewModel: toolSettingsViewModel)
         case "shortcuts":
             ShortcutSettingsView(actions: shortcutActions)
         case "workspaces":

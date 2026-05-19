@@ -139,6 +139,7 @@ final class StubSettingsWindowPresenter: SettingsWindowPresenting {
 
     func present(
         settingsViewModel: AgentSettingsViewModel,
+        toolSettingsViewModel: ToolSettingsViewModel,
         workspaceViewModel: WorkspaceSettingsViewModel,
         shortcutActions: [PromptAction],
         onClose: @escaping () -> Void

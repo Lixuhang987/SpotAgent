@@ -64,11 +64,13 @@ export function registerBuiltinTools(
 
   const enabledSet = new Set(filtered.enabled);
   const registered: string[] = [];
+  const enabledTools: AgentTool[] = [];
   for (const tool of candidates) {
     if (!enabledSet.has(tool.name)) continue;
-    registry.register(tool);
+    enabledTools.push(tool);
     registered.push(tool.name);
   }
+  registry.replaceAll(enabledTools);
 
   return { registry, registered, disabled };
 }

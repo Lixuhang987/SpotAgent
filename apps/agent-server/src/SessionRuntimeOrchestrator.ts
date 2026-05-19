@@ -24,12 +24,14 @@ type RuntimeLike = {
 };
 
 type PushMessage = (message: SessionMessage) => void;
+type BeforeRunHook = () => void | Promise<void>;
 
 export class SessionRuntimeOrchestrator {
   constructor(
     private readonly runtime: RuntimeLike,
     private readonly persistence: SessionPersistence,
     private readonly now: () => string = () => new Date().toISOString(),
+    private readonly beforeRun: BeforeRunHook = () => {},
   ) {}
 
   async handleUserMessage(
@@ -47,6 +49,7 @@ export class SessionRuntimeOrchestrator {
     await this.persistence.autoTitle(sessionId, message.payload.text);
 
     const history = await this.persistence.getMessages(sessionId);
+    await this.beforeRun();
     await this.runtime.waitForPendingSummaries?.(history);
     const runtimeHistory = agentMessagesToRuntimeMessages(history);
 

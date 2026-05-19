@@ -59,6 +59,7 @@ final class ProductionSettingsWindowPresenter: SettingsWindowPresenting {
 
     func present(
         settingsViewModel: AgentSettingsViewModel,
+        toolSettingsViewModel: ToolSettingsViewModel,
         workspaceViewModel: WorkspaceSettingsViewModel,
         shortcutActions: [PromptAction],
         onClose: @escaping () -> Void
@@ -66,6 +67,7 @@ final class ProductionSettingsWindowPresenter: SettingsWindowPresenting {
         let hosting = NSHostingController(
             rootView: SettingsView(
                 settingsViewModel: settingsViewModel,
+                toolSettingsViewModel: toolSettingsViewModel,
                 workspaceViewModel: workspaceViewModel,
                 shortcutActions: shortcutActions
             )

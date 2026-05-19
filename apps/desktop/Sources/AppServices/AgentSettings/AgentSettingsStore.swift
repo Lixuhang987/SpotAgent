@@ -37,14 +37,34 @@ struct AgentSettings: Codable, Equatable {
     }
 }
 
+struct AgentToolSettings: Codable, Equatable {
+    var allowlist: [String]?
+    var denylist: [String]
+
+    static let defaultValue = AgentToolSettings(allowlist: nil, denylist: [])
+
+    init(allowlist: [String]?, denylist: [String]) {
+        self.allowlist = allowlist
+        self.denylist = denylist
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        allowlist = try container.decodeIfPresent([String].self, forKey: .allowlist)
+        denylist = try container.decodeIfPresent([String].self, forKey: .denylist) ?? []
+    }
+}
+
 private struct AgentSettingsFile: Codable {
-    var llm: AgentSettings
+    var llm: AgentSettings?
+    var tools: AgentToolSettings?
 }
 
 @Observable
 @MainActor
 final class AgentSettingsStore {
     private(set) var settings: AgentSettings
+    private(set) var toolSettings: AgentToolSettings
     private(set) var saveErrorMessage: String?
 
     @ObservationIgnored private let fileManager: FileManager
@@ -60,6 +80,7 @@ final class AgentSettingsStore {
         self.homeDirectoryURL = homeDirectoryURL
         let loadedState = Self.loadState(fileManager: fileManager, homeDirectoryURL: homeDirectoryURL)
         self.settings = loadedState.settings
+        self.toolSettings = loadedState.toolSettings
         self.lastLoadedData = loadedState.data
         startPolling()
     }
@@ -75,10 +96,18 @@ final class AgentSettingsStore {
         persist()
     }
 
+    func updateToolSettings(_ mutate: (inout AgentToolSettings) -> Void) {
+        var nextToolSettings = toolSettings
+        mutate(&nextToolSettings)
+        toolSettings = nextToolSettings
+        persist()
+    }
+
     func reloadFromDisk() {
         let loadedState = Self.loadState(fileManager: fileManager, homeDirectoryURL: homeDirectoryURL)
         guard loadedState.data != lastLoadedData else { return }
         settings = loadedState.settings
+        toolSettings = loadedState.toolSettings
         lastLoadedData = loadedState.data
         saveErrorMessage = nil
     }
@@ -91,15 +120,16 @@ final class AgentSettingsStore {
 
     private static func loadState(fileManager: FileManager, homeDirectoryURL: URL) -> (
         settings: AgentSettings,
+        toolSettings: AgentToolSettings,
         data: Data?
     ) {
         let fileURL = settingsFileURL(homeDirectoryURL: homeDirectoryURL)
         guard let data = try? Data(contentsOf: fileURL),
               let persisted = try? JSONDecoder().decode(AgentSettingsFile.self, from: data)
         else {
-            return (.defaultValue, nil)
+            return (.defaultValue, .defaultValue, nil)
         }
-        return (persisted.llm, data)
+        return (persisted.llm ?? .defaultValue, persisted.tools ?? .defaultValue, data)
     }
 
     private func persist() {
@@ -110,7 +140,7 @@ final class AgentSettingsStore {
             try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            let data = try encoder.encode(AgentSettingsFile(llm: settings))
+            let data = try encoder.encode(AgentSettingsFile(llm: settings, tools: toolSettings))
             try data.write(to: fileURL, options: .atomic)
             lastLoadedData = data
             saveErrorMessage = nil

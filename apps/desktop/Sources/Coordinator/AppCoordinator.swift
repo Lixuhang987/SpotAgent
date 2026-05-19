@@ -114,6 +114,10 @@ final class AppCoordinator {
         AgentSettingsViewModel(store: services.settingsStore)
     }
 
+    func makeToolSettingsViewModel() -> ToolSettingsViewModel {
+        ToolSettingsViewModel(store: services.settingsStore)
+    }
+
     func makeShortcutActions() -> [PromptAction] { promptActions }
 
     private func setupPromptPanel() {
@@ -175,6 +179,7 @@ final class AppCoordinator {
     private func handleOpenSettings() {
         settingsLifecycle.openOrFocus(
             settingsViewModel: makeSettingsViewModel(),
+            toolSettingsViewModel: makeToolSettingsViewModel(),
             workspaceViewModel: WorkspaceSettingsViewModel(),
             shortcutActions: makeShortcutActions(),
             onClosed: { [weak self] in self?.send(.settingsWindowClosed) }

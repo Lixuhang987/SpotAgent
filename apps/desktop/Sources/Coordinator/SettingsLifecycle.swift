@@ -20,6 +20,7 @@ final class SettingsLifecycle {
 
     func openOrFocus(
         settingsViewModel: AgentSettingsViewModel,
+        toolSettingsViewModel: ToolSettingsViewModel,
         workspaceViewModel: WorkspaceSettingsViewModel,
         shortcutActions: [PromptAction],
         onClosed: @escaping @MainActor () -> Void
@@ -34,6 +35,7 @@ final class SettingsLifecycle {
 
         window = windowPresenter.present(
             settingsViewModel: settingsViewModel,
+            toolSettingsViewModel: toolSettingsViewModel,
             workspaceViewModel: workspaceViewModel,
             shortcutActions: shortcutActions,
             onClose: { Task { @MainActor in onClosed() } }
