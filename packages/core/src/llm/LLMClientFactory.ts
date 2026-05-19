@@ -222,6 +222,7 @@ class AISDKStreamingClient implements LLMClient {
       model: this.model as Parameters<typeof streamText>[0]["model"],
       messages: await toVercelMessages(messages, options),
       tools: toVercelTools(tools),
+      abortSignal: options?.signal,
     });
     let content = "";
     const toolCalls: NonNullable<LLMCompletion["toolCalls"]> = [];

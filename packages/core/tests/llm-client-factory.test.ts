@@ -111,6 +111,43 @@ describe("LLMClientFactory", () => {
     );
   });
 
+  it("passes abort signals to Anthropic AI SDK requests", async () => {
+    const streamText = vi.fn(() => ({
+      fullStream: (async function* () {
+        yield { type: "text-delta", text: "ok" };
+      })(),
+    }));
+    const model = { provider: "anthropic", modelId: "claude-sonnet-4-5-20250929" };
+    const controller = new AbortController();
+    const result = createLLMClient(
+      {
+        provider: "anthropic",
+        model: "claude-sonnet-4-5-20250929",
+        summarizerModel: "claude-haiku-4-5-20251001",
+        apiKey: "anthropic-key",
+        api: "chat",
+      },
+      {
+        createAnthropic: vi.fn(() => vi.fn(() => model)),
+        streamText,
+      } as LLMClientFactoryDependencies,
+    );
+
+    await collectLLMStream(
+      result.client.stream(
+        [{ role: "user", content: "hi" }],
+        [],
+        { signal: controller.signal },
+      ),
+    );
+
+    expect(streamText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        abortSignal: controller.signal,
+      }),
+    );
+  });
+
   it("rejects unsupported multimodal messages before calling the provider", async () => {
     const stream = vi.fn(async function* () {
       yield { type: "text_delta" as const, text: "should not run" };
