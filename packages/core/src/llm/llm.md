@@ -36,6 +36,7 @@ AgentRuntime
 - **legacy `provider.completion()`**：当前默认 `defaultModelSettings.api = "responses"`；`VercelClient` 构造默认 `api = "chat"`。两个默认不一致，但生产路径全程透传 settings，无实际冲突。
 - **completion API 限制**：`api = "completion"` 不支持 image content；`VercelClient` 会在调用 provider 前抛出明确错误，要求改用 `chat` 或 `responses`。
 - **DI 入口**：`VercelClientOptions.networkLogger` 注入 `FileNetworkLogger` 可把请求 / 响应 body 落到 `~/.spotAgent/log/<YYYY-MM-DD>/network-NNN.jsonl`；`VercelClientDependencies.{createOpenAI, generateText}` 仅供测试替换。
+- **真实 API 集成测试**：`pnpm run test:llm:integration` 会读取 `~/.spotAgent/settings.json` 调用真实端点，并把 provider 原始 JSON 与归一化 `LLMCompletion` 写入 `.cache/llm-api-integration/latest/`，详见 [docs/llm-api-integration.md](/Users/mu9/proj/handAgent/docs/llm-api-integration.md)。
 
 ## 编辑此目录的约束
 
