@@ -109,3 +109,23 @@
   - 授权气泡文案包含 `授权调用 workspace.list`、`授权调用 file.write`、`授权调用 file.read`。
   - Session 文件 `9F4D9D4C-9115-4C77-9361-1023B8B5AA3E.json`、`FC95D6F1-415C-41A8-89A8-FAB137DBDEDA.json`、`AC07B7E0-9852-48A0-B38D-DC8016DE3352.json` 均包含 `permission_request` event，`action` 为 `allow`。
 - **结论**：通过。首次询问与「仅本次」允许路径可用。`本会话`、`始终允许`、拒绝、超时、关闭窗口取消挂起请求仍需继续验证。
+
+## 权限审批记忆、拒绝、超时与撤销（2026-05-19 实机验证）
+
+- **验证日期**：2026-05-19
+- **验证环境**：mock-llm / macOS / `dist/HandAgentDesktop.app`
+- **验证过程**：
+  1. 重启 mock app 清理窗口状态，确认启动后只有状态气泡窗口，agent-server 重新监听 `*:4317`。
+  2. 提交 `[mock:permission-write] QA 本会话允许 1`，在授权气泡选择「本会话」，`file.write` 执行成功。
+  3. 在同一个 SessionWindow 继续提交 `[mock:permission-write] QA 本会话允许 2`，未再次出现授权气泡，`file.write` 自动执行成功。
+  4. 新建会话提交 `[mock:permission-write] QA 新会话重新询问并拒绝`，授权气泡重新出现；点击「拒绝」后 UI 显示 `file.write: 用户拒绝执行该 tool`，会话继续完成。
+  5. 对 `[mock:permission-write] QA 始终允许快速点击` 保持沉默超过 60 秒，session event 记录 `action: deny`。
+  6. 新建会话提交 `[mock:permission-write] QA 始终允许并撤销`，点击「始终允许」，`~/.spotAgent/permissions.json` 写入 `file.write` 的永久 allow 规则和 arguments 摘要。
+  7. 打开 Settings → 权限，确认 `file.write` 规则展示 `content`、`relativePath`、`workspaceId` 摘要；点击「撤销」后 UI 移除该规则，`permissions.json` 中也只剩旧的 `app.frontmost` 与 `window.list` 规则。
+- **证据**：
+  - Session 文件 `~/.spotAgent/sessions/38FBC4E0-FCE6-4611-AC37-E99E50CA0D8B.json`：第一次 `file.write` 有 `permission_request`，第二次同 session 只有 `tool_call/tool_result`，没有第二条 `permission_request`。
+  - Session 文件 `~/.spotAgent/sessions/F564E045-01CD-4D20-BAC6-A89B6822A06E.json`：拒绝后 tool message 为 `用户拒绝执行该 tool`，event 中 `action: deny`、`granted: false`。
+  - Session 文件 `~/.spotAgent/sessions/8BC789C5-C704-4A00-B9C2-1FC9365D2389.json`：创建时间与 `permission_request` 时间相差约 60 秒，event 中 `action: deny`、`granted: false`，证明超时按 deny 处理。
+  - Session 文件 `~/.spotAgent/sessions/8DB9EC61-3486-4AA1-9FDE-07A31AC08319.json`：点击「始终允许」后 `file.write` 执行成功。
+  - `~/.spotAgent/permissions.json`：撤销后不再包含 `file.write` 规则。
+- **结论**：通过。权限审批的「本会话」、跨新会话重新询问、拒绝、超时 deny、「始终允许」持久化、Settings 权限页展示与撤销均可用。关闭 SessionWindow 时取消挂起请求仍需单独验证。
