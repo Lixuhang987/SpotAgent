@@ -2,6 +2,7 @@ import { pathToFileURL } from "node:url";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import type { SessionMessage } from "@handagent/core/protocol/SessionMessage.ts";
+import type { PlatformBridgeMessage } from "@handagent/core/protocol/PlatformBridgeMessage.ts";
 import { SessionPersistence } from "./SessionPersistence.ts";
 import { SessionRouter } from "./SessionRouter.ts";
 import { SessionRuntimeOrchestrator } from "./SessionRuntimeOrchestrator.ts";
@@ -22,6 +23,8 @@ type SessionSocket = {
   on(event: "close", listener: () => void): void;
 };
 
+type SocketMessage = SessionMessage | PlatformBridgeMessage;
+
 export function attachSessionSocketHandlers(
   socket: SessionSocket,
   {
@@ -38,20 +41,22 @@ export function attachSessionSocketHandlers(
 ): void {
   let bridgeToken: BridgeToken | null = null;
   const boundSessions = new Map<string, SessionBindingToken>();
-  const send = (outgoing: SessionMessage) => {
+  const sendSession = (outgoing: SessionMessage) => {
+    socket.send(JSON.stringify(outgoing));
+  };
+  const sendPlatform = (outgoing: PlatformBridgeMessage) => {
     socket.send(JSON.stringify(outgoing));
   };
 
   socket.on("message", async (raw) => {
-    const message = JSON.parse(raw.toString()) as SessionMessage;
+    const message = JSON.parse(raw.toString()) as SocketMessage;
 
-    if (message.type === "platform_bridge_hello" && bridge) {
-      bridgeToken = bridge.attach(send);
-      return;
-    }
-
-    if (message.type === "platform_response") {
-      bridge?.handleResponse(message.payload, bridgeToken);
+    if (isPlatformBridgeMessage(message)) {
+      if (message.type === "platform_bridge_hello" && bridge) {
+        bridgeToken = bridge.attach(sendPlatform);
+      } else if (message.type === "platform_response") {
+        bridge?.handleResponse(message.payload, bridgeToken);
+      }
       return;
     }
 
@@ -70,11 +75,11 @@ export function attachSessionSocketHandlers(
     ) {
       boundSessions.set(
         message.sessionId,
-        permissionBridge.bindSession(message.sessionId, send),
+        permissionBridge.bindSession(message.sessionId, sendSession),
       );
     }
 
-    await router.receive(message, send);
+    await router.receive(message, sendSession);
   });
 
   socket.on("close", () => {
@@ -89,6 +94,10 @@ export function attachSessionSocketHandlers(
     }
     boundSessions.clear();
   });
+}
+
+function isPlatformBridgeMessage(message: SocketMessage): message is PlatformBridgeMessage {
+  return "channel" in message && message.channel === "platform";
 }
 
 function sessionIdFromPermissionRequestId(requestId: string): string {

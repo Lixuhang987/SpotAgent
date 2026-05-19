@@ -19,7 +19,7 @@
 负面（驱动后续 TODO 的根因）：
 
 - **产品闭环进展**：图片附件已写入 Blob/Stub，SessionWindow 已展示当前与历史用户气泡的附件摘要，agent-server 会在调用 runtime 前把 image STUB 展开为 LLM 多模态 content part。
-- **协议表面与运行时仍有不对齐**：`tool_message` 与 `permission_request.arguments` 已接通；剩余主要是"伪流式" assistant_message_delta、`interrupt` 帧未处理、平台 RPC 与会话协议混在同一个 `SessionMessage` union。
+- **协议表面与运行时仍有不对齐**：`tool_message` 与 `permission_request.arguments` 已接通；剩余主要是"伪流式" assistant_message_delta 与 `interrupt` 帧未处理。平台 RPC 与会话协议的混用已通过 `PlatformBridgeMessage` 拆分修正。
 - **缓存边界**：workspace / permission 文件缓存已通过文件戳刷新；`SettingsBackedLLMClient` 也已按 settings 文件戳缓存并复用 `VercelClient`；剩余主要是 tool 设置还缺热加载。
 - **可靠性盲区**：生产窗口 presenter 已通过 `WindowCloseObservation` 持有并释放关闭 observer token；`WebSocketPlatformBridge` 已用 fencing token 处理重复 attach 与旧 socket 关闭。
 - **能力暴露早于实现**：`ocr.read` / `accessibility.snapshot` / `accessibility.action` 已注册为 builtin tool，但 macOS provider 仍返回 `not_implemented`。
@@ -119,24 +119,18 @@
 
 ### 2.2 `SessionMessage` 把会话与平台 RPC 混在同一个 union
 
-**现状**：`SessionMessage` 既是会话协议，又是平台反向 RPC 协议（`platform_request` / `platform_response` / `platform_bridge_hello`），混用 `sessionId = "_platform"` 作为标记。
+**已修**：平台反向 RPC 已从 `SessionMessage` 拆分到 `PlatformBridgeMessage`，外层使用 `channel: "platform"` 显式分流，不再依赖 `sessionId = "_platform"`。
 
-**问题**：
+**结果**：
 
-- `server.ts` 不得不在每条 message 上 if-else 判断"是否平台帧"。
-- `SessionListEntry`、`UserMessageAttachment` 等只跟会话有关的辅助类型也得跟着 protocol 文件变动，影响心智边界。
-
-**建议改法**（任选其一）：
-
-- 方案 A：拆成 `protocol/SessionMessage.ts` + `protocol/PlatformBridgeMessage.ts`，复用同一 socket 但在外层加 `channel: "session" | "platform"` 字段。
-- 方案 B：保留单 union，但把 `_platform` 这种魔法 sessionId 抽成 `kind: "platform" | "session"` 显式字段，并在 `server.ts` 用 exhaustive switch 分派。
-
-倾向方案 A：分两个 union 后两边的判别 narrowing 更干净。
+- `server.ts` 先按 `channel` 识别平台帧，再进入 session 分派。
+- `SessionMessage.ts` 只保留会话 / 历史 / 权限审批相关帧。
+- Swift `PlatformBridgeService` 与 TS `WebSocketPlatformBridge` 都对齐新的平台 envelope。
 
 **验收**：
 
-- `apps/agent-server/src/server.ts` 的 message 派发不再依赖魔法字符串。
-- 新增反向 IPC 方法时不会让 `SessionMessage` 文件膨胀。
+- `apps/agent-server/src/server.ts` 的 message 派发不再依赖魔法字符串。✅
+- 新增反向 IPC 方法时不会让 `SessionMessage` 文件膨胀。✅
 
 ---
 

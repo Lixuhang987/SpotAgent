@@ -1,12 +1,13 @@
 # protocol
 
-desktop ↔ agent-server 的 WebSocket 协议。所有跨进程消息走 `SessionMessage`（20 个变体的判别联合）。这是 TS / Swift 双侧对齐的唯一来源。
+desktop ↔ agent-server 的 WebSocket 协议。会话流量走 `SessionMessage`，平台反向 RPC 走 `PlatformBridgeMessage`。两个 union 共享同一 WebSocket 入口，但平台帧用 `channel: "platform"` 显式分流，不再复用会话 `sessionId`。
 
 ## 文件
 
 | 文件 | 职责 |
 |------|------|
-| `SessionMessage.ts` | `SessionMessage`（判别联合）/ `SessionListEntry` / `UserMessageAttachment` / `PlatformResponsePayload` |
+| `SessionMessage.ts` | `SessionMessage`（会话、历史、权限审批帧）/ `SessionListEntry` / `UserMessageAttachment` |
+| `PlatformBridgeMessage.ts` | `PlatformBridgeMessage`（平台反向 RPC 帧）/ `PlatformResponsePayload` |
 
 ## 消息分类
 
@@ -25,18 +26,30 @@ desktop ↔ agent-server 的 WebSocket 协议。所有跨进程消息走 `Sessio
 | | `delete_session_request` | desktop → server |
 | 权限审批 | `permission_request` | server → desktop |
 | | `permission_response` | desktop → server |
-| 平台反向 IPC | `platform_bridge_hello` | desktop → server（标识此 socket 是 bridge 通道） |
-| | `platform_request` | server → desktop |
-| | `platform_response` | desktop → server |
+| 平台反向 IPC | `platform_bridge_hello` | desktop → server（`channel: "platform"`，标识此 socket 是 bridge 通道） |
+| | `platform_request` | server → desktop（`channel: "platform"`） |
+| | `platform_response` | desktop → server（`channel: "platform"`） |
 
-每条消息共享外层骨架：
+会话消息共享外层骨架：
 
 ```ts
 {
   type: <字面量>,
-  sessionId: string,    // 平台 RPC 用魔法值 "_platform"
+  sessionId: string,
   messageId: string,
   timestamp: string,    // ISO 8601
+  payload: <按 type 分支>,
+}
+```
+
+平台消息共享外层骨架：
+
+```ts
+{
+  channel: "platform",
+  type: "platform_bridge_hello" | "platform_request" | "platform_response",
+  messageId: string,
+  timestamp: string,
   payload: <按 type 分支>,
 }
 ```
@@ -61,8 +74,8 @@ desktop ↔ agent-server 的 WebSocket 协议。所有跨进程消息走 `Sessio
 ```json
 // platform_request
 {
+  "channel": "platform",
   "type": "platform_request",
-  "sessionId": "_platform",
   "messageId": "...",
   "timestamp": "...",
   "payload": {
@@ -75,8 +88,8 @@ desktop ↔ agent-server 的 WebSocket 协议。所有跨进程消息走 `Sessio
 
 // platform_response
 {
+  "channel": "platform",
   "type": "platform_response",
-  "sessionId": "_platform",
   "messageId": "...",
   "timestamp": "...",
   "payload": {
@@ -92,7 +105,7 @@ desktop ↔ agent-server 的 WebSocket 协议。所有跨进程消息走 `Sessio
 - 协议是合约，desktop（Swift）与 agent-server（TS）必须严格对齐字段。**改这里就要同时改 [SessionSocketClient](/Users/mu9/proj/handAgent/apps/desktop/Sources/SessionWindow/session-window.md) 与 [SessionRouter / MessageTranslator](/Users/mu9/proj/handAgent/apps/agent-server/agent-server.md)**。
 - 新增 type 时考虑：是否同时影响 `SessionStore` 持久化、`ConversationMessage` UI、`SessionEvent` 审计三处。
 - 协议字段保持平铺，不要嵌套 anyJson 黑洞，让两边 codec 都能强类型化。
-- `sessionId` 当前承担两个角色：会话标识 + 平台 RPC magic（`"_platform"`）。这是已知 smell，新流量不要再叠加角色。
+- 平台 RPC 不带 `sessionId`；server 只通过 `channel: "platform"` 分派平台帧。
 
 ## 相关文档
 

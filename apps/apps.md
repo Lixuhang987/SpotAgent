@@ -13,7 +13,7 @@
 
 ```mermaid
 flowchart LR
-  A[apps/desktop<br/>macOS 宿主] -->|SessionMessage WS| B[apps/agent-server<br/>本地会话桥]
+  A[apps/desktop<br/>macOS 宿主] -->|SessionMessage / PlatformBridgeMessage WS| B[apps/agent-server<br/>本地会话桥]
   B --> C[packages/core<br/>runtime / tool / LLM]
   A -->|PlatformBridge 反向 IPC| B
 ```
@@ -44,7 +44,8 @@ flowchart LR
 
 - `PromptAttachmentResult`（5 case：textSelection / selectionError / textToken / imageRegion / noAttachment）
 - `SessionSummary`
-- `SessionMessage`（含 user_message / assistant_message_* / tool_message / permission_request / platform_request 等共 20 个变体）
+- `SessionMessage`（含 user_message / assistant_message_* / tool_message / permission_request 等会话帧）
+- `PlatformBridgeMessage`（含 platform_bridge_hello / platform_request / platform_response）
 
 ## 模块边界
 

@@ -4,23 +4,9 @@
 
 最后核对日期：2026-05-19。
 
-## P1 — 需要修复的可靠性与协议边界
-
-### 1. SessionMessage 拆分会话协议与平台 RPC
-
-**现状**：`SessionMessage` 同时承载会话帧和平台反向 RPC，平台通道依赖 `sessionId = "_platform"` 魔法值。
-
-**验收标准**：
-
-- 拆出 `PlatformBridgeMessage`，或在外层增加 `channel: "session" | "platform"`。
-- `server.ts` 的消息派发不再依赖 `"_platform"`。
-- Swift 与 TypeScript 双侧 codec 同步更新。
-
-**依赖**：无。
-
 ## P2 — 运行时与 UX 增强
 
-### 2. LLMClient 真实流式接口
+### 1. LLMClient 真实流式接口
 
 **现状**：`LLMClient.complete()` 返回完整结果，`AgentRuntime` 人工发出 `start + 单次 delta + end`，桌面端看到的是伪流式。
 
@@ -34,7 +20,7 @@
 
 **依赖**：会话路由 / 编排 / 持久化拆分已完成。
 
-### 3. tool 设置 UI 与热加载
+### 2. tool 设置 UI 与热加载
 
 **现状**：core 已有 `ToolSettings` 与 `registerBuiltinTools(... settings)`，支持 `tools.allowlist / tools.denylist`；但 Settings 窗口没有 tool 管理 Tab，agent-server 只在启动时 `loadToolSettings()` 一次，保存设置后不会影响已启动的 registry。
 
@@ -49,7 +35,7 @@
 
 **依赖**：建议复用 `SettingsBackedLLMClient` 已采用的 settings 文件戳失效策略。
 
-### 4. workspace.askUser tool
+### 3. workspace.askUser tool
 
 **现状**：`workspace.list` 已落地；`workspace.askUser` 暂未实现。当前 file tool description 已提示“模糊时调 `workspace.askUser`”，但 registry 中没有这个 tool。
 
@@ -65,7 +51,7 @@
 
 **依赖**：权限气泡 UI 可作为交互样式参考。
 
-### 5. 权限规则管理 UI 与端到端验证
+### 4. 权限规则管理 UI 与端到端验证
 
 **现状**：`FilePermissionPolicy`、`SessionPermissionBridge`、`AgentRuntime` 权限拦截、`SessionSocketClient` 解码、`SessionWindowView` 内联气泡都已实现。剩余风险在 UI 端到端验证和永久规则管理。
 
@@ -77,7 +63,7 @@
 
 **依赖**：无。`session` scope 已按 `sessionId` 隔离并在 socket 关闭时清理。
 
-### 6. 会话历史入口补齐
+### 5. 会话历史入口补齐
 
 **现状**：后端 `list/load/delete` 已实现，SessionWindow 左侧历史侧栏已落地；PromptPanel 最近会话 action 与独立历史窗口未实现。
 
@@ -90,7 +76,7 @@
 
 **依赖**：无。
 
-### 7. OCR 与 Accessibility 平台能力落地
+### 6. OCR 与 Accessibility 平台能力落地
 
 **现状**：`ocr.read`、`accessibility.snapshot`、`accessibility.action` 已作为 builtin tool 注册并暴露给 LLM，但 macOS 侧 `MacPlatformProvider` 对这三个 method 统一返回 `not_implemented`。
 
@@ -106,7 +92,7 @@
 
 **依赖**：macOS 权限提示与审计文案应与 permission UI 对齐。
 
-### 8. 会话中断 / Stop
+### 7. 会话中断 / Stop
 
 **现状**：协议里已有 `interrupt` 帧，但 `SessionRouter` 未处理，SessionWindow 也没有 Stop 按钮；一旦 LLM 请求或 tool 调用耗时较长，用户只能关闭窗口或等待。
 
@@ -124,7 +110,7 @@
 
 ## P3 — 长期能力
 
-### 9. 多 provider LLM 支持
+### 8. 多 provider LLM 支持
 
 **现状**：生产路径只有 `VercelClient`，OpenAI 兼容 API 通过 `responses/chat/completion` 切换。仓库依赖中已有 `@ai-sdk/anthropic`，但尚未接入到 provider factory。
 
@@ -137,7 +123,7 @@
 
 **依赖**：建议在真实 streaming 后做；provider capability 需要声明是否支持当前已落地的多模态 content part。
 
-### 10. 用户自定义 tool / 插件系统
+### 9. 用户自定义 tool / 插件系统
 
 **现状**：所有 tool 都是 builtin，随代码构建。
 

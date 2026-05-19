@@ -140,14 +140,12 @@ flowchart TD
 - `Workspace` / `WorkspaceRegistry` / `FileWorkspaceRegistry`（持久化到 `~/.spotAgent/workspaces.json`）。
 - `PermissionPolicy` / `PermissionDecision` / `PermissionResolution` / `PermissionScope` / `FilePermissionPolicy`（持久化到 `~/.spotAgent/permissions.json`）。
 
-### 7. 跨进程协议（`packages/core/src/protocol/SessionMessage.ts`）
+### 7. 跨进程协议（`packages/core/src/protocol/`）
 
-`SessionMessage` 是 20 个变体的判别联合，覆盖：
+跨进程协议分为两个判别联合：
 
-- 会话生命周期：`open_session` / `user_message` / `assistant_message_start|delta|end` / `tool_message` / `status` / `interrupt` / `session_snapshot` / `error`。
-- 历史读写：`list_sessions_request|response` / `load_session_request|response` / `delete_session_request`。
-- 权限审批：`permission_request` / `permission_response`。
-- 平台反向 IPC：`platform_bridge_hello` / `platform_request` / `platform_response`（`sessionId: "_platform"` 标记）。
+- `SessionMessage` 覆盖会话生命周期、历史读写和权限审批：`open_session` / `user_message` / `assistant_message_start|delta|end` / `tool_message` / `status` / `interrupt` / `session_snapshot` / `error` / `list_sessions_*` / `load_session_*` / `delete_session_request` / `permission_request|response`。
+- `PlatformBridgeMessage` 覆盖平台反向 IPC：`channel: "platform"` + `platform_bridge_hello` / `platform_request` / `platform_response`。
 
 详见 [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md)。
 

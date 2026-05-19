@@ -1,6 +1,6 @@
 # PlatformBridge
 
-`PlatformBridgeService` 在桌面 App 进程内开一条独立 WebSocket，向 `agent-server` 发送 `platform_bridge_hello` 之后接管 `platform_request`/`platform_response` 这条反向通道，让 server 通过 `RemotePlatformAdapter` 调用 macOS 原生能力（剪贴板 / 前台 App / 窗口列表等）。
+`PlatformBridgeService` 在桌面 App 进程内开一条独立 WebSocket，向 `agent-server` 发送 `channel: "platform"` 的 `platform_bridge_hello` 之后接管 `platform_request` / `platform_response` 这条反向通道，让 server 通过 `RemotePlatformAdapter` 调用 macOS 原生能力（剪贴板 / 前台 App / 窗口列表等）。
 
 设计关键：
 
@@ -20,14 +20,14 @@ sequenceDiagram
 
   LLM->>Server: tool_call clipboard.read
   Server->>Server: RemotePlatformAdapter.currentClipboardText
-  Server->>Bridge: platform_request {method, requestId}
+  Server->>Bridge: PlatformBridgeMessage platform_request {method, requestId}
   Bridge->>Mac: handle(method, args)
   Mac-->>Bridge: result
-  Bridge->>Server: platform_response {status, result}
+  Bridge->>Server: PlatformBridgeMessage platform_response {status, result}
   Server-->>LLM: tool result
 ```
 
 文件：
 
-- `PlatformBridgeService.swift`：负责 WebSocket 维护、`platform_bridge_hello` 握手、JSON 编解码、自动重连。
+- `PlatformBridgeService.swift`：负责 WebSocket 维护、`channel: "platform"` 握手、JSON 编解码、自动重连。
 - `MacPlatformProvider.swift`：实际能力实现；新增 macOS 能力时在此扩展。

@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
 import type { SessionMessage } from "@handagent/core/protocol/SessionMessage.ts";
+import type { PlatformBridgeMessage } from "@handagent/core/protocol/PlatformBridgeMessage.ts";
 import type { FilePermissionPolicy } from "@handagent/core/permission/FilePermissionPolicy.ts";
 import type { SessionRouter } from "./SessionRouter.ts";
 import { SessionPermissionBridge } from "./SessionPermissionBridge.ts";
@@ -24,10 +25,10 @@ function userMessage(sessionId: string, text: string): SessionMessage {
   };
 }
 
-function platformHello(messageId: string): SessionMessage {
+function platformHello(messageId: string): PlatformBridgeMessage {
   return {
+    channel: "platform",
     type: "platform_bridge_hello",
-    sessionId: "_platform",
     messageId,
     timestamp: new Date().toISOString(),
     payload: { agent: "test" },
@@ -47,7 +48,10 @@ function permissionResponse(
   };
 }
 
-async function emitMessage(socket: FakeSocket, message: SessionMessage): Promise<void> {
+async function emitMessage(
+  socket: FakeSocket,
+  message: SessionMessage | PlatformBridgeMessage,
+): Promise<void> {
   socket.emit("message", Buffer.from(JSON.stringify(message)));
   await Promise.resolve();
 }

@@ -9,9 +9,9 @@ import {
   PlatformBridgeTimeoutError,
 } from "@handagent/core/platform/PlatformBridge.ts";
 import type {
+  PlatformBridgeMessage,
   PlatformResponsePayload,
-  SessionMessage,
-} from "@handagent/core/protocol/SessionMessage.ts";
+} from "@handagent/core/protocol/PlatformBridgeMessage.ts";
 
 type Pending = {
   method: string;
@@ -21,7 +21,7 @@ type Pending = {
   timeout: ReturnType<typeof setTimeout>;
 };
 
-export type Send = (message: SessionMessage) => void;
+export type Send = (message: PlatformBridgeMessage) => void;
 export type BridgeToken = number;
 
 export class WebSocketPlatformBridge implements PlatformBridge {
@@ -81,8 +81,8 @@ export class WebSocketPlatformBridge implements PlatformBridge {
       });
 
       send({
+        channel: "platform",
         type: "platform_request",
-        sessionId: "_platform",
         messageId: requestId,
         timestamp: new Date().toISOString(),
         payload: { requestId, method, args, timeoutMs },
