@@ -246,3 +246,28 @@
   - PromptPanel 可见状态：Computer Use 读取到聚焦输入框、设置按钮与 action 列表，没有 textSelection chip。
   - Session 文件：`~/.spotAgent/sessions/E97ACF99-34CE-4539-B94B-1723D692720F.json`，`messages` 仅包含用户 prompt 与 mock assistant 回复，`containsSelectionMarker: false`，`containsInterferenceText: false`。
 - **结论**：通过。普通 `showPromptPanel` 不会把前台 App 的已选中文本作为初始上下文注入；只有用户主动触发 `captureSelection` 才会进入选区附件链路。
+
+## 状态气泡焦点回跳（2026-05-20 实机验证）
+
+- **验证日期**：2026-05-20
+- **验证环境**：mock-llm / macOS / worktree `codex/manual-qa-status-bubble-focus` / `dist/HandAgentDesktop.app`
+- **验证过程**：
+  1. 在 worktree 中执行基线验证：`pnpm install`、`bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`，均通过；其中 vitest 为 32 个测试文件、183 个测试通过。
+  2. 执行 `bash ./scripts/package-app.sh --mock-llm` 并启动 `dist/HandAgentDesktop.app`，确认初始状态只有状态气泡窗口，尺寸为 `280x62`。
+  3. agent-server 子进程监听 `*:4317`，`ps -o pid,ppid,command -p 6750` 显示命令路径为 `/Users/mu9/proj/handAgent/.worktrees/manual-qa-status-bubble-focus/apps/agent-server/src/server.ts`。
+  4. 通过原生事件 `System Events` 发送 `key code 49 using {command down, shift down}` 唤出 PromptPanel，窗口尺寸变为 `640x448` 与 `280x62`，输入框自动聚焦。
+  5. 输入 `[mock:assistant-ok] QA status bubble focus final fallback 20260520` 并提交，创建 `Session C08FD225`，Computer Use 可见窗口状态为 `idle`，显示 mock assistant 回复。
+  6. 再次唤出 PromptPanel，输入 `[mock:slow-focus] QA status bubble focus final running 20260520` 并提交，创建 `Session 616C5A0E`，Computer Use 可见窗口状态为 `running`，右上角出现 Stop 控件。
+  7. 将前台切回已完成的 `Session C08FD225`；状态气泡 AX 子树显示 `Running`，摘要为 `[mock:slow-focus] QA status bubble focus final running 20260520`。
+  8. 用 CGEvent 对状态气泡可见区域发送真实鼠标点击后，AX 窗口顺序变为 `, Session 616C5A0E, Session C08FD225`，`AXMain/AXFocused` 对应 `Session 616C5A0E` 为 `true`，证明状态气泡优先回到当前 running session。
+  9. 在 `Session 616C5A0E` 点击 Stop，窗口状态变为 `interrupted`，状态气泡切回 `Idle`，摘要仍指向最近活跃的 `Session 616C5A0E`。
+  10. 将前台切到旧的 `Session C08FD225` 后再次 CGEvent 点击状态气泡，AX 窗口顺序再次变为 `, Session 616C5A0E, Session C08FD225`，`AXMain/AXFocused` 对应 `Session 616C5A0E` 为 `true`，证明没有 running session 时回到最近活跃窗口。
+- **证据**：
+  - agent-server：`ps -o pid,ppid,command -p 6750` 显示 PPID 为 `6741`，命令路径为当前 worktree 下的 `apps/agent-server/src/server.ts`。
+  - 窗口状态：初始 `280, 62`；PromptPanel 唤起后 `640, 448, 280, 62`；两个会话打开后为 `280, 62, 760, 560, 760, 560`。
+  - running 优先级：点击前前台为 `Session C08FD225`；状态气泡 AX 子树为 `Running` + `[mock:slow-focus] QA status bubble focus final running 20260520`；CGEvent 点击后 `Session 616C5A0E` 的 `AXMain/AXFocused` 为 `true`。
+  - fallback：Stop 后 `Session 616C5A0E` 可见状态为 `interrupted`，状态气泡 AX 子树为 `Idle` + `[mock:slow-focus] QA status bubble focus final running 20260520`；从 `Session C08FD225` 点击气泡后 `Session 616C5A0E` 重新成为 `AXMain/AXFocused` 窗口。
+  - Session 文件：
+    - `~/.spotAgent/sessions/C08FD225-6046-4C77-8891-AA3BE3B3B92D.json` 包含 fallback prompt 与 `Mock assistant response: main chain is reachable.`。
+    - `~/.spotAgent/sessions/616C5A0E-4340-4EB2-9B23-C770963D33F0.json` 包含 slow-focus prompt；Stop 后窗口状态进入 `interrupted`。
+- **结论**：通过。状态气泡在存在 running session 时优先回到 running SessionWindow；没有 running session 时回到最近活跃的打开窗口。

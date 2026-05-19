@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MockLLMClient, mockLLMScenarios } from "../src/llm/MockLLMClient";
+import { MockLLMClient, mockLLMScenarios, type MockLLMScenario } from "../src/llm/MockLLMClient";
 import { AgentRuntime } from "../src/runtime/AgentRuntime";
 import type { AgentTool } from "../src/tools/AgentTool";
 import { ToolRegistry } from "../src/tools/ToolRegistry";
@@ -40,6 +40,8 @@ describe("MockLLMClient", () => {
       "[mock:permission-write]",
       "[mock:image-summary]",
       "[mock:llm-error]",
+      "[mock:slow]",
+      "[mock:slow-focus]",
       "[mock:unknown-tool]",
     ]));
   });
@@ -139,5 +141,40 @@ describe("MockLLMClient", () => {
     await expect(
       client.complete([{ role: "user", content: "no trigger" }], []),
     ).rejects.toThrow("MockLLMClient could not find a mock trigger.");
+  });
+
+  it("keeps the slow-focus QA scenario response deterministic", async () => {
+    const slowFocusScenario: MockLLMScenario = {
+      ...mockLLMScenarios.find((scenario) => scenario.id === "slow-focus")!,
+      complete: () => ({
+        message: { role: "assistant", content: "Mock slow focus response completed." },
+        toolCalls: [],
+      }),
+    };
+    const client = new MockLLMClient([slowFocusScenario]);
+
+    await expect(
+      client.complete([{ role: "user", content: "run [mock:slow-focus]" }], []),
+    ).resolves.toEqual({
+      message: {
+        role: "assistant",
+        content: "Mock slow focus response completed.",
+      },
+      toolCalls: [],
+    });
+  });
+
+  it("lets the slow-focus QA scenario abort without waiting for the full delay", async () => {
+    const client = new MockLLMClient();
+    const abortController = new AbortController();
+    abortController.abort();
+
+    await expect(
+      client.complete(
+        [{ role: "user", content: "run [mock:slow-focus]" }],
+        [],
+        { signal: abortController.signal },
+      ),
+    ).rejects.toMatchObject({ name: "AbortError" });
   });
 });

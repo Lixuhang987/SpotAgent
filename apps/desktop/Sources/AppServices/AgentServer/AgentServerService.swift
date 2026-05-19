@@ -242,8 +242,14 @@ struct AgentServerRepositoryRootLocator {
 
     func findRepositoryRoot(startingAt url: URL) -> URL? {
         var current = url.standardizedFileURL
+        var visitedPaths = Set<String>()
 
         while true {
+            let currentPath = current.path
+            guard visitedPaths.insert(currentPath).inserted else {
+                return nil
+            }
+
             let packageManifest = current.appendingPathComponent("Package.swift")
             let serverPath = current.appendingPathComponent(agentServerRelativePath)
 
@@ -252,8 +258,12 @@ struct AgentServerRepositoryRootLocator {
                 return current
             }
 
+            if currentPath == "/" {
+                return nil
+            }
+
             let parent = current.deletingLastPathComponent()
-            if parent.path == current.path {
+            if parent.path == currentPath {
                 return nil
             }
 
