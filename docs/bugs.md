@@ -158,9 +158,9 @@
 
 **发现日期**：2026-05-19
 
----
+**修复日期**：2026-05-20
 
-## 当前 bug
+---
 
 ### 5. Tool message UI 在部分 tool 结果中展示了入参而非实际结果
 
@@ -194,4 +194,26 @@
 - UI 展示：SessionWindow 收到 `tool_message` 后可能保留了 running 阶段的 arguments 文本，或 MessageTranslator / ViewModel 合并 completed tool message 时未用 result text 覆盖旧文本。
 - 下一步应从 `SessionRuntimeOrchestrator` 下发 `tool_message`、`MessageTranslator` 转换和 `SessionViewModel` 合并消息三处追踪。
 
+**状态**：已修复。
+
+**根因边界**：`AgentRuntime` 的 `tool_result.output`、`MessageTranslator.toSessionMessage()` 生成的 completed/failed `tool_message.text`、`SessionRuntimeOrchestrator` 下发帧与审计事件均已正确携带实际结果。失败点在桌面端 `SessionViewModel.handle(.toolMessage)`：running 阶段和 completed/failed 阶段使用同一个 `messageID`，但 ViewModel 每次都追加新的 tool 气泡，导致 UI 保留了最先展示的入参气泡。修复后同 ID 的 terminal tool message 会更新已有 tool 气泡文本。
+
+**checkpoint 与结论**：
+
+- `AgentRuntime/tool_result` -> session 持久化：既有证据中 `~/.spotAgent/sessions/FC95D6F1-415C-41A8-89A8-FAB137DBDEDA.json` 的 `workspace.list` `tool_result.output` 包含 workspace 列表，`~/.spotAgent/sessions/AC07B7E0-9852-48A0-B38D-DC8016DE3352.json` 的 `file.write` `tool_result.output` 为 `Path escapes workspace root: ../../etc/passwd`，说明 runtime/tool 层正常。
+- `MessageTranslator` -> `SessionRuntimeOrchestrator`：既有 `MessageTranslator.test.ts` 与 `SessionRuntimeOrchestrator.test.ts` 覆盖 `tool_result` 转成 completed/failed `tool_message`，并把同一 output 写入 audit event。
+- `SessionViewModel` 合并/渲染：修复前 RED 测试 `SessionViewModelTests.testTerminalToolMessageReplacesRunningArgumentsBubble` 证明同一 `messageID` 的 running/terminal tool frame 会形成重复气泡，列表中保留 `workspace.list: {}` 与 `file.write` 入参 JSON；修复后该测试通过。
+
+**验证**：
+
+- `bash ./scripts/swiftw test --filter SessionViewModelTests/testTerminalToolMessageReplacesRunningArgumentsBubble`
+
 **发现日期**：2026-05-19
+
+**修复日期**：2026-05-20
+
+---
+
+## 当前 bug
+
+当前没有已确认且未修复的 bug。继续按实机 QA 与回归结果复查本文件；发现新缺陷时追加到本节。
