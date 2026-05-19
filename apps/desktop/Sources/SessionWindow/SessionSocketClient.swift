@@ -187,6 +187,16 @@ final class SessionSocketClient: @unchecked Sendable {
         send(envelope, on: socketTask)
     }
 
+    func sendInterrupt(sessionID: String) {
+        sendJSON([
+            "type": "interrupt",
+            "sessionId": sessionID,
+            "messageId": UUID().uuidString,
+            "timestamp": Self.timestamp(),
+            "payload": [:] as [String: Any],
+        ])
+    }
+
     private func sendOpenSession(sessionID: String) {
         guard let socketTask else { return }
 

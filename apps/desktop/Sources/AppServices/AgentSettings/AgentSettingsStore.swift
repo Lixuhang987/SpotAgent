@@ -16,13 +16,29 @@ enum AgentAPIType: String, CaseIterable, Codable, Equatable, Identifiable {
     }
 }
 
+enum AgentLLMProvider: String, CaseIterable, Codable, Equatable, Identifiable {
+    case openAICompatible = "openai-compatible"
+    case anthropic
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .openAICompatible: return "OpenAI 兼容"
+        case .anthropic: return "Anthropic"
+        }
+    }
+}
+
 struct AgentSettings: Codable, Equatable {
+    var provider: AgentLLMProvider
     var model: String
     var apiKey: String
     var baseURL: String
     var api: AgentAPIType
 
     static let defaultValue = AgentSettings(
+        provider: .openAICompatible,
         model: "gpt-5-mini",
         apiKey: "",
         baseURL: "",
@@ -30,10 +46,34 @@ struct AgentSettings: Codable, Equatable {
     )
 
     enum CodingKeys: String, CodingKey {
+        case provider
         case model
         case apiKey
         case baseURL = "baseUrl"
         case api
+    }
+
+    init(
+        provider: AgentLLMProvider = .openAICompatible,
+        model: String,
+        apiKey: String,
+        baseURL: String,
+        api: AgentAPIType
+    ) {
+        self.provider = provider
+        self.model = model
+        self.apiKey = apiKey
+        self.baseURL = baseURL
+        self.api = api
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        provider = try container.decodeIfPresent(AgentLLMProvider.self, forKey: .provider) ?? .openAICompatible
+        model = try container.decode(String.self, forKey: .model)
+        apiKey = try container.decode(String.self, forKey: .apiKey)
+        baseURL = try container.decode(String.self, forKey: .baseURL)
+        api = try container.decode(AgentAPIType.self, forKey: .api)
     }
 }
 

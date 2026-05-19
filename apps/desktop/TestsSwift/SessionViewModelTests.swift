@@ -95,6 +95,24 @@ final class SessionViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testStopSendsInterruptAndKeepsSocketConnected() {
+        let transport = RecordingSessionSocketTransportForViewModel()
+        let client = SessionSocketClient(
+            serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
+            transport: transport,
+            reconnectDelay: 0
+        )
+        let model = SessionViewModel(sessionID: "session-1", socketClient: client)
+
+        model.start(initialPrompt: "hello")
+        model.stop()
+
+        XCTAssertEqual(model.status, "interrupted")
+        XCTAssertEqual(transport.tasks[0].sentTypes, ["open_session", "user_message", "interrupt"])
+        XCTAssertFalse(transport.tasks[0].didCancel)
+    }
+
+    @MainActor
     func testSendPromptWithAttachmentsAddsUserBubbleAttachmentDisplayState() throws {
         let model = SessionViewModel(sessionID: "session-1", socketClient: .noop)
 
@@ -220,4 +238,44 @@ final class SessionViewModelTests: XCTestCase {
         XCTAssertNil(model.pendingHistoryDeletionID)
         XCTAssertTrue(model.historyList.isEmpty)
     }
+}
+
+private final class RecordingSessionSocketTransportForViewModel: SessionSocketTransport {
+    private(set) var tasks: [RecordingSessionWebSocketTaskForViewModel] = []
+
+    func makeWebSocketTask(with url: URL) -> any SessionWebSocketTask {
+        let task = RecordingSessionWebSocketTaskForViewModel()
+        tasks.append(task)
+        return task
+    }
+}
+
+private final class RecordingSessionWebSocketTaskForViewModel: SessionWebSocketTask {
+    private(set) var sentTypes: [String] = []
+    private(set) var didCancel = false
+
+    func resume() {}
+
+    func cancel(with closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
+        didCancel = true
+    }
+
+    func send(
+        _ message: URLSessionWebSocketTask.Message,
+        completionHandler: @escaping @Sendable (Error?) -> Void
+    ) {
+        guard case .string(let text) = message,
+              let data = text.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let type = object["type"] as? String else {
+            completionHandler(nil)
+            return
+        }
+        sentTypes.append(type)
+        completionHandler(nil)
+    }
+
+    func receive(
+        completionHandler: @escaping @Sendable (Result<URLSessionWebSocketTask.Message, Error>) -> Void
+    ) {}
 }

@@ -52,6 +52,34 @@ describe("ModelSettings", () => {
       apiKey: "test-key",
       baseUrl: "https://example.com/v1",
       api: "chat",
+      provider: "openai-compatible",
+    });
+  });
+
+  it("loads the configured LLM provider", () => {
+    const homeDir = mkdtempSync(join(tmpdir(), "spot-agent-settings-"));
+    tempRoots.push(homeDir);
+    const settingsDir = join(homeDir, ".spotAgent");
+    mkdirSync(settingsDir, { recursive: true });
+    writeFileSync(
+      join(settingsDir, "settings.json"),
+      JSON.stringify({
+        llm: {
+          provider: "anthropic",
+          model: "claude-sonnet-4-5-20250929",
+          apiKey: "test-key",
+          api: "chat",
+        },
+      }),
+    );
+
+    expect(loadModelSettings(homeDir)).toEqual({
+      model: "claude-sonnet-4-5-20250929",
+      summarizerModel: "claude-haiku-4-5-20251001",
+      apiKey: "test-key",
+      baseUrl: undefined,
+      api: "chat",
+      provider: "anthropic",
     });
   });
 
@@ -93,6 +121,7 @@ describe("ModelSettings", () => {
       apiKey: "second-key",
       baseUrl: "https://second.example/v1",
       api: "chat",
+      provider: "openai-compatible",
     });
   });
 

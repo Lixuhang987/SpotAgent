@@ -85,6 +85,7 @@ export class VercelClient implements LLMClient {
       model: this.model,
       messages: await toVercelMessages(messages, options),
       tools: toVercelTools(tools),
+      abortSignal: options?.signal,
     };
     const response = this.streamText(request);
     let content = "";

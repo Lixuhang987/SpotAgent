@@ -216,10 +216,11 @@ describe("SessionRuntimeOrchestrator", () => {
         },
       ],
     ]);
-    expect(seenRunOptions).toEqual([
-      { sessionId: "session-2" },
-      { sessionId: "session-2" },
+    expect(seenRunOptions.map((options) => options?.sessionId)).toEqual([
+      "session-2",
+      "session-2",
     ]);
+    expect(seenRunOptions.every((options) => options?.signal instanceof AbortSignal)).toBe(true);
   });
 
   it("waits for pending summaries before passing history into runtime", async () => {
@@ -406,6 +407,84 @@ describe("SessionRuntimeOrchestrator", () => {
         output: "file contents here",
         durationMs: 12,
       },
+    ]);
+  });
+
+  it("aborts the active run and ignores later assistant/tool output", async () => {
+    const pushed: SessionMessage[] = [];
+    const store = new InMemorySessionStore();
+    const persistence = new SessionPersistence(
+      store,
+      () => "2026-05-17T00:00:00.000Z",
+    );
+    let runtimeSignal: AbortSignal | undefined;
+    let emitLateEvent: ((event: AgentRuntimeEvent) => void) | undefined;
+    let finishRun: ((result: { messages: AgentMessage[]; bubbles: [] }) => void) | undefined;
+    const runStarted = Promise.withResolvers<void>();
+    const orchestrator = new SessionRuntimeOrchestrator(
+      {
+        runWithMessages(messages, onEvent, runOptions) {
+          runtimeSignal = runOptions?.signal;
+          emitLateEvent = onEvent;
+          runStarted.resolve();
+          return new Promise((resolve) => {
+            finishRun = resolve;
+          });
+        },
+      },
+      persistence,
+      () => "2026-05-17T00:00:00.000Z",
+    );
+
+    const runPromise = orchestrator.handleUserMessage(
+      createUserMessage("session-interrupt", "停止这轮", "user-1"),
+      (message) => pushed.push(message),
+    );
+    await runStarted.promise;
+
+    orchestrator.interruptSession("session-interrupt", (message) => pushed.push(message));
+    emitLateEvent?.({
+      type: "assistant_message_delta",
+      messageId: "assistant-1",
+      payload: { text: "late assistant" },
+    });
+    emitLateEvent?.({
+      type: "tool_result",
+      toolCallId: "tc-1",
+      toolName: "file.read",
+      status: "success",
+      output: "late tool",
+      durationMs: 1,
+    });
+    finishRun?.({
+      messages: [
+        { role: "user", content: "停止这轮" },
+        { role: "assistant", content: "late assistant" },
+        { role: "tool", toolCallId: "tc-1", name: "file.read", content: "late tool" },
+      ],
+      bubbles: [],
+    });
+    await runPromise;
+
+    expect(runtimeSignal?.aborted).toBe(true);
+    expect(pushed).toEqual([
+      {
+        type: "assistant_message_end",
+        sessionId: "session-interrupt",
+        messageId: "session-interrupt-interrupted",
+        timestamp: "2026-05-17T00:00:00.000Z",
+        payload: { status: "interrupted" },
+      },
+      {
+        type: "status",
+        sessionId: "session-interrupt",
+        messageId: "session-interrupt-status",
+        timestamp: "2026-05-17T00:00:00.000Z",
+        payload: { value: "interrupted" },
+      },
+    ]);
+    expect(await persistence.getMessages("session-interrupt")).toEqual([
+      { role: "user", content: "停止这轮" },
     ]);
   });
 

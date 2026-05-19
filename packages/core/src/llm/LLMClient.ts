@@ -25,6 +25,7 @@ export type LLMStreamEvent =
 
 export type LLMCompleteOptions = {
   blobStore?: BlobStore;
+  signal?: AbortSignal;
 };
 
 export interface LLMClient {
@@ -49,8 +50,11 @@ export async function completeLLM(
   tools: RegisteredTool[],
   options?: LLMCompleteOptions,
 ): Promise<LLMCompletion> {
+  throwIfAborted(options?.signal);
   if (client.complete) {
-    return client.complete(messages, tools, options);
+    const completion = await client.complete(messages, tools, options);
+    throwIfAborted(options?.signal);
+    return completion;
   }
 
   return collectLLMStream(client.stream(messages, tools, options));
@@ -62,13 +66,17 @@ export async function* streamLLM(
   tools: RegisteredTool[],
   options?: LLMCompleteOptions,
 ): AsyncIterable<LLMStreamEvent> {
+  throwIfAborted(options?.signal);
   if (client.stream) {
-    yield* client.stream(messages, tools, options);
+    for await (const event of client.stream(messages, tools, options)) {
+      throwIfAborted(options?.signal);
+      yield event;
+    }
     return;
   }
 
   if (client.complete) {
-    yield* streamFromCompletion(client.complete(messages, tools, options));
+    yield* streamFromCompletion(client.complete(messages, tools, options), options?.signal);
     return;
   }
 
@@ -111,8 +119,11 @@ export type LegacyLLMClient = {
 
 async function* streamFromCompletion(
   completionPromise: Promise<LLMCompletion>,
+  signal?: AbortSignal,
 ): AsyncIterable<LLMStreamEvent> {
+  throwIfAborted(signal);
   const completion = await completionPromise;
+  throwIfAborted(signal);
 
   if (completion.message.content) {
     yield {
@@ -133,4 +144,15 @@ async function* streamFromCompletion(
     message: completion.message,
     toolCalls: completion.toolCalls,
   };
+}
+
+export function throwIfAborted(signal?: AbortSignal): void {
+  if (!signal?.aborted) return;
+  throw createAbortError();
+}
+
+export function createAbortError(): Error {
+  const error = new Error("The agent run was interrupted.");
+  error.name = "AbortError";
+  return error;
 }

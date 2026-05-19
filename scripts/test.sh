@@ -21,6 +21,7 @@ pnpm exec vitest run \
   apps/agent-server/src/server.test.ts \
   apps/agent-server/src/path-alias.test.ts \
   packages/core/tests/llm-integration-artifacts.test.ts \
+  packages/core/tests/llm-client-factory.test.ts \
   packages/core/tests/mock-llm-client.test.ts \
   packages/core/tests/model-settings.test.ts \
   packages/core/tests/openai-config.test.ts \

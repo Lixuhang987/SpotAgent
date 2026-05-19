@@ -14,7 +14,7 @@ export type PushMessage = (message: SessionMessage) => void;
 
 export class SessionRouter {
   constructor(
-    private readonly orchestrator: Pick<SessionRuntimeOrchestrator, "handleUserMessage">,
+    private readonly orchestrator: Pick<SessionRuntimeOrchestrator, "handleUserMessage" | "interruptSession">,
     private readonly persistence: SessionPersistence,
     private readonly now: () => string = () => new Date().toISOString(),
   ) {}
@@ -55,6 +55,9 @@ export class SessionRouter {
         return this.handleDeleteSession(message);
       case "user_message":
         return this.orchestrator.handleUserMessage(message, push);
+      case "interrupt":
+        this.orchestrator.interruptSession(message.sessionId, push);
+        return;
       default:
         return;
     }

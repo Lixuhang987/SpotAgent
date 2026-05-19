@@ -302,7 +302,9 @@ final class SessionViewModel {
     }
 
     func stop() {
-        socketClient.disconnect()
+        guard status == "running" else { return }
+        status = "interrupted"
+        socketClient.sendInterrupt(sessionID: sessionID)
     }
 
     func sendPrompt(_ text: String, attachments: [UserMessageAttachmentPayload] = []) {

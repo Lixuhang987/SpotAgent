@@ -2,7 +2,7 @@ import type { AgentMessage } from "./AgentMessage.ts";
 import type { ToolCallEnvelope } from "./ToolCallEnvelope.ts";
 import type { LLMClientLike } from "../llm/LLMClient.ts";
 import type { LLMCompletion } from "../llm/LLMClient.ts";
-import { streamLLM } from "../llm/LLMClient.ts";
+import { streamLLM, throwIfAborted } from "../llm/LLMClient.ts";
 import { ToolRegistry } from "../tools/ToolRegistry.ts";
 import type { PermissionPolicy } from "../permission/PermissionPolicy.ts";
 import { AllowAllPermissionPolicy, DENY_TOOL_RESULT_TEXT } from "../permission/PermissionPolicy.ts";
@@ -34,7 +34,7 @@ export type AgentRuntimeEvent =
   | {
       type: "assistant_message_end";
       messageId: string;
-      payload: { status: "completed" };
+      payload: { status: "completed" | "interrupted" };
     }
   | {
       type: "tool_call";
@@ -66,6 +66,7 @@ export type AgentRuntimeEvent =
 
 export type AgentRuntimeRunOptions = {
   sessionId?: string;
+  signal?: AbortSignal;
 };
 
 export class AgentRuntime {
@@ -106,12 +107,15 @@ export class AgentRuntime {
     runOptions: AgentRuntimeRunOptions = {}
   ): Promise<AgentRunResult> {
     const nextMessages = [...messages];
+    throwIfAborted(runOptions.signal);
     await this.waitForPendingSummaries(nextMessages);
+    throwIfAborted(runOptions.signal);
     const bubbles: AgentBubble[] = [];
     let assistantCount = 0;
 
     for (let turn = 0; turn < this.maxTurns; turn += 1) {
-      const completion = await this.completeTurn(nextMessages, onEvent, ++assistantCount);
+      const completion = await this.completeTurn(nextMessages, onEvent, ++assistantCount, runOptions);
+      throwIfAborted(runOptions.signal);
       const assistantMessage =
         completion.toolCalls && completion.toolCalls.length > 0
           ? {
@@ -138,6 +142,7 @@ export class AgentRuntime {
       }
 
       for (const toolCall of toolCalls) {
+        throwIfAborted(runOptions.signal);
         const tool = this.toolRegistry.get(toolCall.name);
         if (!tool) {
           throw new Error(`Unknown tool: ${toolCall.name}`);
@@ -151,8 +156,10 @@ export class AgentRuntime {
         };
 
         let decision = await this.permissionPolicy.check(permRequest);
+        throwIfAborted(runOptions.signal);
         if (decision === "ask") {
           const resolution = await this.permissionPolicy.resolveAsk(permRequest);
+          throwIfAborted(runOptions.signal);
           await this.permissionPolicy.remember(permRequest, resolution);
           decision = resolution.decision;
           onEvent({
@@ -198,8 +205,10 @@ export class AgentRuntime {
             sessionId: runOptions.sessionId,
             toolCallId: toolCall.id,
           });
+          throwIfAborted(runOptions.signal);
           toolContent = serializeToolResult(result);
         } catch (error) {
+          throwIfAborted(runOptions.signal);
           toolStatus = "error";
           toolContent = error instanceof Error ? error.message : String(error);
         }
@@ -211,6 +220,7 @@ export class AgentRuntime {
           toolContent,
           cached: tool.stubByDefault ? parseCached(toolCall.arguments.cached) : undefined,
         });
+        throwIfAborted(runOptions.signal);
         nextMessages.push(toolMessage);
 
         onEvent({
@@ -231,46 +241,63 @@ export class AgentRuntime {
     messages: AgentMessage[],
     onEvent: (event: AgentRuntimeEvent) => void,
     assistantCount: number,
+    runOptions: AgentRuntimeRunOptions,
   ): Promise<LLMCompletion> {
     const messageId = `assistant-${assistantCount}`;
     let content = "";
     const toolCalls: ToolCallEnvelope[] = [];
 
+    throwIfAborted(runOptions.signal);
     onEvent({
       type: "assistant_message_start",
       messageId,
       payload: { role: "assistant" },
     });
 
-    for await (const event of streamLLM(
-      this.client,
-      messages,
-      this.toolRegistry.list(),
-      this.blobStore ? { blobStore: this.blobStore } : undefined,
-    )) {
-      switch (event.type) {
-        case "text_delta":
-          content += event.text;
-          onEvent({
-            type: "assistant_message_delta",
-            messageId,
-            payload: { text: event.text },
-          });
-          break;
-        case "tool_call":
-          toolCalls.push(event.toolCall);
-          break;
-        case "message_end":
-          if (typeof event.message.content === "string") {
-            content = event.message.content;
-          }
-          if (event.toolCalls) {
-            toolCalls.splice(0, toolCalls.length, ...event.toolCalls);
-          }
-          break;
+    try {
+      for await (const event of streamLLM(
+        this.client,
+        messages,
+        this.toolRegistry.list(),
+        {
+          ...(this.blobStore ? { blobStore: this.blobStore } : {}),
+          signal: runOptions.signal,
+        },
+      )) {
+        switch (event.type) {
+          case "text_delta":
+            content += event.text;
+            onEvent({
+              type: "assistant_message_delta",
+              messageId,
+              payload: { text: event.text },
+            });
+            break;
+          case "tool_call":
+            toolCalls.push(event.toolCall);
+            break;
+          case "message_end":
+            if (typeof event.message.content === "string") {
+              content = event.message.content;
+            }
+            if (event.toolCalls) {
+              toolCalls.splice(0, toolCalls.length, ...event.toolCalls);
+            }
+            break;
+        }
       }
+    } catch (error) {
+      if (isAbortError(error)) {
+        onEvent({
+          type: "assistant_message_end",
+          messageId,
+          payload: { status: "interrupted" },
+        });
+      }
+      throw error;
     }
 
+    throwIfAborted(runOptions.signal);
     onEvent({
       type: "assistant_message_end",
       messageId,
@@ -328,6 +355,10 @@ export class AgentRuntime {
     if (!this.turnSummarizer) return;
     this.pendingTurnSummary = this.turnSummarizer.summarizeTurn(messages);
   }
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError";
 }
 
 function parseCached(value: unknown): StubCacheScope | undefined {

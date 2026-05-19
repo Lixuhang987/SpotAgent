@@ -7,7 +7,7 @@ LLM 模型配置与 tool allowlist / denylist 的读写。
 | 文件 | 职责 |
 |------|------|
 | `AgentSettingsStore.swift` | `@Observable` + `@MainActor`，从 `~/.spotAgent/settings.json` 读写 LLM 配置与 tool allowlist / denylist，500ms 轮询热加载 |
-| `AgentSettingsView.swift` | 模型设置的 SwiftUI 表单（model / api / baseURL / apiKey），使用 `settingsCard()` + `SettingsFieldStyle` + 自定义 segmented picker，由 [Settings/SettingsView](/Users/mu9/proj/handAgent/apps/desktop/Sources/Settings/settings.md) 嵌入 |
+| `AgentSettingsView.swift` | 模型设置的 SwiftUI 表单（provider / model / api / baseURL / apiKey），使用 `settingsCard()` + `SettingsFieldStyle` + 自定义 segmented picker，由 [Settings/SettingsView](/Users/mu9/proj/handAgent/apps/desktop/Sources/Settings/settings.md) 嵌入 |
 
 ## 数据模型
 
@@ -15,6 +15,7 @@ LLM 模型配置与 tool allowlist / denylist 的读写。
 // ~/.spotAgent/settings.json
 {
   "llm": {
+    "provider": "openai-compatible", // openai-compatible | anthropic；缺失时默认 openai-compatible
     "model": "gpt-5-mini",
     "apiKey": "sk-...",
     "baseUrl": "https://api.openai.com/v1",
@@ -30,6 +31,7 @@ LLM 模型配置与 tool allowlist / denylist 的读写。
 ## 设计备注
 
 - 文件路径固定为 `~/.spotAgent/settings.json`（`AgentSettingsStore.settingsFileURL(homeDirectoryURL:)`）。
+- `AgentLLMProvider` 与 core 的 `ModelSettings.provider` 字符串保持一致；新增 provider 时需要同步 core factory、agent-server 设置读取与桌面 settings UI。
 - 写入用 `JSONEncoder([.prettyPrinted, .sortedKeys])` + `Data.write(.atomic)`，避免半截文件。
 - 500ms 轮询比较 raw `Data` 字节，避免相同内容触发无意义刷新。
 - `update(_:)` 是唯一写入入口，写后立即 persist 并刷新 `lastLoadedData`。

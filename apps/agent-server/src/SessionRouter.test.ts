@@ -241,6 +241,36 @@ describe("SessionRouter", () => {
     ]);
   });
 
+  it("routes interrupt frames to the runtime orchestrator", async () => {
+    const interrupted: string[] = [];
+    const router = new SessionRouter(
+      {
+        async handleUserMessage() {},
+        interruptSession(sessionId: string) {
+          interrupted.push(sessionId);
+        },
+      },
+      new SessionPersistence(
+        new InMemorySessionStore(),
+        () => "2026-05-17T00:00:00.000Z",
+      ),
+      () => "2026-05-18T00:00:00.000Z",
+    );
+
+    await router.receive(
+      {
+        type: "interrupt",
+        sessionId: "session-stop",
+        messageId: "interrupt-1",
+        timestamp: "2026-05-18T00:00:00.000Z",
+        payload: {},
+      },
+      () => {},
+    );
+
+    expect(interrupted).toEqual(["session-stop"]);
+  });
+
   it("exposes convenience methods backed by persistence", async () => {
     const router = new SessionRouter(
       {

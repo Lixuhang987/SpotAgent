@@ -27,6 +27,19 @@ final class AgentSettingsViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testSettingProviderPersistsToStore() {
+        let homeURL = makeTemporaryHomeDirectory()
+        defer { try? FileManager.default.removeItem(at: homeURL) }
+
+        let store = AgentSettingsStore(homeDirectoryURL: homeURL)
+        let vm = AgentSettingsViewModel(store: store)
+
+        vm.provider = .anthropic
+
+        XCTAssertEqual(store.settings.provider, .anthropic)
+    }
+
+    @MainActor
     func testSettingAPIPersistsToStore() {
         let homeURL = makeTemporaryHomeDirectory()
         defer { try? FileManager.default.removeItem(at: homeURL) }

@@ -18,7 +18,7 @@ desktop ↔ agent-server 的 WebSocket 协议。会话流量走 `SessionMessage`
 | | `assistant_message_start` / `_delta` / `_end` | server → desktop |
 | | `tool_message`（`MessageTranslator` 把 `tool_call` → `running`，`tool_result` → `completed`/`failed`） | server → desktop |
 | | `status` | server → desktop |
-| | `interrupt` | desktop → server（当前未处理） |
+| | `interrupt` | desktop → server（中断当前 session run） |
 | | `session_snapshot` | server → desktop |
 | | `error` | server → desktop |
 | 历史读写 | `list_sessions_request` / `_response` | desktop ↔ server |
@@ -61,6 +61,12 @@ desktop ↔ agent-server 的 WebSocket 协议。会话流量走 `SessionMessage`
 - SessionWindow 首次连接和 socket 断线重连后都会发送 `open_session`。
 - agent-server 若在 store 中找到对应 `sessionId`，会返回 `session_snapshot`，用于恢复窗口内的消息列表和状态。
 - 如果 session 不存在，`open_session` 不创建新会话；首次用户输入仍由 `user_message` 创建并触发 runtime。
+
+## 会话中断
+
+- SessionWindow 运行态 Stop 控件发送 `interrupt`，不会断开 socket。
+- agent-server 将 `interrupt` 路由给当前 session 的 active run，abort 后立即回推 `assistant_message_end(status: "interrupted")` 与 `status(value: "interrupted")`。
+- 已中断 run 的后续 assistant delta、tool result 与最终 runtime result 会被 generation 过滤，不再推送或持久化。
 
 ## 附件
 
