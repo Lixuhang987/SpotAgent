@@ -39,6 +39,6 @@ SessionSummary {
 
 ## 与其他模块的关系
 
-- [SessionLifecycle](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 在 `open / close` 中调用 `upsert(_:)`。
+- [SessionLifecycle](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 在 `open / close` 以及 `SessionViewModel` 状态 / 消息变化回调中调用 `upsert(_:)`，保持状态气泡使用的 `isRunning` 与 `latestSummary` 同步。
 - [StatusBubble ViewModel](/Users/mu9/proj/handAgent/apps/desktop/Sources/StatusBubble/status-bubble.md) 派生 `isRunning` / `latestSummary`。
 - [AppCoordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 用 `SessionHistoryStore.list()` 生成 PromptPanel 最近会话 action，用 `SessionHistoryViewModel` 打开独立历史窗口。

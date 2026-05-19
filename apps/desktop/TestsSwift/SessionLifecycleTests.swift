@@ -75,6 +75,81 @@ final class SessionLifecycleTests: XCTestCase {
     }
 
     @MainActor
+    func testViewModelErrorUpdatesRegistrySummary() {
+        let registry = SessionRegistry()
+        let lifecycle = SessionLifecycle(
+            registry: registry,
+            windowPresenter: SpySessionWindowPresenter(),
+            agentServerURL: URL(string: "ws://127.0.0.1:0/noop")!,
+            activationPolicy: AppActivationPolicyCoordinator(),
+            setActivationPolicy: { _ in }
+        )
+        let prompt = PromptSubmission.compose(draft: "hello", attachments: [])!
+        let id = lifecycle.open(prompt: prompt, startupError: nil) { _ in }
+
+        lifecycle.viewModels[id]?.handle(
+            .error(messageID: "error-1", message: "agent failed", timestamp: "2026-05-20T00:00:00Z")
+        )
+
+        XCTAssertEqual(registry.summaries[id]?.isRunning, false)
+        XCTAssertEqual(registry.summaries[id]?.latestSummary, "agent failed")
+        XCTAssertEqual(registry.summaries[id]?.windowIsOpen, true)
+    }
+
+    @MainActor
+    func testAssistantMessageEndUpdatesRegistrySummaryToIdle() {
+        let registry = SessionRegistry()
+        let lifecycle = SessionLifecycle(
+            registry: registry,
+            windowPresenter: SpySessionWindowPresenter(),
+            agentServerURL: URL(string: "ws://127.0.0.1:0/noop")!,
+            activationPolicy: AppActivationPolicyCoordinator(),
+            setActivationPolicy: { _ in }
+        )
+        let prompt = PromptSubmission.compose(draft: "hello", attachments: [])!
+        let id = lifecycle.open(prompt: prompt, startupError: nil) { _ in }
+
+        lifecycle.viewModels[id]?.handle(
+            .assistantMessageStart(messageID: "assistant-1", timestamp: "2026-05-20T00:00:00Z")
+        )
+        lifecycle.viewModels[id]?.handle(
+            .assistantMessageDelta(messageID: "assistant-1", text: "done", timestamp: "2026-05-20T00:00:01Z")
+        )
+        lifecycle.viewModels[id]?.handle(
+            .assistantMessageEnd(messageID: "assistant-1", status: "completed", timestamp: "2026-05-20T00:00:02Z")
+        )
+
+        XCTAssertEqual(registry.summaries[id]?.isRunning, false)
+        XCTAssertEqual(registry.summaries[id]?.latestSummary, "done")
+        XCTAssertEqual(registry.summaries[id]?.windowIsOpen, true)
+    }
+
+    @MainActor
+    func testStatusEventsUpdateRegistryRunningStateWhilePreservingSummary() {
+        let registry = SessionRegistry()
+        let lifecycle = SessionLifecycle(
+            registry: registry,
+            windowPresenter: SpySessionWindowPresenter(),
+            agentServerURL: URL(string: "ws://127.0.0.1:0/noop")!,
+            activationPolicy: AppActivationPolicyCoordinator(),
+            setActivationPolicy: { _ in }
+        )
+        let prompt = PromptSubmission.compose(draft: "hello", attachments: [])!
+        let id = lifecycle.open(prompt: prompt, startupError: nil) { _ in }
+
+        lifecycle.viewModels[id]?.handle(.status(value: "idle"))
+
+        XCTAssertEqual(registry.summaries[id]?.isRunning, false)
+        XCTAssertEqual(registry.summaries[id]?.latestSummary, "hello")
+
+        lifecycle.viewModels[id]?.handle(.status(value: "running"))
+
+        XCTAssertEqual(registry.summaries[id]?.isRunning, true)
+        XCTAssertEqual(registry.summaries[id]?.latestSummary, "hello")
+        XCTAssertEqual(registry.summaries[id]?.windowIsOpen, true)
+    }
+
+    @MainActor
     func testCloseUnknownSessionIDIsNoop() {
         let lifecycle = SessionLifecycle(
             registry: SessionRegistry(),

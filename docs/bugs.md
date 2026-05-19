@@ -29,7 +29,7 @@
 - 2026-05-19 本轮实机 QA 使用 `bash ./scripts/package-app.sh --mock-llm` 打包启动。
 - 图片附件链路可验证到 Quick Look、SessionWindow 摘要、blob stub 持久化；但 `[mock:image-summary]` 只返回固定文本，不能证明真实 LLM 基于图片内容描述。
 - `[mock:assistant-ok]` 为一次性 mock assistant 回复，不能证明真实 token delta 至少 5 段逐段更新。
-- 结论：第 44、45 项需要 real LLM 环境单独验证。
+- 结论：第 45、46 项需要 real LLM 环境单独验证。
 
 ---
 
@@ -92,8 +92,6 @@
 
 ---
 
-## 当前 bug
-
 ### 3. 状态气泡不会随 SessionWindow 失败状态更新
 
 **严重级别**：P1
@@ -110,9 +108,26 @@
 
 **根因边界**：`AppCoordinator.handleSubmitPrompt()` 创建会话时只向 `SessionRegistry` 写入一次 `isRunning: true`；`SessionViewModel.handle(.error)` 更新窗口内 status 但没有回写 `SessionRegistry`。
 
+**状态**：已修复。
+
+**checkpoint 与结论**：
+
+- `SessionEvent(.error/.status/.assistantMessageEnd)` -> `SessionViewModel.handle(_:)`：窗口内 `status`、`error`、`messages` 已按预期更新，失败点不在事件解析或窗口状态维护。
+- `SessionViewModel.handle(_:)` -> `SessionRegistry`：修复前 RED 测试证明 registry 仍停留在创建会话时的 `isRunning: true` 与原始 prompt 摘要；现由 `SessionViewModel` 暴露 `onStateChanged` 闭包，`SessionLifecycle` 接收后同步 `SessionSummary`。
+- `SessionRegistry` -> `StatusBubbleViewModel`：StatusBubble 继续只从 registry 派生 `isRunning` / `latestSummary`，不新增 mirror 状态；registry 更新后气泡会随 failed/idle/running 状态变化。
+
+**验证**：
+
+- 修复前 RED 证据：`bash ./scripts/swiftw test --filter SessionLifecycleTests` 中新增的 `testViewModelErrorUpdatesRegistrySummary`、`testAssistantMessageEndUpdatesRegistrySummaryToIdle`、`testStatusEventsUpdateRegistryRunningStateWhilePreservingSummary` 失败，registry 仍为 `isRunning: true` 且摘要仍是 `hello`。
+- 修复后 `bash ./scripts/swiftw test --filter SessionLifecycleTests` 通过。
+
 **发现日期**：2026-05-19
 
+**修复日期**：2026-05-20
+
 ---
+
+## 当前 bug
 
 ### 4. worktree 启动时 agent-server 使用了主仓库路径
 

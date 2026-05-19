@@ -108,8 +108,31 @@ final class SessionLifecycle {
     private func makeViewModel(sessionID: String) -> SessionViewModel {
         SessionViewModel(
             sessionID: sessionID,
-            socketClient: SessionSocketClient(serverURL: agentServerURL)
+            socketClient: SessionSocketClient(serverURL: agentServerURL),
+            onStateChanged: { [weak self] viewModel in
+                self?.syncSummary(from: viewModel)
+            }
         )
+    }
+
+    private func syncSummary(from viewModel: SessionViewModel) {
+        let existing = registry.summaries[viewModel.sessionID]
+        registry.upsert(
+            SessionSummary(
+                sessionId: viewModel.sessionID,
+                isRunning: viewModel.status == "running",
+                latestSummary: latestNonEmptyMessageText(from: viewModel) ?? existing?.latestSummary ?? "",
+                lastActiveAt: .now,
+                windowIsOpen: existing?.windowIsOpen ?? (windows[viewModel.sessionID] != nil)
+            )
+        )
+    }
+
+    private func latestNonEmptyMessageText(from viewModel: SessionViewModel) -> String? {
+        viewModel.messages
+            .reversed()
+            .map(\.text)
+            .first { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
 
     private func present(
