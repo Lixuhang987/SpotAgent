@@ -194,7 +194,10 @@ export class AgentRuntime {
         let toolContent: string;
         let toolStatus: "success" | "error" = "success";
         try {
-          const result = await tool.call(toolCall.arguments);
+          const result = await tool.call(toolCall.arguments, {
+            sessionId: runOptions.sessionId,
+            toolCallId: toolCall.id,
+          });
           toolContent = serializeToolResult(result);
         } catch (error) {
           toolStatus = "error";

@@ -1,14 +1,14 @@
 # SessionWindow 模块
 
-会话窗口：显示一次 LLM/tool 循环的消息流，支持继续追问、历史侧栏恢复会话、权限审批气泡。架构是 **View + ViewModel + WebSocket Client + Styles** 四件套，窗口本身由 AppServices 的 `SessionWindowPresenting` 生产实现创建。
+会话窗口：显示一次 LLM/tool 循环的消息流，支持继续追问、历史侧栏恢复会话、权限审批气泡和 workspace 选择气泡。架构是 **View + ViewModel + WebSocket Client + Styles** 四件套，窗口本身由 AppServices 的 `SessionWindowPresenting` 生产实现创建。
 
 ## 文件
 
 | 文件 | 职责 |
 |------|------|
-| `SessionWindowView.swift` | 纯 UI：历史侧栏、状态条、连接状态 banner、消息列表、用户附件摘要、错误 banner、权限审批气泡、输入框，全部消费 Theme token |
-| `SessionViewModel.swift` | `@Observable` 状态：`messages` / `status` / `error` / `pendingPermissionRequests` / `historyList` / `connectionState`；消费 `SessionEvent` 维护 UI 状态与连接提示；`SessionBubble` 同时保存消息文本与附件展示摘要 |
-| `SessionSocketClient.swift` | `URLSessionWebSocketTask` 包装：连接、收发 `SessionMessage`、解析 `SessionEvent`，并发送历史读写、权限响应帧；断线后自动重连并重发 `open_session` |
+| `SessionWindowView.swift` | 纯 UI：历史侧栏、状态条、连接状态 banner、消息列表、用户附件摘要、错误 banner、权限审批气泡、workspace 选择气泡、输入框，全部消费 Theme token |
+| `SessionViewModel.swift` | `@Observable` 状态：`messages` / `status` / `error` / `pendingPermissionRequests` / `pendingWorkspaceAskRequests` / `historyList` / `connectionState`；消费 `SessionEvent` 维护 UI 状态与连接提示；`SessionBubble` 同时保存消息文本与附件展示摘要 |
+| `SessionSocketClient.swift` | `URLSessionWebSocketTask` 包装：连接、收发 `SessionMessage`、解析 `SessionEvent`，并发送历史读写、权限响应帧、workspace 选择响应帧；断线后自动重连并重发 `open_session` |
 | `SessionStyles.swift` | `MessageBubbleModifier`（按 role 切换 user / assistant / tool 三色） |
 
 ## 数据流
@@ -38,6 +38,7 @@ agent-server 流式回包 → SessionEvent → ViewModel.handle(_:) → messages
 - `error` → `status = "failed"`，记录 `error`；若上一条 assistant 文本与错误重复则去重
 - `sessionSnapshot` → 全量替换 messages + status；对历史 user message 解析 `[选区]` 与 image `STUB`，归一为附件摘要后展示
 - `permissionRequest` → 追加到 `pendingPermissionRequests`；用户点击拒绝 / 仅本次 / 本会话 / 始终允许后发送 `permission_response` 并移除气泡
+- `workspaceAskRequest` → 追加到 `pendingWorkspaceAskRequests`；UI 只展示队首 ask，用户选择候选 workspace 或取消后发送 `workspace_ask_response` 并移除队首，实现同一 session 内串行展示
 - `sessionList` → 刷新左侧历史侧栏列表
 - `sessionLoaded` → 用历史消息替换当前消息列表，`status = "idle"`；附件摘要归一化规则同 `sessionSnapshot`
 - `connectionState` → 维护 `connectionMessage`；`connecting / reconnecting / disconnected` 显示顶部连接 banner，`connected` 清除 banner。
@@ -63,7 +64,7 @@ agent-server 流式回包 → SessionEvent → ViewModel.handle(_:) → messages
 - **不要在前端做 LLM/tool 编排**：宿主只消费 `SessionEvent`；新事件类型必须先在 agent-server 与前端 `SessionEvent` enum 同步定义，再加 case 到 `handle(_:)`。
 - **窗口尺寸 / 持久化**：当前每次 prompt 提交都新开 760×560 居中窗口，不做位置记忆；新增此能力需走 Coordinator，不要让 View 直接写 `UserDefaults`。
 - **窗口与拖动区域**：Coordinator 创建 `NSWindow` 时启用 `fullSizeContentView` + `titlebarAppearsTransparent` + `titleVisibility = .hidden`，让标题栏保留默认 traffic light 与拖动手势，但视觉颜色与 SwiftUI 内容（`statusHeader` 区域）连成一片，不再出现单独颜色的标题栏条。`SessionWindowView` 的首行 `statusHeader` 直接落在标题栏下方，`Spacer()` 留出的右侧区域天然成为拖动手柄；如需在 statusHeader 增加交互控件，要给左右两端留出可拖动的空隙。
-- **测试**：[SessionViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/SessionViewModelTests.swift) 覆盖事件序列下的 messages/status/connectionState 推导；[SessionSocketClientTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/SessionSocketClientTests.swift) 覆盖 reconnect + `open_session` 续联。
+- **测试**：[SessionViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/SessionViewModelTests.swift) 覆盖事件序列下的 messages/status/connectionState 推导，以及 workspace ask 队列移除；[SessionSocketClientTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/SessionSocketClientTests.swift) 覆盖 reconnect + `open_session` 续联和 workspace ask 解码。
 
 ## 与其他模块的关系
 

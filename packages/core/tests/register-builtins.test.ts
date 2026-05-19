@@ -16,13 +16,14 @@ async function makeRegistry() {
 }
 
 describe("registerBuiltinTools", () => {
-  it("registers all 9 builtin tools when workspace registry and default settings are provided", async () => {
+  it("registers all builtin tools when workspace registry, ask resolver, and default settings are provided", async () => {
     const platform = new OfflinePlatformAdapter();
     const workspaceRegistry = await makeRegistry();
 
     const { registry, registered, disabled } = registerBuiltinTools({
       platform,
       workspaceRegistry,
+      workspaceAskResolver: async () => ({ cancelled: true }),
     });
 
     expect(registered.sort()).toEqual(
@@ -36,6 +37,7 @@ describe("registerBuiltinTools", () => {
         "ocr.read",
         "screen.capture",
         "window.list",
+        "workspace.askUser",
         "workspace.list",
       ].sort(),
     );
@@ -49,8 +51,23 @@ describe("registerBuiltinTools", () => {
 
     expect(registered).not.toContain("file.read");
     expect(registered).not.toContain("file.write");
+    expect(registered).not.toContain("workspace.askUser");
     expect(disabled.find((d) => d.name === "file.read")?.reason).toContain(
       "workspace registry",
+    );
+    expect(disabled.find((d) => d.name === "workspace.askUser")?.reason).toContain(
+      "workspace registry",
+    );
+  });
+
+  it("disables workspace.askUser when ask resolver is missing", async () => {
+    const platform = new OfflinePlatformAdapter();
+    const workspaceRegistry = await makeRegistry();
+    const { registered, disabled } = registerBuiltinTools({ platform, workspaceRegistry });
+
+    expect(registered).not.toContain("workspace.askUser");
+    expect(disabled.find((d) => d.name === "workspace.askUser")?.reason).toContain(
+      "workspace ask resolver",
     );
   });
 
@@ -76,6 +93,7 @@ describe("registerBuiltinTools", () => {
     const { registered, disabled } = registerBuiltinTools({
       platform,
       workspaceRegistry,
+      workspaceAskResolver: async () => ({ cancelled: true }),
       settings: { allowlist: ["file.read", "clipboard.read"], denylist: [] },
     });
 

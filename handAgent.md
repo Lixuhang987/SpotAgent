@@ -149,7 +149,7 @@ flowchart TD
 
 跨进程协议分为两个判别联合：
 
-- `SessionMessage` 覆盖会话生命周期、历史读写和权限审批：`open_session` / `user_message` / `assistant_message_start|delta|end` / `tool_message` / `status` / `interrupt` / `session_snapshot` / `error` / `list_sessions_*` / `load_session_*` / `delete_session_request` / `permission_request|response`。
+- `SessionMessage` 覆盖会话生命周期、历史读写、权限审批和 workspace 选择：`open_session` / `user_message` / `assistant_message_start|delta|end` / `tool_message` / `status` / `interrupt` / `session_snapshot` / `error` / `list_sessions_*` / `load_session_*` / `delete_session_request` / `permission_request|response` / `workspace_ask_request|response`。
 - `PlatformBridgeMessage` 覆盖平台反向 IPC：`channel: "platform"` + `platform_bridge_hello` / `platform_request` / `platform_response`。
 
 详见 [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md)。

@@ -107,6 +107,30 @@ export type SessionMessage =
       };
     }
   | {
+      type: "workspace_ask_request";
+      sessionId: string;
+      messageId: string;
+      timestamp: string;
+      payload: {
+        requestId: string;
+        toolCallId?: string;
+        prompt: string;
+        candidates: WorkspaceAskCandidate[];
+        timeoutMs?: number;
+      };
+    }
+  | {
+      type: "workspace_ask_response";
+      sessionId: string;
+      messageId: string;
+      timestamp: string;
+      payload: {
+        requestId: string;
+        workspaceId?: string;
+        cancelled?: boolean;
+      };
+    }
+  | {
       type: "list_sessions_request";
       sessionId: string;
       messageId: string;
@@ -154,6 +178,13 @@ export type SessionListEntry = {
   createdAt: string;
   updatedAt: string;
   messageCount: number;
+};
+
+export type WorkspaceAskCandidate = {
+  id: string;
+  name: string;
+  description: string;
+  isDefault: boolean;
 };
 
 export type UserMessageAttachment =

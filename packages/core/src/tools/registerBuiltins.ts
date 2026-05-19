@@ -12,12 +12,14 @@ import { FrontmostAppTool } from "./builtins/FrontmostAppTool.ts";
 import { OCRTool } from "./builtins/OCRTool.ts";
 import { ScreenCaptureTool } from "./builtins/ScreenCaptureTool.ts";
 import { WindowListTool } from "./builtins/WindowListTool.ts";
+import { WorkspaceAskUserTool, type WorkspaceAskResolver } from "./builtins/WorkspaceAskUserTool.ts";
 import { WorkspaceListTool } from "./builtins/WorkspaceListTool.ts";
 
 export type RegisterBuiltinToolsOptions = {
   registry?: ToolRegistry;
   platform: PlatformAdapter;
   workspaceRegistry?: WorkspaceRegistry;
+  workspaceAskResolver?: WorkspaceAskResolver;
   settings?: ToolSettings;
 };
 
@@ -47,15 +49,30 @@ export function registerBuiltinTools(
     candidates.push(WorkspaceListTool.create(options.workspaceRegistry));
     candidates.push(FileReadTool.create(options.workspaceRegistry));
     candidates.push(FileWriteTool.create(options.workspaceRegistry));
+    if (options.workspaceAskResolver) {
+      candidates.push(
+        WorkspaceAskUserTool.create({
+          registry: options.workspaceRegistry,
+          askResolver: options.workspaceAskResolver,
+        }),
+      );
+    }
   }
 
   const disabled: { name: string; reason: string }[] = [];
   if (!options.workspaceRegistry) {
     disabled.push(
       { name: "workspace.list", reason: "workspace registry not provided" },
+      { name: "workspace.askUser", reason: "workspace registry not provided" },
       { name: "file.read", reason: "workspace registry not provided" },
       { name: "file.write", reason: "workspace registry not provided" },
     );
+  }
+  if (options.workspaceRegistry && !options.workspaceAskResolver) {
+    disabled.push({
+      name: "workspace.askUser",
+      reason: "workspace ask resolver not provided",
+    });
   }
 
   const candidateNames = candidates.map((t) => t.name);

@@ -1,6 +1,7 @@
 import { statSync } from "node:fs";
 import type { PlatformAdapter } from "@handagent/core/platform/PlatformAdapter.ts";
 import type { WorkspaceRegistry } from "@handagent/core/workspace/Workspace.ts";
+import type { WorkspaceAskResolver } from "@handagent/core/tools/builtins/WorkspaceAskUserTool.ts";
 import {
   loadToolSettings,
   toolSettingsFilePath,
@@ -29,6 +30,7 @@ export class SettingsBackedToolRegistry {
     private readonly options: {
       platform: PlatformAdapter;
       workspaceRegistry?: WorkspaceRegistry;
+      workspaceAskResolver?: WorkspaceAskResolver;
     },
     dependencies: SettingsBackedToolRegistryDependencies = {},
   ) {
@@ -47,6 +49,7 @@ export class SettingsBackedToolRegistry {
       registry: this.registry,
       platform: this.options.platform,
       workspaceRegistry: this.options.workspaceRegistry,
+      workspaceAskResolver: this.options.workspaceAskResolver,
       settings: this.loadToolSettings(),
     });
     this.cachedStamp = settingsStamp;

@@ -1,12 +1,12 @@
 import { z } from "zod";
-import type { AgentTool, AgentToolInputSchema } from "./AgentTool.ts";
+import type { AgentTool, AgentToolCallContext, AgentToolInputSchema } from "./AgentTool.ts";
 
 export interface DefineToolOptions<TInput, TOutput, TDeps> {
   name: string;
   description: string;
   inputSchema: z.ZodType<TInput>;
   stubByDefault?: boolean;
-  run: (input: TInput, deps: TDeps) => Promise<TOutput>;
+  run: (input: TInput, deps: TDeps, context: AgentToolCallContext) => Promise<TOutput>;
 }
 
 export type ToolFactory<TInput, TOutput, TDeps> = {
@@ -55,13 +55,13 @@ export function defineTool<TInput, TOutput, TDeps = unknown>(
       description: options.description,
       inputSchema: jsonSchema,
       stubByDefault: options.stubByDefault,
-      call: async (input: TInput) => {
+      call: async (input: TInput, context: AgentToolCallContext = {}) => {
         const parsed = options.inputSchema.safeParse(input);
         if (!parsed.success) {
           throw new Error(formatValidationError(options.name, parsed.error));
         }
 
-        return options.run(parsed.data, deps);
+        return options.run(parsed.data, deps, context);
       },
     }),
   };

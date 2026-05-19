@@ -27,6 +27,9 @@ struct SessionWindowView: View {
                 ForEach(viewModel.pendingPermissionRequests) { request in
                     permissionBubble(request)
                 }
+                if let request = viewModel.visibleWorkspaceAskRequest {
+                    workspaceAskBubble(request)
+                }
                 Divider().overlay(theme.colors.border)
                 inputField
             }
@@ -289,6 +292,75 @@ struct SessionWindowView: View {
                 )
         }
         .buttonStyle(.plain)
+    }
+
+    private func workspaceAskBubble(_ request: SessionWorkspaceAskRequest) -> some View {
+        VStack(alignment: .leading, spacing: theme.spacing.sm) {
+            HStack(spacing: theme.spacing.sm) {
+                Image(systemName: "folder.badge.questionmark")
+                    .foregroundStyle(theme.colors.accent)
+                    .font(.system(size: 14, weight: .medium))
+                Text(request.prompt)
+                    .font(theme.typography.bodyFont)
+                    .foregroundStyle(theme.colors.textPrimary)
+                Spacer()
+            }
+            VStack(alignment: .leading, spacing: theme.spacing.xs) {
+                ForEach(request.candidates) { candidate in
+                    Button {
+                        viewModel.resolveWorkspaceAsk(requestId: request.id, workspaceId: candidate.id)
+                    } label: {
+                        HStack(alignment: .top, spacing: theme.spacing.sm) {
+                            Image(systemName: candidate.isDefault ? "folder.fill.badge.gearshape" : "folder")
+                                .font(.system(size: 13))
+                                .foregroundStyle(theme.colors.accent)
+                                .frame(width: theme.spacing.lg)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(candidate.name)
+                                    .font(theme.typography.bodyFont)
+                                    .foregroundStyle(theme.colors.textPrimary)
+                                Text(candidate.description)
+                                    .font(theme.typography.captionFont)
+                                    .foregroundStyle(theme.colors.textSecondary)
+                                    .lineLimit(2)
+                            }
+                            Spacer()
+                        }
+                        .padding(.horizontal, theme.spacing.sm)
+                        .padding(.vertical, theme.spacing.sm)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(theme.colors.surface)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: theme.radius.sm)
+                                .strokeBorder(theme.colors.border, lineWidth: 0.5)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            Button {
+                viewModel.resolveWorkspaceAsk(requestId: request.id, workspaceId: nil)
+            } label: {
+                Text("取消")
+                    .font(theme.typography.captionFont)
+                    .foregroundStyle(theme.colors.textSecondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        RoundedRectangle(cornerRadius: theme.radius.sm)
+                            .fill(theme.colors.surface)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: theme.radius.sm)
+                            .strokeBorder(theme.colors.border, lineWidth: 0.5)
+                    )
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, theme.spacing.xl)
+        .padding(.vertical, theme.spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(theme.colors.accentSubtle)
     }
 
     private var inputField: some View {

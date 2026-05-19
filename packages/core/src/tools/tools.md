@@ -1,19 +1,19 @@
 # tools
 
-`AgentTool` 协议、`ToolRegistry` 注册中心，以及当前 10 个 builtin tool。
+`AgentTool` 协议、`ToolRegistry` 注册中心，以及当前 11 个 builtin tool。
 
 ## 文件
 
 | 文件 | 职责 |
 |------|------|
-| `AgentTool.ts` | `AgentTool<TInput, TOutput>` 接口：`name / description / inputSchema (JSON Schema) / call(input)`；可选 `stubByDefault` 声明 runtime 可把结果写成 Blob/Stub |
-| `defineTool.ts` | `defineTool({ name, description, inputSchema (zod), stubByDefault?, run })` 工厂：`zod` schema 自动转 JSON Schema 2019-09；`.create(deps)` 生成的 `call(input)` 会先用同一个 schema 做运行时入参校验，再调用 `run` |
+| `AgentTool.ts` | `AgentTool<TInput, TOutput>` 接口：`name / description / inputSchema (JSON Schema) / call(input, context?)`；`context` 当前包含 `sessionId / toolCallId`；可选 `stubByDefault` 声明 runtime 可把结果写成 Blob/Stub |
+| `defineTool.ts` | `defineTool({ name, description, inputSchema (zod), stubByDefault?, run })` 工厂：`zod` schema 自动转 JSON Schema 2019-09；`.create(deps)` 生成的 `call(input, context?)` 会先用同一个 schema 做运行时入参校验，再调用 `run` |
 | `ToolRegistry.ts` | Map 包装；`register / replaceAll / get / list`，单次注册重名抛错，`replaceAll()` 供 settings 热加载原地刷新；`list()` 返回 `RegisteredTool`（去掉 `call`），供 `LLMClient.stream` 使用 |
 | `registerBuiltins.ts` | 组合根：根据 `PlatformAdapter` + 可选 `WorkspaceRegistry` + `ToolSettings` 装配 candidates，过 allowlist/denylist 后注册 |
-| `builtins/*.ts` | 10 个 builtin tool 实现，全部用 `defineTool` 工厂表达 |
+| `builtins/*.ts` | 11 个 builtin tool 实现，全部用 `defineTool` 工厂表达 |
 | `builtins/workspace-path.ts` | `file.read` / `file.write` 共享的 workspace 路径校验工具：拒绝绝对路径与 `..` 越狱、`realpath` 后再次校验 |
 
-## 10 个 builtin tool
+## 11 个 builtin tool
 
 | name | 入参 | 依赖 | 说明 |
 |------|------|------|------|
@@ -25,6 +25,7 @@
 | `accessibility.snapshot` | `AccessibilitySnapshotTarget` | `PlatformAdapter.accessibilitySnapshot` | macOS 暂返回 `not_implemented` |
 | `accessibility.action` | `AccessibilityActionRequest` | `PlatformAdapter.performAccessibilityAction` | macOS 暂返回 `not_implemented` |
 | `workspace.list` | `{}` | `WorkspaceRegistry.summarize` | 返回 `[{id, name, description, isDefault}]`，**不含 rootPath** |
+| `workspace.askUser` | `{ prompt, candidateIds? }` | `WorkspaceRegistry.summarize` + `WorkspaceAskResolver` | 多个 workspace 候选都合理时，通过 SessionWindow 内联气泡让用户选择；取消、超时或无活动 session 返回 `{ cancelled: true }` |
 | `file.read` | `{ workspaceId, relativePath, cached }` | `WorkspaceRegistry` | 沙箱 read：经 `realpath` 校验仍在 rootPath 内；`cached` 必填，取 `turn` 或 `persist` |
 | `file.write` | `{ workspaceId, relativePath, content }` | `WorkspaceRegistry` | 沙箱 write：写前 lstat 拒绝 basename 是 symlink；10 MiB 上限；`.tmp → rename` 原子写 |
 
@@ -37,13 +38,13 @@ flowchart LR
   A --> W[FileWorkspaceRegistry]
   A --> D[RemotePlatformAdapter]
   C & W & D --> E[registerBuiltinTools]
-  E --> F[candidates = 7 platform tools + 3 workspace tools]
+  E --> F[candidates = 7 platform tools + 4 workspace tools]
   E --> G[filterToolNames（denylist 优先 > allowlist）]
   G --> H[registry.replaceAll]
   H --> I[返回 {registry, registered, disabled}]
 ```
 
-`SettingsBackedToolRegistry` 在 agent-server 启动和每轮 user message 进入 runtime 前按 `settings.json` 文件戳刷新；`disabled` 列表回流到 `console.log`，便于排错；当 `workspaceRegistry` 缺失时，三个 file/workspace tool 直接进 disabled。
+`SettingsBackedToolRegistry` 在 agent-server 启动和每轮 user message 进入 runtime 前按 `settings.json` 文件戳刷新；`disabled` 列表回流到 `console.log`，便于排错；当 `workspaceRegistry` 缺失时，三个 file/workspace tool 直接进 disabled；当缺少 `WorkspaceAskResolver` 时，`workspace.askUser` 单独进 disabled。
 
 ## 编辑此目录的约束
 

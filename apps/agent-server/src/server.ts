@@ -15,6 +15,7 @@ import {
   SessionPermissionBridge,
   type SessionBindingToken,
 } from "./SessionPermissionBridge.ts";
+import { SessionWorkspaceAskBridge } from "./SessionWorkspaceAskBridge.ts";
 import type { FilePermissionPolicy } from "@handagent/core/permission/FilePermissionPolicy.ts";
 
 type SessionSocket = {
@@ -32,15 +33,18 @@ export function attachSessionSocketHandlers(
     bridge,
     permissionBridge,
     permissionPolicy,
+    workspaceAskBridge,
   }: {
     router: SessionRouter;
     bridge?: WebSocketPlatformBridge;
     permissionBridge?: SessionPermissionBridge;
     permissionPolicy?: FilePermissionPolicy;
+    workspaceAskBridge?: SessionWorkspaceAskBridge;
   },
 ): void {
   let bridgeToken: BridgeToken | null = null;
   const boundSessions = new Map<string, SessionBindingToken>();
+  const workspaceAskBoundSessions = new Map<string, SessionBindingToken>();
   const sendSession = (outgoing: SessionMessage) => {
     socket.send(JSON.stringify(outgoing));
   };
@@ -61,22 +65,34 @@ export function attachSessionSocketHandlers(
     }
 
     if (message.type === "permission_response" && permissionBridge) {
-      const token = boundSessions.get(sessionIdFromPermissionRequestId(message.payload.requestId));
+      const token = boundSessions.get(sessionIdFromRequestId(message.payload.requestId));
       if (token !== undefined) {
         permissionBridge.handleResponse(message.payload, token);
       }
       return;
     }
 
-    if (
-      message.type === "user_message" &&
-      permissionBridge &&
-      !boundSessions.has(message.sessionId)
-    ) {
-      boundSessions.set(
-        message.sessionId,
-        permissionBridge.bindSession(message.sessionId, sendSession),
-      );
+    if (message.type === "workspace_ask_response" && workspaceAskBridge) {
+      const token = workspaceAskBoundSessions.get(sessionIdFromRequestId(message.payload.requestId));
+      if (token !== undefined) {
+        workspaceAskBridge.handleResponse(message.payload, token);
+      }
+      return;
+    }
+
+    if (message.type === "user_message") {
+      if (permissionBridge && !boundSessions.has(message.sessionId)) {
+        boundSessions.set(
+          message.sessionId,
+          permissionBridge.bindSession(message.sessionId, sendSession),
+        );
+      }
+      if (workspaceAskBridge && !workspaceAskBoundSessions.has(message.sessionId)) {
+        workspaceAskBoundSessions.set(
+          message.sessionId,
+          workspaceAskBridge.bindSession(message.sessionId, sendSession),
+        );
+      }
     }
 
     await router.receive(message, sendSession);
@@ -92,7 +108,11 @@ export function attachSessionSocketHandlers(
         permissionPolicy?.clearSessionRules(sessionId);
       }
     }
+    for (const [sessionId, token] of workspaceAskBoundSessions) {
+      workspaceAskBridge?.unbindSession(sessionId, token);
+    }
     boundSessions.clear();
+    workspaceAskBoundSessions.clear();
   });
 }
 
@@ -100,7 +120,7 @@ function isPlatformBridgeMessage(message: SocketMessage): message is PlatformBri
   return "channel" in message && message.channel === "platform";
 }
 
-function sessionIdFromPermissionRequestId(requestId: string): string {
+function sessionIdFromRequestId(requestId: string): string {
   const separator = requestId.lastIndexOf(":");
   return separator === -1 ? requestId : requestId.slice(0, separator);
 }
@@ -110,12 +130,14 @@ export async function startServer({
   bridge,
   permissionBridge,
   permissionPolicy,
+  workspaceAskBridge,
   port = 4317,
 }: {
   router: SessionRouter;
   bridge?: WebSocketPlatformBridge;
   permissionBridge?: SessionPermissionBridge;
   permissionPolicy?: FilePermissionPolicy;
+  workspaceAskBridge?: SessionWorkspaceAskBridge;
   port?: number;
 }) {
   const { WebSocketServer } = await import("ws");
@@ -127,6 +149,7 @@ export async function startServer({
       bridge,
       permissionBridge,
       permissionPolicy,
+      workspaceAskBridge,
     });
   });
 
@@ -180,10 +203,12 @@ export async function startDefaultServer(port = 4317) {
   await workspaceRegistry.getDefault();
 
   const platformBridge = new WebSocketPlatformBridge();
+  const workspaceAskBridge = new SessionWorkspaceAskBridge();
   const platform = new RemotePlatformAdapter({ bridge: platformBridge });
   const toolRegistry = new SettingsBackedToolRegistry({
     platform,
     workspaceRegistry,
+    workspaceAskResolver: workspaceAskBridge.ask,
   });
   toolRegistry.refresh();
 
@@ -217,6 +242,7 @@ export async function startDefaultServer(port = 4317) {
     bridge: platformBridge,
     permissionBridge,
     permissionPolicy,
+    workspaceAskBridge,
     port,
   });
 }

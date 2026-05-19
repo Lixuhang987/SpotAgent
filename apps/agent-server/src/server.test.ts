@@ -5,6 +5,7 @@ import type { PlatformBridgeMessage } from "@handagent/core/protocol/PlatformBri
 import type { FilePermissionPolicy } from "@handagent/core/permission/FilePermissionPolicy.ts";
 import type { SessionRouter } from "./SessionRouter.ts";
 import { SessionPermissionBridge } from "./SessionPermissionBridge.ts";
+import { SessionWorkspaceAskBridge } from "./SessionWorkspaceAskBridge.ts";
 import { attachSessionSocketHandlers } from "./server.ts";
 
 class FakeSocket extends EventEmitter {
@@ -45,6 +46,16 @@ function permissionResponse(
     messageId: `response-${requestId}`,
     timestamp: new Date().toISOString(),
     payload: { requestId, decision, scope: "session" },
+  };
+}
+
+function workspaceAskResponse(requestId: string, workspaceId: string): SessionMessage {
+  return {
+    type: "workspace_ask_response",
+    sessionId: "session-A",
+    messageId: `workspace-response-${requestId}`,
+    timestamp: new Date().toISOString(),
+    payload: { requestId, workspaceId },
   };
 }
 
@@ -215,6 +226,36 @@ describe("attachSessionSocketHandlers", () => {
     await emitMessage(socket, permissionResponse(request.payload.requestId, "allow"));
 
     await expect(ask).resolves.toEqual({ decision: "allow", remember: "session" });
+  });
+
+  it("routes workspace ask responses through the current socket binding", async () => {
+    const socket = new FakeSocket();
+    const router = {
+      receive: vi.fn(async () => {}),
+    } as unknown as SessionRouter;
+    const workspaceAskBridge = new SessionWorkspaceAskBridge();
+
+    attachSessionSocketHandlers(socket as never, {
+      router,
+      workspaceAskBridge,
+    });
+
+    await emitMessage(socket, userMessage("session-A", "first"));
+    const ask = workspaceAskBridge.ask({
+      sessionId: "session-A",
+      toolCallId: "tool-1",
+      prompt: "请选择 workspace",
+      candidates: [
+        { id: "docs", name: "文档", description: "文档", isDefault: false },
+        { id: "code", name: "代码", description: "代码", isDefault: false },
+      ],
+    });
+    const request = JSON.parse(socket.sent[0]) as SessionMessage;
+    if (request.type !== "workspace_ask_request") throw new Error("type");
+
+    await emitMessage(socket, workspaceAskResponse(request.payload.requestId, "docs"));
+
+    await expect(ask).resolves.toEqual({ workspaceId: "docs" });
   });
 
   it("routes permission responses for session ids that contain colons", async () => {

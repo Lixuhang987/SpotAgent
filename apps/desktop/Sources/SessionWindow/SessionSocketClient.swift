@@ -14,6 +14,13 @@ struct SessionListItem: Equatable, Identifiable {
     let messageCount: Int
 }
 
+struct WorkspaceAskCandidate: Equatable, Identifiable, Decodable {
+    let id: String
+    let name: String
+    let description: String
+    let isDefault: Bool
+}
+
 enum SessionEvent: Equatable {
     case userMessage(messageID: String, text: String, timestamp: String)
     case assistantMessageStart(messageID: String, timestamp: String)
@@ -21,6 +28,7 @@ enum SessionEvent: Equatable {
     case assistantMessageEnd(messageID: String, status: String, timestamp: String)
     case toolMessage(messageID: String, name: String, text: String, status: String, timestamp: String)
     case permissionRequest(requestId: String, toolName: String, argumentsJSON: String)
+    case workspaceAskRequest(requestId: String, prompt: String, candidates: [WorkspaceAskCandidate])
     case status(value: String)
     case error(messageID: String, message: String, timestamp: String)
     case sessionSnapshot(messages: [SessionBubble], status: String)
@@ -41,6 +49,8 @@ enum SessionEvent: Equatable {
         case let (.toolMessage(a1, a2, a3, a4, a5), .toolMessage(b1, b2, b3, b4, b5)):
             return a1 == b1 && a2 == b2 && a3 == b3 && a4 == b4 && a5 == b5
         case let (.permissionRequest(a1, a2, a3), .permissionRequest(b1, b2, b3)):
+            return a1 == b1 && a2 == b2 && a3 == b3
+        case let (.workspaceAskRequest(a1, a2, a3), .workspaceAskRequest(b1, b2, b3)):
             return a1 == b1 && a2 == b2 && a3 == b3
         case let (.status(a), .status(b)):
             return a == b
@@ -330,6 +340,12 @@ final class SessionSocketClient: @unchecked Sendable {
                 toolName: envelope.payload.toolName ?? "unknown",
                 argumentsJSON: Self.extractPermissionArgumentsJSON(from: data)
             )
+        case "workspace_ask_request":
+            return .workspaceAskRequest(
+                requestId: envelope.payload.requestId ?? envelope.messageId,
+                prompt: envelope.payload.prompt ?? "请选择 workspace",
+                candidates: envelope.payload.candidates ?? []
+            )
         case "list_sessions_response":
             let items = envelope.payload.sessions?.map {
                 SessionListItem(
@@ -416,6 +432,29 @@ final class SessionSocketClient: @unchecked Sendable {
             let text = String(data: data, encoding: .utf8)
         else { return }
         socketTask.send(.string(text)) { _ in }
+    }
+
+    func sendWorkspaceAskResponse(
+        sessionID: String,
+        requestId: String,
+        workspaceId: String?,
+        cancelled: Bool
+    ) {
+        guard socketTask != nil else { return }
+        var payload: [String: Any] = [
+            "requestId": requestId,
+            "cancelled": cancelled,
+        ]
+        if let workspaceId {
+            payload["workspaceId"] = workspaceId
+        }
+        sendJSON([
+            "type": "workspace_ask_response",
+            "sessionId": sessionID,
+            "messageId": UUID().uuidString,
+            "timestamp": Self.timestamp(),
+            "payload": payload,
+        ])
     }
 
     private static func timestamp() -> String {
@@ -528,6 +567,8 @@ private struct IncomingPayload: Decodable {
     let messages: [IncomingSnapshotMessage]?
     let requestId: String?
     let toolName: String?
+    let prompt: String?
+    let candidates: [WorkspaceAskCandidate]?
     let sessions: [IncomingSessionListItem]?
     let targetSessionId: String?
     let title: String?

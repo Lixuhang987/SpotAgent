@@ -159,4 +159,38 @@ final class SessionViewModelTests: XCTestCase {
         XCTAssertEqual(bubble.attachments.map(\.kind), ["text_selection", "image"])
         XCTAssertEqual(bubble.attachments[0].detail, "let x = 1")
     }
+
+    @MainActor
+    func testWorkspaceAskRequestsAreQueuedAndResolvedInOrder() {
+        let model = SessionViewModel(sessionID: "session-1", socketClient: .noop)
+
+        model.handle(
+            .workspaceAskRequest(
+                requestId: "ask-1",
+                prompt: "第一次",
+                candidates: [
+                    WorkspaceAskCandidate(id: "docs", name: "文档", description: "产品文档", isDefault: false),
+                    WorkspaceAskCandidate(id: "code", name: "代码", description: "源码", isDefault: true),
+                ]
+            )
+        )
+        model.handle(
+            .workspaceAskRequest(
+                requestId: "ask-2",
+                prompt: "第二次",
+                candidates: [
+                    WorkspaceAskCandidate(id: "docs", name: "文档", description: "产品文档", isDefault: false),
+                    WorkspaceAskCandidate(id: "code", name: "代码", description: "源码", isDefault: true),
+                ]
+            )
+        )
+
+        XCTAssertEqual(model.pendingWorkspaceAskRequests.map(\.id), ["ask-1", "ask-2"])
+        XCTAssertEqual(model.visibleWorkspaceAskRequest?.id, "ask-1")
+
+        model.resolveWorkspaceAsk(requestId: "ask-1", workspaceId: "docs")
+
+        XCTAssertEqual(model.pendingWorkspaceAskRequests.map(\.id), ["ask-2"])
+        XCTAssertEqual(model.visibleWorkspaceAskRequest?.id, "ask-2")
+    }
 }

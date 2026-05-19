@@ -6,23 +6,7 @@
 
 ## P2 — 运行时与 UX 增强
 
-### 1. workspace.askUser tool
-
-**现状**：`workspace.list` 已落地；`workspace.askUser` 暂未实现。当前 file tool description 已提示“模糊时调 `workspace.askUser`”，但 registry 中没有这个 tool。
-
-**用户场景**：多个 workspace 都可能匹配时，LLM 能让用户在 SessionWindow 内选择目标 workspace。
-
-**验收标准**：
-
-- 新增 `workspace.askUser({ prompt, candidateIds? })`。
-- SessionWindow 复用内联气泡显示候选 workspace。
-- 用户取消或超时返回 `{ cancelled: true }`。
-- 同一 session 内多个询问串行展示。
-- 在 `file.read/write` description 中保留该 tool 的使用指引。
-
-**依赖**：权限气泡 UI 可作为交互样式参考。
-
-### 2. 权限规则管理 UI 与端到端验证
+### 1. 权限规则管理 UI 与端到端验证
 
 **现状**：`FilePermissionPolicy`、`SessionPermissionBridge`、`AgentRuntime` 权限拦截、`SessionSocketClient` 解码、`SessionWindowView` 内联气泡都已实现。剩余风险在 UI 端到端验证和永久规则管理。
 
@@ -34,7 +18,7 @@
 
 **依赖**：无。`session` scope 已按 `sessionId` 隔离并在 socket 关闭时清理。
 
-### 3. 会话历史入口补齐
+### 2. 会话历史入口补齐
 
 **现状**：后端 `list/load/delete` 已实现，SessionWindow 左侧历史侧栏已落地；PromptPanel 最近会话 action 与独立历史窗口未实现。
 
@@ -47,7 +31,7 @@
 
 **依赖**：无。
 
-### 4. OCR 与 Accessibility 平台能力落地
+### 3. OCR 与 Accessibility 平台能力落地
 
 **现状**：`ocr.read`、`accessibility.snapshot`、`accessibility.action` 已作为 builtin tool 注册并暴露给 LLM，但 macOS 侧 `MacPlatformProvider` 对这三个 method 统一返回 `not_implemented`。
 
@@ -63,7 +47,7 @@
 
 **依赖**：macOS 权限提示与审计文案应与 permission UI 对齐。
 
-### 5. 会话中断 / Stop
+### 4. 会话中断 / Stop
 
 **现状**：协议里已有 `interrupt` 帧，但 `SessionRouter` 未处理，SessionWindow 也没有 Stop 按钮；一旦 LLM 请求或 tool 调用耗时较长，用户只能关闭窗口或等待。
 
@@ -81,7 +65,7 @@
 
 ## P3 — 长期能力
 
-### 6. 多 provider LLM 支持
+### 5. 多 provider LLM 支持
 
 **现状**：生产路径只有 `VercelClient`，OpenAI 兼容 API 通过 `responses/chat/completion` 切换。仓库依赖中已有 `@ai-sdk/anthropic`，但尚未接入到 provider factory。
 
@@ -94,7 +78,7 @@
 
 **依赖**：provider capability 需要声明是否支持当前已落地的多模态 content part、tool calling 与 streaming。
 
-### 7. 用户自定义 tool / 插件系统
+### 6. 用户自定义 tool / 插件系统
 
 **现状**：所有 tool 都是 builtin，随代码构建。
 
