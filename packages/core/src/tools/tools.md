@@ -13,7 +13,7 @@
 | `registerTools.ts` | 插件感知组合根：先生成 builtin candidates，再合并插件 loader 结果；builtin 名称优先，重复 plugin tool 全部禁用，最后统一套 `allowlist / denylist` |
 | `builtins/*.ts` | 11 个 builtin tool 实现，全部用 `defineTool` 工厂表达 |
 | `builtins/workspace-path.ts` | `file.read` / `file.write` 共享的 workspace 路径校验工具：拒绝绝对路径与 `..` 越狱、`realpath` 后再次校验 |
-| `plugins/` | 本地目录插件 manifest 解析、加载与子进程执行隔离，见 [plugins/plugins.md](/Users/mu9/proj/handAgent/packages/core/src/tools/plugins/plugins.md) |
+| `plugins/` | 本地目录插件 manifest 解析、加载与本地受信任子进程执行，见 [plugins/plugins.md](/Users/mu9/proj/handAgent/packages/core/src/tools/plugins/plugins.md) |
 
 ## 11 个 builtin tool
 
@@ -23,9 +23,9 @@
 | `app.frontmost` | `{}` | `PlatformAdapter.frontmostAppInfo` | 当前前台 App 信息 |
 | `window.list` | `{}` | `PlatformAdapter.frontmostWindowList` | 当前可见窗口列表（CGWindowList） |
 | `screen.capture` | `ScreenCaptureRequest` | `PlatformAdapter.captureScreen`（→ ScreenCaptureKit） | 支持 display / window / region 三种 target，base64 PNG 返回 |
-| `ocr.read` | `OCRRequest` | `PlatformAdapter.recognizeText` | macOS 暂返回 `not_implemented` |
-| `accessibility.snapshot` | `AccessibilitySnapshotTarget` | `PlatformAdapter.accessibilitySnapshot` | macOS 暂返回 `not_implemented` |
-| `accessibility.action` | `AccessibilityActionRequest` | `PlatformAdapter.performAccessibilityAction` | macOS 暂返回 `not_implemented` |
+| `ocr.read` | `OCRRequest` | `PlatformAdapter.recognizeText` | macOS Vision OCR，仅读入参图片 |
+| `accessibility.snapshot` | `AccessibilitySnapshotTarget` | `PlatformAdapter.accessibilitySnapshot` | macOS Accessibility 快照 |
+| `accessibility.action` | `AccessibilityActionRequest` | `PlatformAdapter.performAccessibilityAction` | macOS Accessibility 动作 |
 | `workspace.list` | `{}` | `WorkspaceRegistry.summarize` | 返回 `[{id, name, description, isDefault}]`，**不含 rootPath** |
 | `workspace.askUser` | `{ prompt, candidateIds? }` | `WorkspaceRegistry.summarize` + `WorkspaceAskResolver` | 多个 workspace 候选都合理时，通过 SessionWindow 内联气泡让用户选择；取消、超时或无活动 session 返回 `{ cancelled: true }` |
 | `file.read` | `{ workspaceId, relativePath, cached }` | `WorkspaceRegistry` | 沙箱 read：经 `realpath` 校验仍在 rootPath 内；`cached` 必填，取 `turn` 或 `persist` |
@@ -50,11 +50,11 @@ flowchart LR
 
 `SettingsBackedToolRegistry` 在 agent-server 启动和每轮 user message 进入 runtime 前按 `settings.json` 与 `~/.spotAgent/plugins/*/plugin.json` 文件戳刷新；`disabled` 列表回流到 `console.log`，便于排错；当 `workspaceRegistry` 缺失时，三个 file/workspace tool 直接进 disabled；当缺少 `WorkspaceAskResolver` 时，`workspace.askUser` 单独进 disabled。
 
-插件 tool 第一版只支持本地目录安装：`~/.spotAgent/plugins/<plugin-id>/plugin.json`。manifest 可用 `enabled: false` 禁用整插件；单个 tool 启停复用 `tools.allowlist / tools.denylist`。插件执行通过本地子进程隔离，JSON stdin/stdout；崩溃、非 JSON 输出、超时都作为 tool error 返回，不影响 agent-server 进程。
+插件 tool 第一版只支持本地目录安装：`~/.spotAgent/plugins/<plugin-id>/plugin.json`。manifest 可用 `enabled: false` 禁用整插件；单个 tool 启停复用 `tools.allowlist / tools.denylist`。插件作为本地受信任子进程执行，JSON stdin/stdout；command 真实路径必须留在插件目录内，stdout / stderr 各有 1 MiB 上限；崩溃、非 JSON 输出、超时、输出超限都作为 tool error 返回，不影响 agent-server 进程。当前不提供 OS 级沙箱。
 
 ## 编辑此目录的约束
 
-- 新增 builtin tool 必须：实现 `AgentTool` → 在 `registerBuiltins.ts` 的 `candidates` 里挂上 → 同步更新 [README](/Users/mu9/proj/handAgent/README.md) 与本文件的"10 个 builtin tool"表。
+- 新增 builtin tool 必须：实现 `AgentTool` → 在 `registerBuiltins.ts` 的 `candidates` 里挂上 → 同步更新 [README](/Users/mu9/proj/handAgent/README.md) 与本文件的"11 个 builtin tool"表。
 - 新增插件 manifest 字段或执行协议字段时，同步更新 [plugins/plugins.md](/Users/mu9/proj/handAgent/packages/core/src/tools/plugins/plugins.md)，并补 manifest 解析与执行失败路径测试。
 - tool name 一律点号风格（`category.action`），描述要包含调用场景与边界条件，方便 LLM 自决策。
 - 不要在 tool 内部直接 `import "node:fs"` 与平台无关的 IO；platform 类 tool 必须经 `PlatformAdapter`，文件类 tool 必须经 `WorkspaceRegistry`。

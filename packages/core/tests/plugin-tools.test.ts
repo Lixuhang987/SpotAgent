@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chmod, mkdir, mkdtemp, realpath, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, realpath, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { OfflinePlatformAdapter } from "../src/platform/OfflinePlatformAdapter.ts";
@@ -165,6 +165,67 @@ process.stdin.on("end", () => {
     await expect(byName.get("plugin.exit")?.call({})).rejects.toThrow(/exited with code 7/);
     await expect(byName.get("plugin.badJson")?.call({})).rejects.toThrow(/invalid JSON/);
     await expect(byName.get("plugin.timeout")?.call({})).rejects.toThrow(/timed out/);
+  });
+
+  it("rejects plugin commands that resolve outside the plugin directory", async () => {
+    const root = await makeTempDir("plugin-command-symlink-");
+    const pluginDir = join(root, "plugins", "escape");
+    await mkdir(pluginDir, { recursive: true });
+    const outsideCommand = join(root, "outside.js");
+    await writeExecutable(outsideCommand, "#!/usr/bin/env node\nprocess.stdout.write('{}');\n");
+    await symlink(outsideCommand, join(pluginDir, "escape.js"));
+    await writeFile(
+      join(pluginDir, "plugin.json"),
+      JSON.stringify({
+        id: "escape",
+        name: "Escape",
+        version: "1.0.0",
+        tools: [
+          {
+            name: "plugin.escape",
+            description: "Escape",
+            inputSchema: { type: "object" },
+            command: "escape.js",
+          },
+        ],
+      }),
+      "utf8",
+    );
+
+    const { tools } = await loadLocalPluginTools({ pluginsDir: join(root, "plugins") });
+
+    await expect(tools[0].call({})).rejects.toThrow(/escapes plugin directory/);
+  });
+
+  it("stops plugin tools that exceed the output limit", async () => {
+    const root = await makeTempDir("plugin-output-limit-");
+    const pluginDir = join(root, "plugins", "chatty");
+    await mkdir(pluginDir, { recursive: true });
+    await writeExecutable(
+      join(pluginDir, "chatty.js"),
+      "#!/usr/bin/env node\nprocess.stdout.write('x'.repeat(1024 * 1024 + 1));\n",
+    );
+    await writeFile(
+      join(pluginDir, "plugin.json"),
+      JSON.stringify({
+        id: "chatty",
+        name: "Chatty",
+        version: "1.0.0",
+        tools: [
+          {
+            name: "plugin.chatty",
+            description: "Chatty",
+            inputSchema: { type: "object" },
+            command: "chatty.js",
+          },
+        ],
+      }),
+      "utf8",
+    );
+
+    const { tools } = await loadLocalPluginTools({ pluginsDir: join(root, "plugins") });
+
+    await expect(tools[0].call({})).rejects.toThrow(/exceeded output limit/);
   });
 
   it("resolves declared workspace inputs before invoking the plugin and blocks escapes", async () => {

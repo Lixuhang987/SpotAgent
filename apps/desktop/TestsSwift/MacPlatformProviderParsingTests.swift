@@ -58,4 +58,35 @@ final class MacPlatformProviderParsingTests: XCTestCase {
         XCTAssertTrue(error.message.contains("隐私与安全性"))
         XCTAssertTrue(error.message.contains("辅助功能"))
     }
+
+    func testAccessibilityWindowSelectionRequiresExplicitWindowMatch() {
+        let selected = selectAccessibilityWindow(
+            windowId: 42,
+            focusedWindow: "focused",
+            windows: ["one", "two"],
+            windowNumber: { $0 == "two" ? 42 : 7 }
+        )
+
+        XCTAssertEqual(selected, "two")
+
+        let missing = selectAccessibilityWindow(
+            windowId: 99,
+            focusedWindow: "focused",
+            windows: ["one", "two"],
+            windowNumber: { $0 == "two" ? 42 : 7 }
+        )
+
+        XCTAssertNil(missing)
+    }
+
+    func testAccessibilityWindowSelectionUsesFocusedWindowWhenWindowIdIsOmitted() {
+        let selected = selectAccessibilityWindow(
+            windowId: nil,
+            focusedWindow: "focused",
+            windows: ["one"],
+            windowNumber: { _ in nil }
+        )
+
+        XCTAssertEqual(selected, "focused")
+    }
 }

@@ -7,6 +7,8 @@ import ImageIO
 import UniformTypeIdentifiers
 import Vision
 
+private let macPlatformAXWindowNumberAttribute = "AXWindowNumber"
+
 struct PlatformBridgeError: Error {
     let code: String
     let message: String
@@ -323,8 +325,11 @@ final class MacPlatformProvider: PlatformProvider {
         case .window(let windowId):
             let app = try appForWindow(windowId: windowId)
             let appElement = AXUIElementCreateApplication(app.processIdentifier)
-            guard let window = copyElementAttribute(appElement, kAXFocusedWindowAttribute) else {
-                throw PlatformBridgeError(code: "not_found", message: "No focused window found for accessibility.snapshot")
+            guard let window = accessibilityWindow(appElement: appElement, windowId: windowId) else {
+                let message = windowId.map {
+                    "No accessibility window found for windowId \($0)"
+                } ?? "No focused window found for accessibility.snapshot"
+                throw PlatformBridgeError(code: "not_found", message: message)
             }
             return (window, nil)
         case .element(let pid, let path):
@@ -344,8 +349,11 @@ final class MacPlatformProvider: PlatformProvider {
         case .window(let windowId):
             let app = try appForWindow(windowId: windowId)
             let appElement = AXUIElementCreateApplication(app.processIdentifier)
-            guard let window = copyElementAttribute(appElement, kAXFocusedWindowAttribute) else {
-                throw PlatformBridgeError(code: "not_found", message: "No focused window found for accessibility.action")
+            guard let window = accessibilityWindow(appElement: appElement, windowId: windowId) else {
+                let message = windowId.map {
+                    "No accessibility window found for windowId \($0)"
+                } ?? "No focused window found for accessibility.action"
+                throw PlatformBridgeError(code: "not_found", message: message)
             }
             return window
         case .element(let pid, let path):
@@ -382,6 +390,15 @@ final class MacPlatformProvider: PlatformProvider {
             current = children[index]
         }
         return current
+    }
+
+    private func accessibilityWindow(appElement: AXUIElement, windowId: Int?) -> AXUIElement? {
+        selectAccessibilityWindow(
+            windowId: windowId,
+            focusedWindow: copyElementAttribute(appElement, kAXFocusedWindowAttribute),
+            windows: copyElementArrayAttribute(appElement, kAXWindowsAttribute),
+            windowNumber: { copyIntAttribute($0, macPlatformAXWindowNumberAttribute) }
+        )
     }
 
     private func snapshot(
@@ -493,6 +510,18 @@ final class MacPlatformProvider: PlatformProvider {
         }
         if let number = value as? NSNumber {
             return number.stringValue
+        }
+        return nil
+    }
+
+    private func copyIntAttribute(_ element: AXUIElement, _ attribute: String) -> Int? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else { return nil }
+        if let int = value as? Int {
+            return int
+        }
+        if let number = value as? NSNumber {
+            return number.intValue
         }
         return nil
     }
@@ -742,6 +771,18 @@ private func parseElementId(_ elementId: String) throws -> (pid: Int, path: [Int
 
 private func elementId(pid: Int, path: [Int]) -> String {
     "pid:\(pid);path:\(path.map(String.init).joined(separator: "."))"
+}
+
+func selectAccessibilityWindow<Element>(
+    windowId: Int?,
+    focusedWindow: Element?,
+    windows: [Element],
+    windowNumber: (Element) -> Int?
+) -> Element? {
+    guard let windowId else {
+        return focusedWindow
+    }
+    return windows.first { windowNumber($0) == windowId }
 }
 
 private func intValue(_ value: Any?) -> Int? {

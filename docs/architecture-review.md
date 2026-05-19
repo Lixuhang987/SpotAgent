@@ -22,7 +22,7 @@
 - **协议表面与运行时仍有不对齐**：`tool_message`、`permission_request.arguments` 与真实 assistant token delta 已接通；剩余主要是 `interrupt` 帧未处理。平台 RPC 与会话协议的混用已通过 `PlatformBridgeMessage` 拆分修正。
 - **缓存边界**：workspace / permission 文件缓存已通过文件戳刷新；`SettingsBackedLLMClient` 已按 settings 文件戳缓存并复用 `VercelClient`；tool registry 也已通过 `SettingsBackedToolRegistry` 在每轮 user message 前按 settings 文件戳刷新。
 - **可靠性盲区**：生产窗口 presenter 已通过 `WindowCloseObservation` 持有并释放关闭 observer token；`WebSocketPlatformBridge` 已用 fencing token 处理重复 attach 与旧 socket 关闭。
-- **能力暴露早于实现**：`ocr.read` / `accessibility.snapshot` / `accessibility.action` 已注册为 builtin tool，但 macOS provider 仍返回 `not_implemented`。
+- **平台能力收口**：`ocr.read`、`accessibility.snapshot`、`accessibility.action` 已由 macOS provider 实现；后续主要风险转为真实 App 权限与交互链路的实机 QA。
 
 ### 0.2 改进路线建议（按依赖顺序）
 
@@ -239,7 +239,7 @@
 
 ### 4.1 builtin tool 模板代码（已修）
 
-**现状**：`defineTool({ name, description, inputSchema, run })` 已落地，builtin tool 已改为 zod schema 单一源并自动生成 JSON Schema。`create(deps).call(input)` 会在调用 `run` 前执行同一个 zod schema 的 `safeParse`，失败时返回包含 tool name 与字段路径的统一可读错误。当前生产注册 10 个 builtin tool：7 个平台类 + `workspace.list` + `file.read` + `file.write`。
+**现状**：`defineTool({ name, description, inputSchema, run })` 已落地，builtin tool 已改为 zod schema 单一源并自动生成 JSON Schema。`create(deps).call(input)` 会在调用 `run` 前执行同一个 zod schema 的 `safeParse`，失败时返回包含 tool name 与字段路径的统一可读错误。当前生产注册 11 个 builtin tool：7 个平台类 + `workspace.list` + `workspace.askUser` + `file.read` + `file.write`。
 
 **已完成**：
 
@@ -375,27 +375,25 @@ private async loadIfChanged(): Promise<void> {
 
 ---
 
-### 5.5 OCR / Accessibility tool 已暴露但 macOS provider 未实现
+### 5.5 OCR / Accessibility tool 已实现
 
-**现状**：`registerBuiltinTools` 默认注册 `ocr.read`、`accessibility.snapshot`、`accessibility.action`，但 `MacPlatformProvider.handle` 对这三个 method 统一抛 `not_implemented`。
+**已修**：`registerBuiltinTools` 默认注册 `ocr.read`、`accessibility.snapshot`、`accessibility.action`，`MacPlatformProvider.handle` 已分别接入 Vision OCR 与 Accessibility API。
 
-**问题**：
+**当前边界**：
 
-- LLM 在需要读图中文字或操作前台 App 时会自然选择这些 tool，但用户看到的是运行时失败；
-- tool list 给模型的能力承诺大于实际能力；
-- 端到端 QA 很难区分“模型不会调用”和“平台没实现”。
+- `ocr.read` 只处理 tool 入参中的 `imageBase64`，不会隐式读取屏幕、剪贴板或文件；
+- `accessibility.snapshot` 支持 frontmost app、app、window、element target，并限制 `maxDepth / maxChildren`；
+- `accessibility.action` 支持 `press / click / set_value`，未授权时返回指向「系统设置 → 隐私与安全性 → 辅助功能」的 `permission_denied`；
+- 显式传入 `windowId` 时按 AX window number 匹配指定窗口，匹配不到返回 `not_found`，不会退回 focused window。
 
-**建议改法**：
+**测试覆盖**：
 
-1. `ocr.read` 用 Vision / 系统 OCR 从用户主动提供图片或 `screen.capture` 结果识别文本。
-2. `accessibility.snapshot` 用 Accessibility API 返回 frontmost app/window/element 树。
-3. `accessibility.action` 至少支持 press / click / set_value，并在未授权时返回权限引导。
-4. 如果短期不实现，应通过 tool settings 默认禁用未实现 tool，避免暴露给 LLM。
+- Swift 单测覆盖 OCR 入参解析、Accessibility target/action 解析、快照限制、权限错误文案与显式 windowId 选择逻辑。
 
-**验收**：
+**待实机验收**：
 
 - 在真实 macOS App 上通过手工 QA 验证 OCR、snapshot、action 三条路径。
-- 单元测试覆盖 provider 参数解析和错误映射。
+- 对指定 `windowId` 的 snapshot 做窗口目标验证，并确认不匹配时返回 `not_found`。
 
 ---
 

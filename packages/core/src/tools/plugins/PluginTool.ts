@@ -62,7 +62,7 @@ export class PluginTool implements AgentTool {
     }
 
     return runPluginCommand({
-      commandPath: resolvePluginCommand(this.options.pluginDir, this.options.manifest.command),
+      commandPath: await resolvePluginCommand(this.options.pluginDir, this.options.manifest.command),
       cwd: this.options.pluginDir,
       request,
       timeoutMs: this.timeoutMs,
@@ -108,7 +108,7 @@ export class PluginTool implements AgentTool {
   }
 }
 
-function resolvePluginCommand(pluginDir: string, command: string): string {
+async function resolvePluginCommand(pluginDir: string, command: string): Promise<string> {
   if (isAbsolute(command)) {
     throw new Error(`plugin command must be relative to plugin directory: ${command}`);
   }
@@ -121,8 +121,19 @@ function resolvePluginCommand(pluginDir: string, command: string): string {
   ) {
     throw new Error(`plugin command escapes plugin directory: ${command}`);
   }
-  return commandPath;
+  const realRoot = await realpath(root);
+  const realCommand = await realpath(commandPath);
+  const realRelative = relative(realRoot, realCommand);
+  if (
+    realRelative === "" ||
+    realRelative.split(sep).some((segment) => segment === "..")
+  ) {
+    throw new Error(`plugin command escapes plugin directory: ${command}`);
+  }
+  return realCommand;
 }
+
+const MAX_PLUGIN_OUTPUT_BYTES = 1024 * 1024;
 
 async function runPluginCommand({
   commandPath,
@@ -141,24 +152,60 @@ async function runPluginCommand({
     const child = spawn(commandPath, [], {
       cwd: dirname(commandPath) || cwd,
       stdio: ["pipe", "pipe", "pipe"],
+      detached: true,
     });
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
+    let stdoutBytes = 0;
+    let stderrBytes = 0;
     let settled = false;
     const timer = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      child.kill("SIGKILL");
-      reject(new Error(`plugin tool ${toolName} timed out after ${timeoutMs}ms`));
+      settleReject(
+        new Error(`plugin tool ${toolName} timed out after ${timeoutMs}ms`),
+        true,
+      );
     }, timeoutMs);
 
-    child.stdout.on("data", (chunk) => stdout.push(Buffer.from(chunk)));
-    child.stderr.on("data", (chunk) => stderr.push(Buffer.from(chunk)));
-    child.on("error", (error) => {
+    function settleReject(error: Error, kill = false): void {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      if (kill) {
+        killPluginProcess(child);
+      }
       reject(error);
+    }
+
+    function appendOutput(streamName: "stdout" | "stderr", chunk: unknown): void {
+      const buffer = Buffer.from(chunk as Buffer);
+      if (streamName === "stdout") {
+        stdoutBytes += buffer.byteLength;
+        if (stdoutBytes > MAX_PLUGIN_OUTPUT_BYTES) {
+          settleReject(
+            new Error(`plugin tool ${toolName} exceeded output limit (${MAX_PLUGIN_OUTPUT_BYTES} bytes)`),
+            true,
+          );
+          return;
+        }
+        stdout.push(buffer);
+        return;
+      }
+
+      stderrBytes += buffer.byteLength;
+      if (stderrBytes > MAX_PLUGIN_OUTPUT_BYTES) {
+        settleReject(
+          new Error(`plugin tool ${toolName} exceeded output limit (${MAX_PLUGIN_OUTPUT_BYTES} bytes)`),
+          true,
+        );
+        return;
+      }
+      stderr.push(buffer);
+    }
+
+    child.stdout.on("data", (chunk) => appendOutput("stdout", chunk));
+    child.stderr.on("data", (chunk) => appendOutput("stderr", chunk));
+    child.on("error", (error) => {
+      settleReject(error);
     });
     child.on("close", (code, signal) => {
       if (settled) return;
@@ -183,6 +230,18 @@ async function runPluginCommand({
 
     child.stdin.end(JSON.stringify(request));
   });
+}
+
+function killPluginProcess(child: ReturnType<typeof spawn>): void {
+  if (child.pid) {
+    try {
+      process.kill(-child.pid, "SIGKILL");
+      return;
+    } catch {
+      // Fall back to the direct child below.
+    }
+  }
+  child.kill("SIGKILL");
 }
 
 function buildDescription(pluginId: string, manifest: PluginToolManifest): string {
