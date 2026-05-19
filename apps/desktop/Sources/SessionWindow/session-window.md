@@ -28,6 +28,7 @@ Coordinator.handleSubmitPrompt
        └─ 本地追加 user bubble（含 `text_selection` / `image` 附件摘要）
        └─ socketClient.sendUserMessage(...)
 agent-server 流式回包 → SessionEvent → ViewModel.handle(_:) → messages/status/error 更新 → SwiftUI 自动刷新
+                                            └─ 状态 / 消息变化回调给 SessionLifecycle，同步 SessionRegistry 供状态气泡派生
 
 PromptPanel 最近会话 / HistoryWindow 恢复
   └─ Coordinator.send(.restoreSession(id))
@@ -85,6 +86,6 @@ PromptPanel 最近会话 / HistoryWindow 恢复
 
 ## 与其他模块的关系
 
-- [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 创建窗口、ViewModel 与 socketClient，并向 [Session 注册表](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Session/session.md) 写 `SessionSummary`。
+- [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 创建窗口、ViewModel 与 socketClient；`SessionLifecycle` 接收 ViewModel 状态变化回调并向 [Session 注册表](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Session/session.md) 写 `SessionSummary`。
 - 通过 `ws://127.0.0.1:4317/api/session` 连接 [AgentServer](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/AgentServer/agent-server.md)。
 - 关闭窗口触发 `setActivationPolicy` 切换（由 [Lifecycle](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Lifecycle/lifecycle.md) 协调）。

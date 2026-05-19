@@ -221,10 +221,16 @@ final class SessionViewModel {
 
     let sessionID: String
     @ObservationIgnored let socketClient: SessionSocketClient
+    @ObservationIgnored private let onStateChanged: @MainActor (SessionViewModel) -> Void
 
-    init(sessionID: String, socketClient: SessionSocketClient) {
+    init(
+        sessionID: String,
+        socketClient: SessionSocketClient,
+        onStateChanged: @escaping @MainActor (SessionViewModel) -> Void = { _ in }
+    ) {
         self.sessionID = sessionID
         self.socketClient = socketClient
+        self.onStateChanged = onStateChanged
     }
 
     func resolvePermission(requestId: String, decision: String, scope: String?) {
@@ -312,6 +318,7 @@ final class SessionViewModel {
         let messageID = UUID().uuidString
         let timestamp = Self.timestamp()
         appendUserMessage(messageID: messageID, text: trimmedText, attachments: attachments)
+        onStateChanged(self)
         socketClient.sendUserMessage(
             sessionID: sessionID,
             messageID: messageID,
@@ -322,32 +329,43 @@ final class SessionViewModel {
     }
 
     func handle(_ event: SessionEvent) {
+        var shouldNotifyStateChanged = false
+
         switch event {
         case .userMessage(let messageID, let text, _):
             appendUserMessage(messageID: messageID, text: text, attachments: [])
+            shouldNotifyStateChanged = true
         case .assistantMessageStart(let messageID, _):
             status = "running"
             error = nil
             messages.append(SessionBubble(id: messageID, role: "assistant", text: ""))
+            shouldNotifyStateChanged = true
         case .assistantMessageDelta(let messageID, let text, _):
             guard let index = messages.firstIndex(where: { $0.id == messageID }) else { return }
             messages[index].text += text
+            shouldNotifyStateChanged = true
         case .assistantMessageEnd(_, let status, _):
             self.status = status == "completed" ? "idle" : status
+            shouldNotifyStateChanged = true
         case .toolMessage(let messageID, let name, let text, _, _):
             messages.append(SessionBubble(id: messageID, role: "tool", text: "\(name): \(text)"))
+            shouldNotifyStateChanged = true
         case .status(let value):
             status = value
             if value != "failed" { error = nil }
+            shouldNotifyStateChanged = true
         case .error(let messageID, let message, _):
             status = "failed"
             error = message
-            if messages.last?.role == "assistant", messages.last?.text == message { return }
-            messages.append(SessionBubble(id: messageID, role: "assistant", text: message))
+            if messages.last?.role != "assistant" || messages.last?.text != message {
+                messages.append(SessionBubble(id: messageID, role: "assistant", text: message))
+            }
+            shouldNotifyStateChanged = true
         case .sessionSnapshot(let messages, let status):
             self.messages = messages.map { $0.normalizedForDisplay() }
             self.status = status
             error = nil
+            shouldNotifyStateChanged = true
         case .permissionRequest(let requestId, let toolName, let argumentsJSON):
             pendingPermissionRequests.append(
                 SessionPermissionRequest(id: requestId, toolName: toolName, argumentsJSON: argumentsJSON)
@@ -362,6 +380,7 @@ final class SessionViewModel {
             messages = bubbles.map { $0.normalizedForDisplay() }
             status = "idle"
             error = nil
+            shouldNotifyStateChanged = true
         case .connectionState(let state):
             connectionState = state
             switch state {
@@ -374,6 +393,10 @@ final class SessionViewModel {
             case .disconnected:
                 connectionMessage = "连接已断开。"
             }
+        }
+
+        if shouldNotifyStateChanged {
+            onStateChanged(self)
         }
     }
 
