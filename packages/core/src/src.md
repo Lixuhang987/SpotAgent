@@ -39,7 +39,7 @@
 
 ### 3. llm 适配阶段
 
-- `loadModelSettings()` 读取 `~/.spotAgent/settings.json`（每次请求都重读）
+- `SettingsBackedLLMClient` 按 `~/.spotAgent/settings.json` 的 `mtimeMs + size` stamp 缓存 `loadModelSettings()` 结果与 `VercelClient`
 - `toVercelMessages` / `toVercelTools` 翻译为 SDK 格式（点号 → 下划线）
 - `VercelClient` 按 `api ∈ {responses, chat, completion}` 选 provider model
 - 可注入 `FileNetworkLogger` 把请求 / 响应落 JSONL
