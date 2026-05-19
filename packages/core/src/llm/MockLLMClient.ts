@@ -134,6 +134,15 @@ export const mockLLMScenarios: MockLLMScenario[] = [
     },
   },
   {
+    id: "slow-focus",
+    triggers: ["[mock:slow-focus]"],
+    description: "较长延迟返回，用于状态气泡回到 running session 的实机 QA。",
+    complete: async (context) => {
+      await delay(10 * 60_000, context.options?.signal);
+      return assistant("Mock slow focus response completed.");
+    },
+  },
+  {
     id: "llm-error",
     triggers: ["[mock:llm-error]"],
     description: "抛出 LLM 错误，用于验证错误气泡。",
@@ -193,6 +202,26 @@ function assistant(content: string): LLMCompletion {
     message: { role: "assistant", content },
     toolCalls: [],
   };
+}
+
+function delay(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) {
+    return Promise.reject(createAbortError());
+  }
+
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener("abort", () => {
+      clearTimeout(timer);
+      reject(createAbortError());
+    }, { once: true });
+  });
+}
+
+function createAbortError(): Error {
+  const error = new Error("The agent run was interrupted.");
+  error.name = "AbortError";
+  return error;
 }
 
 function toolThenFinal(

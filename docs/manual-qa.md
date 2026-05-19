@@ -13,7 +13,7 @@
 
 ## 本轮实机 QA 进度（2026-05-20）
 
-- 已归档：mock LLM 主链路基础、文本选区附件、showPromptPanel 不自动注入前台选区、区域截图附件、Workspace 设置与文件 tool 基础链路、权限审批「仅本次」路径、权限审批记忆 / 拒绝 / 超时 / 永久规则撤销、Tool 设置热加载、会话历史入口与删除确认、agent-server 崩溃恢复、状态气泡失败状态同步、缺少 apiKey 错误可见。详见 [archive.md](./archive.md)。
+- 已归档：mock LLM 主链路基础、文本选区附件、showPromptPanel 不自动注入前台选区、区域截图附件、Workspace 设置与文件 tool 基础链路、权限审批「仅本次」路径、权限审批记忆 / 拒绝 / 超时 / 永久规则撤销、Tool 设置热加载、会话历史入口与删除确认、agent-server 崩溃恢复、状态气泡失败状态同步、状态气泡焦点回跳、缺少 apiKey 错误可见。详见 [archive.md](./archive.md)。
 - 已修复并加入回归检查：worktree 启动路径、tool completed UI 展示实际 result。详见 [bugs.md](./bugs.md)。
 - 仍需继续验证：权限关闭窗口取消挂起请求、workspace.askUser、多会话 platform request 隔离、real LLM vision 与真实 token streaming。
 
@@ -31,7 +31,10 @@
 6. 输入一段用户主动发起的请求并提交。
 7. 观察 PromptPanel 关闭并新建 SessionWindow。
 8. 观察 SessionWindow 中出现用户消息和 assistant 回复；assistant 回复应随 LLM token delta 逐段更新，而不是只在最终完成时一次性出现。
-9. 点击状态气泡，确认优先回到当前 running session；没有 running session 时回最近活跃窗口。
+
+## 状态气泡焦点回跳（P0）
+
+已于 2026-05-20 通过 mock-llm 实机 QA 验证并归档，详见 [archive.md](./archive.md)「状态气泡焦点回跳」。
 
 ## showPromptPanel 不自动注入前台选区（P0）
 

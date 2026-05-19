@@ -73,6 +73,28 @@ final class AgentServerRuntimeModeTests: XCTestCase {
         XCTAssertEqual(resolved?.standardizedFileURL.path, worktreeRepo.standardizedFileURL.path)
     }
 
+    func testRepositoryRootLocatorFallsBackToBundleWhenCurrentDirectoryIsRoot() throws {
+        let repo = URL(fileURLWithPath: "/repo/worktree-repo", isDirectory: true)
+        let bundleExecutableURL = repo
+            .appendingPathComponent("dist/HandAgentDesktop.app/Contents/MacOS", isDirectory: true)
+            .appendingPathComponent("HandAgentDesktop")
+
+        let resolved = AgentServerRepositoryRootLocator(
+            agentServerRelativePath: agentServerRelativePath,
+            fileExists: { path in
+                path == repo.appendingPathComponent("Package.swift").path ||
+                    path == repo.appendingPathComponent(self.agentServerRelativePath).path
+            }
+        ).locate(
+            bundleExecutableURL: bundleExecutableURL,
+            bundleResourceURL: repo.appendingPathComponent("dist/HandAgentDesktop.app/Contents/Resources", isDirectory: true),
+            bundleURL: repo.appendingPathComponent("dist/HandAgentDesktop.app", isDirectory: true),
+            currentDirectoryURL: URL(fileURLWithPath: "/", isDirectory: true)
+        )
+
+        XCTAssertEqual(resolved?.standardizedFileURL.path, repo.standardizedFileURL.path)
+    }
+
     private func makeResourcesDirectory() throws -> URL {
         let root = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
         let directory = root.appendingPathComponent(UUID().uuidString, isDirectory: true)

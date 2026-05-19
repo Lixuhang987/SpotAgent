@@ -31,6 +31,12 @@
 - `[mock:assistant-ok]` 为一次性 mock assistant 回复，不能证明真实 token delta 至少 5 段逐段更新。
 - 结论：第 45、46 项需要 real LLM 环境单独验证。
 
+### `System Events click at` 不适合作为状态气泡点击的唯一证据
+
+- 2026-05-20 状态气泡焦点回跳 QA 中，状态气泡窗口是 `.nonactivatingPanel`，Computer Use 的 accessibility tree 只暴露当前 key SessionWindow，未把状态气泡作为可点击元素枚举出来。
+- 使用 `System Events` 的 `click at {x, y}` 点击状态气泡坐标后，AX 主窗口 / 焦点窗口未稳定切换；改用 CoreGraphics `CGEvent` 发送鼠标 down/up 后，状态气泡点击可稳定触发焦点回跳。
+- 结论：验证状态气泡这类 non-activating panel 的真实点击时，应以 Computer Use 前后 UI 状态 + AX 状态为观察证据，实际点击输入优先使用 CGEvent；不要把 `System Events click at` 的失败单独判为产品 bug。
+
 ---
 
 ## 已修复 bug
@@ -209,6 +215,42 @@
 - `bash ./scripts/swiftw test --filter SessionViewModelTests/testTerminalToolMessageReplacesRunningArgumentsBubble`
 
 **发现日期**：2026-05-19
+
+**修复日期**：2026-05-20
+
+---
+
+### 6. packaged App 从 `/` cwd 启动时仓库根查找不终止
+
+**严重级别**：P1
+
+**现象**：从打包后的 `dist/HandAgentDesktop.app` 启动 mock App 时，`HandAgentDesktop` 进程存在且 CPU 接近 100%，但没有窗口，也没有 `*:4317` agent-server listener。
+
+**复现步骤**：
+
+1. 在 worktree 中执行 `bash ./scripts/package-app.sh --mock-llm`。
+2. 使用 `open dist/HandAgentDesktop.app` 启动。
+3. 观察 `HandAgentDesktop` 进程存在，但 `lsof -nP -iTCP:4317 -sTCP:LISTEN` 无输出，Computer Use 也无法看到状态气泡或其他窗口。
+4. 对桌面进程采样，主线程停在 `AgentServerRepositoryRootLocator.findRepositoryRoot`。
+
+**期望**：packaged App 即使当前工作目录是 `/`，仓库根定位也应有限终止，并继续检查 bundle executable / resource / app bundle 候选，最终拉起当前 bundle 对应 worktree 下的 agent-server。
+
+**根因边界**：`URL(fileURLWithPath: "/").deletingLastPathComponent()` 会产生 `/..`、`/../..` 等路径，旧的 `findRepositoryRoot(startingAt:)` 只比较 `parent.path == current.path`，没有显式处理根目录或循环路径，导致从 `/` 起始时无限向上查找。
+
+**状态**：已修复。
+
+**checkpoint 与结论**：
+
+- packaged App 启动 -> `AgentServerHealth.start()`：主线程采样显示卡在 agent-server 启动前的 repository root 查找阶段，失败点不在 node 子进程或 WebSocket 监听。
+- `findRepositoryRoot(startingAt: "/")` -> parent 递进：Swift one-liner 证明 `/` 的 `deletingLastPathComponent()` 不会稳定停在同一路径，而是产生 `/..` 链；修复后定位器用 `visitedPaths` 防循环，并在 `currentPath == "/"` 时返回 `nil`。
+- cwd 候选失败 -> bundle 候选：回归测试覆盖 `currentDirectoryURL: "/"` 时，定位器能继续回退到 bundle executable/resource/bundle 所在仓库。
+
+**验证**：
+
+- 定向测试：`bash ./scripts/swiftw test --filter AgentServerRuntimeModeTests/testRepositoryRootLocatorFallsBackToBundleWhenCurrentDirectoryIsRoot` 通过。
+- 实机验证：修复后重新 `bash ./scripts/package-app.sh --mock-llm` 并 `open dist/HandAgentDesktop.app`，可见状态气泡 `280x62`，`lsof -nP -iTCP:4317 -sTCP:LISTEN` 显示 node pid `2398` 监听，`ps -o pid,ppid,command -p 2398` 显示命令路径为 `/Users/mu9/proj/handAgent/.worktrees/manual-qa-status-bubble-focus/apps/agent-server/src/server.ts`。
+
+**发现日期**：2026-05-20
 
 **修复日期**：2026-05-20
 
