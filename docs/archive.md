@@ -206,3 +206,23 @@
   - Session 文件：`~/.spotAgent/sessions/A2433C65-E870-4E87-B82C-05058CC500C4.json`，包含 user message 与 `error` event，错误消息为 `MockLLMClient forced failure for QA.`。
   - 状态气泡截图：`/tmp/handagent-qa/status-bubble-failure.png`，可见 `Idle` 与 `MockLLMClient forced failure for QA.`。
 - **结论**：通过。失败会话进入 `failed` 后，状态气泡可同步切回 `Idle`，并用失败文案替换原始 prompt 摘要。
+
+## 缺少 apiKey 错误可见（2026-05-20 实机验证）
+
+- **验证日期**：2026-05-20
+- **验证环境**：real settings / macOS / worktree `codex/manual-qa-missing-apikey-error` / `dist/HandAgentDesktop.app`
+- **验证过程**：
+  1. 在 worktree 中执行 `pnpm install`、`bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`，均通过；其中 vitest 为 32 个测试文件、181 个测试通过。
+  2. 执行 `bash ./scripts/package-app.sh` 打包非 mock App，并确认 `dist/HandAgentDesktop.app/Contents/Resources/HandAgentRuntimeMode.json` 不存在。
+  3. 将 `~/.spotAgent/settings.json` 备份到 `~/.spotAgent/settings.json.qa-missing-apikey-20260520024707.bak`，临时把 `llm.apiKey` 改为空字符串，保留原有 provider、model、api 与 baseUrl。
+  4. 启动 App 后确认初始状态只有状态气泡窗口，尺寸为 `280x62`，Computer Use 可见文案为 `Idle 点击开始`；agent-server 子进程监听 `*:4317`。
+  5. 通过原生事件 `System Events` 发送 `key code 49 using {command down, shift down}` 唤出 PromptPanel，窗口尺寸变为 `640x448` 与 `280x62`，输入框自动聚焦。
+  6. 输入 `QA missing apiKey visible error` 并提交，创建 SessionWindow（`760x560`），窗口状态显示 `failed`，错误文案显示为 `Missing apiKey in ~/.spotAgent/settings.json. 请先在设置页完成模型配置。`。
+  7. 取证后立即从备份恢复 `~/.spotAgent/settings.json`，确认 `llm.apiKey` 已恢复为非空，`tools.denylist` 仍为空数组。
+- **证据**：
+  - agent-server：`ps -o pid,ppid,command -p 80391` 显示命令路径为 `/Users/mu9/proj/handAgent/.worktrees/manual-qa-missing-apikey-error/apps/agent-server/src/server.ts`。
+  - 窗口状态：初始 `280, 62`；PromptPanel 唤起后 `640, 448, 280, 62`；提交后 `280, 62, 760, 560`。
+  - SessionWindow 可见文本：`failed`、`QA missing apiKey visible error`、`Missing apiKey in ~/.spotAgent/settings.json. 请先在设置页完成模型配置。`。
+  - Session 文件：`~/.spotAgent/sessions/1DEAD87B-E546-4B95-BE43-922E5B6F9C5E.json`，包含 user message 与 `error` event，错误消息为 `Missing apiKey in ~/.spotAgent/settings.json. 请先在设置页完成模型配置。`。
+  - 设置恢复检查：`~/.spotAgent/settings.json` 中 `apiKeyRestored: true`，`tools.denylist: []`；退出 App 后无 `HandAgentDesktop` 进程且无 `*:4317` listener。
+- **结论**：通过。缺少 `apiKey` 时会话不会静默失败，SessionWindow 会进入 `failed` 并展示明确配置错误文案。
