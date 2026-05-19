@@ -49,6 +49,28 @@ final class SessionSocketClientTests: XCTestCase {
         XCTAssertEqual(connectionStates, [.connecting, .connected, .disconnected])
     }
 
+    func testSendInterruptSendsInterruptEnvelopeWithoutDisconnecting() {
+        let transport = RecordingSessionSocketTransport()
+        let client = SessionSocketClient(
+            serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
+            transport: transport,
+            reconnectDelay: 0
+        )
+        var connectionStates: [SessionConnectionState] = []
+        client.onEvent = { event in
+            if case .connectionState(let state) = event {
+                connectionStates.append(state)
+            }
+        }
+
+        client.connect(sessionID: "session-1")
+        client.sendInterrupt(sessionID: "session-1")
+
+        XCTAssertEqual(transport.tasks.count, 1)
+        XCTAssertEqual(transport.tasks[0].sentTypes, ["open_session", "interrupt"])
+        XCTAssertEqual(connectionStates, [.connecting, .connected])
+    }
+
     func testExtractPermissionArgumentsJSONReturnsPrettyPayload() {
         let raw = """
         {

@@ -26,7 +26,16 @@ type RuntimeLike = {
 type PushMessage = (message: SessionMessage) => void;
 type BeforeRunHook = () => void | Promise<void>;
 
+type ActiveRun = {
+  controller: AbortController;
+  generation: number;
+  interrupted: boolean;
+};
+
 export class SessionRuntimeOrchestrator {
+  private readonly activeRuns = new Map<string, ActiveRun>();
+  private nextGeneration = 0;
+
   constructor(
     private readonly runtime: RuntimeLike,
     private readonly persistence: SessionPersistence,
@@ -39,6 +48,14 @@ export class SessionRuntimeOrchestrator {
     push: PushMessage,
   ): Promise<void> {
     const { sessionId } = message;
+    const activeRun: ActiveRun = {
+      controller: new AbortController(),
+      generation: this.nextGeneration + 1,
+      interrupted: false,
+    };
+    this.nextGeneration = activeRun.generation;
+    this.activeRuns.get(sessionId)?.controller.abort();
+    this.activeRuns.set(sessionId, activeRun);
 
     await this.persistence.ensureSession(sessionId);
     await this.persistence.persistUserMessage(
@@ -58,6 +75,9 @@ export class SessionRuntimeOrchestrator {
       const result = await this.runtime.runWithMessages(
         runtimeHistory,
         (event) => {
+          if (!this.isActive(sessionId, activeRun) || activeRun.controller.signal.aborted) {
+            return;
+          }
           const outgoing = toSessionMessage(sessionId, event, this.now());
           if (outgoing) {
             push(outgoing);
@@ -68,15 +88,24 @@ export class SessionRuntimeOrchestrator {
             events.push(auditEvent);
           }
         },
-        { sessionId },
+        { sessionId, signal: activeRun.controller.signal },
       );
 
+      if (!this.isActive(sessionId, activeRun) || activeRun.controller.signal.aborted) {
+        return;
+      }
       await this.persistence.persistRunResult(
         sessionId,
         mergeRuntimeResultWithPersistedHistory(history, result.messages),
         events,
       );
     } catch (error) {
+      if (isAbortError(error)) {
+        if (!activeRun.interrupted && this.isActive(sessionId, activeRun)) {
+          this.emitInterrupted(sessionId, push, activeRun);
+        }
+        return;
+      }
       const errorMessage = toErrorMessage(error);
       push({
         type: "error",
@@ -88,7 +117,41 @@ export class SessionRuntimeOrchestrator {
         },
       });
       await this.persistence.persistError(sessionId, errorMessage);
+    } finally {
+      if (this.isActive(sessionId, activeRun)) {
+        this.activeRuns.delete(sessionId);
+      }
     }
+  }
+
+  interruptSession(sessionId: string, push: PushMessage = () => {}): void {
+    const activeRun = this.activeRuns.get(sessionId);
+    if (!activeRun || activeRun.interrupted) return;
+
+    activeRun.controller.abort();
+    this.emitInterrupted(sessionId, push, activeRun);
+  }
+
+  private emitInterrupted(sessionId: string, push: PushMessage, activeRun: ActiveRun): void {
+    activeRun.interrupted = true;
+    push({
+      type: "assistant_message_end",
+      sessionId,
+      messageId: `${sessionId}-interrupted`,
+      timestamp: this.now(),
+      payload: { status: "interrupted" },
+    });
+    push({
+      type: "status",
+      sessionId,
+      messageId: `${sessionId}-status`,
+      timestamp: this.now(),
+      payload: { value: "interrupted" },
+    });
+  }
+
+  private isActive(sessionId: string, activeRun: ActiveRun): boolean {
+    return this.activeRuns.get(sessionId)?.generation === activeRun.generation;
   }
 }
 
@@ -100,4 +163,8 @@ function mergeRuntimeResultWithPersistedHistory(
     ...persistedHistory,
     ...runtimeMessages.slice(persistedHistory.length),
   ];
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError";
 }

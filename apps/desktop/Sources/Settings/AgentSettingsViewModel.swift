@@ -14,6 +14,11 @@ final class AgentSettingsViewModel {
         set { update { $0.model = newValue.trimmingCharacters(in: .whitespacesAndNewlines) } }
     }
 
+    var provider: AgentLLMProvider {
+        get { store.settings.provider }
+        set { update { $0.provider = newValue } }
+    }
+
     var apiKey: String {
         get { store.settings.apiKey }
         set { update { $0.apiKey = newValue.trimmingCharacters(in: .whitespacesAndNewlines) } }

@@ -211,8 +211,9 @@ export async function startDefaultServer(port = 4317) {
     platform,
     workspaceRegistry,
     workspaceAskResolver: workspaceAskBridge.ask,
+    pluginsDir: join(spotDir, "plugins"),
   });
-  toolRegistry.refresh();
+  await toolRegistry.refresh();
 
   const permissionBridge = new SessionPermissionBridge();
   const permissionPolicy = new FilePermissionPolicy({
@@ -243,7 +244,7 @@ export async function startDefaultServer(port = 4317) {
     persistence,
     undefined,
     () => {
-      toolRegistry.refresh();
+      return toolRegistry.refresh();
     },
   );
   const router = new SessionRouter(orchestrator, persistence);

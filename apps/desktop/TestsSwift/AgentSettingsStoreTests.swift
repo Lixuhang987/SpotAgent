@@ -20,6 +20,7 @@ final class AgentSettingsStoreTests: XCTestCase {
 
         let store = AgentSettingsStore(homeDirectoryURL: homeURL)
         store.update { settings in
+            settings.provider = .anthropic
             settings.model = "gpt-4.1"
             settings.apiKey = "test-key"
             settings.baseURL = "https://example.com/v1"
@@ -33,6 +34,7 @@ final class AgentSettingsStoreTests: XCTestCase {
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         let llm = json?["llm"] as? [String: Any]
 
+        XCTAssertEqual(llm?["provider"] as? String, "anthropic")
         XCTAssertEqual(llm?["model"] as? String, "gpt-4.1")
         XCTAssertEqual(llm?["apiKey"] as? String, "test-key")
         XCTAssertEqual(llm?["baseUrl"] as? String, "https://example.com/v1")
@@ -91,6 +93,7 @@ final class AgentSettingsStoreTests: XCTestCase {
             """
             {
               "llm": {
+                "provider": "anthropic",
                 "model": "gpt-4.1",
                 "apiKey": "test-key",
                 "baseUrl": "https://example.com/v1",
@@ -108,6 +111,7 @@ final class AgentSettingsStoreTests: XCTestCase {
         let json = try Self.readJSON(fileURL)
         let llm = json["llm"] as? [String: Any]
         let tools = json["tools"] as? [String: Any]
+        XCTAssertEqual(llm?["provider"] as? String, "anthropic")
         XCTAssertEqual(llm?["model"] as? String, "gpt-4.1")
         XCTAssertEqual(llm?["apiKey"] as? String, "test-key")
         XCTAssertEqual(llm?["baseUrl"] as? String, "https://example.com/v1")
@@ -159,6 +163,7 @@ final class AgentSettingsStoreTests: XCTestCase {
             """
             {
               "llm": {
+                "provider": "anthropic",
                 "model": "gpt-5-mini",
                 "apiKey": "old-key",
                 "baseUrl": "https://old.example/v1",
@@ -175,6 +180,7 @@ final class AgentSettingsStoreTests: XCTestCase {
             """
             {
               "llm": {
+                "provider": "openai-compatible",
                 "model": "gpt-4.1",
                 "apiKey": "new-key",
                 "baseUrl": "https://new.example/v1",
@@ -189,6 +195,7 @@ final class AgentSettingsStoreTests: XCTestCase {
         XCTAssertEqual(
             store.settings,
             AgentSettings(
+                provider: .openAICompatible,
                 model: "gpt-4.1",
                 apiKey: "new-key",
                 baseURL: "https://new.example/v1",

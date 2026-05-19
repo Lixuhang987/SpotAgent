@@ -9,7 +9,7 @@
 | `AgentMessage.ts` | LLM 面向的消息判别联合：`user / assistant(+toolCalls?) / tool / system`；user content 支持字符串或 `text/image` 多模态 parts |
 | `ToolCallEnvelope.ts` | `{ id, name, arguments }` 三元组，连接 LLM 输出与 ToolRegistry |
 | `AgentSession.ts` | 把 `AgentSessionInput`（prompt + 可选选区）归一化为首轮 user message；当前未在 agent-server 主链路使用，仅作为脚本入口 |
-| `AgentRuntime.ts` | 主循环：消费 `LLMClient.stream` → 按 delta 发 assistant 事件 → 收集 toolCalls → 走权限策略 → 调 `ToolRegistry` → 把 tool 结果回灌成 tool message，循环 ≤ `maxTurns` |
+| `AgentRuntime.ts` | 主循环：消费 `LLMClient.stream` → 按 delta 发 assistant 事件 → 收集 toolCalls → 走权限策略 → 调 `ToolRegistry` → 把 tool 结果回灌成 tool message，循环 ≤ `maxTurns`；支持 `AbortSignal` 中断 |
 | `Stub.ts` | 统一渲染 / 解析 `[STUB ...]...[/STUB]` 文本，占位引用 Blob 内容 |
 | `TurnSummarizer.ts` | turn 结束后压缩 `cached=turn` 的 tool message，写回 Blob summary 并重渲染消息 |
 
@@ -17,7 +17,7 @@
 
 ```mermaid
 flowchart TD
-  A[runWithMessages(messages, onEvent, {sessionId})] --> A1[await pending turn summaries]
+  A[runWithMessages(messages, onEvent, {sessionId, signal?})] --> A1[await pending turn summaries]
   A1 --> B[turn ← 0]
   B --> C[LLMClient.stream(messages, registry.list(), {blobStore?})]
   C --> C1[emit assistant start / delta / end]
@@ -44,7 +44,7 @@ flowchart TD
 
 `AgentRuntimeEvent` 是回调流，供 agent-server 翻译成 `SessionMessage`：
 
-- `assistant_message_start | assistant_message_delta | assistant_message_end`：由 `LLMStreamEvent.text_delta` 逐段转发；legacy `complete()` client 会经 `streamLLM()` 兼容层退化为单段 delta。
+- `assistant_message_start | assistant_message_delta | assistant_message_end`：由 `LLMStreamEvent.text_delta` 逐段转发；legacy `complete()` client 会经 `streamLLM()` 兼容层退化为单段 delta；中断时 `_end` status 为 `interrupted`。
 - `tool_call`：tool 调用前埋点；agent-server 会翻译成 `tool_message(status: "running")`。
 - `tool_result`：成功 / 失败 + 序列化输出（`MAX_OUTPUT_BYTES = 8 KiB` 截断）+ duration；agent-server 会翻译成 `tool_message(status: "completed" | "failed")`。
 - `permission_decision`：进入 `ask` 路径后的解析结果；用于审计事件，不直接发 UI 消息。
@@ -59,6 +59,7 @@ flowchart TD
 - runtime 不解析持久化 image STUB；agent-server 会在调用 runtime 前把用户主动提交的 image STUB 转成多模态 image part，runtime 只负责把注入的 `BlobStore` 继续透传给 `LLMClient`。
 - `cached=turn` 的 tool message 在本 turn 内保留完整 body；turn 自然结束后 `TurnSummarizer` 异步压缩，下一次 LLM 调用前 `waitForPendingSummaries()` 会等待并应用 summary。
 - `truncateOutput` 按 UTF-8 字节判长度，但截断时按 JS 字符索引切片（已知潜在 bug，见架构改进）。
+- `runOptions.signal` 被 abort 后，runtime 抛 `AbortError`，停止后续 assistant / tool 事件与消息追加；无法硬取消的 tool 返回后也不会再写入本 run。
 
 ## 编辑此目录的约束
 

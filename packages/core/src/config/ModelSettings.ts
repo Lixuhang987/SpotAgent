@@ -3,8 +3,10 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 export type OpenAIApiType = "responses" | "chat" | "completion";
+export type LLMProvider = "openai-compatible" | "anthropic";
 
 export type ModelSettings = {
+  provider: LLMProvider;
   model: string;
   summarizerModel: string;
   apiKey?: string;
@@ -19,10 +21,12 @@ type PersistedModelSettings = {
     apiKey?: unknown;
     baseUrl?: unknown;
     api?: unknown;
+    provider?: unknown;
   };
 };
 
 export const defaultModelSettings: ModelSettings = {
+  provider: "openai-compatible",
   model: "gpt-5-mini",
   summarizerModel: "claude-haiku-4-5-20251001",
   api: "responses",
@@ -51,6 +55,7 @@ export function loadModelSettings(homeDir = homedir()): ModelSettings {
 
   const llm = parsed.llm ?? {};
   return {
+    provider: normalizeProvider(llm.provider),
     model: normalizeRequiredString(llm.model) ?? defaultModelSettings.model,
     summarizerModel:
       normalizeRequiredString(llm.summarizerModel) ??
@@ -81,4 +86,12 @@ function normalizeApiType(value: unknown): OpenAIApiType {
   }
 
   return defaultModelSettings.api;
+}
+
+function normalizeProvider(value: unknown): LLMProvider {
+  if (value === "anthropic" || value === "openai-compatible") {
+    return value;
+  }
+
+  return defaultModelSettings.provider;
 }

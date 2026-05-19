@@ -130,6 +130,17 @@ struct SessionWindowView: View {
                 .font(theme.typography.captionFont)
                 .foregroundStyle(theme.colors.textSecondary)
             Spacer()
+            if viewModel.status == "running" {
+                Button {
+                    viewModel.stop()
+                } label: {
+                    Image(systemName: "stop.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(theme.colors.error)
+                }
+                .buttonStyle(.plain)
+                .help("停止当前 run")
+            }
         }
         .padding(.horizontal, theme.spacing.xl)
         .padding(.vertical, theme.spacing.md)

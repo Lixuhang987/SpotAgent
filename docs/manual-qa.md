@@ -17,6 +17,11 @@
 - 已确认缺陷：部分 tool completed UI 气泡展示入参而非实际 tool result。详见 [bugs.md](./bugs.md)。
 - 仍需继续验证：权限关闭窗口取消挂起请求、workspace.askUser、多会话 platform request 隔离、real LLM vision 与真实 token streaming。
 
+## 新增待验收能力（2026-05-20）
+
+- 已实现并待实机确认：OCR / Accessibility 平台能力、SessionWindow Stop / interrupt、多 provider LLM、用户自定义 tool / 本地插件系统。实现记录见 [待验收.md](./待验收.md)。
+- 权限审批端到端 QA 仍只剩「关闭 SessionWindow 取消挂起请求」路径未归档；该项继续保留在 [TODO.md](./TODO.md)。
+
 ## 主链路（P0）
 
 1. 启动桌面应用。
@@ -122,6 +127,41 @@
 
 51. 打开两个 SessionWindow（两个不同 session），在两个窗口中同时触发需要 platform 能力的 tool，确认两个请求通过 `requestId` 隔离，结果不串。
 52. 关闭其中一个 SessionWindow，确认另一个 session 的 platform 请求不受影响。
+
+### OCR 与 Accessibility 平台能力
+
+53. 在「系统设置 → 隐私与安全性 → 辅助功能」允许 HandAgent；如要用截图生成 OCR 输入，也在「屏幕录制」里允许 HandAgent。
+54. 使用 `captureRegion` 截取包含清晰文字的区域，或让 LLM 先调用 `screen.capture` 获得图片，再调用 `ocr.read({imageBase64, mimeType: "image/png"})`，确认返回 `text` 与 `lines[].confidence`，且文字内容与图片一致。
+55. 让 LLM 直接调用缺少 `imageBase64` 的 `ocr.read`，确认返回明确 `invalid_argument`，且不会默认读取屏幕、剪贴板或文件。
+56. 打开 TextEdit、系统设置或 Finder 作为前台 App，让 LLM 调用 `accessibility.snapshot({kind: "frontmost_app"})`，确认返回有限层级的 `children`，节点包含 `role`、可读 label/value 和可复用 `elementId`。
+57. 选择一个快照中的按钮或文本框，用对应 `elementId` 调用 `accessibility.action`：按钮验证 `press` 或 `click`，文本框验证 `set_value`。
+58. 用 `window.list` 取得窗口 id 后调用 `accessibility.snapshot({kind: "window", windowId: <id>})`，确认返回的是指定窗口的树；再传入同一 App 下不存在或不匹配的 `windowId`，确认返回 `not_found`，不会退回 focused window。
+59. 临时移除 HandAgent 辅助功能权限后重复 snapshot/action，确认返回 `permission_denied`，文案指向「系统设置 → 隐私与安全性 → 辅助功能」。
+
+### 会话中断 / Stop
+
+60. 使用 real LLM 或 mock 慢响应场景提交一个会持续 streaming 或长时间 tool 调用的 prompt，确认 SessionWindow 运行态出现 Stop 控件。
+61. 点击 Stop，确认窗口不关闭、socket 不断开，状态变为 `interrupted`，后续 assistant delta / tool result 不再追加到当前 run。
+62. 等待原长耗时请求自然返回后，确认 `~/.spotAgent/sessions/<id>.json` 没有写入 Stop 之后的 assistant / tool 消息。
+63. 在同一个 SessionWindow 继续提交新 prompt，确认新 run 可以正常进入 running 并收到回复。
+
+### 多 provider LLM
+
+64. 打开 Settings → 模型配置，确认 provider 可在 `openai-compatible` 与 `anthropic` 间切换，保存后 `~/.spotAgent/settings.json` 写入 `llm.provider`。
+65. 选择 `openai-compatible`，使用当前 OpenAI 兼容端点提交普通文本 prompt，确认 streaming、tool call 与图片附件路径仍按原逻辑工作。
+66. 选择 `anthropic`，配置可用 Anthropic API key 与模型后提交普通文本 prompt，确认 assistant 回复可见且逐段 streaming。
+67. 在 Anthropic provider 下触发一个会调用 tool 的 prompt，确认 tool name 经适配后仍能回到点号风格（如 `file.read`），tool result 可回灌给 LLM。
+68. 将 provider 设为 `openai-compatible` 且 `api` 设为 `completion` 后提交图片附件 prompt，确认返回明确「provider 不支持 multimodal」类错误；提交需要 tool 的 prompt 时确认降级为纯文本请求，不暴露工具列表。
+
+### 用户自定义 tool / 本地插件系统
+
+69. 在 `~/.spotAgent/plugins/echo/plugin.json` 准备一个本地插件，tool 名为 `plugin.echo`，`command` 指向插件目录内可执行脚本，脚本从 stdin 读取 JSON 并向 stdout 输出 JSON。
+70. 重启 App 或触发下一轮 user message，确认 agent-server 日志的已注册 tool 列表包含 `plugin.echo`。
+71. 让 LLM 调用 `plugin.echo`，确认插件收到 `{input, context}`，SessionWindow 展示 JSON tool result，session event 中写入 `tool_call/tool_result`。
+72. 在 `~/.spotAgent/settings.json` 设置 `tools.denylist: ["plugin.echo"]`，不重启 App 再触发该 tool，确认下一轮请求热加载后返回 tool 不可用。
+73. 创建一个与 builtin 同名的插件 tool（如 `file.read`）和两个重复同名插件 tool，确认日志记录 disabled reason，builtin 不被覆盖。
+74. 创建一个会非 0 exit、输出非 JSON、超时或输出超过 1 MiB 的插件 tool，确认错误作为 tool result 返回，agent-server 不崩溃；超时或输出超限时确认子进程被终止。
+75. 创建一个 `command` 经 symlink 指向插件目录外的插件 tool，确认调用时返回 command 越界错误；创建声明 `permissions.workspace: "read"` 或 `"write"` 的插件 tool，分别验证合法 `workspaceId/relativePath` 会收到校验后的 `workspaceRoot/absolutePath`，`../../` 或 symlink 越界会被 workspace 路径校验拦截。该验证只覆盖传给插件的路径边界，不代表插件进程拥有 OS 级沙箱。
 
 ---
 

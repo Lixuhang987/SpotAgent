@@ -6,9 +6,9 @@
 
 | 文件 | 职责 |
 |------|------|
-| `SessionWindowView.swift` | 纯 UI：历史侧栏、状态条、连接状态 banner、消息列表、用户附件摘要、错误 banner、权限审批气泡、workspace 选择气泡、输入框，全部消费 Theme token |
+| `SessionWindowView.swift` | 纯 UI：历史侧栏、运行态 Stop 控件、状态条、连接状态 banner、消息列表、用户附件摘要、错误 banner、权限审批气泡、workspace 选择气泡、输入框，全部消费 Theme token |
 | `SessionViewModel.swift` | `@Observable` 状态：`messages` / `status` / `error` / `pendingPermissionRequests` / `pendingWorkspaceAskRequests` / `historyList` / `pendingHistoryDeletionID` / `connectionState`；消费 `SessionEvent` 维护 UI 状态与连接提示；`SessionBubble` 同时保存消息文本与附件展示摘要 |
-| `SessionSocketClient.swift` | `URLSessionWebSocketTask` 包装：连接、收发 `SessionMessage`、解析 `SessionEvent`，并发送历史读写、权限响应帧、workspace 选择响应帧；断线后自动重连并重发 `open_session` |
+| `SessionSocketClient.swift` | `URLSessionWebSocketTask` 包装：连接、收发 `SessionMessage`、解析 `SessionEvent`，并发送 interrupt、历史读写、权限响应帧、workspace 选择响应帧；断线后自动重连并重发 `open_session` |
 | `SessionHistoryViewModel.swift` | 独立历史窗口状态：从 `SessionHistoryStore` 刷新本地历史、按 query 过滤、维护选中预览、恢复回调和删除确认状态 |
 | `SessionHistoryWindowView.swift` | 独立历史窗口 UI：左侧搜索列表、右侧消息预览、恢复按钮、删除二次确认 |
 | `SessionStyles.swift` | `MessageBubbleModifier`（按 role 切换 user / assistant / tool 三色） |
@@ -41,7 +41,7 @@ PromptPanel 最近会话 / HistoryWindow 恢复
 
 - `userMessage / assistantMessageStart` → 追加新气泡，`status = "running"`，清空 `error`；本地 `sendPrompt` 追加 user bubble 时会把附件转成 `SessionAttachmentSummary`
 - `assistantMessageDelta` → 找到对应 `messageID` 气泡追加文本（无匹配则丢弃，避免乱序写入）
-- `assistantMessageEnd(status: "completed")` → `status = "idle"`；其他 status 透传
+- `assistantMessageEnd(status: "completed")` → `status = "idle"`；`interrupted` 等其他 status 透传
 - `toolMessage` → 追加 role 为 `tool` 的气泡，文本格式 `"\(name): \(text)"`
 - `status` → 直接覆盖；非 `failed` 时清错误
 - `error` → `status = "failed"`，记录 `error`；若上一条 assistant 文本与错误重复则去重
@@ -51,6 +51,12 @@ PromptPanel 最近会话 / HistoryWindow 恢复
 - `sessionList` → 刷新左侧历史侧栏列表
 - `sessionLoaded` → 用历史消息替换当前消息列表，`status = "idle"`；附件摘要归一化规则同 `sessionSnapshot`
 - `connectionState` → 维护 `connectionMessage`；`connecting / reconnecting / disconnected` 显示顶部连接 banner，`connected` 清除 banner。
+
+## 会话中断
+
+- `status == "running"` 时，状态栏右侧显示 Stop 控件。
+- Stop 调用 `SessionViewModel.stop()`，只发送 `interrupt` 帧并把本地状态置为 `interrupted`，不关闭 socket、不触发重连。
+- 后端回推 `assistant_message_end(status: "interrupted")` 或 `status(value: "interrupted")` 时，ViewModel 透传展示，用户仍可继续发送下一条 prompt。
 
 ## 历史入口
 
@@ -75,7 +81,7 @@ PromptPanel 最近会话 / HistoryWindow 恢复
 ## 编辑此目录的约束
 
 - **View 只读 ViewModel + 本地 `@State` draft**：不要直接调 socketClient；继续追问通过 `viewModel.sendPrompt(text)`。
-- **ViewModel 是 main-actor、不直接做网络 I/O**：socketClient 在内部做 `URLSession` 调用，事件回调通过 `Task { @MainActor in ... }` 进入 ViewModel.handle。
+- **ViewModel 是 main-actor、不直接做网络 I/O**：socketClient 在内部做 `URLSession` 调用，事件回调通过 `Task { @MainActor in ... }` 进入 ViewModel.handle；`stop()` 只发送 interrupt，不断开 socket。
 - **不要在 ViewModel 里 dispatch 系统通知或调 Controller**：会话关闭由 window presenter 的 close 回调触发 Coordinator，ViewModel 只对 `stop()` 做 socket 断开。
 - **不要在前端做 LLM/tool 编排**：宿主只消费 `SessionEvent`；新事件类型必须先在 agent-server 与前端 `SessionEvent` enum 同步定义，再加 case 到 `handle(_:)`。
 - **窗口尺寸 / 持久化**：当前每次 prompt 提交都新开 760×560 居中窗口，不做位置记忆；新增此能力需走 Coordinator，不要让 View 直接写 `UserDefaults`。

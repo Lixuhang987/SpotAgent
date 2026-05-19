@@ -1,4 +1,6 @@
-import { statSync } from "node:fs";
+import { readdirSync, statSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type { PlatformAdapter } from "@handagent/core/platform/PlatformAdapter.ts";
 import type { WorkspaceRegistry } from "@handagent/core/workspace/Workspace.ts";
 import type { WorkspaceAskResolver } from "@handagent/core/tools/builtins/WorkspaceAskUserTool.ts";
@@ -7,11 +9,10 @@ import {
   toolSettingsFilePath,
   type ToolSettings,
 } from "@handagent/core/config/ToolSettings.ts";
-import {
-  registerBuiltinTools,
-  type RegisterBuiltinToolsResult,
-} from "@handagent/core/tools/registerBuiltins.ts";
+import { registerTools } from "@handagent/core/tools/registerTools.ts";
+import type { RegisterBuiltinToolsResult } from "@handagent/core/tools/registerBuiltins.ts";
 import { ToolRegistry } from "@handagent/core/tools/ToolRegistry.ts";
+import { loadLocalPluginTools } from "@handagent/core/tools/plugins/loadLocalPluginTools.ts";
 
 type SettingsBackedToolRegistryDependencies = {
   loadToolSettings?: () => ToolSettings;
@@ -31,26 +32,36 @@ export class SettingsBackedToolRegistry {
       platform: PlatformAdapter;
       workspaceRegistry?: WorkspaceRegistry;
       workspaceAskResolver?: WorkspaceAskResolver;
+      pluginsDir?: string;
     },
     dependencies: SettingsBackedToolRegistryDependencies = {},
   ) {
     this.loadToolSettings = dependencies.loadToolSettings ?? loadToolSettings;
-    this.readSettingsStamp = dependencies.readSettingsStamp ?? readToolSettingsStamp;
+    this.readSettingsStamp =
+      dependencies.readSettingsStamp ??
+      (() => readToolSettingsStamp(this.options.pluginsDir ?? defaultPluginsDir()));
     this.log = dependencies.log ?? ((message) => console.log(message));
   }
 
-  refresh(): RegisterBuiltinToolsResult | undefined {
+  async refresh(): Promise<RegisterBuiltinToolsResult | undefined> {
     const settingsStamp = this.readSettingsStamp();
     if (this.cachedStamp === settingsStamp) {
       return undefined;
     }
 
-    const result = registerBuiltinTools({
+    const result = await registerTools({
       registry: this.registry,
       platform: this.options.platform,
       workspaceRegistry: this.options.workspaceRegistry,
       workspaceAskResolver: this.options.workspaceAskResolver,
       settings: this.loadToolSettings(),
+      pluginLoaders: [
+        () =>
+          loadLocalPluginTools({
+            pluginsDir: this.options.pluginsDir ?? defaultPluginsDir(),
+            workspaceRegistry: this.options.workspaceRegistry,
+          }),
+      ],
     });
     this.cachedStamp = settingsStamp;
     this.logRefresh(result);
@@ -67,9 +78,15 @@ export class SettingsBackedToolRegistry {
   }
 }
 
-function readToolSettingsStamp(): string {
+function readToolSettingsStamp(pluginsDir = defaultPluginsDir()): string {
+  const settingsStamp = readSingleFileStamp(toolSettingsFilePath());
+  const pluginsStamp = readPluginsStamp(pluginsDir);
+  return `${settingsStamp}|plugins:${pluginsStamp}`;
+}
+
+function readSingleFileStamp(filePath: string): string {
   try {
-    const stats = statSync(toolSettingsFilePath());
+    const stats = statSync(filePath);
     return `${stats.mtimeMs}:${stats.size}`;
   } catch (error) {
     if (isNotFoundError(error)) {
@@ -77,6 +94,29 @@ function readToolSettingsStamp(): string {
     }
     throw error;
   }
+}
+
+function readPluginsStamp(pluginsDir: string): string {
+  try {
+    const entries = readdirSync(pluginsDir, { withFileTypes: true });
+    const stamps = entries
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => {
+        const manifestPath = join(pluginsDir, entry.name, "plugin.json");
+        return `${entry.name}:${readSingleFileStamp(manifestPath)}`;
+      })
+      .sort();
+    return stamps.join(",");
+  } catch (error) {
+    if (isNotFoundError(error)) {
+      return "missing";
+    }
+    throw error;
+  }
+}
+
+function defaultPluginsDir(): string {
+  return join(homedir(), ".spotAgent", "plugins");
 }
 
 function isNotFoundError(error: unknown): boolean {

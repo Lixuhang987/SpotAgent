@@ -44,7 +44,7 @@ export type SessionMessage =
       sessionId: string;
       messageId: string;
       timestamp: string;
-      payload: { status: "completed" };
+      payload: { status: "completed" | "interrupted" };
     }
   | {
       type: "tool_message";
@@ -62,7 +62,7 @@ export type SessionMessage =
       sessionId: string;
       messageId: string;
       timestamp: string;
-      payload: { value: "idle" | "running" | "failed" };
+      payload: { value: "idle" | "running" | "failed" | "interrupted" };
     }
   | {
       type: "error";
@@ -78,7 +78,7 @@ export type SessionMessage =
       timestamp: string;
       payload: {
         messages: ConversationMessage[];
-        status: "idle" | "running" | "failed";
+        status: "idle" | "running" | "failed" | "interrupted";
       };
     }
   | {

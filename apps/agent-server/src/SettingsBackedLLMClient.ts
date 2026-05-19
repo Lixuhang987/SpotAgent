@@ -7,7 +7,7 @@ import type {
   LLMStreamEvent,
 } from "@handagent/core/llm/LLMClient.ts";
 import { completeLLM, streamLLM } from "@handagent/core/llm/LLMClient.ts";
-import { VercelClient } from "@handagent/core/llm/VercelClient.ts";
+import { createLLMClient } from "@handagent/core/llm/LLMClientFactory.ts";
 import {
   loadModelSettings,
   modelSettingsFilePath,
@@ -25,10 +25,11 @@ type SettingsBackedLLMClientOptions = {
 type SettingsBackedLLMClientDependencies = {
   loadModelSettings?: () => ModelSettings;
   readSettingsStamp?: () => string;
-  createClient?: (settings: VercelClientSettings) => LLMClientLike;
+  createClient?: (settings: SettingsBackedLLMClientSettings) => LLMClientLike;
 };
 
-type VercelClientSettings = {
+type SettingsBackedLLMClientSettings = {
+  provider: ModelSettings["provider"];
   model: string;
   apiKey?: string;
   baseURL?: string;
@@ -43,7 +44,7 @@ export class SettingsBackedLLMClient implements LLMClient {
   private readonly networkLogger;
   private readonly purpose;
   private cachedStamp?: string;
-  private cachedClientSettings?: VercelClientSettings;
+  private cachedClientSettings?: SettingsBackedLLMClientSettings;
   private cachedClient?: LLMClientLike;
 
   constructor(
@@ -54,7 +55,15 @@ export class SettingsBackedLLMClient implements LLMClient {
     this.readSettingsStamp = dependencies.readSettingsStamp ?? readModelSettingsStamp;
     this.createClient =
       dependencies.createClient ??
-      ((settings) => new VercelClient(settings));
+      ((settings) =>
+        createLLMClient({
+          provider: settings.provider,
+          model: settings.model,
+          summarizerModel: settings.model,
+          apiKey: settings.apiKey,
+          baseUrl: settings.baseURL,
+          api: settings.api,
+        }, {}, { networkLogger: settings.networkLogger }).client);
     this.networkLogger = options.networkLogger;
     this.purpose = options.purpose ?? "chat";
   }
@@ -100,8 +109,9 @@ export class SettingsBackedLLMClient implements LLMClient {
     return this.cachedClient;
   }
 
-  private toClientSettings(settings: ModelSettings): VercelClientSettings {
+  private toClientSettings(settings: ModelSettings): SettingsBackedLLMClientSettings {
     return {
+      provider: settings.provider,
       model: this.purpose === "summarizer" ? settings.summarizerModel : settings.model,
       apiKey: settings.apiKey,
       baseURL: settings.baseUrl,
@@ -133,10 +143,11 @@ function isNotFoundError(error: unknown): boolean {
 }
 
 function sameClientSettings(
-  previous: VercelClientSettings,
-  next: VercelClientSettings,
+  previous: SettingsBackedLLMClientSettings,
+  next: SettingsBackedLLMClientSettings,
 ): boolean {
   return (
+    previous.provider === next.provider &&
     previous.model === next.model &&
     previous.apiKey === next.apiKey &&
     previous.baseURL === next.baseURL &&

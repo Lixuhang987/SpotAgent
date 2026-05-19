@@ -4,6 +4,7 @@ import { SettingsBackedLLMClient } from "./SettingsBackedLLMClient.ts";
 describe("SettingsBackedLLMClient", () => {
   it("uses cached settings and one client for 100 completions when the settings stamp is unchanged", async () => {
     const loadModelSettings = vi.fn().mockReturnValue({
+      provider: "openai-compatible",
       model: "gpt-5-mini",
       summarizerModel: "claude-haiku-4-5-20251001",
       apiKey: "first-key",
@@ -29,6 +30,7 @@ describe("SettingsBackedLLMClient", () => {
     expect(loadModelSettings.mock.calls.length).toBeLessThanOrEqual(2);
     expect(createClient).toHaveBeenCalledTimes(1);
     expect(createClient).toHaveBeenCalledWith({
+      provider: "openai-compatible",
       model: "gpt-5-mini",
       apiKey: "first-key",
       baseURL: "https://first.example/v1",
@@ -41,6 +43,7 @@ describe("SettingsBackedLLMClient", () => {
   it("reloads settings and rebuilds the client when the settings stamp changes", async () => {
     let stamp = "settings-v1";
     let settings = {
+      provider: "openai-compatible" as const,
       model: "gpt-5-mini",
       summarizerModel: "claude-haiku-4-5-20251001",
       apiKey: "first-key",
@@ -73,6 +76,7 @@ describe("SettingsBackedLLMClient", () => {
 
     stamp = "settings-v2";
     settings = {
+      provider: "anthropic",
       model: "gpt-4.1",
       summarizerModel: "claude-haiku-4-5-20251001",
       apiKey: "second-key",
@@ -91,6 +95,7 @@ describe("SettingsBackedLLMClient", () => {
       2,
       expect.objectContaining({
         model: "gpt-4.1",
+        provider: "anthropic",
         apiKey: "second-key",
         baseURL: "https://second.example/v1",
         api: "chat",
@@ -101,6 +106,7 @@ describe("SettingsBackedLLMClient", () => {
   it("reuses the existing client when a settings stamp changes but effective client settings do not", async () => {
     let stamp = "settings-v1";
     const loadModelSettings = vi.fn().mockReturnValue({
+      provider: "openai-compatible",
       model: "gpt-5-mini",
       summarizerModel: "claude-haiku-4-5-20251001",
       apiKey: "k",
@@ -129,6 +135,7 @@ describe("SettingsBackedLLMClient", () => {
 
   it("keeps using the cached client while the settings stamp is unchanged", async () => {
     let settings = {
+      provider: "openai-compatible" as const,
       model: "gpt-5-mini",
       summarizerModel: "claude-haiku-4-5-20251001",
       apiKey: "first-key",
@@ -149,6 +156,7 @@ describe("SettingsBackedLLMClient", () => {
 
     await client.complete([], []);
     settings = {
+      provider: "openai-compatible",
       model: "gpt-4.1",
       summarizerModel: "claude-haiku-4-5-20251001",
       apiKey: "second-key",
@@ -160,6 +168,7 @@ describe("SettingsBackedLLMClient", () => {
     expect(loadModelSettings).toHaveBeenCalledTimes(1);
     expect(createClient).toHaveBeenCalledTimes(1);
     expect(createClient).toHaveBeenCalledWith({
+      provider: "openai-compatible",
       model: "gpt-5-mini",
       apiKey: "first-key",
       baseURL: "https://first.example/v1",
@@ -171,6 +180,7 @@ describe("SettingsBackedLLMClient", () => {
   it("forwards the configured network logger to each created client", async () => {
     const networkLogger = { log: vi.fn().mockResolvedValue(undefined) };
     const loadModelSettings = vi.fn().mockReturnValue({
+      provider: "anthropic",
       model: "gpt-5-mini",
       summarizerModel: "claude-haiku-4-5-20251001",
       apiKey: "k",
@@ -196,6 +206,7 @@ describe("SettingsBackedLLMClient", () => {
 
   it("forwards completion options to the cached client", async () => {
     const loadModelSettings = vi.fn().mockReturnValue({
+      provider: "openai-compatible",
       model: "gpt-5-mini",
       summarizerModel: "claude-haiku-4-5-20251001",
       apiKey: "k",
@@ -220,6 +231,7 @@ describe("SettingsBackedLLMClient", () => {
 
   it("can use summarizerModel for summary-only completion requests", async () => {
     const loadModelSettings = vi.fn().mockReturnValue({
+      provider: "anthropic",
       model: "gpt-5-mini",
       summarizerModel: "claude-haiku-4-5-20251001",
       apiKey: "k",
@@ -241,6 +253,7 @@ describe("SettingsBackedLLMClient", () => {
     expect(createClient).toHaveBeenCalledWith(
       expect.objectContaining({
         model: "claude-haiku-4-5-20251001",
+        provider: "anthropic",
       }),
     );
   });

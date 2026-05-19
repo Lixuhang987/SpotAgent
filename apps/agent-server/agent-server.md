@@ -17,8 +17,8 @@
 | `src/SessionRuntimeOrchestrator.ts` | 一轮用户消息编排：确保 session、持久化 user message、等待 pending summary、把 image STUB 展开为 runtime 多模态 content、跑 `AgentRuntime`、翻译 runtime event、落库最终 messages / audit events |
 | `src/SessionPersistence.ts` | 会话持久化封装：唯一直接持有 `SessionStore` 的 agent-server 模块，负责 CRUD、标题生成、历史读取、messages / events 写入，并把 image attachment 交给 BlobStore |
 | `src/MessageTranslator.ts` | 纯函数：`AgentRuntimeEvent` ↔ `SessionMessage` / `SessionEvent` 翻译（`toSessionMessage` / `toAuditEvent` / `agentMessagesToConversation` / `agentMessagesToRuntimeMessages` / `composeUserContent` / `deriveTitle` / `toErrorMessage`）。`composeUserContent` 会把 image attachment 写入 BlobStore 并渲染 image STUB；`agentMessagesToRuntimeMessages` 在进入 runtime 前把 image STUB 转为多模态 image part；新增 tool_message 形态只改这里 |
-| `src/SettingsBackedLLMClient.ts` | 每次 `complete` 先检查 `~/.spotAgent/settings.json` 的 `mtimeMs + size` stamp；stamp 未变复用已缓存的 `VercelClient`，stamp 变化后重读 settings，并只在有效 LLM 配置变化时重建 client；会把 `complete` options（例如 `blobStore`）透传给内部 client；可用 `purpose=summarizer` 读取 `summarizerModel`；注入 `FileNetworkLogger` 把 LLM 网络调用 JSONL 落盘 |
-| `src/SettingsBackedToolRegistry.ts` | 按 `~/.spotAgent/settings.json` 的 `mtimeMs + size` stamp 热加载 `tools.allowlist / tools.denylist`，并原地刷新同一个 `ToolRegistry` 实例；`SessionRuntimeOrchestrator` 每次新一轮 user message 进入 runtime 前调用 `refresh()` |
+| `src/SettingsBackedLLMClient.ts` | 每次 `complete` / `stream` 先检查 `~/.spotAgent/settings.json` 的 `mtimeMs + size` stamp；stamp 未变复用已缓存的 provider client，stamp 变化后重读 settings，并只在 `provider / model / apiKey / baseUrl / api` 等有效 LLM 配置变化时经 core `LLMClientFactory` 重建 client；会把 options（例如 `blobStore`）透传给内部 client；可用 `purpose=summarizer` 读取 `summarizerModel`；注入 `FileNetworkLogger` 把 LLM 网络调用 JSONL 落盘 |
+| `src/SettingsBackedToolRegistry.ts` | 按 `~/.spotAgent/settings.json` 与 `~/.spotAgent/plugins/*/plugin.json` 的 stamp 热加载 builtin + 本地插件 tool，并原地刷新同一个 `ToolRegistry` 实例；`SessionRuntimeOrchestrator` 每次新一轮 user message 进入 runtime 前调用 `refresh()` |
 | `src/WebSocketPlatformBridge.ts` | 实现 core 的 `PlatformBridge` 接口；通过 `attach(send)` 接管来自 desktop 的 `channel: "platform"` 反向 socket 并返回 fencing token，按 `requestId + token` 关联 `platform_request` / `platform_response`，60s 超时 |
 | `src/SessionPermissionBridge.ts` | 实现 `FilePermissionPolicy` 的 `AskResolver`：把 `permission_request` 推到 desktop，按 `requestId + session binding token` 等回 `permission_response`，60s 超时视为 deny |
 | `src/SessionWorkspaceAskBridge.ts` | 实现 `workspace.askUser` 的 `WorkspaceAskResolver`：把 `workspace_ask_request` 推到 desktop，按 `requestId + session binding token` 等回 `workspace_ask_response`，同一 session 内多个 ask 串行展示，取消 / 超时 / 关闭返回 `{ cancelled: true }` |
@@ -35,7 +35,7 @@ sequenceDiagram
   Server->>Core: 动态 import runtime / tools / platform / workspace / permission / config / logging
   Server->>Server: 构造 FileSessionStore / FilesystemBlobStore / FileNetworkLogger / FileWorkspaceRegistry
   Server->>Server: 构造 WebSocketPlatformBridge + RemotePlatformAdapter + SessionWorkspaceAskBridge
-  Server->>Server: SettingsBackedToolRegistry.refresh() → registerBuiltinTools(...) → registry / disabled list
+  Server->>Server: SettingsBackedToolRegistry.refresh() → registerTools(...) → registry / disabled list
   Server->>Server: SessionPermissionBridge + FilePermissionPolicy(askResolver)
   Server->>Server: resolveLLMMode() → SettingsBackedLLMClient 或 MockLLMClient
   Server->>Server: AgentRuntime(LLMClient, registry, {policy, blobStore, turnSummarizer})
@@ -65,17 +65,18 @@ socket 关闭时，若该 socket 持有 bridge token，会调用 `bridge.detach(
 
 | 路径 | 写入方 | 读取方 | 说明 |
 |------|--------|--------|------|
-| `~/.spotAgent/settings.json` | desktop（`AgentSettingsStore`） | agent-server（LLM 路径按 `mtimeMs + size` 失效重读；tool registry 在每轮 user message 前按同一文件戳刷新） | 模型配置 + tool allowlist/denylist |
+| `~/.spotAgent/settings.json` | desktop（`AgentSettingsStore`） | agent-server（LLM 路径按 `mtimeMs + size` 失效重读；tool registry 在每轮 user message 前按同一文件戳刷新） | LLM provider / 模型配置 + tool allowlist/denylist |
 | `~/.spotAgent/sessions/<id>.json` | agent-server（`FileSessionStore`） | agent-server | `PersistedSession` |
 | `~/.spotAgent/blobs/<YYYY-MM-DD>/<uuid>.*` | agent-server（`FilesystemBlobStore`） | agent-server / LLM adapter / 后续 tool | 图片附件与大段 tool 输出的原始内容；图片只在进入 LLM 请求前按 blobId 读取 |
 | `~/.spotAgent/blobs/<YYYY-MM-DD>/<uuid>.meta.json` | agent-server（`FilesystemBlobStore` / `TurnSummarizer`） | agent-server | Blob 元数据与可选 summary |
 | `~/.spotAgent/workspaces.json` | desktop（`WorkspaceSettingsViewModel`） + agent-server（`FileWorkspaceRegistry` 自播种 default） | 双侧 | workspace 注册表 |
 | `~/.spotAgent/permissions.json` | agent-server（`FilePermissionPolicy.remember`） | agent-server | 永久权限规则 |
 | `~/.spotAgent/log/<YYYY-MM-DD>/network-NNN.jsonl` | agent-server（`FileNetworkLogger`） | 人工排查 | LLM 请求 / 响应 body |
+| `~/.spotAgent/plugins/<plugin-id>/plugin.json` | 用户 / 本地安装流程 | agent-server | 本地插件 manifest；tool 执行入口、权限声明、启停状态与超时配置 |
 
 ## LLM 模式
 
-默认模式是 `settings`：`startDefaultServer` 使用 `SettingsBackedLLMClient` 读取 `~/.spotAgent/settings.json` 并启用 `TurnSummarizer`。
+默认模式是 `settings`：`startDefaultServer` 使用 `SettingsBackedLLMClient` 读取 `~/.spotAgent/settings.json` 并启用 `TurnSummarizer`。`llm.provider` 缺失时默认走 `openai-compatible`；当前支持 `openai-compatible` 与 `anthropic`。core 的 `LLMClientFactory` 会显式声明 provider capability，并在不支持图片时提前抛错，在不支持 tool calling 的路径上传空 tools 降级。
 
 当环境变量 `HANDAGENT_LLM_MODE=mock` 时，`startDefaultServer` 改用 core 的 `MockLLMClient`，并关闭 summarizer，避免日常 QA 触发真实端点。桌面 QA 推荐通过包参数写入 bundle marker：
 
