@@ -1,10 +1,10 @@
-import type { AgentMessage } from "../../../packages/core/src/runtime/AgentMessage.ts";
-import type { AgentRuntimeEvent } from "../../../packages/core/src/runtime/AgentRuntime.ts";
-import type { SessionMessage, UserMessageAttachment } from "../../../packages/core/src/protocol/SessionMessage.ts";
-import type { ConversationMessage } from "../../../packages/core/src/conversation/ConversationMessage.ts";
-import type { SessionEvent } from "../../../packages/core/src/storage/index.ts";
-import type { BlobStore } from "../../../packages/core/src/blob/BlobStore.ts";
-import { parseStub, renderStub } from "../../../packages/core/src/runtime/Stub.ts";
+import type { AgentMessage } from "@handagent/core/runtime/AgentMessage.ts";
+import type { AgentRuntimeEvent } from "@handagent/core/runtime/AgentRuntime.ts";
+import type { SessionMessage, UserMessageAttachment } from "@handagent/core/protocol/SessionMessage.ts";
+import type { ConversationMessage } from "@handagent/core/conversation/ConversationMessage.ts";
+import type { SessionEvent } from "@handagent/core/storage/index.ts";
+import type { BlobStore } from "@handagent/core/blob/BlobStore.ts";
+import { parseStub, renderStub } from "@handagent/core/runtime/Stub.ts";
 
 export function toSessionMessage(
   sessionId: string,

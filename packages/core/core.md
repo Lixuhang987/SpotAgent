@@ -4,6 +4,8 @@
 
 `packages/core` 是跨平台 Agent Core，负责会话建模、消息结构、LLM/tool 循环、tool 注册与平台抽象。
 
+TypeScript workspace 包名为 `@handagent/core`。应用层代码应通过 `@handagent/core/<subpath>` 引用本包导出的 `src/` 子路径，不使用跨包相对路径 reach into core。
+
 下级文档入口：
 
 - [src/src.md](/Users/mu9/proj/handAgent/packages/core/src/src.md)

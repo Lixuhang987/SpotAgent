@@ -2,16 +2,16 @@ import { randomUUID } from "node:crypto";
 import type {
   PlatformBridge,
   PlatformBridgeMethod,
-} from "../../../packages/core/src/platform/PlatformBridge.ts";
+} from "@handagent/core/platform/PlatformBridge.ts";
 import {
   PlatformBridgeOfflineError,
   PlatformBridgeRemoteError,
   PlatformBridgeTimeoutError,
-} from "../../../packages/core/src/platform/PlatformBridge.ts";
+} from "@handagent/core/platform/PlatformBridge.ts";
 import type {
   PlatformResponsePayload,
   SessionMessage,
-} from "../../../packages/core/src/protocol/SessionMessage.ts";
+} from "@handagent/core/protocol/SessionMessage.ts";
 
 type Pending = {
   method: string;

@@ -39,7 +39,7 @@
 1. tool 设置 UI 与热加载。
 2. `WebSocketPlatformBridge` 多连接与多会话绑定。
 3. 给 `LLMClient` 真实流式接口，并补会话 `interrupt` / Stop。
-4. 收敛 `SessionMessage` 的协议混用（§2.2）与跨包 path alias（§2.1）。
+4. 收敛 `SessionMessage` 的协议混用（§2.2）。
 
 ---
 
@@ -101,26 +101,20 @@
 
 ## 2. 模块边界
 
-### 2.1 跨包相对路径，没有真实"包"边界
+### 2.1 跨包相对路径，没有真实"包"边界（已修）
 
-**现状**：`apps/agent-server/src/SessionRouter.ts` / `SessionRuntimeOrchestrator.ts` / `SessionPersistence.ts` 等使用 `../../../packages/core/src/...` 这样的相对路径直接 reach into core。
+**已修**：`packages/core` 已声明为 `@handagent/core` workspace 包，并通过 `exports` 把 `./*` 映射到 `./src/*`。`apps/agent-server` 依赖 `@handagent/core: workspace:*`，源码与测试统一使用 `@handagent/core/...` import，不再通过 `../../../packages/core/src/...` reach into core。
 
-**问题**：
+**修复效果**：
 
-- core 内部任何文件位置变化都会破坏 agent-server。
-- agent-server 也可以"绕过 core 的公开 API"直接拿到内部实现细节，违背封装。
-- TS path 没法用别名 import（`@handagent/core`），IDE 跳转和重构都打折扣。
+- agent-server 的 core 依赖变成 package-level alias，路径意图更清晰；
+- 生产运行仍兼容 `node --experimental-transform-types --experimental-specifier-resolution=node apps/agent-server/src/server.ts`；
+- `scripts/test.sh` 纳入 `path-alias.test.ts`，防止相对 reach-in 回归。
 
-**建议改法**：
+**测试覆盖**：
 
-1. 在仓库根 `tsconfig.base.json` 增加 `paths: { "@core/*": ["packages/core/src/*"] }`。
-2. 让 `packages/core/package.json` 的 `exports` 字段显式声明对外 API 入口（`./runtime`、`./protocol`、`./tools` 等），其它路径不导出。
-3. agent-server 全部相对 import 改为 `@core/...`。
-
-**验收**：
-
-- `apps/agent-server/src/**/*.ts` 不再出现 `../../../packages` 字样。
-- 改动 core 内部子目录布局不再连带 agent-server。
+- `apps/agent-server/src/path-alias.test.ts` 扫描 agent-server 源码，断言不再出现 `../../../packages/core`。
+- 额外手工验证 Node 可直接 import `apps/agent-server/src/server.ts` 并解析 `@handagent/core`。
 
 ---
 

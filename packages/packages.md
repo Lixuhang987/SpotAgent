@@ -6,7 +6,7 @@
 
 当前包含一个主包：
 
-- [core/core.md](/Users/mu9/proj/handAgent/packages/core/core.md)
+- [core/core.md](/Users/mu9/proj/handAgent/packages/core/core.md)：workspace 包名为 `@handagent/core`，对外通过 package exports 映射到 `src/`。
 
 ## 分层关系
 
@@ -20,6 +20,7 @@ flowchart TD
 
 - `core` 只定义会话、消息、runtime、tool 协议和平台抽象，不依赖 AppKit。
 - macOS 平台能力由桌面 App 的 `MacPlatformProvider`（Swift）实现，通过 `PlatformBridge` 反向 IPC 暴露给 `RemotePlatformAdapter`。
+- 应用层 TypeScript 代码通过 `@handagent/core/...` 引用 core，不再使用 `../../../packages/core/src/...` 跨包相对路径。
 
 ## 数据流角色
 

@@ -1,12 +1,12 @@
-import type { AgentMessage } from "../../../packages/core/src/runtime/AgentMessage.ts";
+import type { AgentMessage } from "@handagent/core/runtime/AgentMessage.ts";
 import type {
   SessionListEntry,
   SessionMessage,
-} from "../../../packages/core/src/protocol/SessionMessage.ts";
+} from "@handagent/core/protocol/SessionMessage.ts";
 import type {
   PersistedSession,
   SessionSummary,
-} from "../../../packages/core/src/storage/index.ts";
+} from "@handagent/core/storage/index.ts";
 import type { SessionPersistence } from "./SessionPersistence.ts";
 import type { SessionRuntimeOrchestrator } from "./SessionRuntimeOrchestrator.ts";
 

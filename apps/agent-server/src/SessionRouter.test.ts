@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { AgentMessage } from "../../../packages/core/src/runtime/AgentMessage.ts";
-import type { AgentRuntimeEvent } from "../../../packages/core/src/runtime/AgentRuntime.ts";
-import type { SessionMessage } from "../../../packages/core/src/protocol/SessionMessage.ts";
-import { InMemorySessionStore } from "../../../packages/core/src/storage/index.ts";
+import type { AgentMessage } from "@handagent/core/runtime/AgentMessage.ts";
+import type { AgentRuntimeEvent } from "@handagent/core/runtime/AgentRuntime.ts";
+import type { SessionMessage } from "@handagent/core/protocol/SessionMessage.ts";
+import { InMemorySessionStore } from "@handagent/core/storage/index.ts";
 import { handleSocketMessage } from "./server.ts";
 import { SessionPersistence } from "./SessionPersistence.ts";
 import { SessionRouter } from "./SessionRouter.ts";
