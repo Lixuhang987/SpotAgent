@@ -2,14 +2,14 @@ import {
   generateText,
 } from "ai";
 import { createOpenAI, type OpenAIProvider } from "@ai-sdk/openai";
-import type { LLMClient, LLMCompletion } from "./LLMClient.ts";
+import type { LLMClient, LLMCompleteOptions, LLMCompletion } from "./LLMClient.ts";
 import type { AgentMessage } from "../runtime/AgentMessage.ts";
 import type { RegisteredTool } from "../tools/ToolRegistry.ts";
 import type { OpenAIApiType } from "../config/ModelSettings.ts";
 import type { NetworkLogger } from "../logging/NetworkLogger.ts";
 import { createLoggingFetch } from "../logging/createLoggingFetch.ts";
 import { resolveOpenAIApiKey, resolveOpenAIBaseURL } from "./OpenAIConfig.ts";
-import { sanitizeToolName, toVercelMessages, toVercelTools } from "./VercelAdapters.ts";
+import { hasImageContent, sanitizeToolName, toVercelMessages, toVercelTools } from "./VercelAdapters.ts";
 
 type OpenAIProviderSettings = NonNullable<Parameters<typeof createOpenAI>[0]>;
 type VercelRequest = Parameters<typeof generateText>[0];
@@ -28,6 +28,7 @@ type VercelClientDependencies = {
 
 export class VercelClient implements LLMClient {
   private readonly model;
+  private readonly api;
   private readonly generateText;
 
   constructor(
@@ -56,17 +57,25 @@ export class VercelClient implements LLMClient {
       baseURL: resolveOpenAIBaseURL({ baseURL }),
       ...(fetchImpl ? { fetch: fetchImpl } : {}),
     });
+    this.api = api;
     this.model = selectLanguageModel(provider, api, model);
     this.generateText = dependencies.generateText ?? generateText;
   }
 
-  async complete(messages: AgentMessage[], tools: RegisteredTool[]): Promise<LLMCompletion> {
+  async complete(
+    messages: AgentMessage[],
+    tools: RegisteredTool[],
+    options?: LLMCompleteOptions,
+  ): Promise<LLMCompletion> {
+    if (this.api === "completion" && hasImageContent(messages)) {
+      throw new Error("OpenAI completion API does not support image content. Use chat or responses.");
+    }
     const reverseToolNames = new Map(
       tools.map((t) => [sanitizeToolName(t.name), t.name])
     );
     const request: VercelRequest = {
       model: this.model,
-      messages: toVercelMessages(messages),
+      messages: await toVercelMessages(messages, options),
       tools: toVercelTools(tools),
     };
     const response: VercelResponse = await this.generateText(request);

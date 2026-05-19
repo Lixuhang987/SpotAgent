@@ -61,4 +61,63 @@ describe("createLoggingFetch", () => {
     expect(entries[0]).toMatchObject({ direction: "request", body: "raw-string" });
     expect(entries[1]).toMatchObject({ direction: "response", status: 500, body: "not-json" });
   });
+
+  it("redacts image payloads from parsed JSON request logs", async () => {
+    const entries: NetworkLogEntry[] = [];
+    const logger = {
+      log: vi.fn(async (entry: NetworkLogEntry) => {
+        entries.push(entry);
+      }),
+    };
+    const baseFetch = vi.fn(async () =>
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    ) as unknown as typeof fetch;
+
+    const wrapped = createLoggingFetch({ logger, baseFetch });
+
+    await wrapped("https://api.example.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image",
+                image: "base64-large",
+                mediaType: "image/png",
+              },
+              {
+                type: "text",
+                text: "data:image/png;base64,abc",
+              },
+            ],
+          },
+        ],
+      }),
+    });
+
+    expect(entries[0]?.body).toEqual({
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "image",
+              image: "[redacted image payload]",
+              mediaType: "image/png",
+            },
+            {
+              type: "text",
+              text: "[redacted image data URI]",
+            },
+          ],
+        },
+      ],
+    });
+  });
 });

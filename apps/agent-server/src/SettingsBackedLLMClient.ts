@@ -1,5 +1,5 @@
 import { statSync } from "node:fs";
-import type { LLMClient, LLMCompletion } from "../../../packages/core/src/llm/LLMClient.ts";
+import type { LLMClient, LLMCompleteOptions, LLMCompletion } from "../../../packages/core/src/llm/LLMClient.ts";
 import { VercelClient } from "../../../packages/core/src/llm/VercelClient.ts";
 import {
   loadModelSettings,
@@ -52,10 +52,14 @@ export class SettingsBackedLLMClient implements LLMClient {
     this.purpose = options.purpose ?? "chat";
   }
 
-  async complete(messages: AgentMessage[], tools: RegisteredTool[]): Promise<LLMCompletion> {
+  async complete(
+    messages: AgentMessage[],
+    tools: RegisteredTool[],
+    options?: LLMCompleteOptions,
+  ): Promise<LLMCompletion> {
     const settingsStamp = this.readSettingsStamp();
     const client = this.clientForStamp(settingsStamp);
-    return client.complete(messages, tools);
+    return client.complete(messages, tools, options);
   }
 
   private clientForStamp(settingsStamp: string): Pick<LLMClient, "complete"> {

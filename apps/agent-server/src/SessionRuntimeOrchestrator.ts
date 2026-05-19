@@ -8,6 +8,7 @@ import type { SessionMessage } from "../../../packages/core/src/protocol/Session
 import type { SessionEvent } from "../../../packages/core/src/storage/index.ts";
 import type { SessionPersistence } from "./SessionPersistence.ts";
 import {
+  agentMessagesToRuntimeMessages,
   toAuditEvent,
   toErrorMessage,
   toSessionMessage,
@@ -47,11 +48,12 @@ export class SessionRuntimeOrchestrator {
 
     const history = await this.persistence.getMessages(sessionId);
     await this.runtime.waitForPendingSummaries?.(history);
+    const runtimeHistory = agentMessagesToRuntimeMessages(history);
 
     try {
       const events: SessionEvent[] = [];
       const result = await this.runtime.runWithMessages(
-        history,
+        runtimeHistory,
         (event) => {
           const outgoing = toSessionMessage(sessionId, event, this.now());
           if (outgoing) {
@@ -66,7 +68,11 @@ export class SessionRuntimeOrchestrator {
         { sessionId },
       );
 
-      await this.persistence.persistRunResult(sessionId, result.messages, events);
+      await this.persistence.persistRunResult(
+        sessionId,
+        mergeRuntimeResultWithPersistedHistory(history, result.messages),
+        events,
+      );
     } catch (error) {
       const errorMessage = toErrorMessage(error);
       push({
@@ -81,4 +87,14 @@ export class SessionRuntimeOrchestrator {
       await this.persistence.persistError(sessionId, errorMessage);
     }
   }
+}
+
+function mergeRuntimeResultWithPersistedHistory(
+  persistedHistory: AgentMessage[],
+  runtimeMessages: AgentMessage[],
+): AgentMessage[] {
+  return [
+    ...persistedHistory,
+    ...runtimeMessages.slice(persistedHistory.length),
+  ];
 }

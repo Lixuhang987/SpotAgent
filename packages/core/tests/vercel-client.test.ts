@@ -10,9 +10,44 @@ import {
 } from "../src/llm/VercelAdapters";
 import { VercelClient } from "../src/llm/VercelClient";
 import type { AgentMessage } from "../src/runtime/AgentMessage";
+import type { BlobRecord } from "../src/blob/BlobRecord";
+import type { BlobStore } from "../src/blob/BlobStore";
+
+class MemoryBlobStore implements BlobStore {
+  records = new Map<string, BlobRecord>();
+  contents = new Map<string, Buffer>();
+
+  async put(input: { kind: string; bytes: Buffer; extension: string }): Promise<BlobRecord> {
+    const id = `blob-${this.records.size + 1}`;
+    const record: BlobRecord = {
+      id,
+      kind: input.kind,
+      size: input.bytes.byteLength,
+      path: `/tmp/${id}.${input.extension}`,
+    };
+    this.records.set(id, record);
+    this.contents.set(id, input.bytes);
+    return record;
+  }
+
+  async get(id: string): Promise<BlobRecord | undefined> {
+    return this.records.get(id);
+  }
+
+  async readContent(id: string): Promise<Buffer> {
+    const content = this.contents.get(id);
+    if (!content) throw new Error(`Blob not found: ${id}`);
+    return content;
+  }
+
+  async setSummary(id: string, summary: string): Promise<void> {
+    const record = this.records.get(id);
+    if (record) record.summary = summary;
+  }
+}
 
 describe("VercelClient adapters", () => {
-  it("converts agent messages to AI SDK model messages", () => {
+  it("converts agent messages to AI SDK model messages", async () => {
     const messages: AgentMessage[] = [
       {
         role: "system",
@@ -43,7 +78,7 @@ describe("VercelClient adapters", () => {
       },
     ];
 
-    expect(toVercelMessages(messages)).toEqual([
+    await expect(toVercelMessages(messages)).resolves.toEqual([
       {
         role: "system",
         content: "system rule",
@@ -86,6 +121,71 @@ describe("VercelClient adapters", () => {
         ],
       },
     ]);
+  });
+
+  it("maps typed image user content into AI SDK image parts", async () => {
+    const blobStore = new MemoryBlobStore();
+    await blobStore.put({
+      kind: "image",
+      bytes: Buffer.from("png-bytes"),
+      extension: "png",
+    });
+
+    await expect(
+      toVercelMessages(
+        [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "描述图片" },
+              { type: "image", blobId: "blob-1", mimeType: "image/png" },
+            ],
+          },
+        ],
+        { blobStore },
+      ),
+    ).resolves.toEqual([
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "描述图片" },
+          { type: "image", image: Buffer.from("png-bytes"), mediaType: "image/png" },
+        ],
+      },
+    ]);
+  });
+
+  it("throws clear errors when image content cannot be resolved", async () => {
+    const blobStore = new MemoryBlobStore();
+    await blobStore.put({
+      kind: "tool_result",
+      bytes: Buffer.from("text"),
+      extension: "txt",
+    });
+    const messages: AgentMessage[] = [
+      {
+        role: "user",
+        content: [{ type: "image", blobId: "blob-1", mimeType: "image/png" }],
+      },
+    ];
+
+    await expect(toVercelMessages(messages)).rejects.toThrow(
+      "Image content requires a BlobStore.",
+    );
+    await expect(
+      toVercelMessages(
+        [
+          {
+            role: "user",
+            content: [{ type: "image", blobId: "missing", mimeType: "image/png" }],
+          },
+        ],
+        { blobStore },
+      ),
+    ).rejects.toThrow("Image blob not found: missing");
+    await expect(toVercelMessages(messages, { blobStore })).rejects.toThrow(
+      "Blob is not an image: blob-1",
+    );
   });
 
   it("sanitizes tool names so they match OpenAI's ^[a-zA-Z0-9_-]+$ pattern", () => {
@@ -209,5 +309,40 @@ describe("VercelClient adapters", () => {
     expect(completion).toHaveBeenCalledWith("gpt-3.5-turbo-instruct");
     expect(responses).not.toHaveBeenCalled();
     expect(chat).not.toHaveBeenCalled();
+  });
+
+  it("rejects image content when configured for the OpenAI completion API", async () => {
+    const generateText = vi.fn(async () => ({
+      text: "should not run",
+      toolCalls: [],
+    }));
+    const client = new VercelClient(
+      {
+        apiKey: "test-key",
+        model: "gpt-3.5-turbo-instruct",
+        api: "completion",
+      },
+      {
+        createOpenAI: vi.fn(() => ({
+          responses: vi.fn(() => "responses-model"),
+          chat: vi.fn(() => "chat-model"),
+          completion: vi.fn(() => "completion-model"),
+        })),
+        generateText: generateText as never,
+      },
+    );
+
+    await expect(
+      client.complete(
+        [
+          {
+            role: "user",
+            content: [{ type: "image", blobId: "blob-1", mimeType: "image/png" }],
+          },
+        ],
+        [],
+      ),
+    ).rejects.toThrow("OpenAI completion API does not support image content. Use chat or responses.");
+    expect(generateText).not.toHaveBeenCalled();
   });
 });

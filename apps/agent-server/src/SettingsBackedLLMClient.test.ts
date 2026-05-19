@@ -194,6 +194,30 @@ describe("SettingsBackedLLMClient", () => {
     );
   });
 
+  it("forwards completion options to the cached client", async () => {
+    const loadModelSettings = vi.fn().mockReturnValue({
+      model: "gpt-5-mini",
+      summarizerModel: "claude-haiku-4-5-20251001",
+      apiKey: "k",
+      baseUrl: "https://example/v1",
+      api: "chat",
+    });
+    const complete = vi
+      .fn()
+      .mockResolvedValue({ message: { role: "assistant", content: "ok" }, toolCalls: [] });
+    const createClient = vi.fn(() => ({ complete }));
+    const blobStore = { get: vi.fn() };
+
+    const client = new SettingsBackedLLMClient(
+      {},
+      { loadModelSettings, createClient },
+    );
+
+    await client.complete([], [], { blobStore: blobStore as never });
+
+    expect(complete).toHaveBeenCalledWith([], [], { blobStore });
+  });
+
   it("can use summarizerModel for summary-only completion requests", async () => {
     const loadModelSettings = vi.fn().mockReturnValue({
       model: "gpt-5-mini",

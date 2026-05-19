@@ -18,7 +18,7 @@
 
 负面（驱动后续 TODO 的根因）：
 
-- **产品闭环仍有缺口**：图片附件已写入 Blob/Stub，SessionWindow 已展示当前与历史用户气泡的附件摘要；剩余缺口是图片尚未接入 vision 或多模态消息。
+- **产品闭环进展**：图片附件已写入 Blob/Stub，SessionWindow 已展示当前与历史用户气泡的附件摘要，agent-server 会在调用 runtime 前把 image STUB 展开为 LLM 多模态 content part。
 - **协议表面与运行时仍有不对齐**：`tool_message` 与 `permission_request.arguments` 已接通；剩余主要是"伪流式" assistant_message_delta、`interrupt` 帧未处理、平台 RPC 与会话协议混在同一个 `SessionMessage` union。
 - **缓存边界**：workspace / permission 文件缓存已通过文件戳刷新；`SettingsBackedLLMClient` 也已按 settings 文件戳缓存并复用 `VercelClient`；剩余主要是 tool 设置还缺热加载。
 - **可靠性盲区**：生产窗口 presenter 已通过 `WindowCloseObservation` 持有并释放关闭 observer token；剩余主要是 `WebSocketPlatformBridge.attach` 会静默覆盖旧 bridge socket。
@@ -36,11 +36,10 @@
 
 当前优先级：
 
-1. 图片附件多模态消息。
-2. tool 设置 UI 与热加载。
-3. `WebSocketPlatformBridge` 多连接与多会话绑定。
-4. 给 `LLMClient` 真实流式接口，并补会话 `interrupt` / Stop。
-5. 收敛 `SessionMessage` 的协议混用（§2.2）与跨包 path alias（§2.1）。
+1. tool 设置 UI 与热加载。
+2. `WebSocketPlatformBridge` 多连接与多会话绑定。
+3. 给 `LLMClient` 真实流式接口，并补会话 `interrupt` / Stop。
+4. 收敛 `SessionMessage` 的协议混用（§2.2）与跨包 path alias（§2.1）。
 
 ---
 
@@ -190,22 +189,24 @@
 
 ---
 
-### 3.4 图片附件未真实进多模态消息
+### 3.4 图片附件多模态消息（已修）
 
-**现状**：`MessageTranslator.composeUserContent` 会把 `UserMessageAttachment.image` 写入 BlobStore，并在 user message 中插入空 body 的 image STUB。原始 base64 不进入 LLM 上下文，LLM 看到的是 blob 引用而非图像内容。
+**已修**：`MessageTranslator.composeUserContent` 仍会把 `UserMessageAttachment.image` 写入 BlobStore，并在持久化 user message 中插入空 body 的 image STUB；原始 base64 不进入会话历史。`SessionRuntimeOrchestrator` 调用 runtime 前会通过 `agentMessagesToRuntimeMessages()` 把 image STUB 展开为 `{ type: "image"; blobId; mimeType }` content part，`AgentRuntime` 把注入的 `BlobStore` 透传给 `LLMClient.complete()`，`VercelAdapters.toVercelMessages()` 再读取 blob bytes 并映射为 AI SDK image part。
 
-**问题**：用户 captureRegion 之后，原始图像字节已可回读，但 LLM 还没有 vision / `image.describe` 工具把 blob 转成文本事实。这仍是 [TODO](/Users/mu9/proj/handAgent/docs/TODO.md) 中图片多模态闭环的 last mile 缺口。
+**边界**：
 
-**建议改法**：
+- 只处理用户主动提交的图片附件；屏幕、窗口、剪贴板等上下文仍不会默认注入模型。
+- 持久化层仍保存 STUB 文本，避免把 base64 或二进制内容写入 session JSON。
+- `api = "completion"` 会在遇到 image content 时提前报错，要求改用 `chat` 或 `responses`。
+- network logger 会脱敏 AI SDK image payload 与 `data:image/*` 字符串。
 
-1. 增加 `image.describe` / vision tool，按 blobId 读取图像并输出文本描述，输出继续走 `cached` 生命周期。
-2. 或把 `AgentMessage.user.content` 从 `string` 升级为 `string | AgentContentPart[]`（`{ type: "text" } | { type: "image"; mimeType; base64 }`），由 `VercelAdapters.toVercelMessages` 映射到 SDK 多模态消息。
-3. 两条路径都必须保持“屏幕 / 文件 / 剪贴板上下文不默认注入”的产品边界，只能处理用户主动提供的图片附件或 LLM 显式 tool 读取结果。
+**测试覆盖**：
 
-**验收**：
-
-- 截屏后让 LLM 描述图片内容，应能给出真实描述（不再是占位字符串）。
-- `runtime.test.ts` 增加多模态 fake provider case。
+- `MessageTranslator.test.ts` 覆盖 image STUB → runtime 多模态 parts。
+- `SessionRuntimeOrchestrator.test.ts` 覆盖 runtime 收到 typed image content、持久化仍保留 STUB。
+- `runtime.test.ts` 覆盖 `BlobStore` 透传给 LLM client。
+- `vercel-client.test.ts` 覆盖 blob 读取、AI SDK image part 映射、缺 blobStore / 缺 blob / 非 image blob / completion API 报错。
+- `logging-fetch.test.ts` 覆盖 image payload 脱敏。
 
 ---
 
@@ -217,7 +218,7 @@
 
 - 用户在当前窗口可确认本轮请求实际带了哪些附件；
 - 当前本地回显与历史恢复消息的展示形态一致；
-- 图片多模态落地前，附件摘要仍能作为调试线索。
+- 附件摘要仍可作为多模态链路的调试线索。
 
 **测试覆盖**：
 

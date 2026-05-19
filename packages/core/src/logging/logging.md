@@ -7,7 +7,7 @@
 | 文件 | 职责 |
 |------|------|
 | `NetworkLogger.ts` | `NetworkLogger.log(entry)` 接口 + `NetworkLogEntry`（`timestamp / direction / url / method / status / body`） |
-| `createLoggingFetch.ts` | `fetch` 装饰器：发请求前后各 log 一次；响应通过 `clone().text()` 读 body 不消耗原响应；记录失败默默忽略（不阻塞主流程） |
+| `createLoggingFetch.ts` | `fetch` 装饰器：发请求前后各 log 一次；响应通过 `clone().text()` 读 body 不消耗原响应；记录失败默默忽略（不阻塞主流程）；请求 JSON 中的 image payload / data URI 会脱敏 |
 | `FileNetworkLogger.ts` | JSONL 实现：按本地日期分桶，单文件超 1 MiB（`maxFileBytes` 可配）切下一个序号；写入串行化以避免错位 |
 | `index.ts` | 桶导出 |
 
@@ -44,7 +44,7 @@ agent-server / SettingsBackedLLMClient
 ## 编辑此目录的约束
 
 - 不要把 `NetworkLogger` 当成产品级日志；产品事件审计用 `SessionEvent` 走 `SessionStore.appendEvents`。
-- 不要在 logger 内做加工（裁剪、脱敏）以外的事；任何过滤逻辑放在调用侧。
+- logger 内只允许做必要脱敏，不做产品级过滤或决策；当前会脱敏多模态图片 payload。
 - 新增 logger 实现必须保持 `log()` 不抛——外层 fetch 装饰器假定 logger 不会让请求失败。
 
 ## 相关文档

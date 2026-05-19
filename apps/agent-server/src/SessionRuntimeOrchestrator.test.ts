@@ -5,6 +5,8 @@ import type { SessionMessage } from "../../../packages/core/src/protocol/Session
 import { InMemorySessionStore } from "../../../packages/core/src/storage/index.ts";
 import { SessionPersistence } from "./SessionPersistence.ts";
 import { SessionRuntimeOrchestrator } from "./SessionRuntimeOrchestrator.ts";
+import type { BlobRecord } from "../../../packages/core/src/blob/BlobRecord.ts";
+import type { BlobStore } from "../../../packages/core/src/blob/BlobStore.ts";
 
 function createUserMessage(
   sessionId: string,
@@ -18,6 +20,39 @@ function createUserMessage(
     timestamp: "2026-05-11T10:00:00.000Z",
     payload: { text },
   };
+}
+
+class MemoryBlobStore implements BlobStore {
+  records: BlobRecord[] = [];
+  contents = new Map<string, Buffer>();
+
+  async put(input: { kind: string; bytes: Buffer; extension: string }): Promise<BlobRecord> {
+    const id = `blob-${this.records.length + 1}`;
+    const record: BlobRecord = {
+      id,
+      kind: input.kind,
+      size: input.bytes.byteLength,
+      path: `/tmp/${id}.${input.extension}`,
+    };
+    this.records.push(record);
+    this.contents.set(id, input.bytes);
+    return record;
+  }
+
+  async get(id: string): Promise<BlobRecord | undefined> {
+    return this.records.find((record) => record.id === id);
+  }
+
+  async readContent(id: string): Promise<Buffer> {
+    const content = this.contents.get(id);
+    if (!content) throw new Error(`Blob not found: ${id}`);
+    return content;
+  }
+
+  async setSummary(id: string, summary: string): Promise<void> {
+    const record = await this.get(id);
+    if (record) record.summary = summary;
+  }
 }
 
 describe("SessionRuntimeOrchestrator", () => {
@@ -217,6 +252,63 @@ describe("SessionRuntimeOrchestrator", () => {
         { role: "user", content: "第一句" },
         { role: "system", content: "summary ready" },
       ],
+    ]);
+  });
+
+  it("passes image attachments to runtime as multimodal content while persisting stubs", async () => {
+    const runtimeCalls: AgentMessage[][] = [];
+    const blobStore = new MemoryBlobStore();
+    const persistence = new SessionPersistence(
+      new InMemorySessionStore(),
+      () => "2026-05-11T00:00:00.000Z",
+      blobStore,
+    );
+    const orchestrator = new SessionRuntimeOrchestrator(
+      {
+        async runWithMessages(messages: AgentMessage[]) {
+          runtimeCalls.push(messages.map((message) => ({ ...message })));
+          return { messages, bubbles: [] };
+        },
+      },
+      persistence,
+      () => "2026-05-11T00:00:00.000Z",
+    );
+
+    await orchestrator.handleUserMessage(
+      {
+        ...createUserMessage("session-image", "描述图片", "user-1"),
+        payload: {
+          text: "描述图片",
+          attachments: [
+            {
+              kind: "image",
+              id: "img-1",
+              mimeType: "image/png",
+              base64: Buffer.from("png-bytes").toString("base64"),
+            },
+          ],
+        },
+      },
+      () => {},
+    );
+
+    expect(runtimeCalls).toEqual([
+      [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "描述图片" },
+            { type: "image", blobId: "blob-1", mimeType: "image/png" },
+          ],
+        },
+      ],
+    ]);
+    expect(await persistence.getMessages("session-image")).toEqual([
+      {
+        role: "user",
+        content:
+          '描述图片\n\n[STUB id=blob-1 kind=image size=9 path="/tmp/blob-1.png"]\n[/STUB]',
+      },
     ]);
   });
 
