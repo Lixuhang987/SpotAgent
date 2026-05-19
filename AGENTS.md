@@ -29,6 +29,7 @@
 
 - `docs/dev.md`：开发说明。
 - `docs/manual-qa.md`：手工验收清单。
+- `docs/live-qa-flow.md`：实机 QA 执行流程、取证规则、停止条件与缺陷报告格式。
 - `docs/architecture-review.md`：当前代码架构问题与改进路线。
 - `docs/TODO.md`：按依赖关系分组的待办路线图（P0–P3）。
 - `docs/bugs.md`：当前已知 bug 清单与修复约束。
