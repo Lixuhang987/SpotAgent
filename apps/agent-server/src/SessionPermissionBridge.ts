@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import type { AskResolver } from "../../../packages/core/src/permission/FilePermissionPolicy.ts";
-import type { SessionMessage } from "../../../packages/core/src/protocol/SessionMessage.ts";
+import type { AskResolver } from "@handagent/core/permission/FilePermissionPolicy.ts";
+import type { SessionMessage } from "@handagent/core/protocol/SessionMessage.ts";
 
 type Send = (message: SessionMessage) => void;
 

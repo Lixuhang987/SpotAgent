@@ -4,8 +4,8 @@ import {
   PlatformBridgeOfflineError,
   PlatformBridgeRemoteError,
   PlatformBridgeTimeoutError,
-} from "../../../packages/core/src/platform/PlatformBridge.ts";
-import type { SessionMessage } from "../../../packages/core/src/protocol/SessionMessage.ts";
+} from "@handagent/core/platform/PlatformBridge.ts";
+import type { SessionMessage } from "@handagent/core/protocol/SessionMessage.ts";
 
 function captureSends(bridge: WebSocketPlatformBridge): SessionMessage[] {
   const sent: SessionMessage[] = [];

@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { AgentMessage } from "../../../packages/core/src/runtime/AgentMessage.ts";
-import type { AgentRuntimeEvent } from "../../../packages/core/src/runtime/AgentRuntime.ts";
-import type { SessionMessage } from "../../../packages/core/src/protocol/SessionMessage.ts";
-import { InMemorySessionStore } from "../../../packages/core/src/storage/index.ts";
+import type { AgentMessage } from "@handagent/core/runtime/AgentMessage.ts";
+import type { AgentRuntimeEvent } from "@handagent/core/runtime/AgentRuntime.ts";
+import type { SessionMessage } from "@handagent/core/protocol/SessionMessage.ts";
+import { InMemorySessionStore } from "@handagent/core/storage/index.ts";
 import { SessionPersistence } from "./SessionPersistence.ts";
 import { SessionRuntimeOrchestrator } from "./SessionRuntimeOrchestrator.ts";
-import type { BlobRecord } from "../../../packages/core/src/blob/BlobRecord.ts";
-import type { BlobStore } from "../../../packages/core/src/blob/BlobStore.ts";
+import type { BlobRecord } from "@handagent/core/blob/BlobRecord.ts";
+import type { BlobStore } from "@handagent/core/blob/BlobStore.ts";
 
 function createUserMessage(
   sessionId: string,

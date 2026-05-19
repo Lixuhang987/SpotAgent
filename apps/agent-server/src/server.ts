@@ -1,14 +1,14 @@
 import { pathToFileURL } from "node:url";
 import { join } from "node:path";
 import { homedir } from "node:os";
-import type { SessionMessage } from "../../../packages/core/src/protocol/SessionMessage.ts";
+import type { SessionMessage } from "@handagent/core/protocol/SessionMessage.ts";
 import { SessionPersistence } from "./SessionPersistence.ts";
 import { SessionRouter } from "./SessionRouter.ts";
 import { SessionRuntimeOrchestrator } from "./SessionRuntimeOrchestrator.ts";
-import { FileSessionStore } from "../../../packages/core/src/storage/index.ts";
+import { FileSessionStore } from "@handagent/core/storage/index.ts";
 import { WebSocketPlatformBridge } from "./WebSocketPlatformBridge.ts";
 import { SessionPermissionBridge } from "./SessionPermissionBridge.ts";
-import type { FilePermissionPolicy } from "../../../packages/core/src/permission/FilePermissionPolicy.ts";
+import type { FilePermissionPolicy } from "@handagent/core/permission/FilePermissionPolicy.ts";
 
 export async function startServer({
   router,
@@ -98,16 +98,16 @@ export async function startDefaultServer(port = 4317) {
     { FilesystemBlobStore },
     { TurnSummarizer },
   ] = await Promise.all([
-    import("../../../packages/core/src/runtime/AgentRuntime.ts"),
-    import("../../../packages/core/src/tools/registerBuiltins.ts"),
-    import("../../../packages/core/src/platform/RemotePlatformAdapter.ts"),
-    import("../../../packages/core/src/workspace/FileWorkspaceRegistry.ts"),
-    import("../../../packages/core/src/permission/FilePermissionPolicy.ts"),
-    import("../../../packages/core/src/config/ToolSettings.ts"),
+    import("@handagent/core/runtime/AgentRuntime.ts"),
+    import("@handagent/core/tools/registerBuiltins.ts"),
+    import("@handagent/core/platform/RemotePlatformAdapter.ts"),
+    import("@handagent/core/workspace/FileWorkspaceRegistry.ts"),
+    import("@handagent/core/permission/FilePermissionPolicy.ts"),
+    import("@handagent/core/config/ToolSettings.ts"),
     import("./SettingsBackedLLMClient.ts"),
-    import("../../../packages/core/src/logging/FileNetworkLogger.ts"),
-    import("../../../packages/core/src/blob/FilesystemBlobStore.ts"),
-    import("../../../packages/core/src/runtime/TurnSummarizer.ts"),
+    import("@handagent/core/logging/FileNetworkLogger.ts"),
+    import("@handagent/core/blob/FilesystemBlobStore.ts"),
+    import("@handagent/core/runtime/TurnSummarizer.ts"),
   ]);
 
   const spotDir = join(homedir(), ".spotAgent");

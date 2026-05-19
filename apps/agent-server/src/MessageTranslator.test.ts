@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { BlobRecord } from "../../../packages/core/src/blob/BlobRecord.ts";
-import type { BlobStore } from "../../../packages/core/src/blob/BlobStore.ts";
+import type { BlobRecord } from "@handagent/core/blob/BlobRecord.ts";
+import type { BlobStore } from "@handagent/core/blob/BlobStore.ts";
 import {
   agentMessagesToRuntimeMessages,
   agentMessagesToConversation,

@@ -1,12 +1,12 @@
-import type { AgentMessage } from "../../../packages/core/src/runtime/AgentMessage.ts";
-import type { BlobStore } from "../../../packages/core/src/blob/BlobStore.ts";
-import { FilesystemBlobStore } from "../../../packages/core/src/blob/FilesystemBlobStore.ts";
+import type { AgentMessage } from "@handagent/core/runtime/AgentMessage.ts";
+import type { BlobStore } from "@handagent/core/blob/BlobStore.ts";
+import { FilesystemBlobStore } from "@handagent/core/blob/FilesystemBlobStore.ts";
 import type {
   PersistedSession,
   SessionEvent,
   SessionStore,
   SessionSummary,
-} from "../../../packages/core/src/storage/index.ts";
+} from "@handagent/core/storage/index.ts";
 import {
   agentMessagesToConversation,
   composeUserContent,

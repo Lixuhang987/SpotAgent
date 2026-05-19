@@ -5,7 +5,7 @@
 ## 在分层中的位置
 
 - 上游：`apps/desktop`（用户交互、平台能力）。
-- 下游：`packages/core`（runtime、tools、LLM、storage、permission、workspace、logging）。
+- 下游：`@handagent/core` workspace 包（runtime、tools、LLM、storage、permission、workspace、logging）。
 - 自身职责：组装依赖、维护 socket 生命周期、在 desktop 与 core 之间做协议翻译。
 
 ## 文件
@@ -69,7 +69,7 @@ sequenceDiagram
 
 ## 编辑此目录的约束
 
-- 不允许 `import` 任何 macOS / browser-only 模块；只用 Node 标准库 + `ws` + 通过相对路径访问 `packages/core/src/...`。
+- 不允许 `import` 任何 macOS / browser-only 模块；只用 Node 标准库、`ws` 与 `@handagent/core/...` package alias 访问 core。
 - 不在此处定义跨进程 DTO，全部走 `packages/core/src/protocol/SessionMessage.ts`，避免 desktop 与 server 漂移。
 - 新增长驻服务（store / bridge / policy）必须放进 `startDefaultServer`，并通过参数透传给 `startServer`，保持 `startServer` 的可注入构造。
 - 新增协议分支优先放在 `SessionRouter`；新增 runtime 事件翻译优先放在 `MessageTranslator`；新增持久化顺序优先放在 `SessionPersistence`，不要把职责重新堆回单个类。

@@ -1,14 +1,14 @@
 import { statSync } from "node:fs";
-import type { LLMClient, LLMCompleteOptions, LLMCompletion } from "../../../packages/core/src/llm/LLMClient.ts";
-import { VercelClient } from "../../../packages/core/src/llm/VercelClient.ts";
+import type { LLMClient, LLMCompleteOptions, LLMCompletion } from "@handagent/core/llm/LLMClient.ts";
+import { VercelClient } from "@handagent/core/llm/VercelClient.ts";
 import {
   loadModelSettings,
   modelSettingsFilePath,
-} from "../../../packages/core/src/config/ModelSettings.ts";
-import type { ModelSettings } from "../../../packages/core/src/config/ModelSettings.ts";
-import type { AgentMessage } from "../../../packages/core/src/runtime/AgentMessage.ts";
-import type { RegisteredTool } from "../../../packages/core/src/tools/ToolRegistry.ts";
-import type { NetworkLogger } from "../../../packages/core/src/logging/NetworkLogger.ts";
+} from "@handagent/core/config/ModelSettings.ts";
+import type { ModelSettings } from "@handagent/core/config/ModelSettings.ts";
+import type { AgentMessage } from "@handagent/core/runtime/AgentMessage.ts";
+import type { RegisteredTool } from "@handagent/core/tools/ToolRegistry.ts";
+import type { NetworkLogger } from "@handagent/core/logging/NetworkLogger.ts";
 
 type SettingsBackedLLMClientOptions = {
   networkLogger?: NetworkLogger;

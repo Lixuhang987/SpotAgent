@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { BlobRecord } from "../../../packages/core/src/blob/BlobRecord.ts";
-import type { BlobStore } from "../../../packages/core/src/blob/BlobStore.ts";
-import type { AgentMessage } from "../../../packages/core/src/runtime/AgentMessage.ts";
-import { InMemorySessionStore } from "../../../packages/core/src/storage/index.ts";
+import type { BlobRecord } from "@handagent/core/blob/BlobRecord.ts";
+import type { BlobStore } from "@handagent/core/blob/BlobStore.ts";
+import type { AgentMessage } from "@handagent/core/runtime/AgentMessage.ts";
+import { InMemorySessionStore } from "@handagent/core/storage/index.ts";
 import { SessionPersistence } from "./SessionPersistence.ts";
 
 class MemoryBlobStore implements BlobStore {
