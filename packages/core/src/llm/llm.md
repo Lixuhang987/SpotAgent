@@ -29,7 +29,7 @@ AgentRuntime
 
 ## 设计要点
 
-- **同步重读 settings**：生产路径走 `agent-server/SettingsBackedLLMClient`，每次 `complete` 重新读 `~/.spotAgent/settings.json` 并新建 `VercelClient`。优势是用户改 settings 后立即生效；代价是同步 IO 在 LLM 热路径上（详见架构改进）。
+- **settings mtime cache**：生产路径走 `agent-server/SettingsBackedLLMClient`，每次 `complete` 先检查 `~/.spotAgent/settings.json` 的 `mtimeMs + size` stamp；stamp 未变复用现有 `VercelClient`，stamp 变化后重读 settings，并只在有效 LLM 配置变化时新建 `VercelClient`。用户改 settings 写盘后，下一次 `complete` 可见。
 - **伪流式**：`complete` 是非流式，但 `AgentRuntime` 会人工切成 `start/delta/end` 三事件，desktop UI 看不到真实 token streaming（架构改进项）。
 - **tool 命名**：core 内部 tool 名一律点号风格（`file.read`），`VercelAdapters` 在适配层做 `file_read` 转换；冲突时抛 `Tool name collision after sanitization`。
 - **legacy `provider.completion()`**：当前默认 `defaultModelSettings.api = "responses"`；`VercelClient` 构造默认 `api = "chat"`。两个默认不一致，但生产路径全程透传 settings，无实际冲突。
