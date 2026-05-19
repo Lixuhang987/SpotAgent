@@ -5,7 +5,7 @@ import type { PlatformBridgeMessage } from "@handagent/core/protocol/PlatformBri
 import type { FilePermissionPolicy } from "@handagent/core/permission/FilePermissionPolicy.ts";
 import type { SessionRouter } from "./SessionRouter.ts";
 import { SessionPermissionBridge } from "./SessionPermissionBridge.ts";
-import { attachSessionSocketHandlers } from "./server.ts";
+import { attachSessionSocketHandlers, resolveLLMMode } from "./server.ts";
 
 class FakeSocket extends EventEmitter {
   sent: string[] = [];
@@ -273,5 +273,13 @@ describe("attachSessionSocketHandlers", () => {
 
     expect(bridge.detach).toHaveBeenCalledWith(101);
     expect(bridge.detach).toHaveBeenCalledWith(102);
+  });
+});
+
+describe("resolveLLMMode", () => {
+  it("uses mock mode only when HANDAGENT_LLM_MODE is explicitly mock", () => {
+    expect(resolveLLMMode({})).toBe("settings");
+    expect(resolveLLMMode({ HANDAGENT_LLM_MODE: "settings" })).toBe("settings");
+    expect(resolveLLMMode({ HANDAGENT_LLM_MODE: "mock" })).toBe("mock");
   });
 });

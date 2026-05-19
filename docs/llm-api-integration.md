@@ -2,7 +2,7 @@
 
 ## 目标
 
-该测试用于单独验证 `VercelClient` 能调用当前 `~/.spotAgent/settings.json` 配置的真实 OpenAI 兼容端点，并保存 provider 原始请求 / 响应 JSON 与仓内归一化后的 `LLMCompletion`。这些结果用于后续构造 `MockLLMClient` 或 fixture，不进入日常默认测试。
+该测试用于单独验证 `VercelClient` 能调用当前 `~/.spotAgent/settings.json` 配置的真实 OpenAI 兼容端点，并保存 provider 原始请求 / 响应 JSON 与仓内归一化后的 `LLMCompletion`。这些结果用于后续维护 `MockLLMClient`，不进入日常默认测试。
 
 ## 运行方式
 
@@ -69,9 +69,9 @@ HANDAGENT_LLM_REQUEST_TIMEOUT_MS=90000 pnpm run test:llm:integration
 
 如果真实端点超时或报错，测试仍会先写出 `artifact.json` 与已捕获的 `network.jsonl`，并在 `artifact.json.error` 中记录脱敏后的错误摘要；测试本身仍按失败处理。
 
-## 后续 mock 构造依据
+## MockLLMClient 维护依据
 
-后续 `MockLLMClient` 应优先消费 `turn-*.completion.json` 的归一化结构，而不是直接依赖 provider 原始 response。理由：
+`MockLLMClient` 的唯一真源是 `packages/core/src/llm/MockLLMClient.ts` 里的 `mockLLMScenarios`，不维护额外 fixture 文件。新增或调整 mock 场景时，应优先参考 `turn-*.completion.json` 的归一化结构，而不是直接依赖 provider 原始 response。理由：
 
 - `LLMClient` 的稳定契约是 `LLMCompletion`。
 - provider 原始 response 和 AI SDK 内部字段可能随依赖版本变化。
@@ -122,6 +122,13 @@ HANDAGENT_LLM_REQUEST_TIMEOUT_MS=90000 pnpm run test:llm:integration
 ```
 
 这类样例可以直接作为 `MockLLMClient.complete()` 的返回值模板；如果要模拟“先 tool call、后最终回答”的链路，就把第一轮返回上面的结构，第二轮返回 `toolCalls: []` 的 assistant 文本。
+
+日常桌面 QA 不直接使用真实端点，推荐打包 mock 模式：
+
+```bash
+bash ./scripts/package-app.sh --mock-llm
+open dist/HandAgentDesktop.app
+```
 
 ## 默认测试覆盖
 

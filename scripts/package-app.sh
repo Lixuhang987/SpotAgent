@@ -3,14 +3,39 @@ set -euo pipefail
 
 APP_NAME="HandAgentDesktop"
 BUNDLE_ID="com.yourname.HandAgentDesktop"
-BUILD_DIR=".build/release"
-DIST_DIR="dist"
+BUILD_DIR="${HANDAGENT_PACKAGE_BUILD_DIR:-.build/release}"
+DIST_DIR="${HANDAGENT_PACKAGE_DIST_DIR:-dist}"
 APP_DIR="$DIST_DIR/$APP_NAME.app"
+SWIFT_BIN="${HANDAGENT_PACKAGE_SWIFT_BIN:-swift}"
+CODESIGN_BIN="${HANDAGENT_PACKAGE_CODESIGN_BIN:-codesign}"
+MOCK_LLM=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --mock-llm)
+      MOCK_LLM=1
+      shift
+      ;;
+    -h|--help)
+      cat <<EOF
+Usage: bash ./scripts/package-app.sh [--mock-llm]
+
+Options:
+  --mock-llm  Package the app with a bundle marker that starts agent-server in MockLLMClient mode.
+EOF
+      exit 0
+      ;;
+    *)
+      printf 'Unknown option: %s\n' "$1" >&2
+      exit 2
+      ;;
+  esac
+done
 
 tmp_log="$(mktemp -t "package-app.XXXXXX")"
 trap 'rm -f "$tmp_log"' EXIT
 
-if ! swift build -c release --product "$APP_NAME" >"$tmp_log" 2>&1; then
+if ! "$SWIFT_BIN" build -c release --product "$APP_NAME" >"$tmp_log" 2>&1; then
   cat "$tmp_log"
   exit 1
 fi
@@ -58,7 +83,13 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
+if [[ "$MOCK_LLM" == "1" ]]; then
+  cat > "$APP_DIR/Contents/Resources/HandAgentRuntimeMode.json" <<'JSON'
+{"llmMode":"mock"}
+JSON
+fi
+
 # 本地 QA 用 ad-hoc 签名即可。正式分发再换 Developer ID。
-codesign --force --deep --sign - "$APP_DIR" >/dev/null 2>&1
+"$CODESIGN_BIN" --force --deep --sign - "$APP_DIR" >/dev/null 2>&1
 
 echo "success"

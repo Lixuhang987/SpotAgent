@@ -156,6 +156,7 @@ export async function startDefaultServer(port = 4317) {
     { FileNetworkLogger },
     { FilesystemBlobStore },
     { TurnSummarizer },
+    { MockLLMClient },
   ] = await Promise.all([
     import("@handagent/core/runtime/AgentRuntime.ts"),
     import("@handagent/core/tools/registerBuiltins.ts"),
@@ -167,6 +168,7 @@ export async function startDefaultServer(port = 4317) {
     import("@handagent/core/logging/FileNetworkLogger.ts"),
     import("@handagent/core/blob/FilesystemBlobStore.ts"),
     import("@handagent/core/runtime/TurnSummarizer.ts"),
+    import("@handagent/core/llm/MockLLMClient.ts"),
   ]);
 
   const spotDir = join(homedir(), ".spotAgent");
@@ -201,13 +203,22 @@ export async function startDefaultServer(port = 4317) {
     askResolver: permissionBridge.ask,
   });
 
-  const runtime = new AgentRuntime(new SettingsBackedLLMClient({ networkLogger }), registry, {
+  const llmMode = resolveLLMMode();
+  const llmClient = llmMode === "mock"
+    ? new MockLLMClient()
+    : new SettingsBackedLLMClient({ networkLogger });
+  const summarizer = llmMode === "mock"
+    ? undefined
+    : new TurnSummarizer({
+        client: new SettingsBackedLLMClient({ networkLogger, purpose: "summarizer" }),
+        blobStore,
+      });
+  console.log(`[agent-server] llm mode: ${llmMode}`);
+
+  const runtime = new AgentRuntime(llmClient, registry, {
     permissionPolicy,
     blobStore,
-    turnSummarizer: new TurnSummarizer({
-      client: new SettingsBackedLLMClient({ networkLogger, purpose: "summarizer" }),
-      blobStore,
-    }),
+    turnSummarizer: summarizer,
   });
   const persistence = new SessionPersistence(store, undefined, blobStore);
   const orchestrator = new SessionRuntimeOrchestrator(runtime, persistence);
@@ -220,6 +231,12 @@ export async function startDefaultServer(port = 4317) {
     permissionPolicy,
     port,
   });
+}
+
+export type LLMMode = "settings" | "mock";
+
+export function resolveLLMMode(env: Record<string, string | undefined> = process.env): LLMMode {
+  return env.HANDAGENT_LLM_MODE === "mock" ? "mock" : "settings";
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

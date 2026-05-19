@@ -35,6 +35,7 @@ sequenceDiagram
   Server->>Server: 构造 WebSocketPlatformBridge + RemotePlatformAdapter
   Server->>Server: registerBuiltinTools(...) → registry / disabled list
   Server->>Server: SessionPermissionBridge + FilePermissionPolicy(askResolver)
+  Server->>Server: resolveLLMMode() → SettingsBackedLLMClient 或 MockLLMClient
   Server->>Server: AgentRuntime(LLMClient, registry, {policy, blobStore, turnSummarizer})
   Server->>Server: SessionPersistence(store, blobStore)
   Server->>Server: SessionRuntimeOrchestrator(runtime, persistence)
@@ -68,6 +69,19 @@ socket 关闭时，若该 socket 持有 bridge token，会调用 `bridge.detach(
 | `~/.spotAgent/workspaces.json` | desktop（`WorkspaceSettingsViewModel`） + agent-server（`FileWorkspaceRegistry` 自播种 default） | 双侧 | workspace 注册表 |
 | `~/.spotAgent/permissions.json` | agent-server（`FilePermissionPolicy.remember`） | agent-server | 永久权限规则 |
 | `~/.spotAgent/log/<YYYY-MM-DD>/network-NNN.jsonl` | agent-server（`FileNetworkLogger`） | 人工排查 | LLM 请求 / 响应 body |
+
+## LLM 模式
+
+默认模式是 `settings`：`startDefaultServer` 使用 `SettingsBackedLLMClient` 读取 `~/.spotAgent/settings.json` 并启用 `TurnSummarizer`。
+
+当环境变量 `HANDAGENT_LLM_MODE=mock` 时，`startDefaultServer` 改用 core 的 `MockLLMClient`，并关闭 summarizer，避免日常 QA 触发真实端点。桌面 QA 推荐通过包参数写入 bundle marker：
+
+```bash
+bash ./scripts/package-app.sh --mock-llm
+open dist/HandAgentDesktop.app
+```
+
+新增 QA 能力时，mock 返回结构与触发词必须先维护在 `packages/core/src/llm/MockLLMClient.ts` 的 `mockLLMScenarios`，再补对应 runtime / tool 测试。
 
 ## 编辑此目录的约束
 
