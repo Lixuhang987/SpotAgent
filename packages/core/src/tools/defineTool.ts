@@ -16,6 +16,29 @@ export type ToolFactory<TInput, TOutput, TDeps> = {
   create: (deps: TDeps) => AgentTool<TInput, TOutput>;
 };
 
+function formatIssuePath(path: readonly PropertyKey[]): string {
+  return path.length === 0 ? "$" : path.map(String).join(".");
+}
+
+function formatIssuePaths(issue: z.ZodIssue): string {
+  if (issue.code === "unrecognized_keys") {
+    const parentPath = formatIssuePath(issue.path);
+    return issue.keys
+      .map((key) => (parentPath === "$" ? key : `${parentPath}.${key}`))
+      .join(", ");
+  }
+
+  return formatIssuePath(issue.path);
+}
+
+function formatValidationError(toolName: string, error: z.ZodError): string {
+  const details = error.issues
+    .map((issue) => `${formatIssuePaths(issue)}: ${issue.message}`)
+    .join("; ");
+
+  return `Invalid input for tool "${toolName}": ${details}`;
+}
+
 export function defineTool<TInput, TOutput, TDeps = unknown>(
   options: DefineToolOptions<TInput, TOutput, TDeps>,
 ): ToolFactory<TInput, TOutput, TDeps> {
@@ -32,7 +55,14 @@ export function defineTool<TInput, TOutput, TDeps = unknown>(
       description: options.description,
       inputSchema: jsonSchema,
       stubByDefault: options.stubByDefault,
-      call: (input: TInput) => options.run(input, deps),
+      call: async (input: TInput) => {
+        const parsed = options.inputSchema.safeParse(input);
+        if (!parsed.success) {
+          throw new Error(formatValidationError(options.name, parsed.error));
+        }
+
+        return options.run(parsed.data, deps);
+      },
     }),
   };
 }
