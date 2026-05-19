@@ -77,3 +77,62 @@
 - 权限审批 UI 不阻塞其他会话，决策被持久化；Settings 权限页可以查看和撤销永久规则；
 - agent-server 崩溃可自动重启，过限有可见反馈；现有会话自动重连订阅需实机验证；
 - 所有错误路径均有明确文案，不出现静默失败。
+
+---
+
+## 待手工验收功能（代码已实现，需实机 QA 确认）
+
+以下功能已有代码实现和单测覆盖，但尚未经过完整实机 QA 验证。详细实现记录见 [待验收.md](./待验收.md)。
+
+### Tool 运行时基础
+
+34. 启动 App，检查 `~/.spotAgent/log/` 中 agent-server 启动日志，确认打印「已注册 tool 列表」且包含 9 个 builtin tool。
+35. 在 `~/.spotAgent/settings.json` 中设置 `tools.denylist: ["clipboard.read"]`，重启 App，确认 LLM 调 `clipboard.read` 时返回「tool 不可用」错误。
+36. 断开 desktop（关闭 App 但保留 agent-server），通过 WebSocket 客户端发送 `screen.capture` 请求，确认返回 `desktop offline` 错误而非超时。
+
+### ScreenCaptureKit 反向 IPC
+
+37. 让 LLM 调 `screen.capture(target: "display")`，确认返回当前显示器截图（base64 图片可解码）。
+38. 让 LLM 调 `screen.capture(target: "window", windowId: <frontmost>)`，确认返回指定窗口截图。
+39. 快速连续发送 3 个 `platform_request`，确认通过 `requestId` 隔离，结果不串。
+
+### Workspace 沙箱
+
+40. 首次启动 App（删除 `~/.spotAgent/workspaces.json`），确认自动创建 default workspace 且 `~/.spotAgent/workspace/` 目录存在。
+41. 通过 LLM 调 `file.write({workspaceId: "default", relativePath: "../../etc/test"})`，确认返回路径越狱错误。
+42. 在 workspace 目录内创建 symlink 指向外部目录，通过 LLM 调 `file.write` 写入该 symlink 路径，确认 realpath 校验拦截。
+
+### 多模态图片附件
+
+43. 使用 `captureRegion` 截取一个区域，提交 prompt「描述这张图片」，确认 LLM 能基于图片内容给出真实描述（非占位文本）。
+44. 检查 `~/.spotAgent/sessions/<id>.json`，确认 user message 中图片以 blob reference 存储，不是裸 base64。
+
+### 真实流式输出
+
+45. 提交一个会产生长回复的 prompt，观察 SessionWindow 中 assistant 气泡逐段更新（至少 5 段 delta），而非一次性出现完整文本。
+
+### Tool 设置热加载
+
+46. App 运行中，在 Settings → Tools 中禁用 `file.write`，不重启 App，新建会话尝试让 LLM 写文件，确认 tool 不可用。
+47. 重新启用 `file.write`，新建会话再次尝试，确认恢复可用。
+
+### workspace.askUser
+
+48. 注册 3 个 workspace（Notes / Code / Drafts），让 LLM 保存一个文件但不指定目标，确认 SessionWindow 弹出内联气泡让用户选择 workspace。
+49. 选择一个 workspace，确认文件落到对应目录。
+50. 再次触发，这次点「取消」或等待 60s 超时，确认 LLM 收到 `{cancelled: true}` 并能继续推进。
+
+### 协议拆分与多会话绑定
+
+51. 打开两个 SessionWindow（两个不同 session），在两个窗口中同时触发需要 platform 能力的 tool，确认两个请求通过 `requestId` 隔离，结果不串。
+52. 关闭其中一个 SessionWindow，确认另一个 session 的 platform 请求不受影响。
+
+---
+
+## 已知问题（待修复）
+
+当前已知 bug 见 [bugs.md](./bugs.md)。主要包括：
+
+- P0：普通唤起 PromptPanel 会自动采集当前选区（应只在 captureSelection 路径采集）。
+- P1：状态气泡不会随 SessionWindow 失败状态更新。
+- P1：worktree 启动时 agent-server 使用了主仓库路径。

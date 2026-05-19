@@ -1,27 +1,38 @@
 # 待办清单
 
-本文只保留当前仍需修复、补齐或端到端验证的事项。已由代码实现并有测试覆盖的历史项不再保留在 TODO 中；实现细节见对应模块文档与 [architecture-review.md](/Users/mu9/proj/handAgent/docs/architecture-review.md)。
+本文只保留**当前仍需修复、补齐或端到端验证**的事项。已由代码实现并有测试覆盖的历史项不在此处保留。
+
+## 文档维护要求（重要）
+
+- **完成即迁移**：当本文中的待办项被代码实现并通过测试覆盖（或完成手工验收）后，必须将该项**从本文移除**，并按主题分组追加到 [待验收.md](./待验收.md)。
+- **保留四个字段**：迁移到 待验收.md 时务必保留 完成日期 / 关键 commit / 实现位置 / 验收结果 四个字段，便于事后追溯。
+- **同步更新模块文档**：若条目跨多个模块，迁移时同步更新对应 `<dir>.md` 索引。
+- **不要在本文记录历史**：本文只看现在和未来；历史去看 [待验收.md](./待验收.md) 或 `git log`。
+
+历史进度参见 [待验收.md](./待验收.md)。架构改进路线参见 [architecture-review.md](./architecture-review.md)。
 
 最后核对日期：2026-05-19。
 
+---
+
 ## P2 — 运行时与 UX 增强
 
-### 1. 权限审批端到端验证
+### 1. 权限审批端到端手工验证
 
-**现状**：`FilePermissionPolicy`、`SessionPermissionBridge`、`AgentRuntime` 权限拦截、`SessionSocketClient` 解码、`SessionWindowView` 内联气泡都已实现。Settings 已增加权限规则列表，可查看和撤销 `~/.spotAgent/permissions.json` 中的永久规则；新写入的永久规则会保存 `arguments` 供 UI 展示关键参数摘要。剩余风险在真实桌面端到端验证。
+**现状**：`FilePermissionPolicy`、`SessionPermissionBridge`、`AgentRuntime` 权限拦截、`SessionSocketClient` 解码、`SessionWindowView` 内联气泡、Settings 权限规则列表（查看 / 撤销 / 关键参数摘要）均已实现并有单测覆盖。**剩余风险只在真实桌面端到端 QA**。
 
 **验收标准**：
 
-- 手工验证 `once / session / always / deny / timeout / close session` 全路径。
-- Settings 权限规则列表手工验证：展示 toolName、关键参数摘要、decision、createdAt，并能撤销永久规则。
+- 手工跑通 `once / session / always / deny / timeout / close session` 全路径，并把过程记入 [manual-qa.md](./manual-qa.md) 或 [live-qa-flow.md](./live-qa-flow.md)。
+- Settings 权限规则列表手工核对：toolName、关键参数摘要、decision、createdAt 显示正确，撤销永久规则后该规则不再生效。
 
-**依赖**：无。`session` scope 已按 `sessionId` 隔离并在 socket 关闭时清理。
+**依赖**：无。
 
 ### 2. OCR 与 Accessibility 平台能力落地
 
 **现状**：`ocr.read`、`accessibility.snapshot`、`accessibility.action` 已作为 builtin tool 注册并暴露给 LLM，但 macOS 侧 `MacPlatformProvider` 对这三个 method 统一返回 `not_implemented`。
 
-**用户场景**：LLM 需要读取截图中文字、理解前台 App 可访问性树或执行基础点击/输入动作时，tool 应返回真实结果，而不是运行时失败。
+**用户场景**：LLM 需要读取截图中文字、理解前台 App 可访问性树或执行基础点击 / 输入动作时，tool 应返回真实结果，而不是运行时失败。
 
 **验收标准**：
 
@@ -29,7 +40,7 @@
 - `accessibility.snapshot` 基于 Accessibility API 返回 frontmost app/window/element 的结构化树。
 - `accessibility.action` 至少支持 press/click/set_value，并在权限不足时返回明确可读错误。
 - 未授权 Accessibility / Screen Recording 时有明确权限引导。
-- 增加 Swift provider 单元测试可测的解析层，以及手工 QA 覆盖真实 App。
+- Swift provider 增加可测的解析层单测，并补 [manual-qa.md](./manual-qa.md) 真实 App QA 步骤。
 
 **依赖**：macOS 权限提示与审计文案应与 permission UI 对齐。
 
@@ -45,22 +56,24 @@
 - `interrupt` 帧由 server 路由到当前 session run。
 - `AgentRuntime` / `LLMClient` 支持 abort signal，至少能停止后续事件推送并把会话状态置为 interrupted。
 - tool 调用无法硬取消时，后续结果不再写入已中断 run。
-- 测试覆盖 interrupt 后不再追加 assistant/tool 消息。
+- 测试覆盖 interrupt 后不再追加 assistant / tool 消息。
 
-**依赖**：LLM 真实 streaming 接口已完成；UI Stop 可先做“忽略后续输出”的最小闭环，再继续向 provider abort 语义收敛。
+**依赖**：LLM 真实 streaming 接口已完成；UI Stop 可先做「忽略后续输出」的最小闭环，再向 provider abort 语义收敛。
+
+---
 
 ## P3 — 长期能力
 
 ### 4. 多 provider LLM 支持
 
-**现状**：生产路径只有 `VercelClient`，OpenAI 兼容 API 通过 `responses/chat/completion` 切换。仓库依赖中已有 `@ai-sdk/anthropic`，但尚未接入到 provider factory。
+**现状**：生产路径只有 `VercelClient`，OpenAI 兼容 API 通过 `responses/chat/completion` 切换。仓库依赖中已有 `@ai-sdk/anthropic`，但尚未接入 provider factory。
 
 **验收标准**：
 
 - 抽出 `LLMClientFactory`。
 - settings 支持 provider 字段。
-- 至少接入第二个 provider 验证消息、stream、tool call 归一化。
-- provider capability 显式声明是否支持 tool calling / multimodal / streaming。
+- 至少接入第二个 provider（建议 Anthropic）验证消息、stream、tool call 归一化。
+- provider capability 显式声明是否支持 tool calling / multimodal / streaming，runtime 据此降级。
 
 **依赖**：provider capability 需要声明是否支持当前已落地的多模态 content part、tool calling 与 streaming。
 
@@ -71,12 +84,15 @@
 **验收标准**：
 
 - 设计插件 manifest、安装目录、启停机制、权限声明和冲突规则。
-- 第一版可以只支持本地目录插件。
-- 插件崩溃/超时不拖垮 agent-server。
+- 第一版可以只支持本地目录插件（`~/.spotAgent/plugins/`）。
+- 插件崩溃 / 超时不拖垮 agent-server。
 - 与 workspace 沙箱和权限审批系统对齐。
 
-**依赖**：权限 UI、workspace askUser、tool 注册边界稳定后再启动。
+**依赖**：权限 UI、workspace askUser、tool 注册边界稳定后再启动（这些前置项已全部完成）。
+
+---
 
 ## 手工验证清单入口
 
-端到端验证步骤见 [manual-qa.md](/Users/mu9/proj/handAgent/docs/manual-qa.md)。每次完成以上条目后，应同步更新本文件和对应模块 `<dir>.md`。
+端到端验证步骤见 [manual-qa.md](./manual-qa.md)；实机 QA 流程与缺陷报告格式见 [live-qa-flow.md](./live-qa-flow.md)。每次完成本文条目后，应同步更新 [待验收.md](./待验收.md) 与对应模块 `<dir>.md`。
+
