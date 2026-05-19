@@ -6,9 +6,95 @@ import { SessionPersistence } from "./SessionPersistence.ts";
 import { SessionRouter } from "./SessionRouter.ts";
 import { SessionRuntimeOrchestrator } from "./SessionRuntimeOrchestrator.ts";
 import { FileSessionStore } from "@handagent/core/storage/index.ts";
-import { WebSocketPlatformBridge } from "./WebSocketPlatformBridge.ts";
-import { SessionPermissionBridge } from "./SessionPermissionBridge.ts";
+import {
+  WebSocketPlatformBridge,
+  type BridgeToken,
+} from "./WebSocketPlatformBridge.ts";
+import {
+  SessionPermissionBridge,
+  type SessionBindingToken,
+} from "./SessionPermissionBridge.ts";
 import type { FilePermissionPolicy } from "@handagent/core/permission/FilePermissionPolicy.ts";
+
+type SessionSocket = {
+  send(data: string): void;
+  on(event: "message", listener: (raw: { toString(): string }) => void): void;
+  on(event: "close", listener: () => void): void;
+};
+
+export function attachSessionSocketHandlers(
+  socket: SessionSocket,
+  {
+    router,
+    bridge,
+    permissionBridge,
+    permissionPolicy,
+  }: {
+    router: SessionRouter;
+    bridge?: WebSocketPlatformBridge;
+    permissionBridge?: SessionPermissionBridge;
+    permissionPolicy?: FilePermissionPolicy;
+  },
+): void {
+  let bridgeToken: BridgeToken | null = null;
+  const boundSessions = new Map<string, SessionBindingToken>();
+  const send = (outgoing: SessionMessage) => {
+    socket.send(JSON.stringify(outgoing));
+  };
+
+  socket.on("message", async (raw) => {
+    const message = JSON.parse(raw.toString()) as SessionMessage;
+
+    if (message.type === "platform_bridge_hello" && bridge) {
+      bridgeToken = bridge.attach(send);
+      return;
+    }
+
+    if (message.type === "platform_response") {
+      bridge?.handleResponse(message.payload, bridgeToken);
+      return;
+    }
+
+    if (message.type === "permission_response" && permissionBridge) {
+      const token = boundSessions.get(sessionIdFromPermissionRequestId(message.payload.requestId));
+      if (token !== undefined) {
+        permissionBridge.handleResponse(message.payload, token);
+      }
+      return;
+    }
+
+    if (
+      message.type === "user_message" &&
+      permissionBridge &&
+      !boundSessions.has(message.sessionId)
+    ) {
+      boundSessions.set(
+        message.sessionId,
+        permissionBridge.bindSession(message.sessionId, send),
+      );
+    }
+
+    await router.receive(message, send);
+  });
+
+  socket.on("close", () => {
+    if (bridgeToken !== null && bridge) {
+      bridge.detach(bridgeToken);
+    }
+    for (const [sessionId, token] of boundSessions) {
+      const unbound = permissionBridge?.unbindSession(sessionId, token) ?? false;
+      if (unbound) {
+        permissionPolicy?.clearSessionRules(sessionId);
+      }
+    }
+    boundSessions.clear();
+  });
+}
+
+function sessionIdFromPermissionRequestId(requestId: string): string {
+  const separator = requestId.lastIndexOf(":");
+  return separator === -1 ? requestId : requestId.slice(0, separator);
+}
 
 export async function startServer({
   router,
@@ -27,47 +113,11 @@ export async function startServer({
   const wss = new WebSocketServer({ port });
 
   wss.on("connection", (socket) => {
-    let isBridge = false;
-    let boundSessionId: string | null = null;
-    const send = (outgoing: SessionMessage) => {
-      socket.send(JSON.stringify(outgoing));
-    };
-
-    socket.on("message", async (raw) => {
-      const message = JSON.parse(raw.toString()) as SessionMessage;
-
-      if (message.type === "platform_bridge_hello" && bridge) {
-        isBridge = true;
-        bridge.attach(send);
-        return;
-      }
-
-      if (message.type === "platform_response") {
-        bridge?.handleResponse(message.payload);
-        return;
-      }
-
-      if (message.type === "permission_response" && permissionBridge) {
-        permissionBridge.handleResponse(message.payload);
-        return;
-      }
-
-      if (message.type === "user_message" && permissionBridge && !boundSessionId) {
-        boundSessionId = message.sessionId;
-        permissionBridge.bindSession(message.sessionId, send);
-      }
-
-      await router.receive(message, send);
-    });
-
-    socket.on("close", () => {
-      if (isBridge && bridge) {
-        bridge.detach();
-      }
-      if (boundSessionId && permissionBridge) {
-        permissionBridge.unbindSession(boundSessionId);
-        permissionPolicy?.clearSessionRules(boundSessionId);
-      }
+    attachSessionSocketHandlers(socket, {
+      router,
+      bridge,
+      permissionBridge,
+      permissionPolicy,
     });
   });
 
