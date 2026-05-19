@@ -187,3 +187,22 @@
   - 连续崩溃输出：`kill-2 pid=10894 at 17:19:49`、`restarted-2 pid=20586 at 17:19:52`、`restarted-3 pid=20622 at 17:19:57`、`restarted-4 pid=20705 at 17:20:06`、`restarted-5 pid=21357 at 17:20:23`、`kill-6 pid=21357 at 17:20:23`、`final-listener=`。
   - fatal alert 可见文案：`Agent Server 已停止 agent-server 多次崩溃（退出码 9）已停止重启。可在「检查日志」中排查。`
 - **结论**：通过。agent-server 单次崩溃后可自动重启；现有 SessionWindow 可在重启后继续提交并追加同一 session；连续崩溃超过上限后停止重启并给出可见 fatal alert。
+
+## 状态气泡失败状态同步（2026-05-20 实机验证）
+
+- **验证日期**：2026-05-20
+- **验证环境**：mock-llm / macOS / worktree `codex/manual-qa-status-bubble-failure` / `dist/HandAgentDesktop.app`
+- **验证过程**：
+  1. 在 worktree 中执行 `pnpm install`、`bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`，均通过；其中 vitest 为 32 个测试文件、181 个测试通过。
+  2. 执行 `bash ./scripts/package-app.sh --mock-llm` 并启动 `dist/HandAgentDesktop.app`，确认初始状态只有状态气泡窗口，尺寸为 `280x62`，Computer Use 可见文案为 `Idle 点击开始`。
+  3. 通过原生事件 `System Events` 发送 `key code 49 using {command down, shift down}` 唤出 PromptPanel，窗口尺寸变为 `640x448` 与 `280x62`，输入框自动聚焦。
+  4. 输入 `[mock:llm-error] QA status bubble failure sync` 并通过 Return 提交，创建 SessionWindow（`760x560`），窗口状态显示 `failed`，错误文案为 `MockLLMClient forced failure for QA.`。
+  5. 失败后状态气泡窗口仍为 `280x62`，局部截图显示标题从 `Running` 回到 `Idle`，摘要显示 `MockLLMClient forced failure for QA.`，没有停留在原始 prompt。
+  6. 关闭 SessionWindow 后只保留状态气泡，Computer Use 读取到 `Idle 点击开始`，证明失败会话已退出 running 聚合状态。
+- **证据**：
+  - agent-server：`ps -o pid,ppid,command -p 68895` 显示命令路径为 `/Users/mu9/proj/handAgent/.worktrees/manual-qa-status-bubble-failure/apps/agent-server/src/server.ts`。
+  - 窗口状态：初始 `280, 62`；PromptPanel 唤起后 `640, 448, 280, 62`；失败后 `280, 62, 760, 560`。
+  - SessionWindow 可见文本：`failed`、`[mock:llm-error] QA status bubble failure sync`、`MockLLMClient forced failure for QA.`。
+  - Session 文件：`~/.spotAgent/sessions/A2433C65-E870-4E87-B82C-05058CC500C4.json`，包含 user message 与 `error` event，错误消息为 `MockLLMClient forced failure for QA.`。
+  - 状态气泡截图：`/tmp/handagent-qa/status-bubble-failure.png`，可见 `Idle` 与 `MockLLMClient forced failure for QA.`。
+- **结论**：通过。失败会话进入 `failed` 后，状态气泡可同步切回 `Idle`，并用失败文案替换原始 prompt 摘要。
