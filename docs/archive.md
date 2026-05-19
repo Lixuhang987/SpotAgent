@@ -226,3 +226,23 @@
   - Session 文件：`~/.spotAgent/sessions/1DEAD87B-E546-4B95-BE43-922E5B6F9C5E.json`，包含 user message 与 `error` event，错误消息为 `Missing apiKey in ~/.spotAgent/settings.json. 请先在设置页完成模型配置。`。
   - 设置恢复检查：`~/.spotAgent/settings.json` 中 `apiKeyRestored: true`，`tools.denylist: []`；退出 App 后无 `HandAgentDesktop` 进程且无 `*:4317` listener。
 - **结论**：通过。缺少 `apiKey` 时会话不会静默失败，SessionWindow 会进入 `failed` 并展示明确配置错误文案。
+
+## showPromptPanel 不自动注入前台选区（2026-05-20 实机验证）
+
+- **验证日期**：2026-05-20
+- **验证环境**：mock-llm / macOS / worktree `codex/manual-qa-showprompt-selection-isolation` / `dist/HandAgentDesktop.app`
+- **验证过程**：
+  1. 在 worktree 中执行 `pnpm install`、`bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`，均通过；其中 vitest 为 32 个测试文件、181 个测试通过。
+  2. 执行 `bash ./scripts/package-app.sh --mock-llm` 并启动 `dist/HandAgentDesktop.app`，确认初始状态只有状态气泡窗口，尺寸为 `280x62`。
+  3. 用 TextEdit 打开临时文件并全选唯一干扰文本 `HANDAGENT_SHOWPROMPT_SHOULD_NOT_CAPTURE_SELECTION_20260520`，通过 AX 确认前台 App 为 TextEdit，且 `AXSelectedText` 为该字符串。
+  4. 通过原生事件 `System Events` 发送 `key code 49 using {command down, shift down}` 触发普通 `showPromptPanel`，窗口尺寸变为 `640x448` 与 `280x62`，输入框自动聚焦。
+  5. Computer Use 观察 PromptPanel 只有输入框与 action 列表，没有 textSelection chip，也没有显示前台选区内容。
+  6. 输入 `[mock:assistant-ok] QA showPromptPanel selection isolation` 并提交，创建 SessionWindow（`760x560`），窗口显示用户 prompt 与 `Mock assistant response: main chain is reachable.`。
+  7. 退出 HandAgentDesktop 与 TextEdit，删除临时 TextEdit 文件，确认无 `HandAgentDesktop` 进程且无 `*:4317` listener。
+- **证据**：
+  - agent-server：`ps -o pid,ppid,command -p 89908` 显示命令路径为 `/Users/mu9/proj/handAgent/.worktrees/manual-qa-showprompt-selection-isolation/apps/agent-server/src/server.ts`。
+  - TextEdit 选区：`AXSelectedText` 为 `HANDAGENT_SHOWPROMPT_SHOULD_NOT_CAPTURE_SELECTION_20260520`。
+  - 窗口状态：初始 `280, 62`；PromptPanel 唤起后 `640, 448, 280, 62`；提交后 `280, 62, 760, 560`。
+  - PromptPanel 可见状态：Computer Use 读取到聚焦输入框、设置按钮与 action 列表，没有 textSelection chip。
+  - Session 文件：`~/.spotAgent/sessions/E97ACF99-34CE-4539-B94B-1723D692720F.json`，`messages` 仅包含用户 prompt 与 mock assistant 回复，`containsSelectionMarker: false`，`containsInterferenceText: false`。
+- **结论**：通过。普通 `showPromptPanel` 不会把前台 App 的已选中文本作为初始上下文注入；只有用户主动触发 `captureSelection` 才会进入选区附件链路。
