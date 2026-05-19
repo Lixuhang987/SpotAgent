@@ -129,3 +129,19 @@
   - Session 文件 `~/.spotAgent/sessions/8DB9EC61-3486-4AA1-9FDE-07A31AC08319.json`：点击「始终允许」后 `file.write` 执行成功。
   - `~/.spotAgent/permissions.json`：撤销后不再包含 `file.write` 规则。
 - **结论**：通过。权限审批的「本会话」、跨新会话重新询问、拒绝、超时 deny、「始终允许」持久化、Settings 权限页展示与撤销均可用。关闭 SessionWindow 时取消挂起请求仍需单独验证。
+
+## Tool 设置热加载（2026-05-19 实机验证）
+
+- **验证日期**：2026-05-19
+- **验证环境**：mock-llm / macOS / `dist/HandAgentDesktop.app`
+- **验证过程**：
+  1. 打开 Settings → Tools，滚动到 `file.write`，点击开关禁用。
+  2. 确认 `~/.spotAgent/settings.json` 写入 `tools.denylist: ["file.write"]`。
+  3. 不重启 App，提交 `[mock:file-write] QA tool disabled`，SessionWindow 状态变为 `failed`，可见错误为 `Unknown tool: file.write`。
+  4. 回到 Settings → Tools，重新启用 `file.write`，确认 `tools.denylist` 变回空数组。
+  5. 不重启 App，提交 `[mock:file-write] QA tool enabled again`，授权后 `file.write` 执行成功并写入 `hello.txt`。
+- **证据**：
+  - Session 文件 `~/.spotAgent/sessions/C00946D6-B9C9-49C5-9D35-701525888062.json`：events 中记录 `Unknown tool: file.write`。
+  - Session 文件 `~/.spotAgent/sessions/87A181B1-DA13-4CAA-AD2E-03605D0ED39F.json`：`file.write` 有 `tool_call` 与 success `tool_result`，输出 `bytesWritten: 24`。
+  - `~/.spotAgent/settings.json` 最终状态为 `tools.denylist: []`。
+- **结论**：通过。工具开关写入设置文件后，agent-server 可在下一轮 LLM 请求前热加载 registry，无需重启 App。
