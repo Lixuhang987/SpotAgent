@@ -33,7 +33,7 @@
 ### 2. runtime 阶段
 
 - `AgentRuntime.runWithMessages(messages, onEvent, {sessionId})`
-- 每轮调 `LLMClient.complete(messages, registry.list(), {blobStore?})`
+- 每轮消费 `LLMClient.stream(messages, registry.list(), {blobStore?})`
 - 处理 `toolCalls`：`PermissionPolicy.check` → ask / allow / deny → tool 调用 → 写 tool message
 - 详细流程图见 [runtime/runtime.md](/Users/mu9/proj/handAgent/packages/core/src/runtime/runtime.md)
 
@@ -42,6 +42,7 @@
 - `SettingsBackedLLMClient` 按 `~/.spotAgent/settings.json` 的 `mtimeMs + size` stamp 缓存 `loadModelSettings()` 结果与 `VercelClient`
 - `toVercelMessages` / `toVercelTools` 翻译为 SDK 格式（点号 → 下划线）；user image part 会通过 `BlobStore` 读取 bytes 后映射成 AI SDK image part
 - `VercelClient` 按 `api ∈ {responses, chat, completion}` 选 provider model
+- `VercelClient` 通过 AI SDK `streamText().fullStream` 输出 `LLMStreamEvent`
 - 可注入 `FileNetworkLogger` 把请求 / 响应落 JSONL
 
 ### 4. tool 阶段
@@ -76,7 +77,7 @@
 - tool 结果统一序列化为字符串再回灌；`MAX_OUTPUT_BYTES = 8 KiB` 截断。
 - `VercelClient` 当前默认模型 `gpt-5-mini`。
 - user message 支持字符串或多模态 content parts；持久化层仍保存 STUB 文本，agent-server 在 runtime 前展开 image STUB。
-- "伪流式"：`assistant_message_delta` 一次性发出整段文本，desktop UI 实际看不到 token 流。
+- `assistant_message_delta` 来自 `LLMStreamEvent.text_delta`，desktop UI 可逐段拼接 assistant 回复。
 - 文件 tool 已使用 workspace 沙箱、basename symlink 拒绝、10 MiB 写入上限与原子写。
 - `FilePermissionPolicy.cache` 与 `FileWorkspaceRegistry.cache` 不启 watcher；每次公开读写入口前比较持久化文件 `mtimeMs + size`，检测到外部修改后重读，保证 Settings 或外部撤销权限后下一次 tool 调用可见。
 

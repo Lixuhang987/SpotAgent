@@ -1,6 +1,7 @@
 import type { BlobRecord } from "../blob/BlobRecord.ts";
 import type { BlobStore } from "../blob/BlobStore.ts";
-import type { LLMClient } from "../llm/LLMClient.ts";
+import type { LLMClientLike } from "../llm/LLMClient.ts";
+import { completeLLM } from "../llm/LLMClient.ts";
 import type { AgentMessage } from "./AgentMessage.ts";
 import { renderStub } from "./Stub.ts";
 
@@ -10,7 +11,7 @@ export interface TurnSummarizerLike {
 }
 
 type TurnSummarizerOptions = {
-  client: LLMClient;
+  client: LLMClientLike;
   blobStore: BlobStore;
   concurrency?: number;
   warn?: (message: string) => void;
@@ -59,7 +60,8 @@ export class TurnSummarizer implements TurnSummarizerLike {
         throw new Error(`Blob not found: ${blobId}`);
       }
       const content = (await this.options.blobStore.readContent(blobId)).toString("utf8");
-      const completion = await this.options.client.complete(
+      const completion = await completeLLM(
+        this.options.client,
         [
           {
             role: "system",

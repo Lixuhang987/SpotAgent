@@ -249,7 +249,7 @@ describe("VercelClient adapters", () => {
         apiKey: "test-key",
         model: "gpt-5-mini",
       },
-      { createOpenAI, generateText: vi.fn() as never },
+      { createOpenAI, streamText: vi.fn() as never },
     );
 
     expect(client).toBeDefined();
@@ -276,7 +276,7 @@ describe("VercelClient adapters", () => {
           chat,
           completion,
         })),
-        generateText: vi.fn() as never,
+        streamText: vi.fn() as never,
       },
     );
 
@@ -302,7 +302,7 @@ describe("VercelClient adapters", () => {
           chat,
           completion,
         })),
-        generateText: vi.fn() as never,
+        streamText: vi.fn() as never,
       },
     );
 
@@ -312,9 +312,10 @@ describe("VercelClient adapters", () => {
   });
 
   it("rejects image content when configured for the OpenAI completion API", async () => {
-    const generateText = vi.fn(async () => ({
-      text: "should not run",
-      toolCalls: [],
+    const streamText = vi.fn(() => ({
+      fullStream: (async function* () {
+        yield { type: "text-delta", text: "should not run" };
+      })(),
     }));
     const client = new VercelClient(
       {
@@ -328,7 +329,7 @@ describe("VercelClient adapters", () => {
           chat: vi.fn(() => "chat-model"),
           completion: vi.fn(() => "completion-model"),
         })),
-        generateText: generateText as never,
+        streamText: streamText as never,
       },
     );
 
@@ -343,6 +344,82 @@ describe("VercelClient adapters", () => {
         [],
       ),
     ).rejects.toThrow("OpenAI completion API does not support image content. Use chat or responses.");
-    expect(generateText).not.toHaveBeenCalled();
+    expect(streamText).not.toHaveBeenCalled();
+  });
+
+  it("streams text deltas and tool calls from AI SDK fullStream", async () => {
+    const streamText = vi.fn(() => ({
+      fullStream: (async function* () {
+        yield { type: "text-delta", id: "text-1", text: "你" };
+        yield { type: "text-delta", id: "text-1", text: "好" };
+        yield {
+          type: "tool-call",
+          toolCallId: "call-1",
+          toolName: "file_read",
+          input: { path: "/tmp/demo.txt" },
+        };
+        yield { type: "finish", finishReason: "tool-calls" };
+      })(),
+    }));
+    const client = new VercelClient(
+      {
+        apiKey: "test-key",
+      },
+      {
+        createOpenAI: vi.fn(() => ({
+          responses: vi.fn(() => "responses-model"),
+          chat: vi.fn(() => "chat-model"),
+          completion: vi.fn(() => "completion-model"),
+        })),
+        streamText: streamText as never,
+      },
+    );
+
+    const events = [];
+    for await (const event of client.stream(
+      [{ role: "user", content: "hi" }],
+      [
+        {
+          name: "file.read",
+          description: "读取文件",
+          inputSchema: {
+            type: "object",
+            properties: { path: { type: "string" } },
+            required: ["path"],
+          },
+        },
+      ],
+    )) {
+      events.push(event);
+    }
+
+    expect(events).toEqual([
+      { type: "text_delta", text: "你" },
+      { type: "text_delta", text: "好" },
+      {
+        type: "tool_call",
+        toolCall: {
+          id: "call-1",
+          name: "file.read",
+          arguments: { path: "/tmp/demo.txt" },
+        },
+      },
+      {
+        type: "message_end",
+        message: { role: "assistant", content: "你好" },
+        toolCalls: [
+          {
+            id: "call-1",
+            name: "file.read",
+            arguments: { path: "/tmp/demo.txt" },
+          },
+        ],
+      },
+    ]);
+    expect(streamText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    );
   });
 });

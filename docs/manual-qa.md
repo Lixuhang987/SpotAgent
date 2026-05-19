@@ -19,7 +19,7 @@
 4. 确认 PromptPanel 输入框自动聚焦。
 5. 输入一段用户主动发起的请求并提交。
 6. 观察 PromptPanel 关闭并新建 SessionWindow。
-7. 观察 SessionWindow 中出现用户消息和 assistant 回复。当前后端是伪流式：一次性拿到 LLM 完整结果后发 `start/delta/end`，不要求 token 级 streaming。
+7. 观察 SessionWindow 中出现用户消息和 assistant 回复；assistant 回复应随 LLM token delta 逐段更新，而不是只在最终完成时一次性出现。
 8. 点击状态气泡，确认优先回到当前 running session；没有 running session 时回最近活跃窗口。
 9. 如未配置 `apiKey`，确认错误会以可见文案 `Missing apiKey in ~/.spotAgent/settings.json. 请先在设置页完成模型配置。` 和 assistant 气泡展示，而不是静默失败。
 

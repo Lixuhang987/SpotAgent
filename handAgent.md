@@ -40,8 +40,9 @@ flowchart TD
   C --> D[Swift 创建 SessionWindow 与 SessionSocketClient]
   D --> E[agent-server 接收 SessionMessage]
   E --> F[AgentRuntime.run]
-  F --> G[LLMClient.complete]
-  G --> H{返回 toolCalls?}
+  F --> G[LLMClient.stream]
+  G --> G1[转发 token delta]
+  G1 --> H{返回 toolCalls?}
   H -- 否 --> I[SwiftUI 渲染消息列表]
   H -- 是 --> J[ToolRegistry.get]
   J --> K[AgentTool.call]
@@ -88,7 +89,11 @@ flowchart TD
   - `id: string`
   - `name: string`
   - `arguments: Record<string, unknown>`
-- `LLMCompletion`
+- `LLMStreamEvent`
+  - `text_delta`
+  - `tool_call`
+  - `message_end`
+- `LLMCompletion`（兼容聚合结果）
   - `message: assistant message`
   - `toolCalls?: ToolCallEnvelope[]`
 - `AgentRunResult`

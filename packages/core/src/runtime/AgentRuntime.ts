@@ -1,6 +1,8 @@
 import type { AgentMessage } from "./AgentMessage.ts";
 import type { ToolCallEnvelope } from "./ToolCallEnvelope.ts";
-import type { LLMClient } from "../llm/LLMClient.ts";
+import type { LLMClientLike } from "../llm/LLMClient.ts";
+import type { LLMCompletion } from "../llm/LLMClient.ts";
+import { streamLLM } from "../llm/LLMClient.ts";
 import { ToolRegistry } from "../tools/ToolRegistry.ts";
 import type { PermissionPolicy } from "../permission/PermissionPolicy.ts";
 import { AllowAllPermissionPolicy, DENY_TOOL_RESULT_TEXT } from "../permission/PermissionPolicy.ts";
@@ -74,7 +76,7 @@ export class AgentRuntime {
   private pendingTurnSummary: Promise<void> = Promise.resolve();
 
   constructor(
-    private readonly client: LLMClient,
+    private readonly client: LLMClientLike,
     private readonly toolRegistry: ToolRegistry,
     options?: {
       maxTurns?: number;
@@ -109,11 +111,7 @@ export class AgentRuntime {
     let assistantCount = 0;
 
     for (let turn = 0; turn < this.maxTurns; turn += 1) {
-      const completion = await this.client.complete(
-        nextMessages,
-        this.toolRegistry.list(),
-        this.blobStore ? { blobStore: this.blobStore } : undefined,
-      );
+      const completion = await this.completeTurn(nextMessages, onEvent, ++assistantCount);
       const assistantMessage =
         completion.toolCalls && completion.toolCalls.length > 0
           ? {
@@ -124,25 +122,8 @@ export class AgentRuntime {
 
       nextMessages.push(assistantMessage);
       if (assistantMessage.role === "assistant") {
-        assistantCount += 1;
-        const messageId = `assistant-${assistantCount}`;
-        onEvent({
-          type: "assistant_message_start",
-          messageId,
-          payload: { role: "assistant" },
-        });
-        onEvent({
-          type: "assistant_message_delta",
-          messageId,
-          payload: { text: assistantMessage.content },
-        });
-        onEvent({
-          type: "assistant_message_end",
-          messageId,
-          payload: { status: "completed" },
-        });
         bubbles.push({
-          id: messageId,
+          id: `assistant-${assistantCount}`,
           text: assistantMessage.content,
         });
       }
@@ -241,6 +222,62 @@ export class AgentRuntime {
     }
 
     throw new Error(`AgentRuntime exceeded maxTurns: ${this.maxTurns}`);
+  }
+
+  private async completeTurn(
+    messages: AgentMessage[],
+    onEvent: (event: AgentRuntimeEvent) => void,
+    assistantCount: number,
+  ): Promise<LLMCompletion> {
+    const messageId = `assistant-${assistantCount}`;
+    let content = "";
+    const toolCalls: ToolCallEnvelope[] = [];
+
+    onEvent({
+      type: "assistant_message_start",
+      messageId,
+      payload: { role: "assistant" },
+    });
+
+    for await (const event of streamLLM(
+      this.client,
+      messages,
+      this.toolRegistry.list(),
+      this.blobStore ? { blobStore: this.blobStore } : undefined,
+    )) {
+      switch (event.type) {
+        case "text_delta":
+          content += event.text;
+          onEvent({
+            type: "assistant_message_delta",
+            messageId,
+            payload: { text: event.text },
+          });
+          break;
+        case "tool_call":
+          toolCalls.push(event.toolCall);
+          break;
+        case "message_end":
+          if (typeof event.message.content === "string") {
+            content = event.message.content;
+          }
+          if (event.toolCalls) {
+            toolCalls.splice(0, toolCalls.length, ...event.toolCalls);
+          }
+          break;
+      }
+    }
+
+    onEvent({
+      type: "assistant_message_end",
+      messageId,
+      payload: { status: "completed" },
+    });
+
+    return {
+      message: { role: "assistant", content },
+      toolCalls,
+    };
   }
 
   private async createToolMessage(input: {

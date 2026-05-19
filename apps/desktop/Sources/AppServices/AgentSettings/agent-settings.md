@@ -41,4 +41,4 @@ LLM 模型配置的读写与（旧址的）UI。
 ## 与其他模块的关系
 
 - [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 持有 `AgentSettingsStore` 单例，并通过 `makeSettingsViewModel()` 暴露给 Settings 窗口。
-- agent-server（TypeScript 侧）每次 `complete()` 同步读取同一个 JSON 文件里的模型配置；tool settings 目前只在 agent-server 启动时读取一次。
+- agent-server（TypeScript 侧）每次 LLM 请求会按文件戳读取同一个 JSON 文件里的模型配置；tool settings 目前只在 agent-server 启动时读取一次。

@@ -19,6 +19,24 @@ final class SessionViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testAppendsMultipleAssistantDeltasInOrder() {
+        let model = SessionViewModel(sessionID: "session-1", socketClient: .noop)
+
+        model.handle(.assistantMessageStart(messageID: "m1", timestamp: "2026-05-14T00:00:00.000Z"))
+        for (index, text) in ["这", "是", "真", "流", "式"].enumerated() {
+            model.handle(
+                .assistantMessageDelta(
+                    messageID: "m1",
+                    text: text,
+                    timestamp: "2026-05-14T00:00:00.\(index + 1)00Z"
+                )
+            )
+        }
+
+        XCTAssertEqual(model.messages.last?.text, "这是真流式")
+    }
+
+    @MainActor
     func testStartShowsStartupErrorWithoutSendingPrompt() {
         let model = SessionViewModel(sessionID: "session-1", socketClient: .noop)
 

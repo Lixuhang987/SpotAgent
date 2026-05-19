@@ -8,7 +8,7 @@
 |------|------|
 | `AgentTool.ts` | `AgentTool<TInput, TOutput>` 接口：`name / description / inputSchema (JSON Schema) / call(input)`；可选 `stubByDefault` 声明 runtime 可把结果写成 Blob/Stub |
 | `defineTool.ts` | `defineTool({ name, description, inputSchema (zod), stubByDefault?, run })` 工厂：`zod` schema 自动转 JSON Schema 2019-09；`.create(deps)` 生成的 `call(input)` 会先用同一个 schema 做运行时入参校验，再调用 `run` |
-| `ToolRegistry.ts` | Map 包装；`register / get / list`，重名抛错；`list()` 返回 `RegisteredTool`（去掉 `call`），供 `LLMClient.complete` 使用 |
+| `ToolRegistry.ts` | Map 包装；`register / get / list`，重名抛错；`list()` 返回 `RegisteredTool`（去掉 `call`），供 `LLMClient.stream` 使用 |
 | `registerBuiltins.ts` | 组合根：根据 `PlatformAdapter` + 可选 `WorkspaceRegistry` + `ToolSettings` 装配 candidates，过 allowlist/denylist 后注册 |
 | `builtins/*.ts` | 10 个 builtin tool 实现，全部用 `defineTool` 工厂表达 |
 | `builtins/workspace-path.ts` | `file.read` / `file.write` 共享的 workspace 路径校验工具：拒绝绝对路径与 `..` 越狱、`realpath` 后再次校验 |

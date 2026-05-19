@@ -1,5 +1,12 @@
 import { statSync } from "node:fs";
-import type { LLMClient, LLMCompleteOptions, LLMCompletion } from "@handagent/core/llm/LLMClient.ts";
+import type {
+  LLMClient,
+  LLMClientLike,
+  LLMCompleteOptions,
+  LLMCompletion,
+  LLMStreamEvent,
+} from "@handagent/core/llm/LLMClient.ts";
+import { completeLLM, streamLLM } from "@handagent/core/llm/LLMClient.ts";
 import { VercelClient } from "@handagent/core/llm/VercelClient.ts";
 import {
   loadModelSettings,
@@ -18,7 +25,7 @@ type SettingsBackedLLMClientOptions = {
 type SettingsBackedLLMClientDependencies = {
   loadModelSettings?: () => ModelSettings;
   readSettingsStamp?: () => string;
-  createClient?: (settings: VercelClientSettings) => Pick<LLMClient, "complete">;
+  createClient?: (settings: VercelClientSettings) => LLMClientLike;
 };
 
 type VercelClientSettings = {
@@ -37,7 +44,7 @@ export class SettingsBackedLLMClient implements LLMClient {
   private readonly purpose;
   private cachedStamp?: string;
   private cachedClientSettings?: VercelClientSettings;
-  private cachedClient?: Pick<LLMClient, "complete">;
+  private cachedClient?: LLMClientLike;
 
   constructor(
     options: SettingsBackedLLMClientOptions = {},
@@ -59,10 +66,20 @@ export class SettingsBackedLLMClient implements LLMClient {
   ): Promise<LLMCompletion> {
     const settingsStamp = this.readSettingsStamp();
     const client = this.clientForStamp(settingsStamp);
-    return client.complete(messages, tools, options);
+    return completeLLM(client, messages, tools, options);
   }
 
-  private clientForStamp(settingsStamp: string): Pick<LLMClient, "complete"> {
+  stream(
+    messages: AgentMessage[],
+    tools: RegisteredTool[],
+    options?: LLMCompleteOptions,
+  ): AsyncIterable<LLMStreamEvent> {
+    const settingsStamp = this.readSettingsStamp();
+    const client = this.clientForStamp(settingsStamp);
+    return streamLLM(client, messages, tools, options);
+  }
+
+  private clientForStamp(settingsStamp: string): LLMClientLike {
     if (this.cachedClient && this.cachedStamp === settingsStamp) {
       return this.cachedClient;
     }
