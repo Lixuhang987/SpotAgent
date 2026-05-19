@@ -6,8 +6,8 @@
 
 | 文件 | 职责 |
 |------|------|
-| `SessionWindowView.swift` | 纯 UI：历史侧栏、状态条、连接状态 banner、消息列表、错误 banner、权限审批气泡、输入框，全部消费 Theme token |
-| `SessionViewModel.swift` | `@Observable` 状态：`messages` / `status` / `error` / `pendingPermissionRequests` / `historyList` / `connectionState`；消费 `SessionEvent` 维护 UI 状态与连接提示 |
+| `SessionWindowView.swift` | 纯 UI：历史侧栏、状态条、连接状态 banner、消息列表、用户附件摘要、错误 banner、权限审批气泡、输入框，全部消费 Theme token |
+| `SessionViewModel.swift` | `@Observable` 状态：`messages` / `status` / `error` / `pendingPermissionRequests` / `historyList` / `connectionState`；消费 `SessionEvent` 维护 UI 状态与连接提示；`SessionBubble` 同时保存消息文本与附件展示摘要 |
 | `SessionSocketClient.swift` | `URLSessionWebSocketTask` 包装：连接、收发 `SessionMessage`、解析 `SessionEvent`，并发送历史读写、权限响应帧；断线后自动重连并重发 `open_session` |
 | `SessionStyles.swift` | `MessageBubbleModifier`（按 role 切换 user / assistant / tool 三色） |
 
@@ -23,22 +23,23 @@ Coordinator.handleSubmitPrompt
        └─ 若 startupError 非空：直接派发 .error 事件并返回
        └─ socketClient.connect(sessionID:) → onEvent → ViewModel.handle(_:)
            └─ connect / reconnect 时发送 open_session，server 回 session_snapshot 恢复历史
+       └─ 本地追加 user bubble（含 `text_selection` / `image` 附件摘要）
        └─ socketClient.sendUserMessage(...)
 agent-server 流式回包 → SessionEvent → ViewModel.handle(_:) → messages/status/error 更新 → SwiftUI 自动刷新
 ```
 
 ## SessionEvent 处理规则
 
-- `userMessage / assistantMessageStart` → 追加新气泡，`status = "running"`，清空 `error`
+- `userMessage / assistantMessageStart` → 追加新气泡，`status = "running"`，清空 `error`；本地 `sendPrompt` 追加 user bubble 时会把附件转成 `SessionAttachmentSummary`
 - `assistantMessageDelta` → 找到对应 `messageID` 气泡追加文本（无匹配则丢弃，避免乱序写入）
 - `assistantMessageEnd(status: "completed")` → `status = "idle"`；其他 status 透传
 - `toolMessage` → 追加 role 为 `tool` 的气泡，文本格式 `"\(name): \(text)"`
 - `status` → 直接覆盖；非 `failed` 时清错误
 - `error` → `status = "failed"`，记录 `error`；若上一条 assistant 文本与错误重复则去重
-- `sessionSnapshot` → 全量替换 messages + status
+- `sessionSnapshot` → 全量替换 messages + status；对历史 user message 解析 `[选区]` 与 image `STUB`，归一为附件摘要后展示
 - `permissionRequest` → 追加到 `pendingPermissionRequests`；用户点击拒绝 / 仅本次 / 本会话 / 始终允许后发送 `permission_response` 并移除气泡
 - `sessionList` → 刷新左侧历史侧栏列表
-- `sessionLoaded` → 用历史消息替换当前消息列表，`status = "idle"`
+- `sessionLoaded` → 用历史消息替换当前消息列表，`status = "idle"`；附件摘要归一化规则同 `sessionSnapshot`
 - `connectionState` → 维护 `connectionMessage`；`connecting / reconnecting / disconnected` 显示顶部连接 banner，`connected` 清除 banner。
 
 ## 断线重连
@@ -47,6 +48,12 @@ agent-server 流式回包 → SessionEvent → ViewModel.handle(_:) → messages
 - `receive` 失败且不是用户主动 `disconnect()` 时，客户端进入 `reconnecting`，2 秒后新建 socket 并再次发送 `open_session`，用于 server 重启后的自动续联。
 - `disconnect()` 来自窗口关闭 / 会话结束，会取消待重连任务并发送 `disconnected` 状态，不再自动新建 socket。
 - `SessionSocketClientTests` 用可注入 transport 验证：断线会新建 socket 并重发 `open_session`；主动 disconnect 后不会重连。
+
+## 用户附件展示
+
+- 当前会话本地回显：`SessionViewModel.sendPrompt(_:attachments:)` 在发送 socket 前立即追加 user bubble，并把 `UserMessageAttachmentPayload` 归一为 `SessionAttachmentSummary`。
+- 历史会话恢复：server 持久化后的 user content 只保留拼接文本，`SessionBubble.normalizedForDisplay()` 会识别 `[选区]` 文本块与 `kind=image` 的 `STUB`，展示同样的附件计数与类型列表。
+- UI 显示规则：user bubble 保留原始 prompt 文本，下方显示 `附件 ×N · text_selection / image` 汇总，并逐项显示文本选区预览或图片占位信息；不把图片 base64 展开进气泡。
 
 ## 编辑此目录的约束
 

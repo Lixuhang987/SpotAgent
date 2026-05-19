@@ -150,14 +150,57 @@ struct SessionWindowView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: theme.spacing.md) {
                 ForEach(viewModel.messages) { message in
-                    Text(message.text)
-                        .messageBubble(role: message.role)
+                    messageBubble(message)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
             .padding(theme.spacing.xl)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    private func messageBubble(_ message: SessionBubble) -> some View {
+        VStack(alignment: .leading, spacing: theme.spacing.sm) {
+            Text(message.text)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if let attachmentSummaryText = message.attachmentSummaryText {
+                Text(attachmentSummaryText)
+                    .font(theme.typography.captionFont)
+                    .foregroundStyle(theme.colors.textSecondary)
+
+                ForEach(message.attachments) { attachment in
+                    attachmentRow(attachment)
+                }
+            }
+        }
+        .messageBubble(role: message.role)
+    }
+
+    private func attachmentRow(_ attachment: SessionAttachmentSummary) -> some View {
+        HStack(alignment: .top, spacing: theme.spacing.sm) {
+            Image(systemName: attachment.kind == "image" ? "photo" : "text.quote")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(theme.colors.accent)
+                .frame(width: 14)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: theme.spacing.sm) {
+                    Text(attachment.title)
+                        .font(theme.typography.captionFont)
+                        .foregroundStyle(theme.colors.textPrimary)
+                    Text(attachment.kind)
+                        .font(theme.typography.captionFont.monospaced())
+                        .foregroundStyle(theme.colors.textSecondary)
+                }
+                if let detail = attachment.detail, !detail.isEmpty {
+                    Text(detail)
+                        .font(theme.typography.captionFont)
+                        .foregroundStyle(theme.colors.textSecondary)
+                        .lineLimit(2)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func connectionBanner(_ message: String) -> some View {
