@@ -7,20 +7,23 @@
 | 文件 | 职责 |
 |------|------|
 | `AgentServerService.swift` | 定位仓库根目录与 Node.js，启动 / 停止 agent-server 子进程；记录启动错误 |
+| `AgentServerRuntimeMode.swift` | 读取 bundle resource marker 与环境变量，决定 agent-server 子进程是否注入 `HANDAGENT_LLM_MODE=mock` |
 
 ## 职责
 
 1. 从 Bundle 路径向上查找仓库根目录（双重验证：`Package.swift` + `apps/agent-server/src/server.ts` 同时存在）。
 2. 在 PATH、`/opt/homebrew/bin`、`/usr/local/bin` 中定位 `node` 可执行文件。
 3. 设置 `NODE_PATH`，确保 `node_modules` 与 `apps/agent-server/node_modules` 都被解析。
-4. 启动 `node --experimental-transform-types --experimental-specifier-resolution=node apps/agent-server/src/server.ts`。
-5. 记录 `lastStartupError` 供 UI 展示。
+4. 读取 `Contents/Resources/HandAgentRuntimeMode.json`；当 `llmMode` 为 `mock` 时向子进程环境注入 `HANDAGENT_LLM_MODE=mock`。
+5. 启动 `node --experimental-transform-types --experimental-specifier-resolution=node apps/agent-server/src/server.ts`。
+6. 记录 `lastStartupError` 供 UI 展示。
 
 ## 设计备注
 
 - 非 `@MainActor`（`@unchecked Sendable`），进程管理在后台执行；回调通过 `DispatchQueue.main.async` 切回主线程，`AppCoordinator` 再用 `Task { @MainActor in ... }` 二次切回。
 - 使用 `--experimental-transform-types` 直接运行 TypeScript，无需编译步骤。
 - 进程 stdout/stderr 通过 Pipe 捕获但当前未暴露到 UI（仅防止 fd 泄漏）。
+- QA 可通过 `bash ./scripts/package-app.sh --mock-llm` 生成带 `HandAgentRuntimeMode.json` 的 `.app`，启动后 agent-server 使用 `MockLLMClient`，不访问真实 LLM 端点。
 - **错误恢复**：子进程非零退出码触发自动重启，指数退避 `2^n` 秒（封顶 30s），最多 `maxRestartAttempts = 5` 次；
   - 重启次数超限时通过 `onFatalError(message)` 通知 Coordinator，弹原生 `NSAlert`（"确定" / "查看日志"，后者打开 `~/.spotAgent/`）。
   - `userRequestedStop`（来自 `stop()`）与 `exitCode == 0` 都不会触发重启。

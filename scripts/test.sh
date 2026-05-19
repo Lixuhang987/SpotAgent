@@ -8,6 +8,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_ROOT"
 
 bash "$PROJECT_ROOT/scripts/swiftw.test.sh"
+bash "$PROJECT_ROOT/scripts/package-app.test.sh"
 
 pnpm exec vitest run \
   apps/agent-server/src/MessageTranslator.test.ts \
@@ -19,6 +20,8 @@ pnpm exec vitest run \
   apps/agent-server/src/WebSocketPlatformBridge.test.ts \
   apps/agent-server/src/server.test.ts \
   apps/agent-server/src/path-alias.test.ts \
+  packages/core/tests/llm-integration-artifacts.test.ts \
+  packages/core/tests/mock-llm-client.test.ts \
   packages/core/tests/model-settings.test.ts \
   packages/core/tests/openai-config.test.ts \
   packages/core/tests/runtime.test.ts \

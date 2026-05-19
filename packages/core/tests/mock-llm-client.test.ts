@@ -1,0 +1,143 @@
+import { describe, expect, it } from "vitest";
+import { MockLLMClient, mockLLMScenarios } from "../src/llm/MockLLMClient";
+import { AgentRuntime } from "../src/runtime/AgentRuntime";
+import type { AgentTool } from "../src/tools/AgentTool";
+import { ToolRegistry } from "../src/tools/ToolRegistry";
+
+class FakeFileWriteTool implements AgentTool {
+  name = "file.write";
+  description = "write file";
+  inputSchema = {
+    type: "object",
+    properties: {
+      workspaceId: { type: "string" },
+      relativePath: { type: "string" },
+      content: { type: "string" },
+    },
+    required: ["workspaceId", "relativePath", "content"],
+    additionalProperties: false,
+  } as const;
+
+  calls: unknown[] = [];
+
+  async call(input: unknown): Promise<unknown> {
+    this.calls.push(input);
+    return { ok: true, input };
+  }
+}
+
+describe("MockLLMClient", () => {
+  it("keeps scenario triggers unique and visible for QA maintenance", () => {
+    const triggers = mockLLMScenarios.flatMap((scenario) => scenario.triggers);
+
+    expect(new Set(triggers).size).toBe(triggers.length);
+    expect(triggers).toEqual(expect.arrayContaining([
+      "[mock:assistant-ok]",
+      "[mock:file-write]",
+      "[mock:file-read]",
+      "[mock:workspace-list]",
+      "[mock:path-escape]",
+      "[mock:permission-write]",
+      "[mock:image-summary]",
+      "[mock:llm-error]",
+      "[mock:unknown-tool]",
+    ]));
+  });
+
+  it("returns a deterministic assistant response for the main QA chain", async () => {
+    const client = new MockLLMClient();
+
+    await expect(
+      client.complete([{ role: "user", content: "run [mock:assistant-ok]" }], []),
+    ).resolves.toEqual({
+      message: {
+        role: "assistant",
+        content: "Mock assistant response: main chain is reachable.",
+      },
+      toolCalls: [],
+    });
+  });
+
+  it("returns a real-shape file.write tool call and then a final answer", async () => {
+    const client = new MockLLMClient();
+    const first = await client.complete(
+      [{ role: "user", content: "run [mock:file-write]" }],
+      [],
+    );
+
+    expect(first).toEqual({
+      message: { role: "assistant", content: "" },
+      toolCalls: [
+        {
+          id: "mock-file-write-1",
+          name: "file.write",
+          arguments: {
+            workspaceId: "qa-workspace",
+            relativePath: "hello.txt",
+            content: "hello from MockLLMClient",
+          },
+        },
+      ],
+    });
+
+    await expect(
+      client.complete(
+        [
+          { role: "user", content: "run [mock:file-write]" },
+          { ...first.message, toolCalls: first.toolCalls },
+          {
+            role: "tool",
+            toolCallId: "mock-file-write-1",
+            name: "file.write",
+            content: JSON.stringify({ ok: true }),
+          },
+        ],
+        [],
+      ),
+    ).resolves.toEqual({
+      message: {
+        role: "assistant",
+        content: "Mock file.write completed for hello.txt.",
+      },
+      toolCalls: [],
+    });
+  });
+
+  it("drives AgentRuntime through tool call, tool result, and final assistant answer", async () => {
+    const tool = new FakeFileWriteTool();
+    const runtime = new AgentRuntime(
+      new MockLLMClient(),
+      new ToolRegistry([tool]),
+    );
+
+    const result = await runtime.run("please [mock:file-write]");
+
+    expect(tool.calls).toEqual([
+      {
+        workspaceId: "qa-workspace",
+        relativePath: "hello.txt",
+        content: "hello from MockLLMClient",
+      },
+    ]);
+    expect(result.messages.at(-1)).toEqual({
+      role: "assistant",
+      content: "Mock file.write completed for hello.txt.",
+    });
+    expect(result.bubbles.at(-1)).toEqual({
+      id: "assistant-2",
+      text: "Mock file.write completed for hello.txt.",
+    });
+  });
+
+  it("throws explicit errors for failure triggers and missing triggers", async () => {
+    const client = new MockLLMClient();
+
+    await expect(
+      client.complete([{ role: "user", content: "run [mock:llm-error]" }], []),
+    ).rejects.toThrow("MockLLMClient forced failure for QA.");
+
+    await expect(
+      client.complete([{ role: "user", content: "no trigger" }], []),
+    ).rejects.toThrow("MockLLMClient could not find a mock trigger.");
+  });
+});

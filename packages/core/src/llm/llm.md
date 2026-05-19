@@ -1,6 +1,6 @@
 # llm
 
-LLMClient 抽象 + 当前唯一实现 `VercelClient`（OpenAI 兼容网关）。
+LLMClient 抽象 + 生产实现 `VercelClient`（OpenAI 兼容网关）与日常 QA 实现 `MockLLMClient`。
 
 ## 文件
 
@@ -10,6 +10,7 @@ LLMClient 抽象 + 当前唯一实现 `VercelClient`（OpenAI 兼容网关）。
 | `OpenAIConfig.ts` | `resolveOpenAIApiKey` / `resolveOpenAIBaseURL`：从环境或入参里取，缺 `apiKey` 时抛带中文文案的明确错误（指向 settings 页） |
 | `VercelAdapters.ts` | 内部 `AgentMessage[]` ↔ Vercel AI SDK `ModelMessage[]` 翻译；把 user image part 的 blobId 读取成 SDK image part；`sanitizeToolName` 把 `file.read` → `file_read`（OpenAI 网关不允许点号） |
 | `VercelClient.ts` | 实例化 `@ai-sdk/openai` provider，按 `api ∈ {responses, chat, completion}` 选择 model；可注入 `NetworkLogger` 把请求 / 响应 JSONL 落盘 |
+| `MockLLMClient.ts` | 日常 QA 的固定触发词 LLM 实现；`mockLLMScenarios` 是 mock 场景唯一真源，覆盖普通回复、tool call、tool result、错误、慢响应与异常 tool 等路径 |
 
 ## 调用关系
 
@@ -35,7 +36,10 @@ AgentRuntime
 - **tool 命名**：core 内部 tool 名一律点号风格（`file.read`），`VercelAdapters` 在适配层做 `file_read` 转换；冲突时抛 `Tool name collision after sanitization`。
 - **legacy `provider.completion()`**：当前默认 `defaultModelSettings.api = "responses"`；`VercelClient` 构造默认 `api = "chat"`。两个默认不一致，但生产路径全程透传 settings，无实际冲突。
 - **completion API 限制**：`api = "completion"` 不支持 image content；`VercelClient` 会在调用 provider 前抛出明确错误，要求改用 `chat` 或 `responses`。
-- **DI 入口**：`VercelClientOptions.networkLogger` 注入 `FileNetworkLogger` 可把请求 / 响应 body 落到 `~/.spotAgent/log/<YYYY-MM-DD>/network-NNN.jsonl`；`VercelClientDependencies.{createOpenAI, streamText}` 仅供测试替换。
+- **DI 入口**：`VercelClientOptions.networkLogger` 注入 `FileNetworkLogger` 可把请求 / 响应 body 落到 `~/.spotAgent/log/<YYYY-MM-DD>/network-NNN.jsonl`；`VercelClientDependencies.{createOpenAI, streamText, generateText}` 仅供测试替换。
+- **真实 API 集成测试**：`pnpm run test:llm:integration` 会读取 `~/.spotAgent/settings.json` 调用真实端点，并把 provider 原始 JSON 与归一化 `LLMCompletion` 写入 `.cache/llm-api-integration/latest/`，详见 [docs/llm-api-integration.md](/Users/mu9/proj/handAgent/docs/llm-api-integration.md)。
+- **MockLLMClient 场景真源**：日常 QA mock 不读 fixture 文件，固定触发词和返回结构都维护在 `mockLLMScenarios`。新增 QA 功能时，必须先在这里新增触发词和对应测试，再让 live QA 用该触发词覆盖链路。
+- **mock 启动入口**：agent-server 读取 `HANDAGENT_LLM_MODE=mock` 后使用 `MockLLMClient` 并关闭 summarizer；桌面 `.app` 可通过 `bash ./scripts/package-app.sh --mock-llm` 写入 bundle marker，让 `AgentServerService` 派生子进程时注入该环境变量。
 
 ## 编辑此目录的约束
 

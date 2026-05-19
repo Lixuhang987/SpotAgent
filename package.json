@@ -3,6 +3,9 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.5.2",
+  "scripts": {
+    "test:llm:integration": "HANDAGENT_LLM_INTEGRATION=1 vitest run packages/core/tests/vercel-client.integration.test.ts"
+  },
   "devDependencies": {
     "@ai-sdk/openai": "^3.0.63",
     "ai": "^6.0.177",
