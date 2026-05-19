@@ -13,9 +13,9 @@
 
 ## 本轮实机 QA 进度（2026-05-19）
 
-- 已归档：mock LLM 主链路基础、文本选区附件、区域截图附件、Workspace 设置与文件 tool 基础链路、权限审批「仅本次」路径、权限审批记忆 / 拒绝 / 超时 / 永久规则撤销、Tool 设置热加载。详见 [archive.md](./archive.md)。
+- 已归档：mock LLM 主链路基础、文本选区附件、区域截图附件、Workspace 设置与文件 tool 基础链路、权限审批「仅本次」路径、权限审批记忆 / 拒绝 / 超时 / 永久规则撤销、Tool 设置热加载、会话历史入口与删除确认。详见 [archive.md](./archive.md)。
 - 已确认缺陷：部分 tool completed UI 气泡展示入参而非实际 tool result。详见 [bugs.md](./bugs.md)。
-- 仍需继续验证：会话历史完整删除/恢复路径、权限关闭窗口取消挂起请求、agent-server 崩溃恢复、workspace.askUser、多会话 platform request 隔离、real LLM vision 与真实 token streaming。
+- 仍需继续验证：权限关闭窗口取消挂起请求、agent-server 崩溃恢复、workspace.askUser、多会话 platform request 隔离、real LLM vision 与真实 token streaming。
 
 ## 主链路（P0）
 

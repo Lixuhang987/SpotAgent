@@ -145,3 +145,23 @@
   - Session 文件 `~/.spotAgent/sessions/87A181B1-DA13-4CAA-AD2E-03605D0ED39F.json`：`file.write` 有 `tool_call` 与 success `tool_result`，输出 `bytesWritten: 24`。
   - `~/.spotAgent/settings.json` 最终状态为 `tools.denylist: []`。
 - **结论**：通过。工具开关写入设置文件后，agent-server 可在下一轮 LLM 请求前热加载 registry，无需重启 App。
+
+## 会话历史入口与删除确认（2026-05-19 实机验证）
+
+- **验证日期**：2026-05-19
+- **验证环境**：mock-llm / macOS / `dist/HandAgentDesktop.app`
+- **验证过程**：
+  1. 生成临时会话 `[mock:assistant-ok] QA_HISTORY_DELETE_TARGET_20260519`，确认 `~/.spotAgent/sessions/81E29F64-2AE1-422F-8661-7E4D5FEA3745.json` 存在。
+  2. PromptPanel 输入 `QA_HISTORY_DELETE`，最近会话 action 只过滤出目标会话；输入 `87A181B1` 时也能按 sessionId 过滤出对应会话。
+  3. 点击最近会话 action 恢复目标 session；再次从 PromptPanel 恢复同一 session 时只聚焦已有窗口，窗口数量没有增加。
+  4. 点击 PromptPanel 的「会话历史」action，独立历史窗口打开；搜索 `QA_HISTORY_DELETE` 后左侧只剩目标会话，右侧预览同步显示 user 与 assistant 消息。
+  5. 在独立历史窗口点击「恢复」可聚焦目标 SessionWindow。
+  6. 在独立历史窗口对目标会话右键删除，先弹出 `删除会话？` 二次确认；点击「取消」后文件仍存在，再次删除并确认后文件被移除，列表刷新为空。
+  7. 生成临时会话 `[mock:assistant-ok] QA_SIDEBAR_DELETE_TARGET_20260519`，在 SessionWindow 左侧历史侧栏右键删除，确认弹出二次确认；点击「删除」后 `~/.spotAgent/sessions/6AEA0A2A-D794-43F1-9F61-0CEAF37D0E66.json` 被移除，侧栏列表同步删除该项。
+- **证据**：
+  - PromptPanel action：`最近会话：[mock:assistant-ok] QA_HISTORY_DELETE_TARGET_20...` 可按 keyword 过滤出现；`87A181B1` 可按 sessionId 过滤出现对应会话。
+  - 独立历史窗口搜索后只显示 `81E29F64-2AE1-422F-8661-7E4D5FEA3745`，右侧预览显示 `Mock assistant response: main chain is reachable.`。
+  - 删除取消后：`test -f ~/.spotAgent/sessions/81E29F64-2AE1-422F-8661-7E4D5FEA3745.json` 仍为真。
+  - 删除确认后：`test ! -f ~/.spotAgent/sessions/81E29F64-2AE1-422F-8661-7E4D5FEA3745.json` 为真。
+  - 侧栏删除确认后：`test ! -f ~/.spotAgent/sessions/6AEA0A2A-D794-43F1-9F61-0CEAF37D0E66.json` 为真。
+- **结论**：通过。PromptPanel 最近会话 action、独立历史窗口搜索 / 预览 / 恢复 / 删除确认、同一 sessionId 恢复聚焦、SessionWindow 左侧历史侧栏删除确认均可用。
