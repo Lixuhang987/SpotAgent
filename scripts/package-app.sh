@@ -7,7 +7,13 @@ BUILD_DIR=".build/release"
 DIST_DIR="dist"
 APP_DIR="$DIST_DIR/$APP_NAME.app"
 
-swift build -c release --product "$APP_NAME"
+tmp_log="$(mktemp -t "package-app.XXXXXX")"
+trap 'rm -f "$tmp_log"' EXIT
+
+if ! swift build -c release --product "$APP_NAME" >"$tmp_log" 2>&1; then
+  cat "$tmp_log"
+  exit 1
+fi
 
 rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS"
@@ -53,6 +59,6 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 PLIST
 
 # 本地 QA 用 ad-hoc 签名即可。正式分发再换 Developer ID。
-codesign --force --deep --sign - "$APP_DIR"
+codesign --force --deep --sign - "$APP_DIR" >/dev/null 2>&1
 
-echo "Built: $APP_DIR"
+echo "success"
