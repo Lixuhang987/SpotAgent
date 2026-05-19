@@ -3,6 +3,8 @@ import XCTest
 @testable import HandAgentDesktop
 
 final class AgentServerRuntimeModeTests: XCTestCase {
+    private let agentServerRelativePath = "apps/agent-server/src/server.ts"
+
     func testRuntimeModeDefaultsToSettingsWithoutMarker() throws {
         let resourcesURL = try makeResourcesDirectory()
         defer { try? FileManager.default.removeItem(at: resourcesURL) }
@@ -44,6 +46,31 @@ final class AgentServerRuntimeModeTests: XCTestCase {
         )
 
         XCTAssertEqual(environment["HANDAGENT_LLM_MODE"], "mock")
+    }
+
+    func testRepositoryRootLocatorPrefersCurrentWorktreeOverBundleRepository() throws {
+        let mainRepo = URL(fileURLWithPath: "/repo/main-repo", isDirectory: true)
+        let worktreeRepo = URL(fileURLWithPath: "/repo/worktree-repo", isDirectory: true)
+        let bundleExecutableURL = mainRepo
+            .appendingPathComponent(".build/debug", isDirectory: true)
+            .appendingPathComponent("HandAgentDesktop")
+
+        let resolved = AgentServerRepositoryRootLocator(
+            agentServerRelativePath: agentServerRelativePath,
+            fileExists: { path in
+                path == mainRepo.appendingPathComponent("Package.swift").path ||
+                    path == mainRepo.appendingPathComponent(self.agentServerRelativePath).path ||
+                    path == worktreeRepo.appendingPathComponent("Package.swift").path ||
+                    path == worktreeRepo.appendingPathComponent(self.agentServerRelativePath).path
+            }
+        ).locate(
+            bundleExecutableURL: bundleExecutableURL,
+            bundleResourceURL: mainRepo.appendingPathComponent(".build/debug", isDirectory: true),
+            bundleURL: mainRepo,
+            currentDirectoryURL: worktreeRepo
+        )
+
+        XCTAssertEqual(resolved?.standardizedFileURL.path, worktreeRepo.standardizedFileURL.path)
     }
 
     private func makeResourcesDirectory() throws -> URL {

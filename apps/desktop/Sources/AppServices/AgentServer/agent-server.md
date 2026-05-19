@@ -11,7 +11,7 @@
 
 ## 职责
 
-1. 从 Bundle 路径向上查找仓库根目录（双重验证：`Package.swift` + `apps/agent-server/src/server.ts` 同时存在）。
+1. 优先从进程当前工作目录向上查找仓库根目录；若当前目录不是仓库，再回退 Bundle 路径（双重验证：`Package.swift` + `apps/agent-server/src/server.ts` 同时存在）。这样从 `.worktrees/<name>/` 执行 `bash ./scripts/swiftw run HandAgentDesktop` 时，agent-server 会使用同一 worktree 的源码。
 2. 在 PATH、`/opt/homebrew/bin`、`/usr/local/bin` 中定位 `node` 可执行文件。
 3. 设置 `NODE_PATH`，确保 `node_modules` 与 `apps/agent-server/node_modules` 都被解析。
 4. 读取 `Contents/Resources/HandAgentRuntimeMode.json`；当 `llmMode` 为 `mock` 时向子进程环境注入 `HANDAGENT_LLM_MODE=mock`。
