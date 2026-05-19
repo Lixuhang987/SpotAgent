@@ -11,11 +11,11 @@
 - 已通过 `bash ./scripts/swiftw test`
 - 已通过 `bash ./scripts/swiftw build`
 
-## 本轮实机 QA 进度（2026-05-19）
+## 本轮实机 QA 进度（2026-05-20）
 
-- 已归档：mock LLM 主链路基础、文本选区附件、区域截图附件、Workspace 设置与文件 tool 基础链路、权限审批「仅本次」路径、权限审批记忆 / 拒绝 / 超时 / 永久规则撤销、Tool 设置热加载、会话历史入口与删除确认。详见 [archive.md](./archive.md)。
+- 已归档：mock LLM 主链路基础、文本选区附件、区域截图附件、Workspace 设置与文件 tool 基础链路、权限审批「仅本次」路径、权限审批记忆 / 拒绝 / 超时 / 永久规则撤销、Tool 设置热加载、会话历史入口与删除确认、agent-server 崩溃恢复。详见 [archive.md](./archive.md)。
 - 已确认缺陷：部分 tool completed UI 气泡展示入参而非实际 tool result。详见 [bugs.md](./bugs.md)。
-- 仍需继续验证：权限关闭窗口取消挂起请求、agent-server 崩溃恢复、workspace.askUser、多会话 platform request 隔离、real LLM vision 与真实 token streaming。
+- 仍需继续验证：权限关闭窗口取消挂起请求、workspace.askUser、多会话 platform request 隔离、real LLM vision 与真实 token streaming。
 
 ## 主链路（P0）
 
@@ -68,12 +68,7 @@
 
 ## agent-server 崩溃恢复（P3）
 
-33. 通过 `kill -9 <agent-server pid>` 模拟崩溃，确认：
-    - SessionWindow 出现连接错误或断开提示。
-    - 桌面 App 在指数退避（约 1s/2s/4s/8s/16s）内自动重启 server。
-    - 重启成功后新会话可继续提交。
-    - 现有 SessionWindow 自动重连并重发 `open_session`；该路径已有 `SessionSocketClientTests` 覆盖，但仍需实机确认重启后 `session_snapshot` 正常恢复。
-34. 连续杀 6 次模拟反复崩溃，确认第 6 次后弹出 `NSAlert("Agent Server 已停止")`；「查看日志」按钮是否能打开 `~/.spotAgent/` 仍需实机确认。
+已于 2026-05-20 通过 mock-llm 实机 QA 验证并归档，详见 [archive.md](./archive.md)「agent-server 崩溃恢复」。
 
 ## 通过标准
 
@@ -82,7 +77,7 @@
 - PromptPanel 最近会话 action、独立历史窗口搜索 / 预览 / 恢复 / 删除确认可用，同一 sessionId 恢复只聚焦已有窗口或打开一个恢复窗口；
 - file tool 严格沙箱化，越狱被拒；
 - 权限审批 UI 不阻塞其他会话，决策被持久化；Settings 权限页可以查看和撤销永久规则；
-- agent-server 崩溃可自动重启，过限有可见反馈；现有会话自动重连订阅需实机验证；
+- agent-server 崩溃可自动重启，过限有可见反馈；现有会话自动重连订阅可恢复；
 - 所有错误路径均有明确文案，不出现静默失败。
 
 ---

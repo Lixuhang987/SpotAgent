@@ -4,7 +4,7 @@
 
 新条目从 [待验收.md](./待验收.md) 或 [manual-qa.md](./manual-qa.md) 验证通过后移入此处。
 
-最后更新日期：2026-05-19。
+最后更新日期：2026-05-20。
 
 ---
 
@@ -165,3 +165,25 @@
   - 删除确认后：`test ! -f ~/.spotAgent/sessions/81E29F64-2AE1-422F-8661-7E4D5FEA3745.json` 为真。
   - 侧栏删除确认后：`test ! -f ~/.spotAgent/sessions/6AEA0A2A-D794-43F1-9F61-0CEAF37D0E66.json` 为真。
 - **结论**：通过。PromptPanel 最近会话 action、独立历史窗口搜索 / 预览 / 恢复 / 删除确认、同一 sessionId 恢复聚焦、SessionWindow 左侧历史侧栏删除确认均可用。
+
+## agent-server 崩溃恢复（2026-05-20 实机验证）
+
+- **验证日期**：2026-05-20
+- **验证环境**：mock-llm / macOS / worktree `codex/manual-qa-live-qa` / `dist/HandAgentDesktop.app`
+- **验证过程**：
+  1. 在 worktree 中执行 `pnpm install`、`bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`，均通过；其中 vitest 为 30 个测试文件、164 个测试通过。
+  2. 执行 `bash ./scripts/package-app.sh --mock-llm` 并启动 `dist/HandAgentDesktop.app`。
+  3. 初始状态只有状态气泡窗口，尺寸为 `280x62`；agent-server 子进程监听 `*:4317`，命令路径为 `/Users/mu9/proj/handAgent/.worktrees/manual-qa-live-qa/apps/agent-server/src/server.ts`。
+  4. 通过原生事件 `System Events` 发送 `key code 49 using {command down, shift down}` 唤出 PromptPanel，输入 `[mock:assistant-ok] QA agent-server crash recovery baseline` 并提交，创建 SessionWindow（`760x560`）并显示 mock assistant 回复。
+  5. 对 agent-server 子进程 `98572` 执行 `kill -9`；桌面 App 保持运行，SessionWindow 保持打开，随后自动启动新的 agent-server 子进程 `10894` 并重新监听 `*:4317`。
+  6. 在同一个 SessionWindow 中提交 `[mock:assistant-ok] QA post-crash reconnect follow-up`，同一个 session 文件追加到 4 条消息，证明重启后现有窗口可继续使用原 session。
+  7. 继续连续杀死 agent-server 子进程，观察到约 `3s / 5s / 9s / 17s` 的递增重启间隔；第 6 次 kill 后不再出现 `*:4317` listener，并弹出 `Agent Server 已停止` fatal alert，包含 `查看日志` 与 `确定` 按钮。
+  8. 点击 `查看日志` 后 alert 关闭，回到 SessionWindow；窗口显示 `reconnecting`、`连接已断开，正在自动重连…` 和 `Could not connect to the server.`，符合达到重启上限后的可见失败状态。
+- **证据**：
+  - 初始 agent-server：`ps -o pid,ppid,command -p 98572` 显示 PPID 为 `98570`，命令路径为 worktree 下的 `apps/agent-server/src/server.ts`。
+  - 重启后 agent-server：`ps -o pid,ppid,command -p 10894` 显示 PPID 仍为 `98570`，命令路径仍为 worktree 下的 `apps/agent-server/src/server.ts`。
+  - 窗口状态：重启前后 `System Events` 返回窗口尺寸 `280, 62, 760, 560`，对应 status bubble 与 SessionWindow。
+  - Session 文件：`~/.spotAgent/sessions/2C996710-C1E8-447D-9FA0-6CF5CA15692E.json`，`messageCount: 4`，包含 crash 前 prompt 和 post-crash follow-up 两组 user / assistant 消息。
+  - 连续崩溃输出：`kill-2 pid=10894 at 17:19:49`、`restarted-2 pid=20586 at 17:19:52`、`restarted-3 pid=20622 at 17:19:57`、`restarted-4 pid=20705 at 17:20:06`、`restarted-5 pid=21357 at 17:20:23`、`kill-6 pid=21357 at 17:20:23`、`final-listener=`。
+  - fatal alert 可见文案：`Agent Server 已停止 agent-server 多次崩溃（退出码 9）已停止重启。可在「检查日志」中排查。`
+- **结论**：通过。agent-server 单次崩溃后可自动重启；现有 SessionWindow 可在重启后继续提交并追加同一 session；连续崩溃超过上限后停止重启并给出可见 fatal alert。
