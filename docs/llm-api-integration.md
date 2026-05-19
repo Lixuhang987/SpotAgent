@@ -99,6 +99,30 @@ HANDAGENT_LLM_REQUEST_TIMEOUT_MS=90000 pnpm run test:llm:integration
 }
 ```
 
+真实工具调用样例：
+
+```json
+{
+  "message": {
+    "role": "assistant",
+    "content": ""
+  },
+  "toolCalls": [
+    {
+      "id": "call_AYlJyRl8GIztaPdV4Wpx4b2I",
+      "name": "file.write",
+      "arguments": {
+        "content": "hello from real api integration test",
+        "relativePath": "api-integration.txt",
+        "workspaceId": "qa-workspace"
+      }
+    }
+  ]
+}
+```
+
+这类样例可以直接作为 `MockLLMClient.complete()` 的返回值模板；如果要模拟“先 tool call、后最终回答”的链路，就把第一轮返回上面的结构，第二轮返回 `toolCalls: []` 的 assistant 文本。
+
 ## 默认测试覆盖
 
 日常 `bash ./scripts/test.sh` 只运行 artifact 写入单元测试：
