@@ -57,6 +57,20 @@ class StubbedTool implements AgentTool {
   }
 }
 
+class NamedResultTool implements AgentTool {
+  description = "return a fixed result";
+  inputSchema = { type: "object", additionalProperties: false } as const;
+
+  constructor(
+    readonly name: string,
+    private readonly result: unknown,
+  ) {}
+
+  async call(): Promise<unknown> {
+    return this.result;
+  }
+}
+
 class MemoryBlobStore implements BlobStore {
   records: BlobRecord[] = [];
   contents = new Map<string, Buffer>();
@@ -122,6 +136,42 @@ class FakeTurnSummarizer implements TurnSummarizerLike {
 }
 
 describe("AgentRuntime", () => {
+  it("adds default system prompt sections to LLM requests without persisting them", async () => {
+    const seenMessages: AgentMessage[][] = [];
+    const runtime = new AgentRuntime(
+      {
+        async complete(messages: AgentMessage[]) {
+          seenMessages.push(messages.map((message) => ({ ...message })));
+          return {
+            message: { role: "assistant" as const, content: "ok" },
+            toolCalls: [],
+          };
+        },
+      },
+      new ToolRegistry([new FakeTool()]),
+    );
+
+    const result = await runtime.runWithMessages([
+      { role: "user", content: "执行一个流程，使用两个tool调用" },
+    ]);
+
+    expect(seenMessages).toHaveLength(1);
+    expect(seenMessages[0]).toEqual([
+      {
+        role: "system",
+        content: expect.stringContaining("structured tool calls"),
+      },
+      {
+        role: "user",
+        content: "执行一个流程，使用两个tool调用",
+      },
+    ]);
+    expect(result.messages).toEqual([
+      { role: "user", content: "执行一个流程，使用两个tool调用" },
+      { role: "assistant", content: "ok" },
+    ]);
+  });
+
   it("passes the configured blob store into the LLM client", async () => {
     const blobStore = new MemoryBlobStore();
     let seenOptions: unknown;
@@ -223,6 +273,138 @@ describe("AgentRuntime", () => {
     expect(tool.seenContext).toEqual({
       sessionId: "session-ctx",
       toolCallId: "tool-ctx",
+    });
+  });
+
+  it("runs two tool calls after assistant text and sends both results to the final LLM turn", async () => {
+    const seenTurns: AgentMessage[][] = [];
+    const events: unknown[] = [];
+    const toolCalls = [
+      {
+        id: "call-frontmost",
+        name: "app.frontmost",
+        arguments: {},
+      },
+      {
+        id: "call-clipboard",
+        name: "clipboard.read",
+        arguments: {},
+      },
+    ];
+    const client = {
+      async complete(messages: AgentMessage[]) {
+        seenTurns.push(messages.map((message) => ({ ...message })));
+        const lastMessage = messages[messages.length - 1];
+
+        if (lastMessage.role === "user") {
+          return {
+            message: { role: "assistant" as const, content: "我会读取前台 App 和剪贴板。" },
+            toolCalls,
+          };
+        }
+
+        return {
+          message: { role: "assistant" as const, content: "两个 tool 都已完成。" },
+          toolCalls: [],
+        };
+      },
+    };
+    const runtime = new AgentRuntime(
+      client,
+      new ToolRegistry([
+        new NamedResultTool("app.frontmost", { name: "Finder", bundleId: "com.apple.finder" }),
+        new NamedResultTool("clipboard.read", { text: "clipboard text" }),
+      ]),
+    );
+
+    const result = await runtime.runWithMessages(
+      [{ role: "user", content: "执行一个流程，使用两个tool调用" }],
+      (event) => events.push(event),
+    );
+
+    expect(seenTurns).toHaveLength(2);
+    expect(seenTurns[1].slice(-3)).toEqual([
+      {
+        role: "assistant",
+        content: "我会读取前台 App 和剪贴板。",
+        toolCalls,
+      },
+      {
+        role: "tool",
+        toolCallId: "call-frontmost",
+        name: "app.frontmost",
+        content: JSON.stringify({ name: "Finder", bundleId: "com.apple.finder" }),
+      },
+      {
+        role: "tool",
+        toolCallId: "call-clipboard",
+        name: "clipboard.read",
+        content: JSON.stringify({ text: "clipboard text" }),
+      },
+    ]);
+    expect(events).toEqual([
+      {
+        type: "assistant_message_start",
+        messageId: "assistant-1",
+        payload: { role: "assistant" },
+      },
+      {
+        type: "assistant_message_delta",
+        messageId: "assistant-1",
+        payload: { text: "我会读取前台 App 和剪贴板。" },
+      },
+      {
+        type: "assistant_message_end",
+        messageId: "assistant-1",
+        payload: { status: "completed" },
+      },
+      {
+        type: "tool_call",
+        toolCallId: "call-frontmost",
+        toolName: "app.frontmost",
+        input: {},
+      },
+      {
+        type: "tool_result",
+        toolCallId: "call-frontmost",
+        toolName: "app.frontmost",
+        status: "success",
+        output: JSON.stringify({ name: "Finder", bundleId: "com.apple.finder" }),
+        durationMs: expect.any(Number),
+      },
+      {
+        type: "tool_call",
+        toolCallId: "call-clipboard",
+        toolName: "clipboard.read",
+        input: {},
+      },
+      {
+        type: "tool_result",
+        toolCallId: "call-clipboard",
+        toolName: "clipboard.read",
+        status: "success",
+        output: JSON.stringify({ text: "clipboard text" }),
+        durationMs: expect.any(Number),
+      },
+      {
+        type: "assistant_message_start",
+        messageId: "assistant-2",
+        payload: { role: "assistant" },
+      },
+      {
+        type: "assistant_message_delta",
+        messageId: "assistant-2",
+        payload: { text: "两个 tool 都已完成。" },
+      },
+      {
+        type: "assistant_message_end",
+        messageId: "assistant-2",
+        payload: { status: "completed" },
+      },
+    ]);
+    expect(result.messages.at(-1)).toEqual({
+      role: "assistant",
+      content: "两个 tool 都已完成。",
     });
   });
 
@@ -489,8 +671,18 @@ describe("AgentRuntime", () => {
       events.push(event);
     });
 
-    expect(seenTurns[0]).toEqual(initialMessages);
+    expect(seenTurns[0]).toEqual([
+      {
+        role: "system",
+        content: expect.stringContaining("structured tool calls"),
+      },
+      ...initialMessages,
+    ]);
     expect(seenTurns[1]).toEqual([
+      {
+        role: "system",
+        content: expect.stringContaining("structured tool calls"),
+      },
       ...initialMessages,
       {
         role: "assistant",

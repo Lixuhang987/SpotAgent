@@ -33,7 +33,7 @@
 ### 2. runtime 阶段
 
 - `AgentRuntime.runWithMessages(messages, onEvent, {sessionId})`
-- 每轮消费 `LLMClient.stream(messages, registry.list(), {blobStore?})`
+- 每轮先通过 `SystemPrompt` 把默认 system prompt sections 临时前置到 LLM 输入，再消费 `LLMClient.stream(llmMessages, registry.list(), {blobStore?})`
 - 处理 `toolCalls`：`PermissionPolicy.check` → ask / allow / deny → tool 调用 → 写 tool message
 - 详细流程图见 [runtime/runtime.md](/Users/mu9/proj/handAgent/packages/core/src/runtime/runtime.md)
 
