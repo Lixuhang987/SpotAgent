@@ -10,7 +10,8 @@
 | `SessionHistorySidebarView.swift` | 左侧历史导航：标题、空态、历史行、打开/运行/当前状态标识 |
 | `SessionWorkspaceView.swift` | 右侧工作区容器：顶部会话上下文栏、tab strip、连接 banner、空态与输入 composer |
 | `SessionTabBarView.swift` | tab strip 容器、tab item、独立关闭按钮与 tab 运行/连接状态点 |
-| `SessionContentView.swift` | 消息主滚动区、消息气泡、附件行与错误内联面板 |
+| `SessionContentView.swift` | 消息主滚动区、消息气泡、消息文本选择 / 复制入口、附件行与错误内联面板 |
+| `SessionMessageClipboard.swift` | 消息级复制 helper：把单条 message 文本写入系统剪贴板 |
 | `SessionRequestBubbleViews.swift` | 权限审批与 workspace 选择内联面板 |
 | `SessionWindowViewModel.swift` | 窗口级状态：`historyList`、`tabs`、`activeTabID`、删除确认、空态提示；负责打开/激活历史会话、创建新会话、关闭 tab |
 | `SessionTabViewModel.swift` | 单 tab 状态：`sessionID`、socket、消息、运行态、连接态、权限请求、workspace ask；消费 tab 级 `SessionEvent` |
@@ -51,7 +52,8 @@ Coordinator.handleSubmitPrompt
 - 上方 tab strip 只管理“当前窗口中已打开的 tab”。关闭 tab 只断开该 tab 的 socket 并从窗口移除，不删除本地历史文件。
 - tab item 内部拆成两个明确点击目标：左侧激活按钮与右侧 `SessionCloseTabButton`。不要把 `xmark` 作为父激活按钮里的被动图标，否则点击关闭会变成激活 tab。
 - 右侧顶部状态栏展示当前会话标题、运行/连接状态与已打开 tab 数；Stop 只作用于当前 active tab。
-- 消息列表是工作区主滚动区域；错误、权限审批和 workspace 选择作为消息区底部的内联面板展示。
+- 消息列表是工作区主滚动区域；消息正文允许文本选中，每条 message 右上角提供复制图标，复制范围固定为该条 `SessionBubble.text`。
+- 错误、权限审批和 workspace 选择作为消息区底部的内联面板展示。
 - 底部 composer 在无 active tab 时发送会创建新会话；有 active tab 时发送到当前 tab。
 - PromptPanel 提交总是创建新会话 tab，不会把输入发到当前 active tab。
 

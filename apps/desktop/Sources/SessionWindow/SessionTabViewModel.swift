@@ -23,18 +23,23 @@ final class SessionTabViewModel: Identifiable {
     }
 
     @ObservationIgnored let socketClient: SessionSocketClient
+    @ObservationIgnored private let copyMessageText: @MainActor (String) -> Void
     @ObservationIgnored private let onStateChanged: @MainActor (SessionTabViewModel) -> Void
 
     init(
         tabID: String,
         sessionID: String,
         socketClient: SessionSocketClient,
+        copyMessageText: @escaping @MainActor (String) -> Void = { text in
+            SessionMessageClipboard.copy(text)
+        },
         onStateChanged: @escaping @MainActor (SessionTabViewModel) -> Void = { _ in }
     ) {
         self.id = tabID
         self.tabID = tabID
         self.sessionID = sessionID
         self.socketClient = socketClient
+        self.copyMessageText = copyMessageText
         self.onStateChanged = onStateChanged
     }
 
@@ -71,6 +76,13 @@ final class SessionTabViewModel: Identifiable {
         status = .interrupted
         socketClient.sendInterrupt(sessionID: sessionID)
         onStateChanged(self)
+    }
+
+    func copyMessage(messageID: String) {
+        guard let message = messages.first(where: { $0.id == messageID }), !message.text.isEmpty else {
+            return
+        }
+        copyMessageText(message.text)
     }
 
     func resolvePermission(requestId: String, decision: String, scope: String?) {

@@ -54,6 +54,32 @@ final class SessionWindowViewTests: XCTestCase {
         )
     }
 
+    func testMessageBubblesEnableTextSelection() throws {
+        let messageBubbleSource = try messageBubbleSource()
+
+        XCTAssertTrue(
+            messageBubbleSource.contains(".textSelection(.enabled)"),
+            "Message bubble text must remain selectable so users can copy arbitrary ranges."
+        )
+    }
+
+    func testMessageBubblesExposeCopyButtonPerMessage() throws {
+        let source = try sessionWindowSources()
+
+        XCTAssertTrue(
+            source.contains("struct SessionMessageCopyButton: View"),
+            "Each message must expose a dedicated copy button component."
+        )
+        XCTAssertTrue(
+            source.contains("Image(systemName: \"doc.on.doc\")"),
+            "The message copy affordance must use a compact copy icon."
+        )
+        XCTAssertTrue(
+            source.contains(".accessibilityLabel(\"复制消息\")"),
+            "The copy icon must have an explicit VoiceOver label."
+        )
+    }
+
     private func sessionWindowViewSource() throws -> String {
         let sourceURL = sourceDirectory()
             .appendingPathComponent("SessionWindowView.swift")
@@ -93,5 +119,12 @@ final class SessionWindowViewTests: XCTestCase {
         let rowStart = try XCTUnwrap(source.range(of: "struct SessionTabItemView"))
         let nextSection = try XCTUnwrap(source[rowStart.lowerBound...].range(of: "struct SessionCloseTabButton"))
         return String(source[rowStart.lowerBound..<nextSection.lowerBound])
+    }
+
+    private func messageBubbleSource() throws -> String {
+        let source = try sessionWindowSources()
+        let bubbleStart = try XCTUnwrap(source.range(of: "struct SessionMessageBubbleView"))
+        let nextSection = try XCTUnwrap(source[bubbleStart.lowerBound...].range(of: "struct SessionAttachmentRowView"))
+        return String(source[bubbleStart.lowerBound..<nextSection.lowerBound])
     }
 }
