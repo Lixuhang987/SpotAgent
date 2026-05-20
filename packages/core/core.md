@@ -125,3 +125,9 @@ flowchart TD
 - `protocol` 仅定义跨进程 WS 消息形状；TS / Swift 双侧据此对齐。
 - `conversation` 是 UI/持久化消息模型，与 LLM 面向的 `AgentMessage` 解耦。
 - `selection` 只定义用户选区抽象，不做宿主编排。
+
+## 测试目录
+
+`packages/core/tests/` 按 `src/` 的模块边界分组，例如 `runtime/`、`tools/`、`llm/`、`workspace/`。新增测试优先放入对应模块目录；builtin tool 相关测试放在 `tests/tools/builtins/`，本地插件测试放在 `tests/tools/plugins/`。
+
+日常 `bash ./scripts/test.sh` 直接运行整棵 `packages/core/tests`，不要在脚本中继续维护扁平文件清单。真实 LLM API 测试位于 `tests/llm/vercel-client.integration.test.ts`，默认 skip，仅通过 `pnpm run test:llm:integration` 显式开启。

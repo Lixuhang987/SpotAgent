@@ -15,11 +15,11 @@
 **Files:**
 - Modify: `packages/core/src/runtime/AgentMessage.ts`
 - Modify: `packages/core/src/llm/LLMClient.ts`
-- Test: `packages/core/tests/runtime.test.ts`
+- Test: `packages/core/tests/runtime/agent-runtime.test.ts`
 
 - [ ] **Step 1: Write the failing test**
 
-在 `packages/core/tests/runtime.test.ts` 增加测试，断言 runtime 会把 `blobStore` 透传给 fake LLM：
+在 `packages/core/tests/runtime/agent-runtime.test.ts` 增加测试，断言 runtime 会把 `blobStore` 透传给 fake LLM：
 
 ```ts
 it("passes the configured blob store into the LLM client", async () => {
@@ -49,7 +49,7 @@ it("passes the configured blob store into the LLM client", async () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pnpm vitest packages/core/tests/runtime.test.ts --run`
+Run: `pnpm vitest packages/core/tests/runtime/agent-runtime.test.ts --run`
 
 Expected: FAIL because `LLMClient.complete` does not accept an options argument and `AgentRuntime` does not pass `blobStore`.
 
@@ -71,7 +71,7 @@ Change user messages to `content: AgentUserContent`. Add `LLMCompleteOptions = {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `pnpm vitest packages/core/tests/runtime.test.ts --run`
+Run: `pnpm vitest packages/core/tests/runtime/agent-runtime.test.ts --run`
 
 Expected: PASS.
 
@@ -160,7 +160,7 @@ Expected: PASS.
 **Files:**
 - Modify: `packages/core/src/llm/VercelAdapters.ts`
 - Modify: `packages/core/src/llm/VercelClient.ts`
-- Test: `packages/core/tests/vercel-client.test.ts`
+- Test: `packages/core/tests/llm/vercel-client.test.ts`
 
 - [ ] **Step 1: Write failing adapter tests**
 
@@ -178,7 +178,7 @@ Also assert missing blobStore, missing blob, and non-image blob throw clear erro
 
 - [ ] **Step 2: Run test to verify failure**
 
-Run: `pnpm vitest packages/core/tests/vercel-client.test.ts --run`
+Run: `pnpm vitest packages/core/tests/llm/vercel-client.test.ts --run`
 
 Expected: FAIL because `toVercelMessages` is synchronous and does not know `blobStore`.
 
@@ -202,7 +202,7 @@ Track selected `api` in `VercelClient`. If `api === "completion"` and user conte
 
 - [ ] **Step 5: Run tests to verify pass**
 
-Run: `pnpm vitest packages/core/tests/vercel-client.test.ts --run`
+Run: `pnpm vitest packages/core/tests/llm/vercel-client.test.ts --run`
 
 Expected: PASS.
 
@@ -212,7 +212,7 @@ Expected: PASS.
 
 **Files:**
 - Modify: `packages/core/src/logging/createLoggingFetch.ts`
-- Test: `packages/core/tests/logging-fetch.test.ts`
+- Test: `packages/core/tests/logging/logging-fetch.test.ts`
 
 - [ ] **Step 1: Write failing test**
 
@@ -228,7 +228,7 @@ Assert logged body replaces the image value with `[redacted image payload]`.
 
 - [ ] **Step 2: Run test to verify failure**
 
-Run: `pnpm vitest packages/core/tests/logging-fetch.test.ts --run`
+Run: `pnpm vitest packages/core/tests/logging/logging-fetch.test.ts --run`
 
 Expected: FAIL because logger currently stores parsed JSON unchanged.
 
@@ -238,7 +238,7 @@ After parsing JSON, recursively redact object properties named `image` when the 
 
 - [ ] **Step 4: Run test to verify pass**
 
-Run: `pnpm vitest packages/core/tests/logging-fetch.test.ts --run`
+Run: `pnpm vitest packages/core/tests/logging/logging-fetch.test.ts --run`
 
 Expected: PASS.
 
@@ -278,7 +278,7 @@ Expected: both `success`.
 Run:
 
 ```bash
-git add packages/core/src/runtime/AgentMessage.ts packages/core/src/llm/LLMClient.ts packages/core/src/llm/VercelAdapters.ts packages/core/src/llm/VercelClient.ts packages/core/src/logging/createLoggingFetch.ts packages/core/tests/runtime.test.ts packages/core/tests/vercel-client.test.ts packages/core/tests/logging-fetch.test.ts apps/agent-server/src/MessageTranslator.ts apps/agent-server/src/SessionRuntimeOrchestrator.ts apps/agent-server/src/MessageTranslator.test.ts apps/agent-server/src/SessionRuntimeOrchestrator.test.ts docs/TODO.md docs/architecture-review.md docs/dev.md docs/superpowers/plans/2026-05-19-image-multimodal.md
+git add packages/core/src/runtime/AgentMessage.ts packages/core/src/llm/LLMClient.ts packages/core/src/llm/VercelAdapters.ts packages/core/src/llm/VercelClient.ts packages/core/src/logging/createLoggingFetch.ts packages/core/tests/runtime/agent-runtime.test.ts packages/core/tests/llm/vercel-client.test.ts packages/core/tests/logging/logging-fetch.test.ts apps/agent-server/src/MessageTranslator.ts apps/agent-server/src/SessionRuntimeOrchestrator.ts apps/agent-server/src/MessageTranslator.test.ts apps/agent-server/src/SessionRuntimeOrchestrator.test.ts docs/TODO.md docs/architecture-review.md docs/dev.md docs/superpowers/plans/2026-05-19-image-multimodal.md
 git commit -m "feat: send image attachments to multimodal llm"
 ```
 

@@ -169,7 +169,7 @@
 
 **测试覆盖**：
 
-- `bash ./scripts/test.sh` 中新增 `runtime-stream.test.ts` 用 fake provider 输出多段 token，runtime 按顺序 emit `text-delta`。
+- `bash ./scripts/test.sh` 中的 `packages/core/tests/runtime/agent-runtime.test.ts` 用 fake provider 输出多段 token，runtime 按顺序 emit `text-delta`。
 - `vercel-client.test.ts` 覆盖 AI SDK `fullStream` 中的 text delta 与 tool call 映射。
 
 ---
@@ -246,7 +246,7 @@
 - `packages/core/src/tools/defineTool.ts` 提供工厂。
 - `packages/core/src/tools/builtins/*.ts` 使用 zod schema。
 - `packages/core/src/tools/tools.md` 已补 tool 编写约束。
-- `packages/core/tests/define-tool.test.ts` 覆盖类型错误、缺必填、strict object 未知字段，以及 JSON Schema 输出不变。
+- `packages/core/tests/tools/define-tool.test.ts` 覆盖类型错误、缺必填、strict object 未知字段，以及 JSON Schema 输出不变。
 
 ---
 

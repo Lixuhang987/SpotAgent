@@ -18,8 +18,8 @@
 - Create: `packages/core/src/blob/FilesystemBlobStore.ts`
 - Create: `packages/core/src/blob/blob.md`
 - Create: `packages/core/src/runtime/Stub.ts`
-- Test: `packages/core/tests/blob-store.test.ts`
-- Test: `packages/core/tests/stub.test.ts`
+- Test: `packages/core/tests/blob/filesystem-blob-store.test.ts`
+- Test: `packages/core/tests/runtime/stub.test.ts`
 - Modify: `packages/core/src/src.md`
 
 - [ ] 写 `blob-store.test.ts`，覆盖 `put/get/readContent/setSummary` 往返、sidecar 元数据与日期目录。
@@ -39,8 +39,8 @@
 - Modify: `packages/core/src/runtime/AgentRuntime.ts`
 - Modify: `packages/core/src/tools/tools.md`
 - Modify: `packages/core/src/runtime/runtime.md`
-- Test: `packages/core/tests/file-tools.test.ts`
-- Test: `packages/core/tests/runtime.test.ts`
+- Test: `packages/core/tests/tools/builtins/file-tools.test.ts`
+- Test: `packages/core/tests/runtime/agent-runtime.test.ts`
 
 - [ ] 先改测试：`file.read` 必须传 `cached: "turn" | "persist"`，schema required 包含 `cached`。
 - [ ] 先改 runtime 测试：带 `cached=turn` 的 tool 结果写入 BlobStore，LLM 下一轮收到 STUB 包裹的完整 body，tool message 带 `blob` 元数据。
@@ -57,9 +57,9 @@
 - Modify: `packages/core/src/runtime/AgentRuntime.ts`
 - Modify: `packages/core/src/config/ModelSettings.ts`
 - Modify: `packages/core/src/config/config.md`
-- Test: `packages/core/tests/turn-summarizer.test.ts`
-- Test: `packages/core/tests/runtime.test.ts`
-- Test: `packages/core/tests/model-settings.test.ts`
+- Test: `packages/core/tests/runtime/turn-summarizer.test.ts`
+- Test: `packages/core/tests/runtime/agent-runtime.test.ts`
+- Test: `packages/core/tests/config/model-settings.test.ts`
 
 - [ ] 先写 `TurnSummarizer` 测试：成功时写回 summary 并重渲染消息，失败时保留完整 body 且下次可重试。
 - [ ] 先写 runtime 测试：第一轮结束触发异步摘要，第二轮 LLM 调用前等待 pending summary，看到 `summarized=true` 与 summary body。

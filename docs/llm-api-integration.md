@@ -15,7 +15,7 @@ pnpm run test:llm:integration
 等价命令：
 
 ```bash
-HANDAGENT_LLM_INTEGRATION=1 pnpm exec vitest run packages/core/tests/vercel-client.integration.test.ts
+HANDAGENT_LLM_INTEGRATION=1 pnpm exec vitest run packages/core/tests/llm/vercel-client.integration.test.ts
 ```
 
 前提：
@@ -47,7 +47,7 @@ pnpm run test:llm:integration
 ```bash
 HANDAGENT_LLM_ARTIFACT_DIR=/tmp/handagent-llm-api \
 HANDAGENT_LLM_INTEGRATION=1 \
-pnpm exec vitest run packages/core/tests/vercel-client.integration.test.ts
+pnpm exec vitest run packages/core/tests/llm/vercel-client.integration.test.ts
 ```
 
 单次 provider 请求默认 45 秒超时，可通过环境变量调整：
@@ -132,10 +132,10 @@ open dist/HandAgentDesktop.app
 
 ## 默认测试覆盖
 
-日常 `bash ./scripts/test.sh` 只运行 artifact 写入单元测试：
+日常 `bash ./scripts/test.sh` 会运行 `packages/core/tests`，其中真实 API 集成测试默认 skip；与真实 API 产物相关的日常覆盖是 artifact 写入单元测试：
 
 ```bash
-pnpm exec vitest run packages/core/tests/llm-integration-artifacts.test.ts
+pnpm exec vitest run packages/core/tests/llm/llm-integration-artifacts.test.ts
 ```
 
 该测试验证：
