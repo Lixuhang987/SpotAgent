@@ -5,7 +5,10 @@ struct SessionContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            SessionMessageListView(messages: tab.messages)
+            SessionMessageListView(
+                messages: tab.messages,
+                onCopyMessage: { tab.copyMessage(messageID: $0) }
+            )
 
             if let error = tab.error {
                 SessionErrorBannerView(error: error)
@@ -24,6 +27,7 @@ struct SessionContentView: View {
 
 struct SessionMessageListView: View {
     let messages: [SessionBubble]
+    let onCopyMessage: (String) -> Void
 
     @Environment(\.appTheme) private var theme
 
@@ -31,7 +35,10 @@ struct SessionMessageListView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: theme.spacing.md) {
                 ForEach(messages) { message in
-                    SessionMessageBubbleView(message: message)
+                    SessionMessageBubbleView(
+                        message: message,
+                        onCopyMessage: { onCopyMessage(message.id) }
+                    )
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
@@ -46,13 +53,22 @@ struct SessionMessageListView: View {
 
 struct SessionMessageBubbleView: View {
     let message: SessionBubble
+    let onCopyMessage: () -> Void
 
     @Environment(\.appTheme) private var theme
 
     var body: some View {
         VStack(alignment: .leading, spacing: theme.spacing.sm) {
-            Text(message.text)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(alignment: .top, spacing: theme.spacing.sm) {
+                Text(message.text)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                SessionMessageCopyButton(
+                    isDisabled: message.text.isEmpty,
+                    onCopy: onCopyMessage
+                )
+            }
 
             if let attachmentSummaryText = message.attachmentSummaryText {
                 Text(attachmentSummaryText)
@@ -65,6 +81,28 @@ struct SessionMessageBubbleView: View {
             }
         }
         .messageBubble(role: message.role)
+    }
+}
+
+struct SessionMessageCopyButton: View {
+    let isDisabled: Bool
+    let onCopy: () -> Void
+
+    @Environment(\.appTheme) private var theme
+
+    var body: some View {
+        Button(action: onCopy) {
+            Image(systemName: "doc.on.doc")
+                .font(theme.typography.captionFont)
+                .foregroundStyle(isDisabled ? theme.colors.textSecondary.opacity(0.35) : theme.colors.textSecondary)
+                .frame(width: theme.spacing.xxl, height: theme.spacing.xxl)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(isDisabled)
+        .help("复制消息")
+        .accessibilityLabel("复制消息")
+        .accessibilityHint("将这条消息复制到剪贴板")
     }
 }
 

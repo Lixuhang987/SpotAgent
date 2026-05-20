@@ -61,4 +61,27 @@ final class SessionTabViewModelTests: XCTestCase {
         XCTAssertTrue(tab.isInvalid)
         XCTAssertEqual(tab.invalidReason, "Session not found: session-1")
     }
+
+    @MainActor
+    func testCopyMessageCopiesOneMessageTextByID() {
+        var copiedTexts: [String] = []
+        let tab = SessionTabViewModel(
+            tabID: "tab-1",
+            sessionID: "session-1",
+            socketClient: .noop,
+            copyMessageText: { copiedTexts.append($0) }
+        )
+
+        tab.handle(.sessionSnapshot(
+            messages: [
+                SessionBubble(id: "m1", role: "user", text: "first"),
+                SessionBubble(id: "m2", role: "assistant", text: "second\nmessage"),
+            ],
+            status: "idle"
+        ))
+
+        tab.copyMessage(messageID: "m2")
+
+        XCTAssertEqual(copiedTexts, ["second\nmessage"])
+    }
 }
