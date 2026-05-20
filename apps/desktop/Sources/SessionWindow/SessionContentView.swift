@@ -4,18 +4,20 @@ struct SessionContentView: View {
     let tab: SessionTabViewModel
 
     var body: some View {
-        SessionMessageListView(messages: tab.messages)
+        VStack(spacing: 0) {
+            SessionMessageListView(messages: tab.messages)
 
-        if let error = tab.error {
-            SessionErrorBannerView(error: error)
-        }
+            if let error = tab.error {
+                SessionErrorBannerView(error: error)
+            }
 
-        ForEach(tab.pendingPermissionRequests) { request in
-            SessionPermissionBubbleView(request: request, tab: tab)
-        }
+            ForEach(tab.pendingPermissionRequests) { request in
+                SessionPermissionBubbleView(request: request, tab: tab)
+            }
 
-        if let request = tab.visibleWorkspaceAskRequest {
-            SessionWorkspaceAskBubbleView(request: request, tab: tab)
+            if let request = tab.visibleWorkspaceAskRequest {
+                SessionWorkspaceAskBubbleView(request: request, tab: tab)
+            }
         }
     }
 }
@@ -33,9 +35,12 @@ struct SessionMessageListView: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
-            .padding(theme.spacing.xl)
+            .padding(.horizontal, theme.spacing.xl)
+            .padding(.vertical, theme.spacing.lg)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(theme.colors.background)
     }
 }
 
@@ -112,6 +117,9 @@ struct SessionErrorBannerView: View {
         .padding(.horizontal, theme.spacing.xl)
         .padding(.vertical, theme.spacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(theme.colors.error.opacity(0.08))
+        .background(theme.colors.error.opacity(0.09))
+        .overlay(alignment: .top) {
+            Divider().overlay(theme.colors.error.opacity(0.18))
+        }
     }
 }
