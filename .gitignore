@@ -13,3 +13,4 @@ src/utils/vendor/
 .cache
 claude-code
 .worktrees
+.superpowers
