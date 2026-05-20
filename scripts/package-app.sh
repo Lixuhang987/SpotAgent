@@ -8,6 +8,8 @@ DIST_DIR="${HANDAGENT_PACKAGE_DIST_DIR:-dist}"
 APP_DIR="$DIST_DIR/$APP_NAME.app"
 SWIFT_BIN="${HANDAGENT_PACKAGE_SWIFT_BIN:-swift}"
 CODESIGN_BIN="${HANDAGENT_PACKAGE_CODESIGN_BIN:-codesign}"
+CODESIGN_IDENTITY="${HANDAGENT_PACKAGE_CODESIGN_IDENTITY:--}"
+CODESIGN_REQUIREMENT="${HANDAGENT_PACKAGE_CODESIGN_REQUIREMENT:-=designated => identifier \"$BUNDLE_ID\"}"
 MOCK_LLM=0
 
 while [[ $# -gt 0 ]]; do
@@ -89,7 +91,13 @@ if [[ "$MOCK_LLM" == "1" ]]; then
 JSON
 fi
 
-# 本地 QA 用 ad-hoc 签名即可。正式分发再换 Developer ID。
-"$CODESIGN_BIN" --force --deep --sign - "$APP_DIR" >/dev/null 2>&1
+# 本地 QA 默认使用 ad-hoc 签名，但显式写入稳定 designated requirement。
+# 否则默认 requirement 会退化为 cdhash，重构建后二进制 hash 改变，macOS TCC 会把它视为新 App。
+"$CODESIGN_BIN" \
+  --force \
+  --deep \
+  --sign "$CODESIGN_IDENTITY" \
+  --requirements "$CODESIGN_REQUIREMENT" \
+  "$APP_DIR" >/dev/null 2>&1
 
 echo "success"
