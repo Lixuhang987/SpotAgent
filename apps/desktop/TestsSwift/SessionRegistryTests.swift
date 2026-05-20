@@ -88,4 +88,30 @@ final class SessionRegistryTests: XCTestCase {
 
         XCTAssertEqual(registry.primarySessionID, "s2")
     }
+
+    @MainActor
+    func testPrimarySessionPrefersRunningOpenTab() {
+        let registry = SessionRegistry()
+
+        registry.upsert(
+            SessionSummary(
+                sessionId: "idle-session",
+                isRunning: false,
+                latestSummary: "idle",
+                lastActiveAt: Date(timeIntervalSince1970: 1),
+                windowIsOpen: true
+            )
+        )
+        registry.upsert(
+            SessionSummary(
+                sessionId: "running-session",
+                isRunning: true,
+                latestSummary: "running",
+                lastActiveAt: Date(timeIntervalSince1970: 2),
+                windowIsOpen: true
+            )
+        )
+
+        XCTAssertEqual(registry.primarySessionID, "running-session")
+    }
 }

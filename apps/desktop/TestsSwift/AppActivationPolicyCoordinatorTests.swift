@@ -59,17 +59,4 @@ final class AppActivationPolicyCoordinatorTests: XCTestCase {
         )
     }
 
-    @MainActor
-    func testUsesRegularPolicyWhenHistoryWindowIsOpen() {
-        let coordinator = AppActivationPolicyCoordinator()
-
-        XCTAssertEqual(
-            coordinator.policyAfterUpdatingHistoryWindow(isOpen: true),
-            .regular
-        )
-        XCTAssertEqual(
-            coordinator.policyAfterUpdatingHistoryWindow(isOpen: false),
-            .accessory
-        )
-    }
 }

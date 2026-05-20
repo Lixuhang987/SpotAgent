@@ -7,7 +7,7 @@
 | 文件 | 职责 |
 |------|------|
 | `SessionRegistry.swift` | `@Observable` + `@MainActor`，维护 `summaries: [String: SessionSummary]`，按 `lastActiveAt` 排序，提供 `primarySessionID` |
-| `SessionHistoryStore.swift` | 读取 / 删除 `~/.spotAgent/sessions/*.json`，把 `PersistedSession` 解析为 `SessionHistoryEntry` / `SessionHistoryDetail`，供 PromptPanel 最近会话 action 与独立 HistoryWindow 使用 |
+| `SessionHistoryStore.swift` | 读取 / 删除 `~/.spotAgent/sessions/*.json`，把 `PersistedSession` 解析为 `SessionHistoryEntry` / `SessionHistoryDetail`；保留给本地历史文件调试与后续工具使用 |
 
 ## 数据模型
 
@@ -35,10 +35,10 @@ SessionSummary {
 - 新增历史展示字段优先从 `PersistedSession.metadata` 或 `messages` 派生；跨进程持久化格式变更必须同步 [packages/core storage 文档](/Users/mu9/proj/handAgent/packages/core/src/storage/storage.md) 或对应协议文档。
 - 排序与 primary 选择是纯函数，便于测试 — 新规则保持纯函数风格。
 - 不要把 `SessionViewModel` 引用塞进 Registry，避免循环。
-- 测试：[SessionRegistryTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/SessionRegistryTests.swift)、[SessionHistoryViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/SessionHistoryViewModelTests.swift)。
+- 测试：[SessionRegistryTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/SessionRegistryTests.swift)。
 
 ## 与其他模块的关系
 
-- [SessionLifecycle](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 在 `open / close` 以及 `SessionViewModel` 状态 / 消息变化回调中调用 `upsert(_:)`，保持状态气泡使用的 `isRunning` 与 `latestSummary` 同步。
+- [SessionWindowLifecycle](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 在 tab 状态 / 消息变化和 tab 关闭时调用 `upsert(_:)`，保持状态气泡使用的 `isRunning`、`latestSummary` 与 `windowIsOpen` 同步。
 - [StatusBubble ViewModel](/Users/mu9/proj/handAgent/apps/desktop/Sources/StatusBubble/status-bubble.md) 派生 `isRunning` / `latestSummary`。
-- [AppCoordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 用 `SessionHistoryStore.list()` 生成 PromptPanel 最近会话 action，用 `SessionHistoryViewModel` 打开独立历史窗口。
+- [SessionWindow](/Users/mu9/proj/handAgent/apps/desktop/Sources/SessionWindow/session-window.md) 通过 agent-server 的 `list_sessions_request` 展示左侧历史列表。

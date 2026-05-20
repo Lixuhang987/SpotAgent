@@ -101,44 +101,6 @@ final class ProductionSettingsWindowPresenter: SettingsWindowPresenting {
 }
 
 @MainActor
-final class ProductionHistoryWindowPresenter: HistoryWindowPresenting {
-    private var closeObservations: [ObjectIdentifier: WindowCloseObservation] = [:]
-
-    func present(
-        historyViewModel: SessionHistoryViewModel,
-        onClose: @escaping () -> Void
-    ) -> NSWindow? {
-        let hosting = NSHostingController(
-            rootView: SessionHistoryWindowView(viewModel: historyViewModel)
-        )
-        let window = NSWindow(contentViewController: hosting)
-        window.title = "会话历史"
-        window.setContentSize(NSSize(width: 980, height: 620))
-        window.styleMask.insert(.fullSizeContentView)
-        window.titleVisibility = .hidden
-        window.titlebarAppearsTransparent = true
-        window.isOpaque = false
-        window.backgroundColor = .clear
-        window.hasShadow = true
-
-        let sendableOnClose = SendableClosure(closure: onClose)
-        let windowID = ObjectIdentifier(window)
-        closeObservations[windowID] = WindowCloseObservation(
-            object: window,
-            queue: .main
-        ) { [weak self] in
-            self?.closeObservations[windowID] = nil
-            Task { @MainActor in sendableOnClose.closure() }
-        }
-
-        window.center()
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-        return window
-    }
-}
-
-@MainActor
 final class ProductionFatalAlertPresenter: FatalAlertPresenting {
     func showFatal(
         title: String,

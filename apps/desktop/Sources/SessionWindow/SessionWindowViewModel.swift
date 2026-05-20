@@ -14,6 +14,7 @@ final class SessionWindowViewModel {
     @ObservationIgnored private let socketFactory: SocketFactory
     @ObservationIgnored private let historySocketClient: SessionSocketClient
     @ObservationIgnored private let onTabStateChanged: @MainActor (SessionTabViewModel) -> Void
+    @ObservationIgnored private let onTabClosed: @MainActor (SessionTabViewModel) -> Void
 
     var activeTab: SessionTabViewModel? {
         guard let activeTabID else { return nil }
@@ -23,11 +24,13 @@ final class SessionWindowViewModel {
     init(
         socketFactory: @escaping SocketFactory,
         historySocketClient: SessionSocketClient = .noop,
-        onTabStateChanged: @escaping @MainActor (SessionTabViewModel) -> Void = { _ in }
+        onTabStateChanged: @escaping @MainActor (SessionTabViewModel) -> Void = { _ in },
+        onTabClosed: @escaping @MainActor (SessionTabViewModel) -> Void = { _ in }
     ) {
         self.socketFactory = socketFactory
         self.historySocketClient = historySocketClient
         self.onTabStateChanged = onTabStateChanged
+        self.onTabClosed = onTabClosed
         self.historySocketClient.onEvent = { [weak self] event in
             Task { @MainActor in self?.handleWindowEvent(event) }
         }
@@ -57,7 +60,9 @@ final class SessionWindowViewModel {
 
     func closeTab(_ tabID: String) {
         guard let index = tabs.firstIndex(where: { $0.tabID == tabID }) else { return }
-        tabs[index].disconnect()
+        let closingTab = tabs[index]
+        closingTab.disconnect()
+        onTabClosed(closingTab)
         tabs.remove(at: index)
         if activeTabID == tabID {
             activeTabID = tabs.last?.tabID

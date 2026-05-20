@@ -1,13 +1,13 @@
 # PromptPanel 模块
 
-全局热键唤起的命令面板：输入 prompt、展示并触发 PromptAction、跳转设置、过滤并恢复最近会话。架构是 **View + ViewModel + Controller + Styles** 四件套。
+全局热键唤起的命令面板：输入 prompt、展示并触发 PromptAction、跳转设置、打开会话历史。架构是 **View + ViewModel + Controller + Styles** 四件套。
 
 ## 文件
 
 | 文件 | 职责 |
 |------|------|
 | `PromptPanelView.swift` | 纯 UI：输入框 + action 列表 + 附件 chip（图片 chip 可点击触发 QuickLook 预览）+ server 不可用提示，绑定 ViewModel 状态，消费 Theme token |
-| `PromptPanelViewModel.swift` | `@Observable` 状态：`draft` / `focusSeed` / `filteredActions` / `attachments` / `submissionDisabledMessage`；支持 `updateActions(_:)` 刷新静态 action 与最近会话 action；`onSubmit` / `onHide` / `onOpenSettings` / `onPreviewImage` 回调出口 |
+| `PromptPanelViewModel.swift` | `@Observable` 状态：`draft` / `focusSeed` / `filteredActions` / `attachments` / `submissionDisabledMessage`；支持 `updateActions(_:)` 刷新 action；`onSubmit` / `onHide` / `onOpenSettings` / `onPreviewImage` 回调出口 |
 | `PromptPanelController.swift` | `NSPanel` 生命周期、ESC 局部监听、ViewModel 注入、持有 `QuickLookPreviewController` |
 | `PromptPanelWindow.swift` | `NSPanel` 子类，处理失焦自动隐藏 |
 | `PromptPanelStyles.swift` | `PromptPanelContainerModifier` / `ActionRowModifier` |
@@ -18,7 +18,7 @@
 
 ```
 Coordinator
-  └─ 注入 PromptAction 列表（设置 / 历史窗口 / 最近会话）→ Controller.register(actions:)
+  └─ 注入 PromptAction 列表（设置 / 会话历史）→ Controller.register(actions:)
                             └─ 创建 ViewModel(actions:)
                             └─ 已创建 ViewModel 时调用 updateActions(_:)
                             └─ ViewModel.onSubmit/onHide/onOpenSettings 回调到 Controller
@@ -30,7 +30,7 @@ AgentServerHealth.onAvailabilityChange → Controller.setSubmissionEnabled(...)
                                       └─ server 不可用时 ViewModel.submit() 保留 draft，不上抛 onSubmit
 ```
 
-最近会话 action 在每次 `showPromptPanel / togglePromptPanel` 前由 Coordinator 重新读取 `SessionHistoryStore.list()` 生成，按持久化会话 `updatedAt` 倒序取前 8 条。点击最近会话 action 会走 `AppCoordinator.Action.restoreSession(id)`，由 `SessionLifecycle.restore` 聚焦已打开窗口或按既有 sessionId 创建新的 SessionWindow。
+“会话历史” action 会走 `AppCoordinator.Action.openHistory`，聚焦全局 SessionWindow 并刷新左侧历史列表，不改变 active tab。
 
 ## 编辑此目录的约束
 
@@ -48,8 +48,8 @@ AgentServerHealth.onAvailabilityChange → Controller.setSubmissionEnabled(...)
 ## 与其他模块的关系
 
 - 由 [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 持有并注入 actions。
-- 提交 prompt 后由 Coordinator 创建 [SessionWindow](/Users/mu9/proj/handAgent/apps/desktop/Sources/SessionWindow/session-window.md) 与 `SessionViewModel`。
+- 提交 prompt 后由 Coordinator 聚焦或创建全局 [SessionWindow](/Users/mu9/proj/handAgent/apps/desktop/Sources/SessionWindow/session-window.md)，再由窗口模型创建会话或向 active tab 发送消息。
 - [AgentServer](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/AgentServer/agent-server.md) 可用性变化会同步到 `setSubmissionEnabled`，避免重启期间提交新 prompt。
 - "打开设置" action 由 Coordinator 路由到 [Settings](/Users/mu9/proj/handAgent/apps/desktop/Sources/Settings/settings.md) 窗口。
-- "会话历史" 与最近会话 action 由 Coordinator 路由到 [SessionWindow](/Users/mu9/proj/handAgent/apps/desktop/Sources/SessionWindow/session-window.md) 的历史窗口 / 会话恢复能力。
+- "会话历史" action 由 Coordinator 路由到 [SessionWindow](/Users/mu9/proj/handAgent/apps/desktop/Sources/SessionWindow/session-window.md) 的左侧历史列表。
 - 全局热键来自 [AppServices/Hotkey](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Hotkey/hotkey.md)。

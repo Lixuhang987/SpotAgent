@@ -73,6 +73,9 @@ final class SessionWindowLifecycle {
             historySocketClient: SessionSocketClient(serverURL: agentServerURL),
             onTabStateChanged: { [weak self] tab in
                 self?.syncSummary(from: tab, windowIsOpen: true)
+            },
+            onTabClosed: { [weak self] tab in
+                self?.syncSummary(from: tab, windowIsOpen: false)
             }
         )
         viewModel = model
