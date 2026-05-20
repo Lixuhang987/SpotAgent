@@ -299,3 +299,21 @@
   - `~/.spotAgent/sessions/AC07B7E0-9852-48A0-B38D-DC8016DE3352.json` 的 `file.write` `tool_result.output` 为 `Path escapes workspace root: ../../etc/passwd`。
   - 回归测试：`bash ./scripts/swiftw test --filter SessionViewModelTests/testTerminalToolMessageReplacesRunningArgumentsBubble` 通过。
 - **结论**：通过。SessionWindow terminal tool 气泡会用真实 result 覆盖 running 阶段参数展示，不再停留在 `workspace.list: {}` 或 `file.write` 入参 JSON。
+
+## 会话中断 / Stop（2026-05-20 实机验证）
+
+- **验证日期**：2026-05-20
+- **验证环境**：mock-llm / macOS / main branch / `dist/HandAgentDesktop.app`
+- **验证过程**：
+  1. 执行基线命令：`bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`，均通过；其中 vitest 为 64 个测试文件、364 个测试通过。
+  2. 执行 `bash ./scripts/package-app.sh --mock-llm` 并启动 `dist/HandAgentDesktop.app`，确认状态气泡窗口可见，agent-server 监听 `*:4317`。
+  3. 通过原生事件 `System Events` 发送 `key code 49 using {command down, shift down}` 唤出 PromptPanel，输入 `[mock:slow-focus] QA stop interrupt manual 20260520` 并提交。
+  4. SessionWindow `Session 6D439C8C` 打开后状态为 `running`，右上角出现 Stop 控件；点击 Stop 后窗口保持打开，状态变为 `interrupted`，socket 与 agent-server 仍保持运行。
+  5. 检查 session 文件，确认中断后只写入该 user message，没有写入被中断 run 的 assistant 或 tool 消息；等待 5 秒后 messageCount 仍为 1。
+  6. 在同一个 SessionWindow 继续提交 `[mock:assistant-ok] QA stop follow-up manual 20260520`，窗口状态回到 `idle`，并显示 mock assistant 回复。
+- **证据**：
+  - agent-server：`ps -o pid,ppid,command -p 42956` 显示 PPID 为 `42954`，命令路径为 `/Users/mu9/proj/handAgent/apps/agent-server/src/server.ts`。
+  - 窗口状态：初始状态气泡 `280x62`；提交 slow run 后出现 `Session 6D439C8C`，窗口 `760x560`，状态 `running`；点击 Stop 后状态为 `interrupted`，窗口未关闭。
+  - Session 文件：`~/.spotAgent/sessions/6D439C8C-ABE0-4380-8F66-9D619401FB7B.json`，中断后 `messageCount: 1`，仅包含 `[mock:slow-focus] QA stop interrupt manual 20260520`。
+  - 继续追问后同一 session 文件 `messageCount: 3`，消息为 slow user、follow-up user、`Mock assistant response: main chain is reachable.`，没有 Stop 之后追加的 slow assistant / tool 消息。
+- **结论**：通过。SessionWindow 运行态 Stop 控件可中断当前 run，窗口和 socket 不关闭；中断后的旧 run 不再写入消息，同一窗口可以继续发起新 run 并正常收到回复。

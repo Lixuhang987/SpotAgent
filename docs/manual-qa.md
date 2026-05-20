@@ -7,7 +7,7 @@
 
 ## 验收目标
 
-确认桌面 Agent MVP 仍未归档的端到端路径可用，并把新通过的条目及时移入归档：权限关闭窗口取消挂起请求、tool 运行时基础、ScreenCaptureKit 反向 IPC、workspace 沙箱、多模态图片附件、真实流式输出、workspace.askUser、协议拆分与多会话绑定、OCR、Accessibility、会话中断 / Stop、多 provider LLM、用户自定义 tool / 本地插件系统。
+确认桌面 Agent MVP 仍未归档的端到端路径可用，并把新通过的条目及时移入归档：权限关闭窗口取消挂起请求、tool 运行时基础、ScreenCaptureKit 反向 IPC、workspace 沙箱、多模态图片附件、真实流式输出、workspace.askUser、协议拆分与多会话绑定、OCR、Accessibility、多 provider LLM、用户自定义 tool / 本地插件系统。
 
 ## 验收前提
 
@@ -68,13 +68,6 @@
 1. 选择一个快照中的按钮或文本框，用对应 `elementId` 调用 `accessibility.action`：按钮验证 `press` 或 `click`，文本框验证 `set_value`。
 1. 用 `window.list` 取得窗口 id 后调用 `accessibility.snapshot({kind: "window", windowId: <id>})`，确认返回的是指定窗口的树；再传入同一 App 下不存在或不匹配的 `windowId`，确认返回 `not_found`，不会退回 focused window。
 1. 临时移除 HandAgent 辅助功能权限后重复 snapshot/action，确认返回 `permission_denied`，文案指向「系统设置 → 隐私与安全性 → 辅助功能」。
-
-## 会话中断 / Stop（P1）
-
-1. 使用 real LLM 或 mock 慢响应场景提交一个会持续 streaming 或长时间 tool 调用的 prompt，确认 SessionWindow 运行态出现 Stop 控件。
-1. 点击 Stop，确认窗口不关闭、socket 不断开，状态变为 `interrupted`，后续 assistant delta / tool result 不再追加到当前 run。
-1. 等待原长耗时请求自然返回后，确认 `~/.spotAgent/sessions/<id>.json` 没有写入 Stop 之后的 assistant / tool 消息。
-1. 在同一个 SessionWindow 继续提交新 prompt，确认新 run 可以正常进入 running 并收到回复。
 
 ## 多 provider LLM（P2）
 
