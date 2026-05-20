@@ -11,10 +11,17 @@ import type { SessionPersistence } from "./SessionPersistence.ts";
 import type { SessionRuntimeOrchestrator } from "./SessionRuntimeOrchestrator.ts";
 
 export type PushMessage = (message: SessionMessage) => void;
+type RouterOrchestrator = Pick<SessionRuntimeOrchestrator, "handleUserMessage"> &
+  Partial<
+    Pick<
+      SessionRuntimeOrchestrator,
+      "interruptSession" | "interruptAndWait" | "isSessionRunning"
+    >
+  >;
 
 export class SessionRouter {
   constructor(
-    private readonly orchestrator: Pick<SessionRuntimeOrchestrator, "handleUserMessage" | "interruptSession">,
+    private readonly orchestrator: RouterOrchestrator,
     private readonly persistence: SessionPersistence,
     private readonly now: () => string = () => new Date().toISOString(),
   ) {}
@@ -45,6 +52,8 @@ export class SessionRouter {
 
   async receive(message: SessionMessage, push: PushMessage = () => {}): Promise<void> {
     switch (message.type) {
+      case "create_session_request":
+        return this.handleCreateSession(message, push);
       case "open_session":
         return this.handleOpenSession(message, push);
       case "list_sessions_request":
@@ -52,11 +61,11 @@ export class SessionRouter {
       case "load_session_request":
         return this.handleLoadSession(message, push);
       case "delete_session_request":
-        return this.handleDeleteSession(message);
+        return this.handleDeleteSession(message, push);
       case "user_message":
-        return this.orchestrator.handleUserMessage(message, push);
+        return this.handleUserMessage(message, push);
       case "interrupt":
-        this.orchestrator.interruptSession(message.sessionId, push);
+        this.orchestrator.interruptSession?.(message.sessionId, push);
         return;
       default:
         return;
@@ -68,7 +77,19 @@ export class SessionRouter {
     push: PushMessage,
   ): Promise<void> {
     const session = await this.persistence.getSession(message.sessionId);
-    if (!session) return;
+    if (!session) {
+      push({
+        type: "session_open_failed",
+        sessionId: message.sessionId,
+        messageId: message.messageId,
+        timestamp: this.now(),
+        payload: {
+          reason: "not_found",
+          message: `Session not found: ${message.sessionId}`,
+        },
+      });
+      return;
+    }
 
     const messages = await this.persistence.getConversationMessages(message.sessionId);
     push({
@@ -81,6 +102,63 @@ export class SessionRouter {
         status: "idle",
       },
     });
+  }
+
+  private async handleCreateSession(
+    message: Extract<SessionMessage, { type: "create_session_request" }>,
+    push: PushMessage,
+  ): Promise<void> {
+    const session = await this.persistence.createSession();
+    const sessionId = session.metadata.id;
+
+    push({
+      type: "create_session_response",
+      sessionId,
+      messageId: message.messageId,
+      timestamp: this.now(),
+      payload: {
+        title: session.metadata.title ?? null,
+      },
+    });
+
+    const initialText = message.payload.initialText?.trim();
+    if (!initialText) return;
+
+    await this.orchestrator.handleUserMessage(
+      {
+        type: "user_message",
+        sessionId,
+        messageId: `${message.messageId}-initial-user`,
+        timestamp: this.now(),
+        payload: {
+          text: initialText,
+          attachments: message.payload.attachments,
+        },
+      },
+      push,
+    );
+  }
+
+  private async handleUserMessage(
+    message: Extract<SessionMessage, { type: "user_message" }>,
+    push: PushMessage,
+  ): Promise<void> {
+    const session = await this.persistence.getSession(message.sessionId);
+    if (!session) {
+      push({
+        type: "user_message_failed",
+        sessionId: message.sessionId,
+        messageId: message.messageId,
+        timestamp: this.now(),
+        payload: {
+          reason: "session_not_found",
+          message: `Session not found: ${message.sessionId}`,
+        },
+      });
+      return;
+    }
+
+    return this.orchestrator.handleUserMessage(message, push);
   }
 
   private async handleListSessions(
@@ -122,8 +200,39 @@ export class SessionRouter {
 
   private async handleDeleteSession(
     message: Extract<SessionMessage, { type: "delete_session_request" }>,
+    push: PushMessage,
   ): Promise<void> {
-    await this.persistence.deleteSession(message.payload.targetSessionId);
+    const targetSessionId = message.payload.targetSessionId;
+    const existing = await this.persistence.getSession(targetSessionId);
+    if (!existing) {
+      push({
+        type: "delete_session_response",
+        sessionId: message.sessionId,
+        messageId: message.messageId,
+        timestamp: this.now(),
+        payload: {
+          targetSessionId,
+          status: "not_found",
+        },
+      });
+      return;
+    }
+
+    if (this.orchestrator.isSessionRunning?.(targetSessionId)) {
+      await this.orchestrator.interruptAndWait?.(targetSessionId, push);
+    }
+
+    await this.persistence.deleteSession(targetSessionId);
+    push({
+      type: "delete_session_response",
+      sessionId: message.sessionId,
+      messageId: message.messageId,
+      timestamp: this.now(),
+      payload: {
+        targetSessionId,
+        status: "deleted",
+      },
+    });
   }
 }
 

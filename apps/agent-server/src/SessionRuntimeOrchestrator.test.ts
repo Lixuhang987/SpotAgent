@@ -103,6 +103,7 @@ describe("SessionRuntimeOrchestrator", () => {
       () => "2026-05-11T00:00:00.000Z",
     );
 
+    await persistence.ensureSession("session-1");
     await orchestrator.handleUserMessage(
       createUserMessage("session-1", "第一句", "user-1"),
       (message) => pushed.push(message),
@@ -185,6 +186,7 @@ describe("SessionRuntimeOrchestrator", () => {
       () => "2026-05-11T00:00:00.000Z",
     );
 
+    await persistence.ensureSession("session-2");
     await orchestrator.handleUserMessage(
       createUserMessage("session-2", "第一句", "user-1"),
       () => {},
@@ -249,6 +251,7 @@ describe("SessionRuntimeOrchestrator", () => {
       },
     );
 
+    await persistence.ensureSession("session-summary");
     await orchestrator.handleUserMessage(
       createUserMessage("session-summary", "第一句", "user-1"),
       () => {},
@@ -282,6 +285,7 @@ describe("SessionRuntimeOrchestrator", () => {
       () => "2026-05-11T00:00:00.000Z",
     );
 
+    await persistence.ensureSession("session-image");
     await orchestrator.handleUserMessage(
       {
         ...createUserMessage("session-image", "描述图片", "user-1"),
@@ -369,6 +373,7 @@ describe("SessionRuntimeOrchestrator", () => {
       () => "2026-05-17T00:00:00.000Z",
     );
 
+    await persistence.ensureSession("session-tool");
     await orchestrator.handleUserMessage(
       createUserMessage("session-tool", "读取文件", "user-1"),
       (message) => pushed.push(message),
@@ -436,6 +441,7 @@ describe("SessionRuntimeOrchestrator", () => {
       () => "2026-05-17T00:00:00.000Z",
     );
 
+    await persistence.ensureSession("session-interrupt");
     const runPromise = orchestrator.handleUserMessage(
       createUserMessage("session-interrupt", "停止这轮", "user-1"),
       (message) => pushed.push(message),
@@ -488,6 +494,69 @@ describe("SessionRuntimeOrchestrator", () => {
     ]);
   });
 
+  it("reports running sessions and waits for interrupt cleanup", async () => {
+    const pushed: SessionMessage[] = [];
+    const persistence = new SessionPersistence(
+      new InMemorySessionStore(),
+      () => "2026-05-20T00:00:00.000Z",
+    );
+    let finishRun: ((result: { messages: AgentMessage[]; bubbles: [] }) => void) | undefined;
+    const runStarted = Promise.withResolvers<void>();
+    const orchestrator = new SessionRuntimeOrchestrator(
+      {
+        runWithMessages(_messages, _onEvent, runOptions) {
+          runOptions?.signal.addEventListener("abort", () => {
+            finishRun?.({
+              messages: [
+                { role: "user", content: "删除中" },
+                { role: "assistant", content: "late" },
+              ],
+              bubbles: [],
+            });
+          });
+          runStarted.resolve();
+          return new Promise((resolve) => {
+            finishRun = resolve;
+          });
+        },
+      },
+      persistence,
+      () => "2026-05-20T00:00:00.000Z",
+    );
+
+    await persistence.ensureSession("session-delete-running");
+    const runPromise = orchestrator.handleUserMessage(
+      createUserMessage("session-delete-running", "删除中", "user-1"),
+      (message) => pushed.push(message),
+    );
+    await runStarted.promise;
+
+    expect(orchestrator.isSessionRunning("session-delete-running")).toBe(true);
+    await orchestrator.interruptAndWait("session-delete-running", (message) => pushed.push(message));
+    await runPromise;
+
+    expect(orchestrator.isSessionRunning("session-delete-running")).toBe(false);
+    expect(await persistence.getMessages("session-delete-running")).toEqual([
+      { role: "user", content: "删除中" },
+    ]);
+    expect(pushed).toEqual([
+      {
+        type: "assistant_message_end",
+        sessionId: "session-delete-running",
+        messageId: "session-delete-running-interrupted",
+        timestamp: "2026-05-20T00:00:00.000Z",
+        payload: { status: "interrupted" },
+      },
+      {
+        type: "status",
+        sessionId: "session-delete-running",
+        messageId: "session-delete-running-status",
+        timestamp: "2026-05-20T00:00:00.000Z",
+        payload: { value: "interrupted" },
+      },
+    ]);
+  });
+
   it("pushes and records an error when runtime execution fails", async () => {
     const pushed: SessionMessage[] = [];
     const persistence = new SessionPersistence(
@@ -504,6 +573,7 @@ describe("SessionRuntimeOrchestrator", () => {
       () => "2026-05-11T00:00:00.000Z",
     );
 
+    await persistence.ensureSession("session-4");
     await orchestrator.handleUserMessage(
       createUserMessage("session-4", "你好", "user-1"),
       (message) => pushed.push(message),

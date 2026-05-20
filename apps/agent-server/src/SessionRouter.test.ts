@@ -174,7 +174,7 @@ describe("SessionRouter", () => {
     ]);
   });
 
-  it("does not create a session when open_session targets missing history", async () => {
+  it("returns session_open_failed when open_session targets missing history", async () => {
     const persistence = new SessionPersistence(
       new InMemorySessionStore(),
       () => "2026-05-18T00:00:00.000Z",
@@ -199,8 +199,195 @@ describe("SessionRouter", () => {
       (message) => pushed.push(message),
     );
 
-    expect(pushed).toEqual([]);
+    expect(pushed).toEqual([
+      {
+        type: "session_open_failed",
+        sessionId: "missing-session",
+        messageId: "open-1",
+        timestamp: "2026-05-18T00:02:00.000Z",
+        payload: {
+          reason: "not_found",
+          message: "Session not found: missing-session",
+        },
+      },
+    ]);
     expect(await persistence.getSession("missing-session")).toBeNull();
+  });
+
+  it("rejects user_message for missing session without creating it", async () => {
+    const persistence = new SessionPersistence(
+      new InMemorySessionStore(),
+      () => "2026-05-20T00:00:00.000Z",
+    );
+    const handled: SessionMessage[] = [];
+    const router = new SessionRouter(
+      {
+        async handleUserMessage(message) {
+          handled.push(message);
+        },
+        interruptSession() {},
+      },
+      persistence,
+      () => "2026-05-20T00:01:00.000Z",
+    );
+    const pushed: SessionMessage[] = [];
+
+    await router.receive(
+      createUserMessage("missing-session", "hello", "user-1"),
+      (message) => pushed.push(message),
+    );
+
+    expect(handled).toEqual([]);
+    expect(pushed).toEqual([
+      {
+        type: "user_message_failed",
+        sessionId: "missing-session",
+        messageId: "user-1",
+        timestamp: "2026-05-20T00:01:00.000Z",
+        payload: {
+          reason: "session_not_found",
+          message: "Session not found: missing-session",
+        },
+      },
+    ]);
+    expect(await persistence.getSession("missing-session")).toBeNull();
+  });
+
+  it("creates a session explicitly and starts the initial prompt", async () => {
+    const persistence = new SessionPersistence(
+      new InMemorySessionStore(),
+      () => "2026-05-20T00:00:00.000Z",
+    );
+    const handled: SessionMessage[] = [];
+    const router = new SessionRouter(
+      {
+        async handleUserMessage(message, push) {
+          handled.push(message);
+          push({
+            type: "status",
+            sessionId: message.sessionId,
+            messageId: `${message.sessionId}-status`,
+            timestamp: "2026-05-20T00:01:00.000Z",
+            payload: { value: "running" },
+          });
+        },
+        interruptSession() {},
+      },
+      persistence,
+      () => "2026-05-20T00:01:00.000Z",
+    );
+    const pushed: SessionMessage[] = [];
+
+    await router.receive(
+      {
+        type: "create_session_request",
+        sessionId: "",
+        messageId: "create-1",
+        timestamp: "2026-05-20T00:01:00.000Z",
+        payload: { initialText: "hello" },
+      },
+      (message) => pushed.push(message),
+    );
+
+    expect(pushed[0]?.type).toBe("create_session_response");
+    expect(pushed[0]?.messageId).toBe("create-1");
+    const createdSessionId = pushed[0]?.sessionId;
+    expect(createdSessionId).toMatch(/^session-/);
+    expect(await persistence.getSession(createdSessionId!)).not.toBeNull();
+    expect(handled).toEqual([
+      {
+        type: "user_message",
+        sessionId: createdSessionId,
+        messageId: "create-1-initial-user",
+        timestamp: "2026-05-20T00:01:00.000Z",
+        payload: { text: "hello", attachments: undefined },
+      },
+    ]);
+    expect(pushed[1]).toEqual({
+      type: "status",
+      sessionId: createdSessionId,
+      messageId: `${createdSessionId}-status`,
+      timestamp: "2026-05-20T00:01:00.000Z",
+      payload: { value: "running" },
+    });
+  });
+
+  it("returns delete_session_response after deleting existing session", async () => {
+    const persistence = new SessionPersistence(
+      new InMemorySessionStore(),
+      () => "2026-05-20T00:00:00.000Z",
+    );
+    const router = new SessionRouter(
+      { async handleUserMessage() {}, interruptSession() {}, async interruptAndWait() {} },
+      persistence,
+      () => "2026-05-20T00:01:00.000Z",
+    );
+    const pushed: SessionMessage[] = [];
+
+    await persistence.ensureSession("session-delete");
+    await router.receive(
+      {
+        type: "delete_session_request",
+        sessionId: "request-session",
+        messageId: "delete-1",
+        timestamp: "2026-05-20T00:01:00.000Z",
+        payload: { targetSessionId: "session-delete" },
+      },
+      (message) => pushed.push(message),
+    );
+
+    expect(await persistence.getSession("session-delete")).toBeNull();
+    expect(pushed).toEqual([
+      {
+        type: "delete_session_response",
+        sessionId: "request-session",
+        messageId: "delete-1",
+        timestamp: "2026-05-20T00:01:00.000Z",
+        payload: {
+          targetSessionId: "session-delete",
+          status: "deleted",
+        },
+      },
+    ]);
+  });
+
+  it("interrupts running session before deleting it", async () => {
+    const persistence = new SessionPersistence(
+      new InMemorySessionStore(),
+      () => "2026-05-20T00:00:00.000Z",
+    );
+    const calls: string[] = [];
+    const router = new SessionRouter(
+      {
+        async handleUserMessage() {},
+        interruptSession() {},
+        async interruptAndWait(sessionId: string) {
+          calls.push(`interrupt:${sessionId}`);
+        },
+        isSessionRunning(sessionId: string) {
+          return sessionId === "session-running";
+        },
+      },
+      persistence,
+      () => "2026-05-20T00:01:00.000Z",
+    );
+    const pushed: SessionMessage[] = [];
+
+    await persistence.ensureSession("session-running");
+    await router.receive(
+      {
+        type: "delete_session_request",
+        sessionId: "request-session",
+        messageId: "delete-1",
+        timestamp: "2026-05-20T00:01:00.000Z",
+        payload: { targetSessionId: "session-running" },
+      },
+      (message) => pushed.push(message),
+    );
+
+    expect(calls).toEqual(["interrupt:session-running"]);
+    expect(await persistence.getSession("session-running")).toBeNull();
+    expect(pushed[0]?.type).toBe("delete_session_response");
   });
 
   it("dispatches deletes and user messages to their owning modules", async () => {
@@ -230,10 +417,8 @@ describe("SessionRouter", () => {
       },
       () => {},
     );
-    await router.receive(
-      createUserMessage("session-user", "hello", "user-1"),
-      () => {},
-    );
+    await persistence.ensureSession("session-user");
+    await router.receive(createUserMessage("session-user", "hello", "user-1"), () => {});
 
     expect(await persistence.getSession("session-delete")).toBeNull();
     expect(handledMessages).toEqual([
@@ -344,6 +529,7 @@ describe("SessionRouter", () => {
       () => "2026-05-11T00:00:00.000Z",
     );
 
+    await persistence.ensureSession("session-3");
     await handleSocketMessage(
       router,
       {

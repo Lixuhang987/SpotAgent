@@ -57,7 +57,6 @@ export class SessionRuntimeOrchestrator {
     this.activeRuns.get(sessionId)?.controller.abort();
     this.activeRuns.set(sessionId, activeRun);
 
-    await this.persistence.ensureSession(sessionId);
     await this.persistence.persistUserMessage(
       sessionId,
       message.payload.text,
@@ -130,6 +129,21 @@ export class SessionRuntimeOrchestrator {
 
     activeRun.controller.abort();
     this.emitInterrupted(sessionId, push, activeRun);
+  }
+
+  isSessionRunning(sessionId: string): boolean {
+    return this.activeRuns.has(sessionId);
+  }
+
+  async interruptAndWait(sessionId: string, push: PushMessage = () => {}): Promise<void> {
+    const activeRun = this.activeRuns.get(sessionId);
+    if (!activeRun) return;
+
+    this.interruptSession(sessionId, push);
+
+    while (this.activeRuns.has(sessionId)) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
   }
 
   private emitInterrupted(sessionId: string, push: PushMessage, activeRun: ActiveRun): void {

@@ -5,6 +5,25 @@ import type {
 
 export type SessionMessage =
   | {
+      type: "create_session_request";
+      sessionId: "";
+      messageId: string;
+      timestamp: string;
+      payload: {
+        initialText?: string;
+        attachments?: UserMessageAttachment[];
+      };
+    }
+  | {
+      type: "create_session_response";
+      sessionId: string;
+      messageId: string;
+      timestamp: string;
+      payload: {
+        title: string | null;
+      };
+    }
+  | {
       type: "open_session";
       sessionId: string;
       messageId: string;
@@ -79,6 +98,26 @@ export type SessionMessage =
       payload: {
         messages: ConversationMessage[];
         status: "idle" | "running" | "failed" | "interrupted";
+      };
+    }
+  | {
+      type: "session_open_failed";
+      sessionId: string;
+      messageId: string;
+      timestamp: string;
+      payload: {
+        reason: "not_found" | "unavailable";
+        message: string;
+      };
+    }
+  | {
+      type: "user_message_failed";
+      sessionId: string;
+      messageId: string;
+      timestamp: string;
+      payload: {
+        reason: "session_not_found" | "invalid_request";
+        message: string;
       };
     }
   | {
@@ -170,6 +209,16 @@ export type SessionMessage =
       messageId: string;
       timestamp: string;
       payload: { targetSessionId: string };
+    }
+  | {
+      type: "delete_session_response";
+      sessionId: string;
+      messageId: string;
+      timestamp: string;
+      payload: {
+        targetSessionId: string;
+        status: "deleted" | "not_found";
+      };
     };
 
 export type SessionListEntry = {
