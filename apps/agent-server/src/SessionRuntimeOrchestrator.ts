@@ -24,7 +24,7 @@ type RuntimeLike = {
 };
 
 type PushMessage = (message: SessionMessage) => void;
-type BeforeRunHook = () => void | Promise<void>;
+type BeforeRunHook = (sessionId: string) => void | Promise<void>;
 
 type ActiveRun = {
   controller: AbortController;
@@ -65,7 +65,7 @@ export class SessionRuntimeOrchestrator {
     await this.persistence.autoTitle(sessionId, message.payload.text);
 
     const history = await this.persistence.getMessages(sessionId);
-    await this.beforeRun();
+    await this.beforeRun(sessionId);
     await this.runtime.waitForPendingSummaries?.(history);
     const runtimeHistory = agentMessagesToRuntimeMessages(history);
 

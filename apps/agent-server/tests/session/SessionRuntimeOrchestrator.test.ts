@@ -212,8 +212,8 @@ describe("SessionRuntimeOrchestrator", () => {
       },
       persistence,
       () => "2026-05-11T00:00:00.000Z",
-      () => {
-        order.push("refresh");
+      (sessionId) => {
+        order.push(`refresh:${sessionId}`);
       },
     );
 
@@ -229,7 +229,7 @@ describe("SessionRuntimeOrchestrator", () => {
         { role: "system", content: "summary ready" },
       ],
     ]);
-    expect(order).toEqual(["refresh", "summary", "runtime"]);
+    expect(order).toEqual(["refresh:session-summary", "summary", "runtime"]);
   });
 
   it("passes image attachments to runtime as multimodal content while persisting stubs", async () => {

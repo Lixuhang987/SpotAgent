@@ -1,6 +1,4 @@
-import { readdirSync, statSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { statSync } from "node:fs";
 import type { PlatformAdapter } from "@handagent/core/platform/PlatformAdapter.ts";
 import type { WorkspaceRegistry } from "@handagent/core/workspace/Workspace.ts";
 import type { WorkspaceAskResolver } from "@handagent/core/tools/builtins/WorkspaceAskUserTool.ts";
@@ -12,7 +10,6 @@ import {
 import { registerTools } from "@handagent/core/tools/registerTools.ts";
 import type { RegisterBuiltinToolsResult } from "@handagent/core/tools/registerBuiltins.ts";
 import { ToolRegistry } from "@handagent/core/tools/ToolRegistry.ts";
-import { loadLocalPluginTools } from "@handagent/core/tools/plugins/loadLocalPluginTools.ts";
 
 type SettingsBackedToolRegistryDependencies = {
   loadToolSettings?: () => ToolSettings;
@@ -39,7 +36,7 @@ export class SettingsBackedToolRegistry {
     this.loadToolSettings = dependencies.loadToolSettings ?? loadToolSettings;
     this.readSettingsStamp =
       dependencies.readSettingsStamp ??
-      (() => readToolSettingsStamp(this.options.pluginsDir ?? defaultPluginsDir()));
+      (() => readToolSettingsStamp());
     this.log = dependencies.log ?? ((message) => console.log(message));
   }
 
@@ -55,13 +52,7 @@ export class SettingsBackedToolRegistry {
       workspaceRegistry: this.options.workspaceRegistry,
       workspaceAskResolver: this.options.workspaceAskResolver,
       settings: this.loadToolSettings(),
-      pluginLoaders: [
-        () =>
-          loadLocalPluginTools({
-            pluginsDir: this.options.pluginsDir ?? defaultPluginsDir(),
-            workspaceRegistry: this.options.workspaceRegistry,
-          }),
-      ],
+      pluginLoaders: [],
     });
     this.cachedStamp = settingsStamp;
     this.logRefresh(result);
@@ -78,10 +69,8 @@ export class SettingsBackedToolRegistry {
   }
 }
 
-function readToolSettingsStamp(pluginsDir = defaultPluginsDir()): string {
-  const settingsStamp = readSingleFileStamp(toolSettingsFilePath());
-  const pluginsStamp = readPluginsStamp(pluginsDir);
-  return `${settingsStamp}|plugins:${pluginsStamp}`;
+function readToolSettingsStamp(): string {
+  return readSingleFileStamp(toolSettingsFilePath());
 }
 
 function readSingleFileStamp(filePath: string): string {
@@ -94,29 +83,6 @@ function readSingleFileStamp(filePath: string): string {
     }
     throw error;
   }
-}
-
-function readPluginsStamp(pluginsDir: string): string {
-  try {
-    const entries = readdirSync(pluginsDir, { withFileTypes: true });
-    const stamps = entries
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => {
-        const manifestPath = join(pluginsDir, entry.name, "plugin.json");
-        return `${entry.name}:${readSingleFileStamp(manifestPath)}`;
-      })
-      .sort();
-    return stamps.join(",");
-  } catch (error) {
-    if (isNotFoundError(error)) {
-      return "missing";
-    }
-    throw error;
-  }
-}
-
-function defaultPluginsDir(): string {
-  return join(homedir(), ".spotAgent", "plugins");
 }
 
 function isNotFoundError(error: unknown): boolean {

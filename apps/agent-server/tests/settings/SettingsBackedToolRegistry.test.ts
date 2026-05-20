@@ -53,7 +53,7 @@ describe("SettingsBackedToolRegistry", () => {
     expect(loadCount).toBe(1);
   });
 
-  it("loads local plugins and applies denylist to plugin tools", async () => {
+  it("does not load private plugin tools from the plugins directory", async () => {
     const root = await mkdtemp(join(tmpdir(), "settings-plugin-registry-"));
     const pluginsDir = join(root, "plugins");
     const pluginDir = join(pluginsDir, "echo");
@@ -79,24 +79,19 @@ describe("SettingsBackedToolRegistry", () => {
       "utf8",
     );
 
-    let denylist: string[] = [];
-    let stamp = "v1";
     const manager = new SettingsBackedToolRegistry(
       { platform: new OfflinePlatformAdapter(), pluginsDir },
       {
-        readSettingsStamp: () => stamp,
-        loadToolSettings: () => ({ allowlist: null, denylist }),
+        readSettingsStamp: () => "v1",
+        loadToolSettings: () => ({ allowlist: null, denylist: [] }),
         log: () => {},
       },
     );
 
     await manager.refresh();
-    expect(manager.registry.get("plugin.echo")).toBeDefined();
 
-    denylist = ["plugin.echo"];
-    stamp = "v2";
-    await manager.refresh();
-
-    expect(manager.registry.get("plugin.echo")).toBeUndefined();
+    expect(manager.registry.list().map((tool) => tool.name)).not.toContain(
+      "plugin.echo",
+    );
   });
 });

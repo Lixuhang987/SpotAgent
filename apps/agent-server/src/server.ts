@@ -176,6 +176,7 @@ export async function startDefaultServer(port = 4317) {
     { FilePermissionPolicy },
     { SettingsBackedLLMClient },
     { SettingsBackedToolRegistry },
+    { SessionScopedToolRegistry },
     { FileNetworkLogger },
     { FilesystemBlobStore },
     { TurnSummarizer },
@@ -187,6 +188,7 @@ export async function startDefaultServer(port = 4317) {
     import("@handagent/core/permission/FilePermissionPolicy.ts"),
     import("./SettingsBackedLLMClient.ts"),
     import("./SettingsBackedToolRegistry.ts"),
+    import("./SessionScopedToolRegistry.ts"),
     import("@handagent/core/logging/FileNetworkLogger.ts"),
     import("@handagent/core/blob/FilesystemBlobStore.ts"),
     import("@handagent/core/runtime/TurnSummarizer.ts"),
@@ -215,6 +217,10 @@ export async function startDefaultServer(port = 4317) {
     pluginsDir: join(spotDir, "plugins"),
   });
   await toolRegistry.refresh();
+  const sessionScopedTools = new SessionScopedToolRegistry({
+    builtinRegistry: toolRegistry.registry,
+    listMcpTools: async () => [],
+  });
 
   const permissionBridge = new SessionPermissionBridge();
   const permissionPolicy = new FilePermissionPolicy({
@@ -234,7 +240,7 @@ export async function startDefaultServer(port = 4317) {
     });
   console.log(`[agent-server] llm mode: ${llmMode}`);
 
-  const runtime = new AgentRuntime(llmClient, toolRegistry.registry, {
+  const runtime = new AgentRuntime(llmClient, sessionScopedTools.registry, {
     permissionPolicy,
     blobStore,
     turnSummarizer: summarizer,
@@ -244,8 +250,13 @@ export async function startDefaultServer(port = 4317) {
     runtime,
     persistence,
     undefined,
-    () => {
-      return toolRegistry.refresh();
+    async (sessionId) => {
+      await toolRegistry.refresh();
+      const session = await persistence.getSession(sessionId);
+      await sessionScopedTools.refreshForSession(
+        sessionId,
+        session?.metadata.actionBinding,
+      );
     },
   );
   const router = new SessionRouter(orchestrator, persistence);
