@@ -1,4 +1,4 @@
-import type { NetworkLogger } from "./NetworkLogger.ts";
+import type { NetworkLogEntry, NetworkLogger } from "./NetworkLogger.ts";
 
 type FetchInput = Parameters<typeof fetch>[0];
 type FetchInit = Parameters<typeof fetch>[1];
@@ -22,7 +22,7 @@ export function createLoggingFetch(options: LoggingFetchOptions): typeof fetch {
     const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
 
     const requestBody = init?.body !== undefined ? init.body : undefined;
-    void options.logger.log({
+    logNetworkEntry(options.logger, {
       timestamp: now().toISOString(),
       direction: "request",
       url,
@@ -31,6 +31,18 @@ export function createLoggingFetch(options: LoggingFetchOptions): typeof fetch {
     });
 
     const response = await baseFetch(input, init);
+    if (isStreamingResponse(response)) {
+      logNetworkEntry(options.logger, {
+        timestamp: now().toISOString(),
+        direction: "response",
+        url,
+        method,
+        status: response.status,
+        body: `[streaming response: ${response.headers.get("content-type")?.split(";")[0].trim() ?? "unknown"}]`,
+      });
+      return response;
+    }
+
     const cloned = response.clone();
     let parsed: unknown;
     try {
@@ -39,7 +51,7 @@ export function createLoggingFetch(options: LoggingFetchOptions): typeof fetch {
     } catch {
       parsed = null;
     }
-    void options.logger.log({
+    logNetworkEntry(options.logger, {
       timestamp: now().toISOString(),
       direction: "response",
       url,
@@ -49,6 +61,18 @@ export function createLoggingFetch(options: LoggingFetchOptions): typeof fetch {
     });
     return response;
   };
+}
+
+function logNetworkEntry(logger: NetworkLogger, entry: NetworkLogEntry): void {
+  try {
+    void logger.log(entry).catch(() => {});
+  } catch {
+    // Logging must not affect request handling.
+  }
+}
+
+function isStreamingResponse(response: Response): boolean {
+  return response.headers.get("content-type")?.toLowerCase().split(";")[0].trim() === "text/event-stream";
 }
 
 function tryParseBody(body: unknown): unknown {

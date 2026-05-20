@@ -371,8 +371,6 @@
 
 ---
 
-## 当前 bug
-
 ### 9. 真实 provider streaming 被网络日志包装器缓冲，UI 只在完成后一次性显示
 
 **严重级别**：P1
@@ -409,6 +407,31 @@
 - `createLoggingFetch()` -> AI SDK `streamText()`：失败点在 `packages/core/src/logging/createLoggingFetch.ts`。当前实现 `await response.clone().text()` 后才 `return response`，因此 streamed response 会先被日志 clone 完整读完，调用方拿到 response 时 SSE 已结束。
 - AI SDK -> `AgentRuntime` -> WebSocket -> SwiftUI：mock streaming 与自动化测试已覆盖多段 delta 渲染；本次现场表现与 fetch 包装器缓冲一致，仍需修复后做 real provider 实机回归。
 
-**状态**：待修复。
+**状态**：已修复。
 
-`删除 running session 后已打开 tab 仍显示运行中` 已完成代码修复和自动化验证，仍需完成最终 GUI 删除确认后的实机回归闭环。
+**根因边界**：`packages/core/src/logging/createLoggingFetch.ts` 在收到 response 后固定执行 `await response.clone().text()`，再把原 response 返回给调用方。对 `text/event-stream` 来说，这会让日志 clone 先读完整个 SSE body，AI SDK 随后才开始消费原 response，因此 `AgentRuntime`、WebSocket 和 SwiftUI 都只能在响应完成后收到文本增量。
+
+**checkpoint 与结论**：
+
+- provider -> HTTP SSE：修复前 `network-004.jsonl` 记录同一请求有 `6544` 个 `chat.completion.chunk`、`6542` 个 `delta.content` 与 `[DONE]`，证明 provider 实际返回了流式分片。
+- logging fetch -> AI SDK：修复前新增 RED 测试证明 `createLoggingFetch()` 包装 `text/event-stream` response 时，wrapped fetch promise 直到 stream close 后才 resolve；失败点锁定在日志包装器。
+- logging fetch 修复：对 `Content-Type: text/event-stream` 的 response 不再 clone/read body，而是立即记录 `body: "[streaming response: text/event-stream]"` 并返回原 response。
+- AI SDK -> SessionWindow：修复后 real provider 实机回归显示窗口仍为 `运行中` 时，assistant 气泡已从 `STREAM_START\n1.` 增长到至少第 86 条。
+
+**验证**：
+
+- 修复前 RED 证据：`pnpm vitest run packages/core/tests/logging/logging-fetch.test.ts` 中新增测试失败，断言 `resolved` 期望 `true`、实际为 `false`。
+- 修复后定向测试：`pnpm vitest run packages/core/tests/logging/logging-fetch.test.ts` 通过，5 个测试通过。
+- 修复后完整 TypeScript 测试：`bash ./scripts/test.sh` 通过，212 个测试通过，1 个 integration 跳过。
+- 修复后 Swift 测试：`bash ./scripts/swiftw test` 通过。
+- 修复后 Swift build：`bash ./scripts/swiftw build` 通过。
+- 修复后实机回归：非 mock packaged App 提交 `QA real streaming fixed 20260521...`；Computer Use 在 `运行中` 状态采样到 `STREAM_START`、`1.`，随后同一 run 增长到至少第 86 条；`~/.spotAgent/sessions/session-1779311685828-kaqr5f.json` 完成后包含 2 条消息；`~/.spotAgent/log/2026-05-21/network-005.jsonl` response 记录为 `[streaming response: text/event-stream]`。
+- 最终代码 smoke：处理 code review 后重新打包非 mock App，提交 `QA real streaming exact-code smoke 20260521...`；Computer Use 在 `运行中` 状态采样到 `EXACT_STREAM_START` 与条目 1 到 250；`~/.spotAgent/sessions/session-1779312326930-rilxsi.json` 完成后包含 2 条消息；`network-005.jsonl` 第 4 行 response 仍为 `[streaming response: text/event-stream]`。
+
+**修复日期**：2026-05-21
+
+---
+
+## 当前 bug
+
+暂无未修复 bug。`删除 running session 后已打开 tab 仍显示运行中` 已完成代码修复和自动化验证，仍需完成最终 GUI 删除确认后的实机回归闭环。

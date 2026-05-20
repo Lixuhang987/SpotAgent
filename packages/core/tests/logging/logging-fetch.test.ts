@@ -62,6 +62,86 @@ describe("createLoggingFetch", () => {
     expect(entries[1]).toMatchObject({ direction: "response", status: 500, body: "not-json" });
   });
 
+  it("returns event stream responses before consuming the body for logging", async () => {
+    const entries: NetworkLogEntry[] = [];
+    const logger = {
+      log: vi.fn(async (entry: NetworkLogEntry) => {
+        entries.push(entry);
+      }),
+    };
+    let closeStream!: () => void;
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("data: hello\n\n"));
+        closeStream = () => controller.close();
+      },
+    });
+    const baseFetch = vi.fn(async () =>
+      new Response(stream, {
+        status: 200,
+        headers: { "content-type": "text/event-stream; charset=utf-8" },
+      }),
+    ) as unknown as typeof fetch;
+
+    const wrapped = createLoggingFetch({ logger, baseFetch });
+    let resolved = false;
+    const responsePromise = wrapped("https://api.example.com/v1/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({ stream: true }),
+    }).then((response) => {
+      resolved = true;
+      return response;
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(resolved).toBe(true);
+    const response = await responsePromise;
+    expect(response.headers.get("content-type")).toContain("text/event-stream");
+    const reader = response.body?.getReader();
+    const firstChunk = await reader?.read();
+    expect(new TextDecoder().decode(firstChunk?.value)).toBe("data: hello\n\n");
+    expect(entries[1]).toMatchObject({
+      direction: "response",
+      status: 200,
+      body: "[streaming response: text/event-stream]",
+    });
+
+    closeStream();
+    await expect(reader?.read()).resolves.toMatchObject({ done: true });
+  });
+
+  it("attaches rejection handlers to async logger writes", async () => {
+    let rejectionHandlers = 0;
+    const rejectedLogWrite = {
+      catch(onRejected: (error: Error) => void) {
+        rejectionHandlers += 1;
+        onRejected(new Error("log write failed"));
+        return Promise.resolve();
+      },
+    } as Promise<void>;
+    const logger = {
+      log: vi.fn(() => rejectedLogWrite),
+    };
+    const baseFetch = vi.fn(async () =>
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    ) as unknown as typeof fetch;
+
+    const wrapped = createLoggingFetch({ logger, baseFetch });
+
+    const response = await wrapped("https://api.example.com/v1/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({ model: "gpt-5-mini" }),
+    });
+    await expect(response.json()).resolves.toEqual({ ok: true });
+
+    expect(logger.log).toHaveBeenCalledTimes(2);
+    expect(rejectionHandlers).toBe(2);
+  });
+
   it("redacts image payloads from parsed JSON request logs", async () => {
     const entries: NetworkLogEntry[] = [];
     const logger = {
