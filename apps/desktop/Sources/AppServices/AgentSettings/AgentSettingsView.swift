@@ -31,7 +31,7 @@ struct AgentSettingsView: View {
 
                 SettingsSection {
                     SettingsRow("API Key") {
-                        TextField("sk-...", text: $viewModel.apiKey)
+                        SecureField("sk-...", text: $viewModel.apiKey)
                             .privacySensitive()
                             .textFieldStyle(SettingsFieldStyle())
                     }
@@ -55,68 +55,26 @@ struct AgentSettingsView: View {
     }
 
     private var apiSegmented: some View {
-        HStack(spacing: 0) {
+        Picker("接口", selection: $viewModel.api) {
             ForEach(AgentAPIType.allCases) { api in
-                apiButton(api)
+                Text(api.title).tag(api)
             }
         }
-        .background(Color.black.opacity(0.3))
-        .clipShape(RoundedRectangle(cornerRadius: theme.radius.sm))
-        .overlay(
-            RoundedRectangle(cornerRadius: theme.radius.sm)
-                .strokeBorder(theme.colors.border, lineWidth: 0.5)
-        )
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .controlSize(.small)
+        .frame(maxWidth: 340)
     }
 
     private var providerSegmented: some View {
-        HStack(spacing: 0) {
+        Picker("Provider", selection: $viewModel.provider) {
             ForEach(AgentLLMProvider.allCases) { provider in
-                providerButton(provider)
+                Text(provider.title).tag(provider)
             }
         }
-        .background(Color.black.opacity(0.3))
-        .clipShape(RoundedRectangle(cornerRadius: theme.radius.sm))
-        .overlay(
-            RoundedRectangle(cornerRadius: theme.radius.sm)
-                .strokeBorder(theme.colors.border, lineWidth: 0.5)
-        )
-    }
-
-    private func providerButton(_ provider: AgentLLMProvider) -> some View {
-        let isSelected = viewModel.provider == provider
-        return Button {
-            viewModel.provider = provider
-        } label: {
-            Text(provider.title)
-                .font(theme.typography.captionFont)
-                .fontWeight(isSelected ? .medium : .regular)
-                .foregroundStyle(isSelected ? theme.colors.textPrimary : theme.colors.textSecondary)
-                .padding(.horizontal, theme.spacing.md)
-                .padding(.vertical, 7)
-                .background(
-                    RoundedRectangle(cornerRadius: theme.radius.sm - 1)
-                        .fill(isSelected ? theme.colors.surface : Color.clear)
-                )
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func apiButton(_ api: AgentAPIType) -> some View {
-        let isSelected = viewModel.api == api
-        return Button {
-            viewModel.api = api
-        } label: {
-            Text(api.title)
-                .font(theme.typography.captionFont)
-                .fontWeight(isSelected ? .medium : .regular)
-                .foregroundStyle(isSelected ? theme.colors.textPrimary : theme.colors.textSecondary)
-                .padding(.horizontal, theme.spacing.md)
-                .padding(.vertical, 7)
-                .background(
-                    RoundedRectangle(cornerRadius: theme.radius.sm - 1)
-                        .fill(isSelected ? theme.colors.surface : Color.clear)
-                )
-        }
-        .buttonStyle(.plain)
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .controlSize(.small)
+        .frame(maxWidth: 340)
     }
 }

@@ -7,11 +7,8 @@ struct ToolSettingsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                SettingsSection {
-                    ForEach(Array(viewModel.tools.enumerated()), id: \.element.id) { index, tool in
-                        if index > 0 { SettingsRowDivider() }
-                        toolRow(tool)
-                    }
+                SettingsListSection(items: viewModel.tools) { tool in
+                    toolRow(tool)
                 }
 
                 Spacer(minLength: 0)

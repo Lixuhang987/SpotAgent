@@ -92,7 +92,7 @@ final class SessionWindowLifecycle {
         registry.upsert(
             SessionSummary(
                 sessionId: tab.sessionID,
-                isRunning: tab.status == "running",
+                isRunning: tab.status.isRunning,
                 latestSummary: latestNonEmptyMessageText(from: tab) ?? "",
                 lastActiveAt: .now,
                 windowIsOpen: windowIsOpen

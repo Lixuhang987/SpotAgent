@@ -37,7 +37,7 @@ struct SessionTabItemView: View {
     var body: some View {
         Button(action: onActivate) {
             HStack(spacing: theme.spacing.xs) {
-                if tab.status == "running" {
+                if tab.status.isRunning {
                     Circle()
                         .fill(theme.colors.accent)
                         .frame(width: 6, height: 6)

@@ -7,7 +7,7 @@
 | 文件 | 职责 |
 |------|------|
 | `AppTheme.swift` | 定义 `AppTheme` 聚合 + `ThemeColors` / `ThemeTypography` / `ThemeSpacing` / `ThemeRadius` / `ThemeAnimation` |
-| `ThemeEnvironment.swift` | `AppThemeKey` + `EnvironmentValues.appTheme` 扩展 |
+| `ThemeEnvironment.swift` | 基于 SwiftUI `@Entry` 的 `EnvironmentValues.appTheme` 扩展 |
 
 ## Token 分类
 

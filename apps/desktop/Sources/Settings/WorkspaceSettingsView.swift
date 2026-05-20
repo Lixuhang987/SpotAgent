@@ -1,5 +1,5 @@
-import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct WorkspaceSettingsView: View {
     @Bindable var viewModel: WorkspaceSettingsViewModel
@@ -12,17 +12,14 @@ struct WorkspaceSettingsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                SettingsSection {
-                    ForEach(Array(viewModel.workspaces.enumerated()), id: \.element.id) { index, ws in
-                        if index > 0 { SettingsRowDivider() }
-                        workspaceRow(ws)
-                    }
+                SettingsListSection(items: viewModel.workspaces) { workspace in
+                    workspaceRow(workspace)
                 }
 
                 SettingsSectionSeparator()
 
                 Button("添加 Workspace") {
-                    pickDirectoryAndAdd()
+                    showingAdd = true
                 }
                 .buttonStyle(.plain)
                 .padding(.horizontal, 20)
@@ -39,6 +36,12 @@ struct WorkspaceSettingsView: View {
                 editSheet(ws)
             }
         }
+        .fileImporter(
+            isPresented: $showingAdd,
+            allowedContentTypes: [.folder],
+            allowsMultipleSelection: false,
+            onCompletion: addImportedWorkspace
+        )
     }
 
     private func workspaceRow(_ ws: WorkspaceEntry) -> some View {
@@ -122,13 +125,14 @@ struct WorkspaceSettingsView: View {
         .frame(width: 360)
     }
 
-    private func pickDirectoryAndAdd() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.prompt = "选择目录"
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+    private func addImportedWorkspace(_ result: Result<[URL], Error>) {
+        guard case .success(let urls) = result, let url = urls.first else { return }
+        let didStartAccessing = url.startAccessingSecurityScopedResource()
+        defer {
+            if didStartAccessing {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
         let name = url.lastPathComponent
         viewModel.add(name: name, description: "", rootPath: url.path)
     }

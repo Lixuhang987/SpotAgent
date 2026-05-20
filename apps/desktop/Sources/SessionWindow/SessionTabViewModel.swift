@@ -8,7 +8,7 @@ final class SessionTabViewModel: Identifiable {
     let sessionID: String
 
     private(set) var messages: [SessionBubble] = []
-    private(set) var status: String = "idle"
+    private(set) var status: SessionRunStatus = .idle
     private(set) var error: String?
     private(set) var pendingPermissionRequests: [SessionPermissionRequest] = []
     private(set) var pendingWorkspaceAskRequests: [SessionWorkspaceAskRequest] = []
@@ -67,8 +67,8 @@ final class SessionTabViewModel: Identifiable {
     }
 
     func stop() {
-        guard status == "running" else { return }
-        status = "interrupted"
+        guard status.isRunning else { return }
+        status = .interrupted
         socketClient.sendInterrupt(sessionID: sessionID)
         onStateChanged(self)
     }
@@ -101,7 +101,7 @@ final class SessionTabViewModel: Identifiable {
             appendUserMessage(messageID: messageID, text: text, attachments: [])
             shouldNotifyStateChanged = true
         case .assistantMessageStart(let messageID, _):
-            status = "running"
+            status = .running
             error = nil
             messages.append(SessionBubble(id: messageID, role: "assistant", text: ""))
             shouldNotifyStateChanged = true
@@ -110,7 +110,7 @@ final class SessionTabViewModel: Identifiable {
             messages[index].text += text
             shouldNotifyStateChanged = true
         case .assistantMessageEnd(_, let status, _):
-            self.status = status == "completed" ? "idle" : status
+            self.status = .fromProtocolStatus(status)
             shouldNotifyStateChanged = true
         case .toolMessage(let messageID, let name, let text, _, _):
             let displayText = "\(name): \(text)"
@@ -121,11 +121,11 @@ final class SessionTabViewModel: Identifiable {
             }
             shouldNotifyStateChanged = true
         case .status(let value):
-            status = value
-            if value != "failed" { error = nil }
+            status = .fromProtocolStatus(value)
+            if status.clearsError { error = nil }
             shouldNotifyStateChanged = true
         case .error(let messageID, let message, _):
-            status = "failed"
+            status = .failed
             error = message
             if messages.last?.role != "assistant" || messages.last?.text != message {
                 messages.append(SessionBubble(id: messageID, role: "assistant", text: message))
@@ -133,13 +133,13 @@ final class SessionTabViewModel: Identifiable {
             shouldNotifyStateChanged = true
         case .sessionSnapshot(let messages, let status):
             self.messages = messages.map { $0.normalizedForDisplay() }
-            self.status = status
+            self.status = .fromProtocolStatus(status)
             error = nil
             shouldNotifyStateChanged = true
         case .sessionOpenFailed(_, let message), .userMessageFailed(_, let message):
             isInvalid = true
             invalidReason = message
-            status = "failed"
+            status = .failed
             error = message
             shouldNotifyStateChanged = true
         case .permissionRequest(let requestId, let toolName, let argumentsJSON):
@@ -176,7 +176,7 @@ final class SessionTabViewModel: Identifiable {
         text: String,
         attachments: [UserMessageAttachmentPayload]
     ) {
-        status = "running"
+        status = .running
         error = nil
         messages.append(SessionBubble.user(id: messageID, text: text, attachments: attachments))
     }

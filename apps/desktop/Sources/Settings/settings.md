@@ -13,9 +13,9 @@
 | `PermissionRulesViewModel.swift` | `@Observable` 代理：直接读写 `~/.spotAgent/permissions.json`，展示永久规则并支持按 `argHash` 撤销 |
 | `PermissionRulesView.swift` | 权限规则 UI：toolName / decision / createdAt / 参数摘要列表 + 撤销按钮 |
 | `ShortcutSettingsView.swift` | 快捷键配置 UI；上栏是“全局快捷键”，下栏是“App 内快捷键”，两栏都用 `KeyboardShortcuts.Recorder` |
-| `WorkspaceSettingsView.swift` | 工作区列表 + 添加 / 编辑 / 删除 UI；NSOpenPanel 选目录 + 表单 sheet |
+| `WorkspaceSettingsView.swift` | 工作区列表 + 添加 / 编辑 / 删除 UI；SwiftUI `fileImporter` 选目录 + 表单 sheet |
 | `WorkspaceSettingsViewModel.swift` | `@Observable` 代理：直接读写 `~/.spotAgent/workspaces.json`（与 core 侧 `FileWorkspaceRegistry` 共享文件） |
-| `SettingsStyles.swift` | 共享样式：`SettingsTabBar`、`SettingsSection`、`SettingsRow`、`SettingsRowDivider`、`SettingsFieldStyle`、`SettingsSectionSeparator` |
+| `SettingsStyles.swift` | 共享样式：`SettingsTab`、`SettingsTabBar`、`SettingsSection`、`SettingsListSection`、`SettingsRow`、`SettingsRowDivider`、`SettingsFieldStyle`、`SettingsSectionSeparator` |
 
 模型设置的具体 UI 在 [AppServices/AgentSettings/AgentSettingsView.swift](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/AgentSettings/AgentSettingsView.swift)（历史遗留，未来应迁回 `Sources/Settings/`），由本模块的 SettingsView 嵌入。
 
@@ -42,7 +42,7 @@ Coordinator.send(.openSettings)
 - **ViewModel 是 Store 的代理层**：不缓存值；getter 透传 `store.settings.xxx` / `store.toolSettings.xxx`，setter 调 `store.update` / `store.updateToolSettings`。新增字段顺序：`AgentSettings` / `AgentToolSettings` → `AgentSettingsStore.update` / `updateToolSettings` 已支持 → ViewModel 加属性 → 对应 View 加 UI。
 - **写入时统一 trim**：所有字符串字段在 setter 里 `trimmingCharacters(in: .whitespacesAndNewlines)`，避免空白污染 settings.json。
 - **不要把 store 直接传给 View**：始终经过 ViewModel；测试也是 `AgentSettingsViewModel(store:)`。
-- **Tab 增加规则**：新建 Tab 在 `SettingsView` 内增 `Tab(...)`；Tab 内如果有副作用则配套加 ViewModel；纯展示可直接写 View。
+- **Tab 增加规则**：新建 Tab 先在 `SettingsTab` enum 增 case、标题和图标，再在 `SettingsView.tabContent` 接入内容；Tab 内如果有副作用则配套加 ViewModel；纯展示可直接写 View。
 - **视觉风格**：设置页面使用 `settingsCard()` 卡片容器 + `SettingsFieldStyle` 输入框 + `SettingsRow` 行布局，与 PromptPanel / SessionWindow 保持统一暗色玻璃风格。不要使用系统 `Form` / `GroupBox` / `.grouped` 样式。窗口标题栏设为透明 + fullSizeContentView，与 SessionWindow 一致。
 - **不要在 Settings 里读 LLM/tool 运行态**：宿主层不组装 LLM 消息，`api`/`baseURL`/`apiKey` 和工具开关只是写入 settings.json；agent-server 侧每次模型请求自己读模型配置，每轮 user message 前刷新 tool registry。
 - **快捷键只有两类模型**：全局快捷键仅包含“唤起面板 / 捕获文本选区 / 圈选区域截图”，由 Hotkey 注册为系统级热键；其余宿主动作归为 App 内快捷键，由 `AppScopeShortcutDispatcher` 在 App 激活范围内分发。不要再新增 PromptPanel 局部快捷键模型。
