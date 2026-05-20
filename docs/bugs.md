@@ -247,4 +247,40 @@
 
 ## 当前 bug
 
-当前没有已确认且未修复的 bug。继续按实机 QA 与回归结果复查本文件；发现新缺陷时追加到本节。
+### 1. 关闭 SessionWindow 后挂起权限请求未立即取消
+
+**严重级别**：P2
+
+**现象**：SessionWindow 内出现权限审批气泡后，直接关闭窗口，挂起的 `file.write` 权限请求没有立即取消；约 60 秒后原 session 仍写入 deny 的 `permission_request` 和 `tool_result`。
+
+**复现步骤**：
+
+1. 执行基线命令：`bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`。
+2. 执行 `bash ./scripts/package-app.sh --mock-llm` 并启动 `dist/HandAgentDesktop.app`。
+3. 通过原生事件 `System Events` 发送 `key code 49 using {command down, shift down}` 唤出 PromptPanel。
+4. 输入 `[mock:permission-write] QA close pending permission manual 20260520` 并提交。
+5. SessionWindow `Session 8056DDA1` 出现 `授权调用 file.write` 内联权限气泡后，不点击任何授权按钮，直接关闭窗口。
+6. 等待约 60 秒后检查 `~/.spotAgent/sessions/8056DDA1-76B5-425B-A8DA-773D1C3CE41C.json`。
+
+**实际结果**：
+
+- 关闭窗口后 2 秒检查时只剩状态气泡，session 文件只有 1 条 user message。
+- 约 60 秒后同一 session 文件被追加 assistant tool call、tool message 和 final assistant message。
+- events 中出现 `permission_request`，`action: "deny"`，随后写入 `tool_result`，`output: "用户拒绝执行该 tool"`。
+
+**期望结果**：关闭 SessionWindow 时应立即取消该窗口绑定的挂起权限请求，不应等待超时后继续向已关闭 session 写入 permission / tool / assistant 消息；后续新会话的权限审批仍应可正常出现和响应。
+
+**证据**：
+
+- 关闭前 UI：Computer Use 可见 `Session 8056DDA1` 中有 `授权调用 file.write` 气泡，参数为 `workspaceId: "qa-workspace"`、`relativePath: "permission-check.txt"`、`content: "permission scenario content"`。
+- 关闭后窗口状态：`System Events` 只剩状态气泡窗口 `280x62`。
+- Session 文件：`~/.spotAgent/sessions/8056DDA1-76B5-425B-A8DA-773D1C3CE41C.json` 后续变为 `messageCount: 4`，包含 `toolCalls`、`tool` content `用户拒绝执行该 tool` 与 `Mock permission write completed.`。
+- 后续新会话 `Session 8BFFA3D9` 仍可出现新的 `授权调用 file.write` 气泡，说明权限系统未整体卡死，但旧挂起请求未被立即清理。
+
+**初步调用链 / 根因边界**：
+
+- `SessionWindow` 关闭 -> WebSocket close / session unbind：窗口确实关闭，UI 只剩状态气泡。
+- `SessionPermissionBridge.unbindSession` 后，已挂起的 ask promise 没有立即以 cancelled / deny 结束，仍保留到 60 秒 timeout。
+- `AgentRuntime` 在 timeout deny 后继续把 tool denial 和 final assistant 追加到原 session，说明取消没有传到 runtime 当前 run。
+
+**发现日期**：2026-05-20
