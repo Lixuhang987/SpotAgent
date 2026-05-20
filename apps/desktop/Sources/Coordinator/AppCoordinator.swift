@@ -29,6 +29,7 @@ final class AppCoordinator {
     @ObservationIgnored private let historyLifecycle: HistoryLifecycle
     @ObservationIgnored private let activationPolicy = AppActivationPolicyCoordinator()
     @ObservationIgnored private var platformBridgeService: (any PlatformBridgeRunning)?
+    @ObservationIgnored private let appScopeShortcutDispatcher = AppScopeShortcutDispatcher()
     @ObservationIgnored private lazy var promptPanelController = PromptPanelController()
     @ObservationIgnored private lazy var statusBubbleController: StatusBubbleController = {
         StatusBubbleController(registry: services.sessionRegistry)
@@ -94,6 +95,7 @@ final class AppCoordinator {
     func bootstrap() {
         setupPromptPanel()
         setupHotkey()
+        setupAppScopeShortcuts()
         setupStatusBubble()
         setupAgentServerHealth()
         agentServerHealth.start()
@@ -104,6 +106,7 @@ final class AppCoordinator {
     func shutdown() {
         platformBridgeService?.stop()
         platformBridgeService = nil
+        appScopeShortcutDispatcher.stop()
         agentServerHealth.stop()
         settingsLifecycle.close()
         sessionLifecycle.closeAll()
@@ -183,6 +186,10 @@ final class AppCoordinator {
         services.hotkeyRegistrar.registerCaptureRegion { [weak self] in
             Task { @MainActor in await self?.captureCoordinator.captureRegionAndShow() }
         }
+    }
+
+    private func setupAppScopeShortcuts() {
+        appScopeShortcutDispatcher.start(actions: basePromptActions)
     }
 
     private func setupStatusBubble() {

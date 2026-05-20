@@ -18,14 +18,6 @@ final class PromptPanelController {
     }
 
     func register(actions: [PromptAction]) {
-        for action in actions {
-            if let defaultShortcut = action.defaultShortcut {
-                let name = action.shortcutName
-                if KeyboardShortcuts.getShortcut(for: name) == nil {
-                    PromptActionShortcutStore.setShortcut(defaultShortcut, for: name)
-                }
-            }
-        }
         if viewModel == nil {
             let vm = PromptPanelViewModel(actions: actions)
             vm.onSubmit = { [weak self] draft, attachments in
@@ -142,18 +134,6 @@ final class PromptPanelController {
         if event.keyCode == UInt16(kVK_Escape) {
             hide()
             return nil
-        }
-        guard panel?.isKeyWindow == true,
-              let viewModel,
-              let eventShortcut = KeyboardShortcuts.Shortcut(event: event) else {
-            return event
-        }
-        for action in viewModel.filteredActions {
-            guard let shortcut = KeyboardShortcuts.getShortcut(for: action.shortcutName) else { continue }
-            if shortcut == eventShortcut {
-                viewModel.submitAction(action)
-                return nil
-            }
         }
         return event
     }

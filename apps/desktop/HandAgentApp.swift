@@ -15,7 +15,6 @@ struct HandAgentApp: App {
                 Button("设置…") {
                     coordinator.send(.openSettings)
                 }
-                .keyboardShortcut(",", modifiers: .command)
             }
         }
     }

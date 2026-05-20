@@ -8,6 +8,7 @@ struct ShortcutSettingsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
+                SettingsSectionHeader("全局快捷键")
                 SettingsSection {
                     SettingsRow("唤起面板") {
                         KeyboardShortcuts.Recorder("", name: .showPromptPanel)
@@ -24,10 +25,11 @@ struct ShortcutSettingsView: View {
 
                 SettingsSectionSeparator()
 
+                SettingsSectionHeader("App 内快捷键")
                 SettingsSection {
                     if actions.isEmpty {
-                        SettingsRow("Actions") {
-                            Text("当前没有可配置的 PromptAction")
+                        SettingsRow("快捷键") {
+                            Text("当前没有可配置的 App 内快捷键")
                                 .font(theme.typography.captionFont)
                                 .foregroundStyle(theme.colors.textSecondary)
                         }
@@ -37,7 +39,9 @@ struct ShortcutSettingsView: View {
                                 SettingsRowDivider()
                             }
                             SettingsRow(action.title) {
-                                PromptActionShortcutRecorder(name: action.shortcutName)
+                                KeyboardShortcuts.Recorder("", name: action.shortcutName) { _ in
+                                    KeyboardShortcuts.disable(action.shortcutName)
+                                }
                             }
                         }
                     }
@@ -45,6 +49,9 @@ struct ShortcutSettingsView: View {
 
                 Spacer(minLength: 0)
             }
+        }
+        .onAppear {
+            AppScopeShortcutDefaults.disableGlobalRegistration(for: actions.map(\.shortcutName))
         }
     }
 }

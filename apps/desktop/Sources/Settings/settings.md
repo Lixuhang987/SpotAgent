@@ -1,6 +1,6 @@
 # Settings 模块
 
-设置窗口的容器与各 Tab 视图。当前五个 Tab：模型配置（代理 `AgentSettingsStore`）、工具管理（代理 `ToolSettingsViewModel`）、权限规则管理（代理 `PermissionRulesViewModel`）、快捷键配置（KeyboardShortcuts.Recorder）、工作区管理（代理 `WorkspaceSettingsViewModel`）。窗口本身由 Coordinator 用 `NSWindow + NSHostingController` 管理（不使用 SwiftUI `Settings` scene，因为需要主动 `openOrFocus` 控制）。
+设置窗口的容器与各 Tab 视图。当前五个 Tab：模型配置（代理 `AgentSettingsStore`）、工具管理（代理 `ToolSettingsViewModel`）、权限规则管理（代理 `PermissionRulesViewModel`）、快捷键配置（全局快捷键 / App 内快捷键两栏，均使用 KeyboardShortcuts.Recorder）、工作区管理（代理 `WorkspaceSettingsViewModel`）。窗口本身由 Coordinator 用 `NSWindow + NSHostingController` 管理（不使用 SwiftUI `Settings` scene，因为需要主动 `openOrFocus` 控制）。
 
 ## 文件
 
@@ -12,8 +12,7 @@
 | `ToolSettingsView.swift` | 工具管理 UI：builtin tool 列表、风险提示、开关切换 |
 | `PermissionRulesViewModel.swift` | `@Observable` 代理：直接读写 `~/.spotAgent/permissions.json`，展示永久规则并支持按 `argHash` 撤销 |
 | `PermissionRulesView.swift` | 权限规则 UI：toolName / decision / createdAt / 参数摘要列表 + 撤销按钮 |
-| `ShortcutSettingsView.swift` | 全局热键 + PromptAction 快捷键的 `KeyboardShortcuts.Recorder` 列表 |
-| `PromptActionShortcutRecorder.swift` | PromptAction 局部快捷键录制器；允许与 App 主菜单重复，只写本地快捷键存储，不注册全局 hotkey |
+| `ShortcutSettingsView.swift` | 快捷键配置 UI；上栏是“全局快捷键”，下栏是“App 内快捷键”，两栏都用 `KeyboardShortcuts.Recorder` |
 | `WorkspaceSettingsView.swift` | 工作区列表 + 添加 / 编辑 / 删除 UI；NSOpenPanel 选目录 + 表单 sheet |
 | `WorkspaceSettingsViewModel.swift` | `@Observable` 代理：直接读写 `~/.spotAgent/workspaces.json`（与 core 侧 `FileWorkspaceRegistry` 共享文件） |
 | `SettingsStyles.swift` | 共享样式：`SettingsTabBar`、`SettingsSection`、`SettingsRow`、`SettingsRowDivider`、`SettingsFieldStyle`、`SettingsSectionSeparator` |
@@ -29,7 +28,7 @@ Coordinator.send(.openSettings)
             ├─ AgentSettingsView(viewModel:)        // → AgentSettingsStore.update → 写 ~/.spotAgent/settings.json
             ├─ ToolSettingsView(viewModel:)         // → AgentSettingsStore.updateToolSettings → 写 ~/.spotAgent/settings.json（同文件保留 llm / tools）
             ├─ PermissionRulesView(viewModel:)      // → 写 ~/.spotAgent/permissions.json；FilePermissionPolicy 下次 check 自动重读
-            ├─ ShortcutSettingsView(actions:)       // 全局热键用 KeyboardShortcuts.Recorder；PromptAction 用局部 recorder 写 UserDefaults
+            ├─ ShortcutSettingsView(actions:)       // 全局快捷键 / App 内快捷键两栏；均用 KeyboardShortcuts.Recorder 写 UserDefaults
             └─ WorkspaceSettingsView(viewModel:)    // → 写 ~/.spotAgent/workspaces.json；FileWorkspaceRegistry 下次访问自动重读
   └─ 生产 presenter 通过 WindowCloseObservation 持有关闭通知 token，收到 NSWindow.willCloseNotification 后释放 token → Coordinator.send(.settingsWindowClosed)
 ```
@@ -46,7 +45,7 @@ Coordinator.send(.openSettings)
 - **Tab 增加规则**：新建 Tab 在 `SettingsView` 内增 `Tab(...)`；Tab 内如果有副作用则配套加 ViewModel；纯展示可直接写 View。
 - **视觉风格**：设置页面使用 `settingsCard()` 卡片容器 + `SettingsFieldStyle` 输入框 + `SettingsRow` 行布局，与 PromptPanel / SessionWindow 保持统一暗色玻璃风格。不要使用系统 `Form` / `GroupBox` / `.grouped` 样式。窗口标题栏设为透明 + fullSizeContentView，与 SessionWindow 一致。
 - **不要在 Settings 里读 LLM/tool 运行态**：宿主层不组装 LLM 消息，`api`/`baseURL`/`apiKey` 和工具开关只是写入 settings.json；agent-server 侧每次模型请求自己读模型配置，每轮 user message 前刷新 tool registry。
-- **区分全局热键与局部 action 快捷键**：全局热键继续使用 `KeyboardShortcuts.Recorder` 的系统 / 主菜单冲突校验；PromptAction 只在 PromptPanel 可见时本地匹配，必须使用 `PromptActionShortcutRecorder`，避免 `⌘,` 这类与 App 主菜单一致的快捷键被误判为不可用。
+- **快捷键只有两类模型**：全局快捷键仅包含“唤起面板 / 捕获文本选区 / 圈选区域截图”，由 Hotkey 注册为系统级热键；其余宿主动作归为 App 内快捷键，由 `AppScopeShortcutDispatcher` 在 App 激活范围内分发。不要再新增 PromptPanel 局部快捷键模型。
 - **测试**：[AgentSettingsViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/AgentSettingsViewModelTests.swift) 用临时 home 目录验证读写串通；[AgentSettingsStoreTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/AgentSettingsStoreTests.swift) 覆盖磁盘 IO + 轮询；[PermissionRulesViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/PermissionRulesViewModelTests.swift) 覆盖权限规则读取、参数摘要和撤销写回。
 
 ## 与其他模块的关系

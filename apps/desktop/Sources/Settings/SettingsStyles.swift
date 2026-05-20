@@ -54,6 +54,25 @@ struct SettingsTabBar: View {
 
 // MARK: - Section
 
+struct SettingsSectionHeader: View {
+    @Environment(\.appTheme) private var theme
+    let title: String
+
+    init(_ title: String) {
+        self.title = title
+    }
+
+    var body: some View {
+        Text(title)
+            .font(theme.typography.captionFont.weight(.semibold))
+            .foregroundStyle(theme.colors.textSecondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, theme.spacing.xxl)
+            .padding(.top, theme.spacing.lg)
+            .padding(.bottom, theme.spacing.xs)
+    }
+}
+
 struct SettingsSection<Content: View>: View {
     @Environment(\.appTheme) private var theme
     @ViewBuilder let content: () -> Content
