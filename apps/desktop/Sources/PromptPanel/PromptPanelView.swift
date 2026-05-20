@@ -114,7 +114,7 @@ struct PromptPanelView: View {
                 .font(theme.typography.promptInputFont)
                 .foregroundStyle(theme.colors.textPrimary)
                 .focused($isQueryFocused)
-                .disabled(viewModel.submissionDisabledMessage != nil)
+                .disabled(viewModel.isSubmissionInputDisabled)
                 .onSubmit { viewModel.submit() }
         }
         .padding(.horizontal, theme.spacing.md)
@@ -177,25 +177,23 @@ struct PromptPanelView: View {
         }
     }
 
-    private func actionRow(_ action: PromptAction) -> some View {
+    private func actionRow(_ action: ActionDefinition) -> some View {
         let isHovered = hoveredActionId == action.id
-        return Button { viewModel.submitAction(action) } label: {
+        return Button { viewModel.selectAction(action) } label: {
             HStack(spacing: theme.spacing.md) {
                 Text(action.title)
                     .font(theme.typography.bodyFont)
                     .foregroundStyle(isHovered ? theme.colors.textPrimary : theme.colors.textSecondary)
                 Spacer()
-                if let shortcut = viewModel.shortcutLabel(for: action) {
-                    Text(shortcut)
-                        .font(theme.typography.captionFont)
-                        .foregroundStyle(theme.colors.textSecondary.opacity(0.7))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(theme.colors.surface)
-                        )
-                }
+                Text(action.trigger)
+                    .font(theme.typography.captionFont)
+                    .foregroundStyle(theme.colors.textSecondary.opacity(0.7))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(theme.colors.surface)
+                    )
             }
             .actionRow(isHighlighted: isHovered)
         }

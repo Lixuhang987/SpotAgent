@@ -26,7 +26,7 @@ final class HotkeyRegistrarTests: XCTestCase {
         XCTAssertEqual(backend.boundShortcuts, [newShortcut])
     }
 
-    func testPromptActionShortcutLabelReadsUpdatedStoredShortcut() {
+    func testPromptActionShortcutNameReadsUpdatedStoredShortcut() {
         let action = PromptAction(
             id: "hotkey-reload-test-\(UUID().uuidString)",
             title: "测试动作",
@@ -34,17 +34,16 @@ final class HotkeyRegistrarTests: XCTestCase {
             defaultShortcut: nil,
             perform: {}
         )
-        let vm = PromptPanelViewModel(actions: [action])
         let oldShortcut = KeyboardShortcuts.Shortcut(.k, modifiers: [.command])
         let newShortcut = KeyboardShortcuts.Shortcut(.l, modifiers: [.command])
         defer { KeyboardShortcuts.setShortcut(nil, for: action.shortcutName) }
 
         KeyboardShortcuts.setShortcut(oldShortcut, for: action.shortcutName)
-        XCTAssertEqual(vm.shortcutLabel(for: action), oldShortcut.description)
+        XCTAssertEqual(KeyboardShortcuts.getShortcut(for: action.shortcutName), oldShortcut)
 
         KeyboardShortcuts.setShortcut(newShortcut, for: action.shortcutName)
 
-        XCTAssertEqual(vm.shortcutLabel(for: action), newShortcut.description)
+        XCTAssertEqual(KeyboardShortcuts.getShortcut(for: action.shortcutName), newShortcut)
     }
 
     func testAppScopeShortcutDefaultPersistsWithoutGlobalRegistration() {

@@ -9,7 +9,7 @@ final class AppCoordinator {
         case hidePromptPanel
         case togglePromptPanel
         case submitPrompt(String, attachments: [PromptAttachmentResult])
-        case submitAction(PromptAction)
+        case submitActionPrompt(String, actionBinding: ActionBindingPayload, attachments: [PromptAttachmentResult])
         case openSettings
         case openHistory
         case settingsWindowClosed
@@ -109,9 +109,8 @@ final class AppCoordinator {
             promptPanelController.toggle()
         case .submitPrompt(let draft, let attachments):
             handleSubmitPrompt(draft, attachments: attachments)
-        case .submitAction(let action):
-            action.perform()
-            promptPanelController.hide()
+        case .submitActionPrompt(let draft, let binding, let attachments):
+            handleSubmitPrompt(draft, attachments: attachments, actionBinding: binding)
         case .openSettings:
             handleOpenSettings()
         case .openHistory:
@@ -143,6 +142,9 @@ final class AppCoordinator {
         refreshPromptActions()
         promptPanelController.onSubmit = { [weak self] draft, attachments in
             self?.send(.submitPrompt(draft, attachments: attachments))
+        }
+        promptPanelController.onSubmitAction = { [weak self] prompt, binding, attachments in
+            self?.send(.submitActionPrompt(prompt, actionBinding: binding, attachments: attachments))
         }
         promptPanelController.onOpenSettings = { [weak self] in
             self?.send(.openSettings)
@@ -184,14 +186,22 @@ final class AppCoordinator {
         bridge.start()
     }
 
-    private func handleSubmitPrompt(_ draft: String, attachments: [PromptAttachmentResult]) {
+    private func handleSubmitPrompt(
+        _ draft: String,
+        attachments: [PromptAttachmentResult],
+        actionBinding: ActionBindingPayload? = nil
+    ) {
         if let agentServerError {
             promptPanelController.setSubmissionEnabled(false, message: agentServerError)
             promptPanelController.show()
             return
         }
 
-        guard let prompt = PromptSubmission.compose(draft: draft, attachments: attachments) else { return }
+        guard let prompt = PromptSubmission.compose(
+            draft: draft,
+            attachments: attachments,
+            actionBinding: actionBinding
+        ) else { return }
         promptPanelController.hide()
         sessionWindowLifecycle.createTabWithInitialPrompt(prompt) { [weak self] in
             self?.send(.sessionWindowClosed)
@@ -224,7 +234,7 @@ final class AppCoordinator {
         promptPanelController.register(actions: buildPromptActions())
     }
 
-    private func buildPromptActions() -> [PromptAction] {
-        basePromptActions
+    private func buildPromptActions() -> [ActionDefinition] {
+        services.actionManifestStore.load().actions
     }
 }

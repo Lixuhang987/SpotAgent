@@ -40,6 +40,7 @@ final class AppServices {
     let sessionRegistry: SessionRegistry
     let settingsStore: AgentSettingsStore
     let sessionHistoryStore: SessionHistoryStore
+    let actionManifestStore: ActionManifestStore
     let agentServerURL: URL
     let platformBridgeFactory: @MainActor (URL) -> (any PlatformBridgeRunning)?
     let hotkeyRegistrar: any HotkeyRegistering
@@ -54,6 +55,7 @@ final class AppServices {
         sessionRegistry: SessionRegistry = SessionRegistry(),
         settingsStore: AgentSettingsStore = AgentSettingsStore(),
         sessionHistoryStore: SessionHistoryStore = SessionHistoryStore(),
+        actionManifestStore: ActionManifestStore = ActionManifestStore(),
         agentServerURL: URL = URL(string: "ws://127.0.0.1:4317/api/session")!,
         platformBridgeFactory: @escaping @MainActor (URL) -> (any PlatformBridgeRunning)? = { url in
             PlatformBridgeService(serverURL: url)
@@ -71,6 +73,7 @@ final class AppServices {
         self.sessionRegistry = sessionRegistry
         self.settingsStore = settingsStore
         self.sessionHistoryStore = sessionHistoryStore
+        self.actionManifestStore = actionManifestStore
         self.agentServerURL = agentServerURL
         self.platformBridgeFactory = platformBridgeFactory
         self.hotkeyRegistrar = hotkeyRegistrar
@@ -83,10 +86,14 @@ final class AppServices {
 
     static func testing(
         setActivationPolicy: @escaping @MainActor (NSApplication.ActivationPolicy) -> Void = { _ in },
-        settingsWindowPresenter: any SettingsWindowPresenting = NopSettingsWindowPresenter()
+        settingsWindowPresenter: any SettingsWindowPresenting = NopSettingsWindowPresenter(),
+        actionManifestStore: ActionManifestStore = ActionManifestStore(
+            pluginsDirectoryURL: URL(fileURLWithPath: "/dev/null", isDirectory: true)
+        )
     ) -> AppServices {
         AppServices(
             agentServer: NopAgentServerService(),
+            actionManifestStore: actionManifestStore,
             agentServerURL: URL(string: "ws://127.0.0.1:0/noop")!,
             platformBridgeFactory: { _ in nil },
             hotkeyRegistrar: NopHotkeyRegistrar(),

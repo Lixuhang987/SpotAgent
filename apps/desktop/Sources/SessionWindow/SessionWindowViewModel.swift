@@ -80,13 +80,18 @@ final class SessionWindowViewModel {
         createTabWithInitialPrompt(text, attachments: attachments)
     }
 
-    func createTabWithInitialPrompt(_ text: String, attachments: [UserMessageAttachmentPayload] = []) {
+    func createTabWithInitialPrompt(
+        _ text: String,
+        attachments: [UserMessageAttachmentPayload] = [],
+        actionBinding: ActionBindingPayload? = nil
+    ) {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedText.isEmpty else { return }
 
         pendingCreatedSessionPrompt = PendingCreatedSessionPrompt(
             text: trimmedText,
-            attachments: attachments
+            attachments: attachments,
+            actionBinding: actionBinding
         )
         historySocketClient.sendCreateSession()
     }
@@ -167,4 +172,5 @@ final class SessionWindowViewModel {
 private struct PendingCreatedSessionPrompt {
     let text: String
     let attachments: [UserMessageAttachmentPayload]
+    let actionBinding: ActionBindingPayload?
 }

@@ -1,5 +1,4 @@
 import Foundation
-import KeyboardShortcuts
 
 @Observable
 @MainActor
@@ -8,23 +7,33 @@ final class PromptPanelViewModel {
     var focusSeed = 0
     var attachments: [PromptAttachmentResult] = []
     private(set) var submissionDisabledMessage: String?
+    private(set) var isSubmissionInputDisabled = false
 
     var onSubmit: ((String, [PromptAttachmentResult]) -> Void)?
+    var onSubmitAction: ((String, ActionBindingPayload, [PromptAttachmentResult]) -> Void)?
     var onHide: (() -> Void)?
     var onOpenSettings: (() -> Void)?
     var onPreviewImage: ((PromptAttachmentResult) -> Void)?
 
-    @ObservationIgnored private var actions: [PromptAction]
+    @ObservationIgnored private var actions: [ActionDefinition]
 
-    var filteredActions: [PromptAction] {
-        PromptAction.filter(actions, query: draft)
+    var filteredActions: [ActionDefinition] {
+        let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return actions }
+
+        let query = trimmed.lowercased()
+        return actions.filter {
+            $0.trigger.lowercased().hasPrefix(query)
+                || $0.title.lowercased().contains(query)
+                || ($0.description?.lowercased().contains(query) ?? false)
+        }
     }
 
-    init(actions: [PromptAction]) {
+    init(actions: [ActionDefinition]) {
         self.actions = actions
     }
 
-    func updateActions(_ actions: [PromptAction]) {
+    func updateActions(_ actions: [ActionDefinition]) {
         self.actions = actions
     }
 
@@ -52,25 +61,44 @@ final class PromptPanelViewModel {
     }
 
     func setSubmissionEnabled(_ enabled: Bool, message: String?) {
+        isSubmissionInputDisabled = !enabled
         submissionDisabledMessage = enabled ? nil : message
     }
 
     func submit() {
         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        guard submissionDisabledMessage == nil else { return }
-        let payload = attachments.filter {
-            if case .selectionError = $0 { return false }
-            return true
+        guard !isSubmissionInputDisabled else { return }
+        submissionDisabledMessage = nil
+
+        switch ActionInvocation.parse(draft: draft, actions: actions) {
+        case .action(let parsed):
+            do {
+                let rendered = try parsed.renderedPrompt()
+                let binding = ActionBindingPayload(
+                    pluginId: parsed.action.pluginId,
+                    promptName: parsed.action.promptName
+                )
+                onSubmitAction?(rendered, binding, validAttachments())
+                resetForNewSession()
+            } catch ActionInvocationError.missingRequiredArgument(let name) {
+                submissionDisabledMessage = "缺少必填参数：\(name)"
+            } catch {
+                submissionDisabledMessage = "Action 渲染失败"
+            }
+            return
+        case .partial:
+            return
+        case .plain:
+            break
         }
-        onSubmit?(trimmed, payload)
+
+        onSubmit?(trimmed, validAttachments())
         resetForNewSession()
     }
 
-    func submitAction(_ action: PromptAction) {
-        action.perform()
-        resetForNewSession()
-        onHide?()
+    func selectAction(_ action: ActionDefinition) {
+        draft = action.arguments.isEmpty ? action.trigger : "\(action.trigger) "
     }
 
     func openSettings() {
@@ -78,7 +106,10 @@ final class PromptPanelViewModel {
         onHide?()
     }
 
-    func shortcutLabel(for action: PromptAction) -> String? {
-        KeyboardShortcuts.getShortcut(for: action.shortcutName)?.description
+    private func validAttachments() -> [PromptAttachmentResult] {
+        attachments.filter {
+            if case .selectionError = $0 { return false }
+            return true
+        }
     }
 }
