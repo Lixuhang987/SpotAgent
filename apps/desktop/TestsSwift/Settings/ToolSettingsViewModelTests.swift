@@ -5,9 +5,9 @@ import XCTest
 final class ToolSettingsViewModelTests: XCTestCase {
     @MainActor
     func testLoadsDenylistAsDisabledTool() throws {
-        let homeURL = makeTemporaryHomeDirectory()
+        let homeURL = TestFiles.makeTemporaryHomeDirectory()
         defer { try? FileManager.default.removeItem(at: homeURL) }
-        try writeSettings(
+        try TestFiles.writeSettings(
             homeURL,
             """
             {
@@ -27,7 +27,7 @@ final class ToolSettingsViewModelTests: XCTestCase {
 
     @MainActor
     func testDisablingToolAddsItToDenylist() throws {
-        let homeURL = makeTemporaryHomeDirectory()
+        let homeURL = TestFiles.makeTemporaryHomeDirectory()
         defer { try? FileManager.default.removeItem(at: homeURL) }
 
         let store = AgentSettingsStore(homeDirectoryURL: homeURL)
@@ -40,9 +40,9 @@ final class ToolSettingsViewModelTests: XCTestCase {
 
     @MainActor
     func testEnablingToolRemovesDenylistAndUpdatesAllowlistWhenPresent() throws {
-        let homeURL = makeTemporaryHomeDirectory()
+        let homeURL = TestFiles.makeTemporaryHomeDirectory()
         defer { try? FileManager.default.removeItem(at: homeURL) }
-        try writeSettings(
+        try TestFiles.writeSettings(
             homeURL,
             """
             {
@@ -66,7 +66,7 @@ final class ToolSettingsViewModelTests: XCTestCase {
 
     @MainActor
     func testBuiltinToolCatalogContainsExpectedToolsAndRiskLabels() {
-        let store = AgentSettingsStore(homeDirectoryURL: makeTemporaryHomeDirectory())
+        let store = AgentSettingsStore(homeDirectoryURL: TestFiles.makeTemporaryHomeDirectory())
         let viewModel = ToolSettingsViewModel(store: store)
 
         XCTAssertEqual(viewModel.tools.map(\.name), [
@@ -84,21 +84,4 @@ final class ToolSettingsViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.tools.first(where: { $0.name == "file.write" })?.riskLabel, "高风险")
     }
 
-    private func makeTemporaryHomeDirectory() -> URL {
-        let root = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-        let directory = root.appendingPathComponent(UUID().uuidString, isDirectory: true)
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        return directory
-    }
-
-    private func writeSettings(_ homeURL: URL, _ json: String) throws {
-        let fileURL = homeURL
-            .appendingPathComponent(".spotAgent", isDirectory: true)
-            .appendingPathComponent("settings.json")
-        try FileManager.default.createDirectory(
-            at: fileURL.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
-        try Data(json.utf8).write(to: fileURL)
-    }
 }

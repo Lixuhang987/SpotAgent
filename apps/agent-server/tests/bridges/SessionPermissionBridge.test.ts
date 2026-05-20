@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SessionMessage } from "@handagent/core/protocol/SessionMessage.ts";
-import { SessionPermissionBridge } from "./SessionPermissionBridge.ts";
+import { SessionPermissionBridge } from "../../src/SessionPermissionBridge.ts";
 
 describe("SessionPermissionBridge", () => {
   it("routes permission requests to the socket bound to each session", async () => {

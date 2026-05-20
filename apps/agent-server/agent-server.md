@@ -98,7 +98,8 @@ open dist/HandAgentDesktop.app
 
 - 修改 TS 后必须重启 desktop app（无 hot reload）。
 - 报错排查优先看 `~/.spotAgent/log/`（请求 / 响应 body）与 `~/.spotAgent/sessions/<id>.json`（事件审计）。
-- 测试：`bash ./scripts/test.sh` 跑 vitest 全量；单文件 `pnpm --filter @handagent/agent-server vitest run <file>`。
+- 测试统一放在 `tests/`，按职责分为 `bridges/`、`protocol/`、`server/`、`session/`、`settings/` 与 `support/`；不要再把 `.test.ts` 混进 `src/`。
+- 验证：`bash ./scripts/test.sh` 跑 vitest 全量；单文件 `pnpm exec vitest run apps/agent-server/tests/<dir>/<file>.test.ts`。
 
 ## 相关代码与文档
 

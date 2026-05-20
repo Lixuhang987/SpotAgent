@@ -46,7 +46,7 @@ Coordinator.send(.openSettings)
 - **视觉风格**：设置页面使用 `settingsCard()` 卡片容器 + `SettingsFieldStyle` 输入框 + `SettingsRow` 行布局，与 PromptPanel / SessionWindow 保持统一暗色玻璃风格。不要使用系统 `Form` / `GroupBox` / `.grouped` 样式。窗口标题栏设为透明 + fullSizeContentView，与 SessionWindow 一致。
 - **不要在 Settings 里读 LLM/tool 运行态**：宿主层不组装 LLM 消息，`api`/`baseURL`/`apiKey` 和工具开关只是写入 settings.json；agent-server 侧每次模型请求自己读模型配置，每轮 user message 前刷新 tool registry。
 - **快捷键只有两类模型**：全局快捷键仅包含“唤起面板 / 捕获文本选区 / 圈选区域截图”，由 Hotkey 注册为系统级热键；其余宿主动作归为 App 内快捷键，由 `AppScopeShortcutDispatcher` 在 App 激活范围内分发。不要再新增 PromptPanel 局部快捷键模型。
-- **测试**：[AgentSettingsViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/AgentSettingsViewModelTests.swift) 用临时 home 目录验证读写串通；[AgentSettingsStoreTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/AgentSettingsStoreTests.swift) 覆盖磁盘 IO + 轮询；[PermissionRulesViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/PermissionRulesViewModelTests.swift) 覆盖权限规则读取、参数摘要和撤销写回。
+- **测试**：[AgentSettingsViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/Settings/AgentSettingsViewModelTests.swift) 用临时 home 目录验证读写串通；[AgentSettingsStoreTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/AppServices/AgentSettings/AgentSettingsStoreTests.swift) 覆盖磁盘 IO + 轮询；[PermissionRulesViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/Settings/PermissionRulesViewModelTests.swift) 覆盖权限规则读取、参数摘要和撤销写回。
 
 ## 与其他模块的关系
 

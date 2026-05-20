@@ -32,7 +32,7 @@ SessionRegistry (@Observable) 变化
 - **动画在 View 内闭环**：glow pulse 等装饰性动画用 SwiftUI `withAnimation` 完成，不要污染 ViewModel。
 - **窗口与拖动区域**：`NSWindow` 设为 `isOpaque = false` + `backgroundColor = .clear` + `fullSizeContentView` + `titlebarAppearsTransparent`，避免气泡上方出现一条与 SwiftUI 圆角容器颜色不同的标题栏。`isMovableByWindowBackground = true` 让气泡所有空白区域都能拖；点击交互必须用 `onTapGesture` 挂在容器上而不是把整个内容包进 `Button`，否则 `Button` 会吞掉拖拽手势。
 - **首点击即生效**：Controller 用带 `.nonactivatingPanel` 样式的 `NSPanel`（且 `canBecomeKey = false`），点击不会被 AppKit 截走用于激活窗口/切换 key，直接派发为 `mouseDown` 触发 `onTapGesture`。不要换回普通 `NSWindow` 或试图通过包裹一层 `NSView` 重写 `acceptsFirstMouse` 来解决——AppKit 在 hit-test 后只会询问命中的叶子视图（即 `NSHostingView` 内部子树），外层包裹的覆写不会被采纳。
-- **测试**：[StatusBubbleViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/StatusBubbleViewModelTests.swift) 覆盖空 / 运行 / 已结束三种 registry 状态。
+- **测试**：[StatusBubbleViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/StatusBubble/StatusBubbleViewModelTests.swift) 覆盖空 / 运行 / 已结束三种 registry 状态。
 
 ## 与其他模块的关系
 

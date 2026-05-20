@@ -5,7 +5,7 @@ import XCTest
 final class AgentSettingsStoreTests: XCTestCase {
     @MainActor
     func testLoadsDefaultsWhenSettingsFileDoesNotExist() {
-        let homeURL = makeTemporaryHomeDirectory()
+        let homeURL = TestFiles.makeTemporaryHomeDirectory()
         defer { try? FileManager.default.removeItem(at: homeURL) }
 
         let store = AgentSettingsStore(homeDirectoryURL: homeURL)
@@ -15,7 +15,7 @@ final class AgentSettingsStoreTests: XCTestCase {
 
     @MainActor
     func testPersistsSettingsToDotSpotAgentSettingsJSON() throws {
-        let homeURL = makeTemporaryHomeDirectory()
+        let homeURL = TestFiles.makeTemporaryHomeDirectory()
         defer { try? FileManager.default.removeItem(at: homeURL) }
 
         let store = AgentSettingsStore(homeDirectoryURL: homeURL)
@@ -43,10 +43,10 @@ final class AgentSettingsStoreTests: XCTestCase {
 
     @MainActor
     func testUpdatingModelSettingsPreservesToolSettings() throws {
-        let homeURL = makeTemporaryHomeDirectory()
+        let homeURL = TestFiles.makeTemporaryHomeDirectory()
         defer { try? FileManager.default.removeItem(at: homeURL) }
 
-        let fileURL = Self.settingsFileURL(homeURL)
+        let fileURL = TestFiles.settingsFileURL(homeURL)
         try FileManager.default.createDirectory(
             at: fileURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
@@ -73,7 +73,7 @@ final class AgentSettingsStoreTests: XCTestCase {
             settings.model = "gpt-4.1"
         }
 
-        let json = try Self.readJSON(fileURL)
+        let json = try TestFiles.readJSON(fileURL)
         let tools = json["tools"] as? [String: Any]
         XCTAssertEqual(tools?["allowlist"] as? [String], ["file.read", "clipboard.read"])
         XCTAssertEqual(tools?["denylist"] as? [String], ["screen.capture"])
@@ -81,10 +81,10 @@ final class AgentSettingsStoreTests: XCTestCase {
 
     @MainActor
     func testUpdatingToolSettingsPreservesModelSettings() throws {
-        let homeURL = makeTemporaryHomeDirectory()
+        let homeURL = TestFiles.makeTemporaryHomeDirectory()
         defer { try? FileManager.default.removeItem(at: homeURL) }
 
-        let fileURL = Self.settingsFileURL(homeURL)
+        let fileURL = TestFiles.settingsFileURL(homeURL)
         try FileManager.default.createDirectory(
             at: fileURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
@@ -108,7 +108,7 @@ final class AgentSettingsStoreTests: XCTestCase {
             tools.denylist = ["file.write"]
         }
 
-        let json = try Self.readJSON(fileURL)
+        let json = try TestFiles.readJSON(fileURL)
         let llm = json["llm"] as? [String: Any]
         let tools = json["tools"] as? [String: Any]
         XCTAssertEqual(llm?["provider"] as? String, "anthropic")
@@ -122,10 +122,10 @@ final class AgentSettingsStoreTests: XCTestCase {
 
     @MainActor
     func testLoadsToolDenylistFromDisk() throws {
-        let homeURL = makeTemporaryHomeDirectory()
+        let homeURL = TestFiles.makeTemporaryHomeDirectory()
         defer { try? FileManager.default.removeItem(at: homeURL) }
 
-        let fileURL = Self.settingsFileURL(homeURL)
+        let fileURL = TestFiles.settingsFileURL(homeURL)
         try FileManager.default.createDirectory(
             at: fileURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
@@ -149,7 +149,7 @@ final class AgentSettingsStoreTests: XCTestCase {
 
     @MainActor
     func testReloadsSettingsFromDiskAfterExternalChange() throws {
-        let homeURL = makeTemporaryHomeDirectory()
+        let homeURL = TestFiles.makeTemporaryHomeDirectory()
         defer { try? FileManager.default.removeItem(at: homeURL) }
 
         let fileURL = homeURL
@@ -204,21 +204,4 @@ final class AgentSettingsStoreTests: XCTestCase {
         )
     }
 
-    private func makeTemporaryHomeDirectory() -> URL {
-        let root = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-        let directory = root.appendingPathComponent(UUID().uuidString, isDirectory: true)
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        return directory
-    }
-
-    private static func settingsFileURL(_ homeURL: URL) -> URL {
-        homeURL
-            .appendingPathComponent(".spotAgent", isDirectory: true)
-            .appendingPathComponent("settings.json")
-    }
-
-    private static func readJSON(_ fileURL: URL) throws -> [String: Any] {
-        let data = try Data(contentsOf: fileURL)
-        return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-    }
 }

@@ -5,9 +5,9 @@ import XCTest
 final class PermissionRulesViewModelTests: XCTestCase {
     @MainActor
     func testLoadsPermissionRulesFromDotSpotAgentPermissionsJSON() throws {
-        let homeURL = makeTemporaryHomeDirectory()
+        let homeURL = TestFiles.makeTemporaryHomeDirectory()
         defer { try? FileManager.default.removeItem(at: homeURL) }
-        let fileURL = permissionsFileURL(homeURL)
+        let fileURL = TestFiles.permissionsFileURL(homeURL)
         try FileManager.default.createDirectory(
             at: fileURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
@@ -45,9 +45,9 @@ final class PermissionRulesViewModelTests: XCTestCase {
 
     @MainActor
     func testRevokeRemovesPermissionRuleAndPreservesOtherRules() throws {
-        let homeURL = makeTemporaryHomeDirectory()
+        let homeURL = TestFiles.makeTemporaryHomeDirectory()
         defer { try? FileManager.default.removeItem(at: homeURL) }
-        let fileURL = permissionsFileURL(homeURL)
+        let fileURL = TestFiles.permissionsFileURL(homeURL)
         try FileManager.default.createDirectory(
             at: fileURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
@@ -80,22 +80,8 @@ final class PermissionRulesViewModelTests: XCTestCase {
         viewModel.revoke(ruleId: "hash-1")
 
         XCTAssertEqual(viewModel.rules.map(\.id), ["hash-2"])
-        let data = try Data(contentsOf: fileURL)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let json = try TestFiles.readJSON(fileURL)
         let rules = try XCTUnwrap(json["rules"] as? [[String: Any]])
         XCTAssertEqual(rules.map { $0["argHash"] as? String }, ["hash-2"])
-    }
-
-    private func makeTemporaryHomeDirectory() -> URL {
-        let root = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-        let directory = root.appendingPathComponent(UUID().uuidString, isDirectory: true)
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        return directory
-    }
-
-    private func permissionsFileURL(_ homeURL: URL) -> URL {
-        homeURL
-            .appendingPathComponent(".spotAgent", isDirectory: true)
-            .appendingPathComponent("permissions.json")
     }
 }

@@ -4,7 +4,7 @@ import XCTest
 final class AgentSettingsViewModelTests: XCTestCase {
     @MainActor
     func testModelPropertyReadsFromStore() {
-        let homeURL = makeTemporaryHomeDirectory()
+        let homeURL = TestFiles.makeTemporaryHomeDirectory()
         defer { try? FileManager.default.removeItem(at: homeURL) }
 
         let store = AgentSettingsStore(homeDirectoryURL: homeURL)
@@ -15,7 +15,7 @@ final class AgentSettingsViewModelTests: XCTestCase {
 
     @MainActor
     func testSettingModelPersistsToStore() {
-        let homeURL = makeTemporaryHomeDirectory()
+        let homeURL = TestFiles.makeTemporaryHomeDirectory()
         defer { try? FileManager.default.removeItem(at: homeURL) }
 
         let store = AgentSettingsStore(homeDirectoryURL: homeURL)
@@ -28,7 +28,7 @@ final class AgentSettingsViewModelTests: XCTestCase {
 
     @MainActor
     func testSettingProviderPersistsToStore() {
-        let homeURL = makeTemporaryHomeDirectory()
+        let homeURL = TestFiles.makeTemporaryHomeDirectory()
         defer { try? FileManager.default.removeItem(at: homeURL) }
 
         let store = AgentSettingsStore(homeDirectoryURL: homeURL)
@@ -41,7 +41,7 @@ final class AgentSettingsViewModelTests: XCTestCase {
 
     @MainActor
     func testSettingAPIPersistsToStore() {
-        let homeURL = makeTemporaryHomeDirectory()
+        let homeURL = TestFiles.makeTemporaryHomeDirectory()
         defer { try? FileManager.default.removeItem(at: homeURL) }
 
         let store = AgentSettingsStore(homeDirectoryURL: homeURL)
@@ -52,10 +52,4 @@ final class AgentSettingsViewModelTests: XCTestCase {
         XCTAssertEqual(store.settings.api, .chat)
     }
 
-    private func makeTemporaryHomeDirectory() -> URL {
-        let root = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-        let directory = root.appendingPathComponent(UUID().uuidString, isDirectory: true)
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        return directory
-    }
 }

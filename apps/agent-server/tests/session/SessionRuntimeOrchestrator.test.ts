@@ -3,10 +3,9 @@ import type { AgentMessage } from "@handagent/core/runtime/AgentMessage.ts";
 import type { AgentRuntimeEvent } from "@handagent/core/runtime/AgentRuntime.ts";
 import type { SessionMessage } from "@handagent/core/protocol/SessionMessage.ts";
 import { InMemorySessionStore } from "@handagent/core/storage/index.ts";
-import { SessionPersistence } from "./SessionPersistence.ts";
-import { SessionRuntimeOrchestrator } from "./SessionRuntimeOrchestrator.ts";
-import type { BlobRecord } from "@handagent/core/blob/BlobRecord.ts";
-import type { BlobStore } from "@handagent/core/blob/BlobStore.ts";
+import { MemoryBlobStore } from "../support/MemoryBlobStore.ts";
+import { SessionPersistence } from "../../src/SessionPersistence.ts";
+import { SessionRuntimeOrchestrator } from "../../src/SessionRuntimeOrchestrator.ts";
 
 function createUserMessage(
   sessionId: string,
@@ -20,39 +19,6 @@ function createUserMessage(
     timestamp: "2026-05-11T10:00:00.000Z",
     payload: { text },
   };
-}
-
-class MemoryBlobStore implements BlobStore {
-  records: BlobRecord[] = [];
-  contents = new Map<string, Buffer>();
-
-  async put(input: { kind: string; bytes: Buffer; extension: string }): Promise<BlobRecord> {
-    const id = `blob-${this.records.length + 1}`;
-    const record: BlobRecord = {
-      id,
-      kind: input.kind,
-      size: input.bytes.byteLength,
-      path: `/tmp/${id}.${input.extension}`,
-    };
-    this.records.push(record);
-    this.contents.set(id, input.bytes);
-    return record;
-  }
-
-  async get(id: string): Promise<BlobRecord | undefined> {
-    return this.records.find((record) => record.id === id);
-  }
-
-  async readContent(id: string): Promise<Buffer> {
-    const content = this.contents.get(id);
-    if (!content) throw new Error(`Blob not found: ${id}`);
-    return content;
-  }
-
-  async setSummary(id: string, summary: string): Promise<void> {
-    const record = await this.get(id);
-    if (record) record.summary = summary;
-  }
 }
 
 describe("SessionRuntimeOrchestrator", () => {

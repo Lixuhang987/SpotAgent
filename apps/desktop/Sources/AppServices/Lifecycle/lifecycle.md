@@ -23,7 +23,7 @@
 
 - 计数与策略派生是纯逻辑，不调 `NSApp`；切换由 [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 中的 `setActivationPolicy` 闭包完成（测试可注入 mock）。
 - 不要在此处依赖 SwiftUI / AppKit。
-- 测试：[AppActivationPolicyCoordinatorTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/AppActivationPolicyCoordinatorTests.swift)。
+- 测试：[AppActivationPolicyCoordinatorTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/AppServices/Lifecycle/AppActivationPolicyCoordinatorTests.swift)。
 
 ## 与其他模块的关系
 

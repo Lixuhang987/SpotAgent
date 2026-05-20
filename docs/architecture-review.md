@@ -112,7 +112,7 @@
 
 **测试覆盖**：
 
-- `apps/agent-server/src/path-alias.test.ts` 扫描 agent-server 源码，断言不再出现 `../../../packages/core`。
+- `apps/agent-server/tests/path-alias.test.ts` 扫描 agent-server 源码，断言不再出现 `../../../packages/core`。
 - 额外手工验证 Node 可直接 import `apps/agent-server/src/server.ts` 并解析 `@handagent/core`。
 
 ---

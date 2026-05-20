@@ -57,7 +57,7 @@ Coordinator.handleSubmitPrompt
 - 不要重新引入独立历史窗口；历史列表属于全局 SessionWindow。
 - 新事件类型必须先在 agent-server 与前端 `SessionEvent` enum 同步定义，再加到对应 view model 的 `handle(_:)`。
 - 历史删除必须确认；任何 UI 入口删除持久化会话前都先进入待确认状态。
-- 测试：[SessionTabViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/SessionTabViewModelTests.swift)、[SessionWindowViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/SessionWindowViewModelTests.swift)、[SessionSocketClientTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/SessionSocketClientTests.swift)。
+- 测试：[SessionTabViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/SessionWindow/SessionTabViewModelTests.swift)、[SessionWindowViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/SessionWindow/SessionWindowViewModelTests.swift)、[SessionSocketClientTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/SessionWindow/SessionSocketClientTests.swift)。
 
 ## 与其他模块的关系
 
