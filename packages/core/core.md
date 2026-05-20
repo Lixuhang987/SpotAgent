@@ -15,7 +15,9 @@ TypeScript workspace 包名为 `@handagent/core`。应用层代码应通过 `@ha
 | 子模块 | 职责 | 文档 |
 |------|------|------|
 | `runtime/` | 会话循环、消息模型、tool call 编排 | [runtime/runtime.md](/Users/mu9/proj/handAgent/packages/core/src/runtime/runtime.md) |
+| `actions/` | Action Plugin manifest 与 session binding 解析 | [actions/actions.md](/Users/mu9/proj/handAgent/packages/core/src/actions/actions.md) |
 | `llm/` | LLMClient 抽象与 Vercel AI SDK 适配 | [llm/llm.md](/Users/mu9/proj/handAgent/packages/core/src/llm/llm.md) |
+| `mcp/` | 标准 MCP client 与 tool adapter | [mcp/mcp.md](/Users/mu9/proj/handAgent/packages/core/src/mcp/mcp.md) |
 | `tools/` | AgentTool 协议、ToolRegistry、11 个 builtin tool | [tools/tools.md](/Users/mu9/proj/handAgent/packages/core/src/tools/tools.md) |
 | `platform/` | PlatformAdapter / PlatformBridge / RemotePlatformAdapter / OfflinePlatformAdapter | [platform/platform.md](/Users/mu9/proj/handAgent/packages/core/src/platform/platform.md) |
 | `permission/` | 权限策略接口与文件持久化实现 | [permission/permission.md](/Users/mu9/proj/handAgent/packages/core/src/permission/permission.md) |
@@ -128,6 +130,6 @@ flowchart TD
 
 ## 测试目录
 
-`packages/core/tests/` 按 `src/` 的模块边界分组，例如 `runtime/`、`tools/`、`llm/`、`workspace/`。新增测试优先放入对应模块目录；builtin tool 相关测试放在 `tests/tools/builtins/`，本地插件测试放在 `tests/tools/plugins/`。
+`packages/core/tests/` 按 `src/` 的模块边界分组，例如 `runtime/`、`tools/`、`llm/`、`workspace/`、`actions/`、`mcp/`。新增测试优先放入对应模块目录；builtin tool 相关测试放在 `tests/tools/builtins/`。
 
 日常 `bash ./scripts/test.sh` 直接运行整棵 `packages/core/tests`，不要在脚本中继续维护扁平文件清单。真实 LLM API 测试位于 `tests/llm/vercel-client.integration.test.ts`，默认 skip，仅通过 `pnpm run test:llm:integration` 显式开启。

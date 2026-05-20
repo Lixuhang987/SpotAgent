@@ -20,7 +20,8 @@
 - 测试模式走 `AppServices.testing()` 注入 nop 替身，跳过窗口/进程/激活策略副作用。
 - 窗口生命周期由 lifecycle 控制器闭环：`SessionWindowLifecycle` 管全局 SessionWindow，`SettingsLifecycle` 管 Settings；Coordinator 不持有 AppKit 对象。
 - 历史入口语义：`openHistory` 聚焦全局 SessionWindow 并刷新左侧历史，不打开独立窗口，不改变 active tab。
-- PromptPanel 提交语义：`submitPrompt` 复用全局 SessionWindow，但每次提交都通过 `create_session_request` 创建新 session/tab；SessionWindow 底部 composer 才会在已有 active tab 中继续追问。
+- PromptPanel 提交语义：`submitPrompt` 与 `submitActionPrompt` 都复用全局 SessionWindow，但每次提交都通过 `create_session_request` 创建新 session/tab；SessionWindow 底部 composer 才会在已有 active tab 中继续追问。
+- Action prompt 由 PromptPanel 先渲染 template，再携带 `{ pluginId, promptName }` 作为 `actionBinding` 创建新 session。
 - agent-server 健康状态独立：server 不可用时拒绝 `submitPrompt` 并保留面板草稿。
 
 ## 当前 Action 列表
@@ -28,7 +29,7 @@
 ```
 showPromptPanel / hidePromptPanel / togglePromptPanel
 submitPrompt(String, attachments: [PromptAttachmentResult])
-submitAction(PromptAction)
+submitActionPrompt(String, actionBinding: ActionBindingPayload, attachments: [PromptAttachmentResult])
 openSettings / settingsWindowClosed
 openHistory / sessionWindowClosed
 statusBubbleTapped(String?)
