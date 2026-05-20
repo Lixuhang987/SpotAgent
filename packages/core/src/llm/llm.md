@@ -11,7 +11,7 @@ LLMClient 抽象 + `LLMClientFactory` provider 分发；生产实现包含 OpenA
 | `LLMClientFactory.ts` | 根据 `ModelSettings.provider` 创建 provider client，并显式声明 `streaming / toolCalling / multimodal` capability；对不支持图片的 provider 请求提前抛错，对不支持 tool calling 的路径传空 tools 降级 |
 | `VercelAdapters.ts` | 内部 `AgentMessage[]` ↔ Vercel AI SDK `ModelMessage[]` 翻译；把 user image part 的 blobId 读取成 SDK image part；`sanitizeToolName` 把 `file.read` → `file_read`（OpenAI 网关不允许点号） |
 | `VercelClient.ts` | 实例化 `@ai-sdk/openai` provider，按 `api ∈ {responses, chat, completion}` 选择 model；可注入 `NetworkLogger` 把请求 / 响应 JSONL 落盘 |
-| `MockLLMClient.ts` | 日常 QA 的固定触发词 LLM 实现；`mockLLMScenarios` 是 mock 场景唯一真源，覆盖普通回复、tool call、tool result、错误、慢响应与异常 tool 等路径 |
+| `MockLLMClient.ts` | 日常 QA 的固定触发词 LLM 实现；实现 `stream()` 与兼容 `complete()`，`mockLLMScenarios` 是 mock 场景唯一真源，覆盖普通回复、tool call、tool result、错误、慢响应与异常 tool 等路径 |
 
 ## 调用关系
 
@@ -34,7 +34,7 @@ AgentRuntime
 
 ## 设计要点
 
-- **真实 streaming**：`AgentRuntime` 主路径消费 `stream()`，把每个 `text_delta` 直接转成 `assistant_message_delta`。`tool_call` 事件会进入 runtime 的 tool 调用队列，`message_end` 给出最终 assistant message 与 toolCalls 快照。测试 fake 可只实现 `stream()`；旧的 `complete()` fake 仍由 helper 兼容。
+- **真实 streaming**：`AgentRuntime` 主路径消费 `stream()`，把每个 `text_delta` 直接转成 `assistant_message_delta`。`tool_call` 事件会进入 runtime 的 tool 调用队列，`message_end` 给出最终 assistant message 与 toolCalls 快照。测试 fake 可只实现 `stream()`；旧的 `complete()` fake 仍由 helper 兼容。`MockLLMClient` 也实现 `stream()`，让 mock 模式可以验证 agent-server 到 desktop 的多段 delta 渲染链路。
 - **settings mtime cache**：生产路径走 `agent-server/SettingsBackedLLMClient`，每次 `stream()` / `complete()` 先检查 `~/.spotAgent/settings.json` 的 `mtimeMs + size` stamp；stamp 未变复用现有 provider client，stamp 变化后重读 settings，并只在有效 LLM 配置变化时经 `LLMClientFactory` 新建 client。用户改 settings 写盘后，下一次 LLM 请求可见。
 - **provider capability**：factory 返回 `{client, capabilities}`。当前 `openai-compatible` 的 `responses/chat` 与 `anthropic` 均声明支持 streaming、tool calling、多模态；`openai-compatible + api=completion` 声明不支持 tool calling 与多模态。多模态不支持时会在 provider 调用前抛明确错误；tool calling 不支持时传空 tools，让 runtime 退化为纯文本请求。
 - **多模态图片**：`AgentMessage.user.content` 支持字符串或 `text/image` content parts。agent-server 持久化时仍保存 image STUB，调用 runtime 前才转为 `{ type: "image"; blobId; mimeType }`；`VercelAdapters` 需要 `options.blobStore` 才能读取 bytes 并生成 AI SDK image part。
