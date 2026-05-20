@@ -6,7 +6,12 @@
 
 | 文件 | 职责 |
 |------|------|
-| `SessionWindowView.swift` | 纯 UI：历史侧栏、tab bar、运行态 Stop 控件、连接状态 banner、消息列表、附件摘要、错误 banner、权限审批气泡、workspace 选择气泡、输入框 |
+| `SessionWindowView.swift` | 根布局：组合历史侧栏、右侧会话工作区与删除确认 alert；不直接写行、tab、消息或气泡细节 |
+| `SessionHistorySidebarView.swift` | 左侧历史列表容器与整行可点击的历史行组件 |
+| `SessionWorkspaceView.swift` | 右侧工作区容器、状态 header、连接 banner、空态与输入 composer |
+| `SessionTabBarView.swift` | tab bar 容器与单个 tab item |
+| `SessionContentView.swift` | 消息列表、消息气泡、附件行与错误 banner |
+| `SessionRequestBubbleViews.swift` | 权限审批气泡与 workspace 选择气泡 |
 | `SessionWindowViewModel.swift` | 窗口级状态：`historyList`、`tabs`、`activeTabID`、删除确认、空态提示；负责打开/激活历史会话、创建新会话、关闭 tab |
 | `SessionTabViewModel.swift` | 单 tab 状态：`sessionID`、socket、消息、运行态、连接态、权限请求、workspace ask；消费 tab 级 `SessionEvent` |
 | `SessionViewModel.swift` | 旧单会话 view model 兼容层，保留消息/附件归一化类型与既有测试覆盖 |
