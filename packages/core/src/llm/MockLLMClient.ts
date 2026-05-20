@@ -1,4 +1,9 @@
-import type { LLMClient, LLMCompleteOptions, LLMCompletion } from "./LLMClient.ts";
+import type {
+  LLMClient,
+  LLMCompleteOptions,
+  LLMCompletion,
+  LLMStreamEvent,
+} from "./LLMClient.ts";
 import type { AgentMessage } from "../runtime/AgentMessage.ts";
 import type { RegisteredTool } from "../tools/ToolRegistry.ts";
 
@@ -268,6 +273,32 @@ export class MockLLMClient implements LLMClient {
     }
     return scenario.complete({ messages, tools, options });
   }
+
+  async *stream(
+    messages: AgentMessage[],
+    tools: RegisteredTool[],
+    options?: LLMCompleteOptions,
+  ): AsyncIterable<LLMStreamEvent> {
+    const completion = await this.complete(messages, tools, options);
+    throwIfAborted(options?.signal);
+
+    for (const text of chunkText(completion.message.content)) {
+      throwIfAborted(options?.signal);
+      yield { type: "text_delta", text };
+    }
+
+    for (const toolCall of completion.toolCalls ?? []) {
+      throwIfAborted(options?.signal);
+      yield { type: "tool_call", toolCall };
+    }
+
+    throwIfAborted(options?.signal);
+    yield {
+      type: "message_end",
+      message: completion.message,
+      toolCalls: completion.toolCalls ?? [],
+    };
+  }
 }
 
 function findScenario(
@@ -323,6 +354,15 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
       reject(createAbortError());
     }, { once: true });
   });
+}
+
+function chunkText(text: string): string[] {
+  return text.match(/\S+\s*/g) ?? [];
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (!signal?.aborted) return;
+  throw createAbortError();
 }
 
 function createAbortError(): Error {

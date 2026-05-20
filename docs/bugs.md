@@ -13,12 +13,13 @@
 
 ##  测试备注
 
-### mock-llm 不能证明真实 vision 与 token streaming
+### mock-llm 不能证明真实 vision 与真实 provider token streaming
 
 - 2026-05-19 本轮实机 QA 使用 `bash ./scripts/package-app.sh --mock-llm` 打包启动。
 - 图片附件链路可验证到 Quick Look、SessionWindow 摘要、blob stub 持久化；但 `[mock:image-summary]` 只返回固定文本，不能证明真实 LLM 基于图片内容描述。
-- `[mock:assistant-ok]` 为一次性 mock assistant 回复，不能证明真实 token delta 至少 5 段逐段更新。
-- 结论：第 45、46 项需要 real LLM 环境单独验证。
+- 2026-05-20 已补充 `MockLLMClient.stream()`；`[mock:assistant-ok]` 可验证 mock 模式下 agent-server 到 desktop 的多段 `assistant_message_delta` 渲染链路。
+- 但 mock delta 是本地确定性分片，仍不能证明真实 provider 的网络 streaming、token 到达节奏或 vision 理解能力。
+- 结论：真实 vision 与真实 provider token streaming 仍需要 real LLM 环境单独验证。
 
 ### `System Events click at` 不适合作为状态气泡点击的唯一证据
 

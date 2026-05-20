@@ -67,6 +67,78 @@ describe("MockLLMClient", () => {
     });
   });
 
+  it("streams assistant text as deterministic deltas", async () => {
+    const client = new MockLLMClient();
+
+    const events = [];
+    for await (const event of client.stream(
+      [{ role: "user", content: "run [mock:assistant-ok]" }],
+      [],
+    )) {
+      events.push(event);
+    }
+
+    expect(events).toEqual([
+      { type: "text_delta", text: "Mock " },
+      { type: "text_delta", text: "assistant " },
+      { type: "text_delta", text: "response: " },
+      { type: "text_delta", text: "main " },
+      { type: "text_delta", text: "chain " },
+      { type: "text_delta", text: "is " },
+      { type: "text_delta", text: "reachable." },
+      {
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: "Mock assistant response: main chain is reachable.",
+        },
+        toolCalls: [],
+      },
+    ]);
+  });
+
+  it("streams tool calls before the message end event", async () => {
+    const client = new MockLLMClient();
+
+    const events = [];
+    for await (const event of client.stream(
+      [{ role: "user", content: "run [mock:file-write]" }],
+      [],
+    )) {
+      events.push(event);
+    }
+
+    expect(events).toEqual([
+      {
+        type: "tool_call",
+        toolCall: {
+          id: "mock-file-write-1",
+          name: "file.write",
+          arguments: {
+            workspaceId: "qa-workspace",
+            relativePath: "hello.txt",
+            content: "hello from MockLLMClient",
+          },
+        },
+      },
+      {
+        type: "message_end",
+        message: { role: "assistant", content: "" },
+        toolCalls: [
+          {
+            id: "mock-file-write-1",
+            name: "file.write",
+            arguments: {
+              workspaceId: "qa-workspace",
+              relativePath: "hello.txt",
+              content: "hello from MockLLMClient",
+            },
+          },
+        ],
+      },
+    ]);
+  });
+
   it("returns a real-shape file.write tool call and then a final answer", async () => {
     const client = new MockLLMClient();
     const first = await client.complete(
