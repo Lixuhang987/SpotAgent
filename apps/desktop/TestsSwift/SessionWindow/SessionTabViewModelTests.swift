@@ -49,6 +49,120 @@ final class SessionTabViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testOpenSessionSnapshotDoesNotClearInFlightLocalPrompt() {
+        let tab = SessionTabViewModel(
+            tabID: "tab-1",
+            sessionID: "session-1",
+            socketClient: .noop
+        )
+
+        tab.sendPrompt("hello from panel")
+        tab.handle(.sessionSnapshot(messages: [], status: "idle"))
+
+        XCTAssertEqual(tab.messages.map(\.text), ["hello from panel"])
+        XCTAssertEqual(tab.status, .running)
+    }
+
+    @MainActor
+    func testOpenSessionSnapshotDoesNotClearStreamingAssistantBubble() {
+        let tab = SessionTabViewModel(
+            tabID: "tab-1",
+            sessionID: "session-1",
+            socketClient: .noop
+        )
+
+        tab.sendPrompt("hello from panel")
+        tab.handle(.assistantMessageStart(messageID: "assistant-1", timestamp: "2026-05-20T00:00:00.000Z"))
+        tab.handle(.assistantMessageDelta(
+            messageID: "assistant-1",
+            text: "hi",
+            timestamp: "2026-05-20T00:00:00.100Z"
+        ))
+        tab.handle(.sessionSnapshot(
+            messages: [SessionBubble(id: "msg-0", role: "user", text: "hello from panel")],
+            status: "idle"
+        ))
+
+        XCTAssertEqual(tab.messages.map(\.text), ["hello from panel", "hi"])
+        XCTAssertEqual(tab.status, .running)
+    }
+
+    @MainActor
+    func testOpenSessionSnapshotWithPersistedPromptKeepsLocalTurnRunning() {
+        let tab = SessionTabViewModel(
+            tabID: "tab-1",
+            sessionID: "session-1",
+            socketClient: .noop
+        )
+
+        tab.sendPrompt("hello from panel")
+        tab.handle(.sessionSnapshot(
+            messages: [SessionBubble(id: "msg-0", role: "user", text: "hello from panel")],
+            status: "idle"
+        ))
+
+        XCTAssertEqual(tab.messages.map(\.text), ["hello from panel"])
+        XCTAssertEqual(tab.status, .running)
+    }
+
+    @MainActor
+    func testLateStaleSnapshotDoesNotClearCompletedLocalAssistantBubble() {
+        let tab = SessionTabViewModel(
+            tabID: "tab-1",
+            sessionID: "session-1",
+            socketClient: .noop
+        )
+
+        tab.sendPrompt("hello from panel")
+        tab.handle(.assistantMessageStart(messageID: "assistant-1", timestamp: "2026-05-20T00:00:00.000Z"))
+        tab.handle(.assistantMessageDelta(
+            messageID: "assistant-1",
+            text: "hi",
+            timestamp: "2026-05-20T00:00:00.100Z"
+        ))
+        tab.handle(.assistantMessageEnd(
+            messageID: "assistant-1",
+            status: "completed",
+            timestamp: "2026-05-20T00:00:00.200Z"
+        ))
+        tab.handle(.sessionSnapshot(
+            messages: [SessionBubble(id: "msg-0", role: "user", text: "hello from panel")],
+            status: "idle"
+        ))
+
+        XCTAssertEqual(tab.messages.map(\.text), ["hello from panel", "hi"])
+        XCTAssertEqual(tab.status, .idle)
+    }
+
+    @MainActor
+    func testStaleSnapshotWithRepeatedPromptTextKeepsNewLocalTurnRunning() {
+        let tab = SessionTabViewModel(
+            tabID: "tab-1",
+            sessionID: "session-1",
+            socketClient: .noop
+        )
+
+        tab.handle(.sessionSnapshot(
+            messages: [
+                SessionBubble(id: "msg-0", role: "user", text: "repeat"),
+                SessionBubble(id: "msg-1", role: "assistant", text: "old reply"),
+            ],
+            status: "idle"
+        ))
+        tab.sendPrompt("repeat")
+        tab.handle(.sessionSnapshot(
+            messages: [
+                SessionBubble(id: "msg-0", role: "user", text: "repeat"),
+                SessionBubble(id: "msg-1", role: "assistant", text: "old reply"),
+            ],
+            status: "idle"
+        ))
+
+        XCTAssertEqual(tab.messages.map(\.text), ["repeat", "old reply", "repeat"])
+        XCTAssertEqual(tab.status, .running)
+    }
+
+    @MainActor
     func testOpenFailedMarksTabInvalid() {
         let tab = SessionTabViewModel(
             tabID: "tab-1",

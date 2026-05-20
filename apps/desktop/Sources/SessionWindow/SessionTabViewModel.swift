@@ -25,6 +25,7 @@ final class SessionTabViewModel: Identifiable {
     @ObservationIgnored let socketClient: SessionSocketClient
     @ObservationIgnored private let copyMessageText: @MainActor (String) -> Void
     @ObservationIgnored private let onStateChanged: @MainActor (SessionTabViewModel) -> Void
+    @ObservationIgnored private var pendingLocalTurnStartIndex: Int?
 
     init(
         tabID: String,
@@ -61,6 +62,7 @@ final class SessionTabViewModel: Identifiable {
         let messageID = UUID().uuidString
         let timestamp = Self.timestamp()
         appendUserMessage(messageID: messageID, text: trimmedText, attachments: attachments)
+        pendingLocalTurnStartIndex = messages.count - 1
         onStateChanged(self)
         socketClient.sendUserMessage(
             sessionID: sessionID,
@@ -144,11 +146,10 @@ final class SessionTabViewModel: Identifiable {
             }
             shouldNotifyStateChanged = true
         case .sessionSnapshot(let messages, let status):
-            self.messages = messages.map { $0.normalizedForDisplay() }
-            self.status = .fromProtocolStatus(status)
-            error = nil
+            applySessionSnapshot(messages: messages, status: status)
             shouldNotifyStateChanged = true
         case .sessionOpenFailed(_, let message), .userMessageFailed(_, let message):
+            pendingLocalTurnStartIndex = nil
             isInvalid = true
             invalidReason = message
             status = .failed
@@ -195,5 +196,61 @@ final class SessionTabViewModel: Identifiable {
 
     private static func timestamp() -> String {
         ISO8601DateFormatter().string(from: Date())
+    }
+
+    private func applySessionSnapshot(messages: [SessionBubble], status: String) {
+        let snapshotMessages = messages.map { $0.normalizedForDisplay() }
+        guard let pendingLocalTurnStartIndex else {
+            self.messages = snapshotMessages
+            self.status = .fromProtocolStatus(status)
+            error = nil
+            return
+        }
+
+        let previousStatus = self.status
+        let previousError = error
+        self.messages = Self.mergeSnapshot(snapshotMessages, preservingLocalSuffixFrom: self.messages)
+        let snapshotCompletesPendingTurn = Self.snapshotCompletesPendingTurn(
+            snapshotMessages,
+            pendingTurnStartIndex: pendingLocalTurnStartIndex
+        )
+
+        if !snapshotCompletesPendingTurn {
+            self.status = previousStatus
+            error = previousError
+            return
+        }
+
+        self.pendingLocalTurnStartIndex = nil
+        self.status = .fromProtocolStatus(status)
+        error = nil
+    }
+
+    private static func mergeSnapshot(
+        _ snapshotMessages: [SessionBubble],
+        preservingLocalSuffixFrom localMessages: [SessionBubble]
+    ) -> [SessionBubble] {
+        guard localMessages.count > snapshotMessages.count else {
+            return snapshotMessages
+        }
+
+        let localSuffix = localMessages.dropFirst(snapshotMessages.count)
+        return snapshotMessages + localSuffix
+    }
+
+    private static func snapshotCompletesPendingTurn(
+        _ snapshotMessages: [SessionBubble],
+        pendingTurnStartIndex: Int
+    ) -> Bool {
+        guard snapshotMessages.indices.contains(pendingTurnStartIndex),
+              snapshotMessages[pendingTurnStartIndex].role == "user" else {
+            return false
+        }
+
+        let afterUserIndex = snapshotMessages.index(after: pendingTurnStartIndex)
+        guard afterUserIndex < snapshotMessages.endIndex else {
+            return false
+        }
+        return snapshotMessages[afterUserIndex...].contains { $0.role != "user" }
     }
 }
