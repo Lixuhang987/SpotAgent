@@ -271,3 +271,31 @@
     - `~/.spotAgent/sessions/C08FD225-6046-4C77-8891-AA3BE3B3B92D.json` 包含 fallback prompt 与 `Mock assistant response: main chain is reachable.`。
     - `~/.spotAgent/sessions/616C5A0E-4340-4EB2-9B23-C770963D33F0.json` 包含 slow-focus prompt；Stop 后窗口状态进入 `interrupted`。
 - **结论**：通过。状态气泡在存在 running session 时优先回到 running SessionWindow；没有 running session 时回到最近活跃的打开窗口。
+
+## worktree 启动路径（2026-05-20 实机验证）
+
+- **验证日期**：2026-05-20
+- **验证环境**：mock-llm / macOS / worktree `manual-qa-status-bubble-focus` / `dist/HandAgentDesktop.app`
+- **验证过程**：
+  1. 在 worktree 中执行 `bash ./scripts/package-app.sh --mock-llm`。
+  2. 使用 `open dist/HandAgentDesktop.app` 从 packaged App 启动桌面端。
+  3. 确认 App 可见状态气泡，agent-server 正常监听 `*:4317`。
+  4. 检查 agent-server 子进程命令路径，确认使用当前 worktree 下的源码。
+- **证据**：
+  - `lsof -nP -iTCP:4317 -sTCP:LISTEN` 显示 node pid `2398` 监听。
+  - `ps -o pid,ppid,command -p 2398` 显示命令路径为 `/Users/mu9/proj/handAgent/.worktrees/manual-qa-status-bubble-focus/apps/agent-server/src/server.ts`。
+  - 回归测试：`bash ./scripts/swiftw test --filter AgentServerRuntimeModeTests/testRepositoryRootLocatorFallsBackToBundleWhenCurrentDirectoryIsRoot` 通过。
+- **结论**：通过。packaged App 从 `/` cwd 启动时，仓库根查找可有限终止并回退到 bundle 候选，agent-server 使用同一 worktree 下的源码路径。
+
+## Tool completed UI 展示实际 result（2026-05-20 回归验证）
+
+- **验证日期**：2026-05-20
+- **验证环境**：Swift 单测 / 既有 mock-llm 实机证据
+- **验证过程**：
+  1. 复查既有 mock-llm 实机证据，确认 `workspace.list` 与越狱 `file.write` 的 session 持久化里已有真实 tool result。
+  2. 增加并运行桌面端回归测试，覆盖同一 `messageID` 的 running tool message 被 completed / failed tool message 替换。
+- **证据**：
+  - `~/.spotAgent/sessions/FC95D6F1-415C-41A8-89A8-FAB137DBDEDA.json` 的 `workspace.list` `tool_result.output` 包含 workspace 列表。
+  - `~/.spotAgent/sessions/AC07B7E0-9852-48A0-B38D-DC8016DE3352.json` 的 `file.write` `tool_result.output` 为 `Path escapes workspace root: ../../etc/passwd`。
+  - 回归测试：`bash ./scripts/swiftw test --filter SessionViewModelTests/testTerminalToolMessageReplacesRunningArgumentsBubble` 通过。
+- **结论**：通过。SessionWindow terminal tool 气泡会用真实 result 覆盖 running 阶段参数展示，不再停留在 `workspace.list: {}` 或 `file.write` 入参 JSON。

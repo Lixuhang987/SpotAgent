@@ -11,18 +11,7 @@
 - 按顺序复现并验证每个 checkpoint，停在第一个未被证实的跳点；不要提前假设后续链路成功或失败。
 - 只有在明确证明某一跳失败后，才实施最小修复；修复完成后需要补回能防止回归的测试或手工验收记录，并重新验证完整链路。
 
-## 非产品缺陷 / 测试备注
-
-### Computer Use 的 `super+shift+space` 不适合判断本项目全局热键
-
-- Computer Use `press_key` 发送 `super+shift+space` 后未唤出 PromptPanel，但用户手动按快捷键可以唤出。
-- 改用 macOS `System Events` 发送 `key code 49 using {command down, shift down}` 后正常唤起。
-- 结论：属于测试工具按键注入不等价，不作为产品 bug。
-
-### LLM 返回 Gateway Timeout
-
-- 测试 prompt 返回 `Failed after 3 attempts. Last error: Gateway Timeout`。
-- 属于上游模型服务超时，不直接判断为产品代码缺陷。产品 UI 对错误的展示是可见的。
+##  测试备注
 
 ### mock-llm 不能证明真实 vision 与 token streaming
 
