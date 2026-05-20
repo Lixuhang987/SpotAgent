@@ -32,6 +32,7 @@
 - `docs/llm-api-integration.md`：LLM 真实 API 集成测试运行方式、输出 JSON 结构与 mock 构造依据。
 - `docs/live-qa-flow.md`：实机 QA 执行流程、取证规则、停止条件与缺陷报告格式。
 - `docs/architecture-review.md`：当前代码架构问题与改进路线。
+- `docs/swift-refactor-review.md`：Swift / SwiftUI 代码重构评审，聚焦成熟系统 API 替代自维护实现。
 - `docs/TODO.md`：按依赖关系分组的待办路线图（P0–P3）。
 - `docs/bugs.md`：当前已知 bug 清单与修复约束。
 - `docs/human/`：手工撰写的设计资料。
