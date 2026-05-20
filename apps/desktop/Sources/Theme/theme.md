@@ -26,7 +26,7 @@
 - **不要为旧系统加 fallback**：目标系统 macOS 15+，token 直接用 SwiftUI 原生 API。
 - **保留 dark-only 假设**：当前不支持 light mode 切换；如未来要支持，`AppTheme` 需扩为 `light` / `dark` 两实例并在根 View 注入。
 - **不要让 ViewModel 依赖 Theme**：`@Observable` 类不读 SwiftUI Environment；样式只在 View 与 ViewModifier 中消费 token。
-- **测试**：颜色 / 字体不可比，只断言 spacing 等可比 token；详见 [AppThemeTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/AppThemeTests.swift)。
+- **测试**：颜色 / 字体不可比，只断言 spacing 等可比 token；详见 [AppThemeTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/Theme/AppThemeTests.swift)。
 
 ## 与其他模块的关系
 

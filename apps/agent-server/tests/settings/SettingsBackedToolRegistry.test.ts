@@ -3,7 +3,7 @@ import { chmod, mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { OfflinePlatformAdapter } from "@handagent/core/platform/OfflinePlatformAdapter.ts";
-import { SettingsBackedToolRegistry } from "./SettingsBackedToolRegistry.ts";
+import { SettingsBackedToolRegistry } from "../../src/SettingsBackedToolRegistry.ts";
 
 describe("SettingsBackedToolRegistry", () => {
   it("refreshes the existing registry when tool settings stamp changes", async () => {

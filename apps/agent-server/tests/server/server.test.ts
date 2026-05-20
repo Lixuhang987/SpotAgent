@@ -3,10 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { SessionMessage } from "@handagent/core/protocol/SessionMessage.ts";
 import type { PlatformBridgeMessage } from "@handagent/core/protocol/PlatformBridgeMessage.ts";
 import type { FilePermissionPolicy } from "@handagent/core/permission/FilePermissionPolicy.ts";
-import type { SessionRouter } from "./SessionRouter.ts";
-import { SessionPermissionBridge } from "./SessionPermissionBridge.ts";
-import { SessionWorkspaceAskBridge } from "./SessionWorkspaceAskBridge.ts";
-import { attachSessionSocketHandlers, resolveLLMMode } from "./server.ts";
+import type { SessionRouter } from "../../src/SessionRouter.ts";
+import { SessionPermissionBridge } from "../../src/SessionPermissionBridge.ts";
+import { SessionWorkspaceAskBridge } from "../../src/SessionWorkspaceAskBridge.ts";
+import { attachSessionSocketHandlers, resolveLLMMode } from "../../src/server.ts";
 
 class FakeSocket extends EventEmitter {
   sent: string[] = [];

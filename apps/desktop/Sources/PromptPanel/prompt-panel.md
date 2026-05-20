@@ -43,7 +43,7 @@ AgentServerHealth.onAvailabilityChange → Controller.setSubmissionEnabled(...)
 - **窗口与拖动区域**：`NSPanel` 自身设为 `isOpaque = false` + `backgroundColor = .clear`，可见背景全部由 SwiftUI `promptPanelContainer()` 的圆角 + ultraThinMaterial 提供，避免顶部"标题栏条"和主体颜色不一致。`isMovableByWindowBackground = true` 让任何空白处都能拖；首行的 input 框宽度固定（左上角紧凑，带 surface 背景与 border），右侧是齿轮按钮，中间留出的 `Spacer` 区域天然成为不显眼的拖动手柄。新增首行控件时不要让控件铺满整行，必须保留中间的拖动空隙。
 - **PromptAction.filter 大小写不敏感**：title 与 keywords 两路匹配；新增匹配维度需保持纯函数 + 单元测试。
 - **server 不可用时不丢草稿**：`submissionDisabledMessage != nil` 时输入框禁用并显示提示，`submit()` 直接返回，不清空 `draft` / `attachments`。
-- **测试**：[PromptPanelViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/PromptPanelViewModelTests.swift) 覆盖 draft 提交 / 过滤 / action 触发；[PromptActionTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/PromptActionTests.swift) 覆盖过滤逻辑。
+- **测试**：[PromptPanelViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/PromptPanel/PromptPanelViewModelTests.swift) 覆盖 draft 提交 / 过滤 / action 触发；[PromptActionTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/PromptPanel/PromptActionTests.swift) 覆盖过滤逻辑。
 
 ## 与其他模块的关系
 

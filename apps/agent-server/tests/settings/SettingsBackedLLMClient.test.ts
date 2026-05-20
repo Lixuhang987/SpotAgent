@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { SettingsBackedLLMClient } from "./SettingsBackedLLMClient.ts";
+import { SettingsBackedLLMClient } from "../../src/SettingsBackedLLMClient.ts";
 
 describe("SettingsBackedLLMClient", () => {
   it("uses cached settings and one client for 100 completions when the settings stamp is unchanged", async () => {

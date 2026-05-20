@@ -35,7 +35,7 @@ SessionSummary {
 - 新增历史展示字段优先从 `PersistedSession.metadata` 或 `messages` 派生；跨进程持久化格式变更必须同步 [packages/core storage 文档](/Users/mu9/proj/handAgent/packages/core/src/storage/storage.md) 或对应协议文档。
 - 排序与 primary 选择是纯函数，便于测试 — 新规则保持纯函数风格。
 - 不要把 `SessionViewModel` 引用塞进 Registry，避免循环。
-- 测试：[SessionRegistryTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/SessionRegistryTests.swift)。
+- 测试：[SessionRegistryTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/AppServices/Session/SessionRegistryTests.swift)。
 
 ## 与其他模块的关系
 

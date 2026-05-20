@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SessionMessage } from "@handagent/core/protocol/SessionMessage.ts";
-import { SessionWorkspaceAskBridge } from "./SessionWorkspaceAskBridge.ts";
+import { SessionWorkspaceAskBridge } from "../../src/SessionWorkspaceAskBridge.ts";
 
 describe("SessionWorkspaceAskBridge", () => {
   it("routes workspace ask requests to the socket bound to each session", async () => {
