@@ -36,25 +36,23 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
-    func testSubmitPromptCreatesSessionViewModel() {
+    func testSubmitPromptCreatesSessionWindow() {
         let coordinator = AppCoordinator(services: AppServices.testing())
 
         coordinator.send(.submitPrompt("hello", attachments: []))
 
-        XCTAssertEqual(coordinator.sessionViewModels.count, 1)
-        XCTAssertEqual(coordinator.sessionViewModels.values.first?.messages.first?.text, "hello")
+        XCTAssertNotNil(coordinator.sessionWindowViewModel)
     }
 
     @MainActor
-    func testSessionClosedRemovesViewModel() {
+    func testSessionClosedRemovesWindowViewModel() {
         let coordinator = AppCoordinator(services: AppServices.testing())
 
         coordinator.send(.submitPrompt("hello", attachments: []))
-        let sessionID = coordinator.sessionViewModels.keys.first!
 
-        coordinator.send(.sessionClosed(sessionID))
+        coordinator.send(.sessionWindowClosed)
 
-        XCTAssertTrue(coordinator.sessionViewModels.isEmpty)
+        XCTAssertNil(coordinator.sessionWindowViewModel)
     }
 
     @MainActor
@@ -63,7 +61,7 @@ final class AppCoordinatorTests: XCTestCase {
 
         coordinator.send(.submitPrompt("   ", attachments: []))
 
-        XCTAssertTrue(coordinator.sessionViewModels.isEmpty)
+        XCTAssertNil(coordinator.sessionWindowViewModel)
     }
 
     @MainActor
@@ -95,18 +93,35 @@ final class AppCoordinatorTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(10))
         coordinator.send(.submitPrompt("hello", attachments: []))
 
-        XCTAssertTrue(coordinator.sessionViewModels.isEmpty)
+        XCTAssertNil(coordinator.sessionWindowViewModel)
         XCTAssertEqual(coordinator.agentServerError, "agent-server 已断开，正在尝试重连…")
     }
 
     @MainActor
-    func testRestoreSessionActionDelegatesToHistoryEntry() {
+    func testHistoryActionOpensSingleSessionWindowWithoutChangingActiveTab() {
         let coordinator = AppCoordinator(services: AppServices.testing())
 
-        coordinator.send(.restoreSession("session-1"))
+        coordinator.send(.openHistory)
+        coordinator.sessionWindowViewModel?.handleWindowEvent(
+            .createSessionResponse(sessionID: "session-1", title: nil)
+        )
+        let firstActive = coordinator.sessionWindowViewModel?.activeTabID
 
-        XCTAssertEqual(coordinator.sessionViewModels.keys.first, "session-1")
-        XCTAssertEqual(coordinator.sessionViewModels["session-1"]?.messages.map(\.text), [])
+        coordinator.send(.openHistory)
+
+        XCTAssertNotNil(firstActive)
+        XCTAssertEqual(coordinator.sessionWindowViewModel?.activeTabID, firstActive)
+    }
+
+    @MainActor
+    func testMultiplePromptsReuseSingleWindow() {
+        let coordinator = AppCoordinator(services: AppServices.testing())
+
+        coordinator.send(.submitPrompt("first", attachments: []))
+        let firstModel = coordinator.sessionWindowViewModel
+        coordinator.send(.submitPrompt("second", attachments: []))
+
+        XCTAssertTrue(coordinator.sessionWindowViewModel === firstModel)
     }
 
     @MainActor

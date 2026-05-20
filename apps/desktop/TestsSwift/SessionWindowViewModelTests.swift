@@ -46,4 +46,14 @@ final class SessionWindowViewModelTests: XCTestCase {
         XCTAssertNil(model.activeTab)
         XCTAssertEqual(model.noticeMessage, "missing")
     }
+
+    @MainActor
+    func testActiveTabExposesInputTarget() {
+        let model = SessionWindowViewModel(socketFactory: { _ in .noop })
+
+        XCTAssertNil(model.activeTab)
+        model.openHistorySession("session-1")
+
+        XCTAssertEqual(model.activeTab?.sessionID, "session-1")
+    }
 }

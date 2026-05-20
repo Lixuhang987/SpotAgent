@@ -24,14 +24,13 @@ final class ProductionSessionWindowPresenter: SessionWindowPresenting {
     private var closeObservations: [ObjectIdentifier: WindowCloseObservation] = [:]
 
     func present(
-        sessionID: String,
-        viewModel: SessionViewModel,
+        viewModel: SessionWindowViewModel,
         onClose: @escaping () -> Void
     ) -> NSWindow? {
         let hosting = NSHostingController(rootView: SessionWindowView(viewModel: viewModel))
         let window = NSWindow(contentViewController: hosting)
-        window.title = "Session \(sessionID.prefix(8))"
-        window.setContentSize(NSSize(width: 760, height: 560))
+        window.title = "HandAgent"
+        window.setContentSize(NSSize(width: 920, height: 640))
         window.styleMask.insert(.fullSizeContentView)
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true

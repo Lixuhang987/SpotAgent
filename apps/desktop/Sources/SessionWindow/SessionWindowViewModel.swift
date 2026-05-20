@@ -13,6 +13,7 @@ final class SessionWindowViewModel {
 
     @ObservationIgnored private let socketFactory: SocketFactory
     @ObservationIgnored private let historySocketClient: SessionSocketClient
+    @ObservationIgnored private let onTabStateChanged: @MainActor (SessionTabViewModel) -> Void
 
     var activeTab: SessionTabViewModel? {
         guard let activeTabID else { return nil }
@@ -21,10 +22,12 @@ final class SessionWindowViewModel {
 
     init(
         socketFactory: @escaping SocketFactory,
-        historySocketClient: SessionSocketClient = .noop
+        historySocketClient: SessionSocketClient = .noop,
+        onTabStateChanged: @escaping @MainActor (SessionTabViewModel) -> Void = { _ in }
     ) {
         self.socketFactory = socketFactory
         self.historySocketClient = historySocketClient
+        self.onTabStateChanged = onTabStateChanged
         self.historySocketClient.onEvent = { [weak self] event in
             Task { @MainActor in self?.handleWindowEvent(event) }
         }
@@ -126,7 +129,11 @@ final class SessionWindowViewModel {
             sessionID: sessionID,
             socketClient: socketFactory(sessionID),
             onStateChanged: { [weak self] _ in
-                self?.pruneInvalidTabs()
+                guard let self else { return }
+                if let tab = self.tabs.first(where: { $0.sessionID == sessionID }) {
+                    self.onTabStateChanged(tab)
+                }
+                self.pruneInvalidTabs()
             }
         )
     }

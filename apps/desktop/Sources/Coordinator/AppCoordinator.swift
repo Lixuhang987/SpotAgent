@@ -12,21 +12,18 @@ final class AppCoordinator {
         case submitAction(PromptAction)
         case openSettings
         case openHistory
-        case restoreSession(String)
         case settingsWindowClosed
-        case historyWindowClosed
-        case sessionClosed(String)
+        case sessionWindowClosed
         case statusBubbleTapped(String?)
     }
 
-    var sessionViewModels: [String: SessionViewModel] { sessionLifecycle.viewModels }
+    var sessionWindowViewModel: SessionWindowViewModel? { sessionWindowLifecycle.viewModel }
     var agentServerError: String? { agentServerHealth.errorMessage }
 
     @ObservationIgnored private let services: AppServices
     @ObservationIgnored private let agentServerHealth: AgentServerHealth
-    @ObservationIgnored private let sessionLifecycle: SessionLifecycle
+    @ObservationIgnored private let sessionWindowLifecycle: SessionWindowLifecycle
     @ObservationIgnored private let settingsLifecycle: SettingsLifecycle
-    @ObservationIgnored private let historyLifecycle: HistoryLifecycle
     @ObservationIgnored private let activationPolicy = AppActivationPolicyCoordinator()
     @ObservationIgnored private var platformBridgeService: (any PlatformBridgeRunning)?
     @ObservationIgnored private let appScopeShortcutDispatcher = AppScopeShortcutDispatcher()
@@ -55,13 +52,6 @@ final class AppCoordinator {
             perform: { [weak self] in self?.send(.openHistory) }
         )
     ]
-    @ObservationIgnored private lazy var historyViewModel: SessionHistoryViewModel = {
-        let viewModel = SessionHistoryViewModel(store: services.sessionHistoryStore)
-        viewModel.onRestore = { [weak self] sessionID in
-            self?.send(.restoreSession(sessionID))
-        }
-        return viewModel
-    }()
 
     convenience init() { self.init(services: AppServices()) }
 
@@ -72,7 +62,7 @@ final class AppCoordinator {
             fatalAlertPresenter: services.fatalAlertPresenter,
             showsFatalAlert: services.showsStatusBubble
         )
-        self.sessionLifecycle = SessionLifecycle(
+        self.sessionWindowLifecycle = SessionWindowLifecycle(
             registry: services.sessionRegistry,
             windowPresenter: services.sessionWindowPresenter,
             agentServerURL: services.agentServerURL,
@@ -81,11 +71,6 @@ final class AppCoordinator {
         )
         self.settingsLifecycle = SettingsLifecycle(
             windowPresenter: services.settingsWindowPresenter,
-            activationPolicy: activationPolicy,
-            setActivationPolicy: services.setActivationPolicy
-        )
-        self.historyLifecycle = HistoryLifecycle(
-            windowPresenter: services.historyWindowPresenter,
             activationPolicy: activationPolicy,
             setActivationPolicy: services.setActivationPolicy
         )
@@ -109,7 +94,7 @@ final class AppCoordinator {
         appScopeShortcutDispatcher.stop()
         agentServerHealth.stop()
         settingsLifecycle.close()
-        sessionLifecycle.closeAll()
+        sessionWindowLifecycle.close()
     }
 
     func send(_ action: Action) {
@@ -131,15 +116,10 @@ final class AppCoordinator {
             handleOpenSettings()
         case .openHistory:
             handleOpenHistory()
-        case .restoreSession(let sessionID):
-            handleRestoreSession(sessionID)
         case .settingsWindowClosed:
             settingsLifecycle.handleClosed()
-        case .historyWindowClosed:
-            historyLifecycle.handleClosed()
-        case .sessionClosed(let sessionID):
-            sessionLifecycle.close(sessionID)
-            refreshPromptActions()
+        case .sessionWindowClosed:
+            sessionWindowLifecycle.close()
         case .statusBubbleTapped(let sessionID):
             handleStatusBubbleTap(sessionID)
         }
@@ -213,8 +193,8 @@ final class AppCoordinator {
 
         guard let prompt = PromptSubmission.compose(draft: draft, attachments: attachments) else { return }
         promptPanelController.hide()
-        sessionLifecycle.open(prompt: prompt, startupError: agentServerError) { [weak self] id in
-            self?.send(.sessionClosed(id))
+        sessionWindowLifecycle.createTabWithInitialPrompt(prompt) { [weak self] in
+            self?.send(.sessionWindowClosed)
         }
     }
 
@@ -230,24 +210,13 @@ final class AppCoordinator {
     }
 
     private func handleOpenHistory() {
-        historyViewModel.refresh()
-        historyLifecycle.openOrFocus(
-            historyViewModel: historyViewModel,
-            onRestoreSession: { [weak self] sessionID in
-                self?.send(.restoreSession(sessionID))
-            },
-            onClosed: { [weak self] in self?.send(.historyWindowClosed) }
-        )
-    }
-
-    private func handleRestoreSession(_ sessionID: String) {
-        _ = sessionLifecycle.restore(sessionID: sessionID) { [weak self] id in
-            self?.send(.sessionClosed(id))
+        sessionWindowLifecycle.openOrFocusHistory { [weak self] in
+            self?.send(.sessionWindowClosed)
         }
     }
 
     private func handleStatusBubbleTap(_ sessionID: String?) {
-        if let sessionID, sessionLifecycle.focus(sessionID) { return }
+        if sessionID != nil, sessionWindowLifecycle.focus() { return }
         promptPanelController.show()
     }
 
@@ -256,16 +225,6 @@ final class AppCoordinator {
     }
 
     private func buildPromptActions() -> [PromptAction] {
-        basePromptActions + services.sessionHistoryStore.list().prefix(8).map { item in
-            PromptAction(
-                id: "recent-session-\(item.id)",
-                title: "最近会话：\(item.title ?? item.id)",
-                keywords: [item.id, item.title ?? "", item.preview, "recent", "history", "session"],
-                defaultShortcut: nil,
-                perform: { [weak self] in
-                    self?.send(.restoreSession(item.id))
-                }
-            )
-        }
+        basePromptActions
     }
 }

@@ -1,34 +1,35 @@
 import SwiftUI
 
 struct SessionWindowView: View {
-    @Bindable var viewModel: SessionViewModel
+    @Bindable var viewModel: SessionWindowViewModel
     @Environment(\.appTheme) private var theme
     @State private var draft = ""
-    @State private var sidebarVisible = false
 
     var body: some View {
         HStack(spacing: 0) {
-            if sidebarVisible {
-                historySidebar
-                    .frame(width: 220)
-                    .transition(.move(edge: .leading))
-                Divider().overlay(theme.colors.border)
-            }
+            historySidebar
+                .frame(width: 240)
+            Divider().overlay(theme.colors.border)
             VStack(spacing: 0) {
                 statusHeader
+                tabBar
                 Divider().overlay(theme.colors.border)
-                if let connectionMessage = viewModel.connectionMessage {
+                if let connectionMessage = activeTab?.connectionMessage {
                     connectionBanner(connectionMessage)
                 }
-                messageList
-                if let error = viewModel.error {
-                    errorBanner(error)
-                }
-                ForEach(viewModel.pendingPermissionRequests) { request in
-                    permissionBubble(request)
-                }
-                if let request = viewModel.visibleWorkspaceAskRequest {
-                    workspaceAskBubble(request)
+                if let activeTab {
+                    messageList(activeTab)
+                    if let error = activeTab.error {
+                        errorBanner(error)
+                    }
+                    ForEach(activeTab.pendingPermissionRequests) { request in
+                        permissionBubble(request, tab: activeTab)
+                    }
+                    if let request = activeTab.visibleWorkspaceAskRequest {
+                        workspaceAskBubble(request, tab: activeTab)
+                    }
+                } else {
+                    emptyState
                 }
                 Divider().overlay(theme.colors.border)
                 inputField
@@ -46,6 +47,8 @@ struct SessionWindowView: View {
             Text("删除后无法恢复本地历史文件。")
         }
     }
+
+    private var activeTab: SessionTabViewModel? { viewModel.activeTab }
 
     private var historySidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -85,17 +88,30 @@ struct SessionWindowView: View {
     }
 
     private func historyRow(_ item: SessionListItem) -> some View {
-        let isCurrent = item.id == viewModel.sessionID
+        let isOpen = viewModel.tabs.contains { $0.sessionID == item.id }
+        let isActive = activeTab?.sessionID == item.id
+        let running = viewModel.tabs.first { $0.sessionID == item.id }?.status == "running"
         return Button {
-            if !isCurrent {
-                viewModel.restoreSession(item.id)
-            }
+            viewModel.openHistorySession(item.id)
         } label: {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.title ?? "未命名会话")
-                    .font(theme.typography.bodyFont)
-                    .foregroundStyle(isCurrent ? theme.colors.accent : theme.colors.textPrimary)
-                    .lineLimit(1)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: theme.spacing.sm) {
+                    if running {
+                        Circle()
+                            .fill(theme.colors.accent)
+                            .frame(width: 6, height: 6)
+                    }
+                    Text(item.title ?? "未命名会话")
+                        .font(theme.typography.bodyFont)
+                        .foregroundStyle(isActive ? theme.colors.accent : theme.colors.textPrimary)
+                        .lineLimit(1)
+                    Spacer()
+                    if isOpen {
+                        Image(systemName: "rectangle.on.rectangle")
+                            .font(.system(size: 10))
+                            .foregroundStyle(theme.colors.textSecondary)
+                    }
+                }
                 Text("\(item.messageCount) 条")
                     .font(theme.typography.captionFont)
                     .foregroundStyle(theme.colors.textSecondary)
@@ -103,26 +119,13 @@ struct SessionWindowView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, theme.spacing.md)
             .padding(.vertical, theme.spacing.sm)
-            .background(isCurrent ? theme.colors.accentSubtle : Color.clear)
+            .background(isActive ? theme.colors.accentSubtle : Color.clear)
         }
         .buttonStyle(.plain)
     }
 
     private var statusHeader: some View {
         HStack(spacing: theme.spacing.sm) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    sidebarVisible.toggle()
-                }
-                if sidebarVisible {
-                    viewModel.refreshHistory()
-                }
-            } label: {
-                Image(systemName: "sidebar.left")
-                    .font(.system(size: 12))
-                    .foregroundStyle(theme.colors.textSecondary)
-            }
-            .buttonStyle(.plain)
             Circle()
                 .fill(statusColor)
                 .frame(width: 8, height: 8)
@@ -130,9 +133,9 @@ struct SessionWindowView: View {
                 .font(theme.typography.captionFont)
                 .foregroundStyle(theme.colors.textSecondary)
             Spacer()
-            if viewModel.status == "running" {
+            if activeTab?.status == "running" {
                 Button {
-                    viewModel.stop()
+                    viewModel.stopActiveTab()
                 } label: {
                     Image(systemName: "stop.fill")
                         .font(.system(size: 11))
@@ -146,10 +149,49 @@ struct SessionWindowView: View {
         .padding(.vertical, theme.spacing.md)
     }
 
+    private var tabBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: theme.spacing.xs) {
+                ForEach(viewModel.tabs) { tab in
+                    Button {
+                        viewModel.activateTab(tab.tabID)
+                    } label: {
+                        HStack(spacing: theme.spacing.xs) {
+                            if tab.status == "running" {
+                                Circle().fill(theme.colors.accent).frame(width: 6, height: 6)
+                            }
+                            Text(tab.messages.first?.text ?? tab.sessionID)
+                                .lineLimit(1)
+                            Image(systemName: "xmark")
+                                .font(.system(size: 10))
+                        }
+                        .font(theme.typography.captionFont)
+                        .padding(.horizontal, theme.spacing.sm)
+                        .padding(.vertical, theme.spacing.xs)
+                        .background(
+                            tab.tabID == viewModel.activeTabID
+                            ? theme.colors.accentSubtle
+                            : theme.colors.surface.opacity(0.45)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        Button("关闭") { viewModel.closeTab(tab.tabID) }
+                    }
+                }
+            }
+            .padding(.horizontal, theme.spacing.md)
+            .padding(.vertical, theme.spacing.xs)
+        }
+    }
+
     private var statusColor: Color {
-        switch viewModel.connectionState {
+        guard let activeTab else {
+            return theme.colors.textSecondary.opacity(0.4)
+        }
+        switch activeTab.connectionState {
         case .connected:
-            return viewModel.status == "running" ? theme.colors.accent : theme.colors.textSecondary.opacity(0.4)
+            return activeTab.status == "running" ? theme.colors.accent : theme.colors.textSecondary.opacity(0.4)
         case .connecting, .reconnecting:
             return theme.colors.accent
         case .disconnected:
@@ -167,9 +209,10 @@ struct SessionWindowView: View {
     }
 
     private var statusLabel: String {
-        switch viewModel.connectionState {
+        guard let activeTab else { return "idle" }
+        switch activeTab.connectionState {
         case .connected:
-            return viewModel.status
+            return activeTab.status
         case .connecting:
             return "connecting"
         case .reconnecting:
@@ -179,10 +222,10 @@ struct SessionWindowView: View {
         }
     }
 
-    private var messageList: some View {
+    private func messageList(_ tab: SessionTabViewModel) -> some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: theme.spacing.md) {
-                ForEach(viewModel.messages) { message in
+                ForEach(tab.messages) { message in
                     messageBubble(message)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
@@ -190,6 +233,18 @@ struct SessionWindowView: View {
             .padding(theme.spacing.xl)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: theme.spacing.sm) {
+            Text("选择左侧会话继续")
+                .font(theme.typography.titleFont)
+                .foregroundStyle(theme.colors.textPrimary)
+            Text("也可以直接发送消息创建新会话。")
+                .font(theme.typography.bodyFont)
+                .foregroundStyle(theme.colors.textSecondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func messageBubble(_ message: SessionBubble) -> some View {
@@ -266,7 +321,7 @@ struct SessionWindowView: View {
         .background(theme.colors.error.opacity(0.08))
     }
 
-    private func permissionBubble(_ request: SessionPermissionRequest) -> some View {
+    private func permissionBubble(_ request: SessionPermissionRequest, tab: SessionTabViewModel) -> some View {
         VStack(alignment: .leading, spacing: theme.spacing.sm) {
             HStack(spacing: theme.spacing.sm) {
                 Image(systemName: "lock.shield")
@@ -285,10 +340,10 @@ struct SessionWindowView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             HStack(spacing: theme.spacing.sm) {
-                permissionButton("拒绝", role: "deny", scope: nil, requestId: request.id, accent: false)
-                permissionButton("仅本次", role: "allow", scope: "once", requestId: request.id, accent: true)
-                permissionButton("本会话", role: "allow", scope: "session", requestId: request.id, accent: true)
-                permissionButton("始终允许", role: "allow", scope: "always", requestId: request.id, accent: true)
+                permissionButton("拒绝", role: "deny", scope: nil, requestId: request.id, accent: false, tab: tab)
+                permissionButton("仅本次", role: "allow", scope: "once", requestId: request.id, accent: true, tab: tab)
+                permissionButton("本会话", role: "allow", scope: "session", requestId: request.id, accent: true, tab: tab)
+                permissionButton("始终允许", role: "allow", scope: "always", requestId: request.id, accent: true, tab: tab)
             }
         }
         .padding(.horizontal, theme.spacing.xl)
@@ -302,10 +357,11 @@ struct SessionWindowView: View {
         role: String,
         scope: String?,
         requestId: String,
-        accent: Bool
+        accent: Bool,
+        tab: SessionTabViewModel
     ) -> some View {
         Button {
-            viewModel.resolvePermission(requestId: requestId, decision: role, scope: scope)
+            tab.resolvePermission(requestId: requestId, decision: role, scope: scope)
         } label: {
             Text(label)
                 .font(theme.typography.captionFont)
@@ -324,7 +380,7 @@ struct SessionWindowView: View {
         .buttonStyle(.plain)
     }
 
-    private func workspaceAskBubble(_ request: SessionWorkspaceAskRequest) -> some View {
+    private func workspaceAskBubble(_ request: SessionWorkspaceAskRequest, tab: SessionTabViewModel) -> some View {
         VStack(alignment: .leading, spacing: theme.spacing.sm) {
             HStack(spacing: theme.spacing.sm) {
                 Image(systemName: "folder.badge.questionmark")
@@ -338,7 +394,7 @@ struct SessionWindowView: View {
             VStack(alignment: .leading, spacing: theme.spacing.xs) {
                 ForEach(request.candidates) { candidate in
                     Button {
-                        viewModel.resolveWorkspaceAsk(requestId: request.id, workspaceId: candidate.id)
+                        tab.resolveWorkspaceAsk(requestId: request.id, workspaceId: candidate.id)
                     } label: {
                         HStack(alignment: .top, spacing: theme.spacing.sm) {
                             Image(systemName: candidate.isDefault ? "folder.fill.badge.gearshape" : "folder")
@@ -369,7 +425,7 @@ struct SessionWindowView: View {
                 }
             }
             Button {
-                viewModel.resolveWorkspaceAsk(requestId: request.id, workspaceId: nil)
+                tab.resolveWorkspaceAsk(requestId: request.id, workspaceId: nil)
             } label: {
                 Text("取消")
                     .font(theme.typography.captionFont)
@@ -399,9 +455,9 @@ struct SessionWindowView: View {
                 .textFieldStyle(.plain)
                 .font(theme.typography.bodyFont)
                 .foregroundStyle(theme.colors.textPrimary)
-                .disabled(!viewModel.canSendPrompt)
+                .disabled(!canSendPrompt)
                 .onSubmit {
-                    guard viewModel.canSendPrompt else { return }
+                    guard canSendPrompt else { return }
                     let currentDraft = draft
                     draft = ""
                     viewModel.sendPrompt(currentDraft)
@@ -409,5 +465,9 @@ struct SessionWindowView: View {
         }
         .padding(.horizontal, theme.spacing.xl)
         .padding(.vertical, theme.spacing.md)
+    }
+
+    private var canSendPrompt: Bool {
+        activeTab?.canSendPrompt ?? true
     }
 }

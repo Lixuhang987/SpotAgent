@@ -5,8 +5,7 @@ import SwiftUI
 @MainActor
 protocol SessionWindowPresenting {
     func present(
-        sessionID: String,
-        viewModel: SessionViewModel,
+        viewModel: SessionWindowViewModel,
         onClose: @escaping () -> Void
     ) -> NSWindow?
 }
@@ -132,8 +131,11 @@ final class NopHotkeyRegistrar: HotkeyRegistering {
 
 @MainActor
 final class NopSessionWindowPresenter: SessionWindowPresenting {
-    func present(sessionID: String, viewModel: SessionViewModel, onClose: @escaping () -> Void) -> NSWindow? {
-        nil
+    private(set) var presentedViewModel: SessionWindowViewModel?
+
+    func present(viewModel: SessionWindowViewModel, onClose: @escaping () -> Void) -> NSWindow? {
+        presentedViewModel = viewModel
+        return NSWindow()
     }
 }
 
