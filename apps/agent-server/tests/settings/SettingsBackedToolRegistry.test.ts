@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chmod, mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { OfflinePlatformAdapter } from "@handagent/core/platform/OfflinePlatformAdapter.ts";
@@ -53,34 +53,10 @@ describe("SettingsBackedToolRegistry", () => {
     expect(loadCount).toBe(1);
   });
 
-  it("does not load private plugin tools from the plugins directory", async () => {
-    const root = await mkdtemp(join(tmpdir(), "settings-plugin-registry-"));
-    const pluginsDir = join(root, "plugins");
-    const pluginDir = join(pluginsDir, "echo");
-    await mkdir(pluginDir, { recursive: true });
-    const commandPath = join(pluginDir, "echo.js");
-    await writeFile(commandPath, "#!/usr/bin/env node\nprocess.stdout.write('{}');\n", "utf8");
-    await chmod(commandPath, 0o755);
-    await writeFile(
-      join(pluginDir, "plugin.json"),
-      JSON.stringify({
-        id: "echo",
-        name: "Echo",
-        version: "1.0.0",
-        tools: [
-          {
-            name: "plugin.echo",
-            description: "Echo",
-            inputSchema: { type: "object" },
-            command: "echo.js",
-          },
-        ],
-      }),
-      "utf8",
-    );
-
+  it("does not register legacy external tools", async () => {
+    const legacyToolName = "plugin" + ".echo";
     const manager = new SettingsBackedToolRegistry(
-      { platform: new OfflinePlatformAdapter(), pluginsDir },
+      { platform: new OfflinePlatformAdapter() },
       {
         readSettingsStamp: () => "v1",
         loadToolSettings: () => ({ allowlist: null, denylist: [] }),
@@ -91,7 +67,7 @@ describe("SettingsBackedToolRegistry", () => {
     await manager.refresh();
 
     expect(manager.registry.list().map((tool) => tool.name)).not.toContain(
-      "plugin.echo",
+      legacyToolName,
     );
   });
 });

@@ -68,11 +68,11 @@
 1. 在 Anthropic provider 下触发一个会调用 tool 的 prompt，确认 tool name 经适配后仍能回到点号风格（如 `file.read`），tool result 可回灌给 LLM。
 1. 将 provider 设为 `openai-compatible` 且 `api` 设为 `completion` 后提交图片附件 prompt，确认返回明确「provider 不支持 multimodal」类错误；提交需要 tool 的 prompt 时确认降级为纯文本请求，不暴露工具列表。
 
-## 用户自定义 tool / 本地插件系统后续边界（P2）
+## Action Plugin / MCP 会话绑定（P2）
 
-1. 创建一个与 builtin 同名的插件 tool（如 `file.read`）和两个重复同名插件 tool，确认日志记录 disabled reason，builtin 不被覆盖。
-1. 创建一个会非 0 exit、输出非 JSON、超时或输出超过 1 MiB 的插件 tool，确认错误作为 tool result 返回，agent-server 不崩溃；超时或输出超限时确认子进程被终止。
-1. 创建一个 `command` 经 symlink 指向插件目录外的插件 tool，确认调用时返回 command 越界错误；创建声明 `permissions.workspace: "read"` 或 `"write"` 的插件 tool，分别验证合法 `workspaceId/relativePath` 会收到校验后的 `workspaceRoot/absolutePath`，`../../` 或 symlink 越界会被 workspace 路径校验拦截。该验证只覆盖传给插件的路径边界，不代表插件进程拥有 OS 级沙箱。
+1. 在 `~/.spotAgent/plugins/<plugin-id>/plugin.json` 创建包含 `prompts[]` 与 `mcpServerIds` 的 Action Plugin，打开 PromptPanel 后确认 trigger row 可见，提交后强制创建新 session。
+1. 配置 `~/.spotAgent/mcp.json` 中的 stdio 或 Streamable HTTP MCP server，确认 Action session 内可调用 `mcp.<serverId>.<toolName>`，普通 prompt session 不暴露该 MCP tool。
+1. 让 Action Plugin 引用一个不存在的 MCP server，确认 agent-server 记录 skip 日志，builtin tools 仍可用，prompt runtime 不因该 server 缺失而中断。
 
 ## 通过标准
 

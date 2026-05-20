@@ -181,19 +181,6 @@ export const mockLLMScenarios: MockLLMScenario[] = [
     }),
   },
   {
-    id: "plugin-echo",
-    triggers: ["[mock:plugin-echo]"],
-    description: "调用 plugin.echo，用于验证本地插件 tool 加载、执行与热禁用。",
-    complete: (context) => toolThenFinal(context, {
-      toolCall: {
-        id: "mock-plugin-echo-1",
-        name: "plugin.echo",
-        arguments: { message: "hello from MockLLMClient" },
-      },
-      finalText: "Mock plugin.echo completed.",
-    }),
-  },
-  {
     id: "ocr-invalid",
     triggers: ["[mock:ocr-invalid]"],
     description: "调用缺少 imageBase64 的 ocr.read，用于验证明确 invalid_argument 错误。",

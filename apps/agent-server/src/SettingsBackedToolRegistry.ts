@@ -29,7 +29,6 @@ export class SettingsBackedToolRegistry {
       platform: PlatformAdapter;
       workspaceRegistry?: WorkspaceRegistry;
       workspaceAskResolver?: WorkspaceAskResolver;
-      pluginsDir?: string;
     },
     dependencies: SettingsBackedToolRegistryDependencies = {},
   ) {
@@ -52,7 +51,6 @@ export class SettingsBackedToolRegistry {
       workspaceRegistry: this.options.workspaceRegistry,
       workspaceAskResolver: this.options.workspaceAskResolver,
       settings: this.loadToolSettings(),
-      pluginLoaders: [],
     });
     this.cachedStamp = settingsStamp;
     this.logRefresh(result);

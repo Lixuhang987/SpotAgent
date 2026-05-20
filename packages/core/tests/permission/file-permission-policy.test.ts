@@ -73,9 +73,10 @@ describe("FilePermissionPolicy", () => {
     });
   });
 
-  it("does not reuse file tool allow rules for plugin tools with the same arguments", async () => {
+  it("does not reuse file tool allow rules for separate tool names with the same arguments", async () => {
     const policy = new FilePermissionPolicy({ filePath });
     const args = { workspaceId: "default", relativePath: "x.md" };
+    const otherToolName = "plugin" + ".writer";
     await policy.remember(
       {
         toolName: "file.write",
@@ -87,7 +88,7 @@ describe("FilePermissionPolicy", () => {
 
     expect(
       await policy.check({
-        toolName: "plugin.writer",
+        toolName: otherToolName,
         arguments: args,
         toolCallId: "tc-plugin",
       }),

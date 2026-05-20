@@ -229,7 +229,6 @@ export async function startDefaultServer(port = 4317) {
     platform,
     workspaceRegistry,
     workspaceAskResolver: workspaceAskBridge.ask,
-    pluginsDir,
   });
   await toolRegistry.refresh();
   const mcpRegistry = new MCPServerRegistry({

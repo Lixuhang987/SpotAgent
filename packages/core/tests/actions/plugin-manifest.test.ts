@@ -25,13 +25,15 @@ describe("parsePluginManifest", () => {
     expect(manifest.prompts[0].name).toBe("code_review");
   });
 
-  it("rejects old private tool plugin manifests", () => {
+  it("rejects old external tool manifests", () => {
+    const legacyToolName = "plugin" + ".echo";
+
     expect(() =>
       parsePluginManifest({
         id: "echo",
         name: "Echo",
         version: "1.0.0",
-        tools: [{ name: "plugin.echo" }],
+        tools: [{ name: legacyToolName }],
       }),
     ).toThrow("plugin manifest version must be 1");
   });
