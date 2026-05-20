@@ -48,7 +48,7 @@ AgentServerHealth.onAvailabilityChange → Controller.setSubmissionEnabled(...)
 ## 与其他模块的关系
 
 - 由 [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 持有并注入 actions。
-- 提交 prompt 后由 Coordinator 聚焦或创建全局 [SessionWindow](/Users/mu9/proj/handAgent/apps/desktop/Sources/SessionWindow/session-window.md)，再由窗口模型创建会话或向 active tab 发送消息。
+- 提交 prompt 后由 Coordinator 聚焦或创建全局 [SessionWindow](/Users/mu9/proj/handAgent/apps/desktop/Sources/SessionWindow/session-window.md)，再由窗口模型创建新的会话 tab；当前 active tab 不会接收 PromptPanel 的初始提交。
 - [AgentServer](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/AgentServer/agent-server.md) 可用性变化会同步到 `setSubmissionEnabled`，避免重启期间提交新 prompt。
 - "打开设置" action 由 Coordinator 路由到 [Settings](/Users/mu9/proj/handAgent/apps/desktop/Sources/Settings/settings.md) 窗口。
 - "会话历史" action 由 Coordinator 路由到 [SessionWindow](/Users/mu9/proj/handAgent/apps/desktop/Sources/SessionWindow/session-window.md) 的左侧历史列表。
