@@ -22,7 +22,7 @@
 1. 让 LLM 调 `screen.capture(target: "window", windowId: <frontmost>)`，确认返回指定窗口截图。
 1. 快速连续发送 3 个 `platform_request`，确认通过 `requestId` 隔离，结果不串。
 
-最近阻塞记录：2026-05-21 使用 mock-LLM 触发 `[mock:screen-display]` 已验证到 `screen.capture` 权限气泡与真实 PlatformBridge 调用，但 macOS 返回 `Failed to enumerate shareable content (用户拒绝了应用程序、窗口、显示器捕捉的TCC)。请确认 HandAgent 已获得「屏幕录制」权限。`。授权屏幕录制后需重新验证 display/window 截图和 3 个快速 `platform_request` 隔离。
+最近阻塞记录：2026-05-21 使用 mock-LLM 触发 `[mock:screen-display]` 已验证到 `screen.capture` 权限气泡与真实 PlatformBridge 调用，但即使 `kTCCServiceScreenCapture` 已允许、`CGPreflightScreenCaptureAccess()` 也返回 `true`，应用内 `SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)` 仍返回 `Failed to enumerate shareable content (用户拒绝了应用程序、窗口、显示器捕捉的TCC)。请确认 HandAgent 已获得「屏幕录制」权限。`。该项已写入 [bugs.md](./bugs.md)；修复后需重新验证 display/window 截图和 3 个快速 `platform_request` 隔离。
 
 ## 多模态图片附件（P1）
 
@@ -80,4 +80,4 @@
 
 ## 已知问题（待修复）
 
-当前已确认缺陷以 [bugs.md](./bugs.md) 为准。2026-05-21 已确认：删除 running session 后，已打开 tab 仍显示 `运行中`。
+当前已确认缺陷以 [bugs.md](./bugs.md) 为准。2026-05-21 已确认：删除 running session 后，已打开 tab 仍显示 `运行中`；ScreenCaptureKit 反向 IPC 也仍在 `permission_denied`，两项都需要继续修复并回归验收。

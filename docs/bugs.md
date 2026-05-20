@@ -349,3 +349,44 @@
 - `SessionTabViewModel`：被删除的 tab 仍保留本地状态与 socket，因此 UI 继续展示旧的 running 状态。
 
 **状态**：未修复。
+
+### 2. ScreenCaptureKit 反向 IPC 在已开启屏幕录制权限后仍返回 permission_denied
+
+**严重级别**：P2
+
+**发现日期**：2026-05-21
+
+**复现步骤**：
+
+1. 执行基线命令：`bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`。
+2. 执行 `bash ./scripts/package-app.sh --mock-llm` 并启动 `dist/HandAgentDesktop.app`。
+3. 在系统设置「隐私与安全性 → 录屏与系统录音」里确认 `HandAgentDesktop` 开关为开启；若先关闭过，再重新开启并按系统提示重启 app。
+4. 在 PromptPanel 提交 `[mock:screen-display] QA screen capture display`。
+5. 点击 `screen.capture` 授权气泡中的「仅本次」。
+6. 检查 SessionWindow 与 `~/.spotAgent/sessions/session-1779316378563-ce3kgj.json`。
+
+**实际结果**：
+
+- SessionWindow 显示 `screen.capture: Failed to enumerate shareable content (用户拒绝了应用程序、窗口、显示器捕捉的TCC)。请确认 HandAgent 已获得「屏幕录制」权限。`
+- session 文件 `~/.spotAgent/sessions/session-1779316378563-ce3kgj.json` 记录了 `permission_request(action: allow)`、`tool_call(screen.capture display)` 与 `tool_result(status: error)`。
+- `sqlite3 "$HOME/Library/Application Support/com.apple.TCC/TCC.db"` 可查到 `kTCCServiceScreenCapture|com.yourname.HandAgentDesktop|0|2|4|1779316195`。
+- `swift -e 'import CoreGraphics; print(CGPreflightScreenCaptureAccess())'` 返回 `true`，说明系统侧预检已通过，但应用内 `SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)` 仍报 TCC 拒绝。
+
+**期望结果**：
+
+`screen.capture` 在已授予屏幕录制权限并重启 app 后，应能返回 `imageBase64` 的 display 截图；如果仍无法枚举 shareable content，错误必须能指向真实原因，而不是继续冒充用户拒绝。
+
+**证据**：
+
+- UI：PromptPanel 授权气泡参数为 `{ "target": { "kind": "display" } }`；确认授权后 SessionWindow 仍显示上述错误。
+- session 文件：`~/.spotAgent/sessions/session-1779316378563-ce3kgj.json`。
+- TCC 数据库：`kTCCServiceScreenCapture|com.yourname.HandAgentDesktop|0|2|4|1779316195`。
+- 系统预检：`CGPreflightScreenCaptureAccess()` 返回 `true`。
+
+**初步调用链 / 根因边界**：
+
+- `MockLLMClient` -> `tool_call(screen.capture)` -> `SessionPermissionBridge`：权限审批链路正常，用户已允许本次调用。
+- `SessionRuntimeOrchestrator` -> `PlatformBridgeService` -> `MacPlatformProvider.captureScreen()`：失败点停在 `SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)`，它抛出带 TCC 文案的错误。
+- 目前尚未证明是 ScreenCaptureKit / TCC / code-sign requirement 哪一层在误判；下一步需要进一步追踪实现和签名边界。
+
+**状态**：未修复。
