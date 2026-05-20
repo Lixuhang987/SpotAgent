@@ -51,7 +51,7 @@ test -x "$APP_DIR/Contents/MacOS/HandAgentDesktop"
 test -f "$MARKER_FILE"
 grep -q '"llmMode":"mock"' "$MARKER_FILE"
 grep -q 'swift:build -c release --product HandAgentDesktop' "$LOG_FILE"
-grep -q 'codesign:--force --deep --sign -' "$LOG_FILE"
+grep -q 'codesign:--force --deep --sign - --requirements =designated => identifier "com.yourname.HandAgentDesktop"' "$LOG_FILE"
 
 rm -rf "$DIST_DIR"
 : >"$LOG_FILE"
@@ -66,6 +66,6 @@ HANDAGENT_PACKAGE_LOG_FILE="$LOG_FILE" \
 test -x "$APP_DIR/Contents/MacOS/HandAgentDesktop"
 test ! -f "$MARKER_FILE"
 grep -q 'swift:build -c release --product HandAgentDesktop' "$LOG_FILE"
-grep -q 'codesign:--force --deep --sign -' "$LOG_FILE"
+grep -q 'codesign:--force --deep --sign - --requirements =designated => identifier "com.yourname.HandAgentDesktop"' "$LOG_FILE"
 
 echo "success"

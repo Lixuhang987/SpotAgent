@@ -73,6 +73,12 @@ bash ./scripts/swiftw build
 - 状态链路：状态气泡展示 -> 点击后回到 running session 或最近活跃窗口。
 - 工具链路：先通过 `packages/core/tests/*` 里对应测试验证，再考虑接到 SessionWindow。
 
+### 打包与系统权限
+
+- 本地 QA 打包使用 `bash ./scripts/package-app.sh --mock-llm`。
+- 脚本默认用 ad-hoc 签名，但会显式写入 `designated => identifier "com.yourname.HandAgentDesktop"`，避免默认 requirement 退化成随二进制变化的 `cdhash`。这样屏幕录制、辅助功能等 macOS TCC 权限在多次重构建后仍能复用同一个 App 身份。
+- 如果需要换正式签名身份，可设置 `HANDAGENT_PACKAGE_CODESIGN_IDENTITY`；如果 bundle id 或签名策略变化，也要同步设置 `HANDAGENT_PACKAGE_CODESIGN_REQUIREMENT`。
+
 ## 代码规范
 
 ### 目录边界
