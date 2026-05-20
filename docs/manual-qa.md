@@ -7,7 +7,7 @@
 
 ## 验收目标
 
-确认桌面 Agent MVP 仍未归档的端到端路径可用，并把新通过的条目及时移入归档：权限关闭窗口取消挂起请求、tool 运行时基础、ScreenCaptureKit 反向 IPC、多模态图片附件、真实流式输出、协议拆分与多会话绑定、OCR、Accessibility、多 provider LLM、用户自定义 tool 后续异常路径 / 本地插件系统边界。
+确认桌面 Agent MVP 仍未归档的端到端路径可用，并把新通过的条目及时移入归档：权限关闭窗口取消挂起请求、ScreenCaptureKit 反向 IPC、多模态图片附件、真实流式输出、协议拆分与多会话绑定、OCR、Accessibility、多 provider LLM、用户自定义 tool 后续异常路径 / 本地插件系统边界。
 
 ## 验收前提
 
@@ -21,12 +21,6 @@
 1. 在 SessionWindow 内触发一个需要权限审批且会保持挂起的 tool 请求。
 1. 授权气泡出现后不做选择，直接关闭该 SessionWindow。
 1. 确认挂起请求全部被取消，不留僵尸请求；后续新建会话和权限审批不受影响。
-
-## Tool 运行时基础（P2）
-
-1. 启动 App，检查 `~/.spotAgent/log/` 中 agent-server 启动日志，确认打印「已注册 tool 列表」且包含 9 个 builtin tool。
-1. 在 `~/.spotAgent/settings.json` 中设置 `tools.denylist: ["clipboard.read"]`，重启 App，确认 LLM 调 `clipboard.read` 时返回「tool 不可用」错误。
-1. 断开 desktop（关闭 App 但保留 agent-server），通过 WebSocket 客户端发送 `screen.capture` 请求，确认返回 `desktop offline` 错误而非超时。
 
 ## ScreenCaptureKit 反向 IPC（P2）
 

@@ -367,3 +367,21 @@
   - Session 文件 `~/.spotAgent/sessions/A94C0D17-D697-45AC-A4F7-0552BF2C5545.json`：denylist 生效后 session 状态为 `failed`，event 为 `Unknown tool: plugin.echo`。
   - settings 恢复后 `~/.spotAgent/settings.json` 中 `tools.denylist` 为空数组。
 - **结论**：通过。本地插件 tool 可在下一轮请求中热加载、进入统一权限审批与 tool result/event 链路；`tools.denylist` 可不重启热禁用插件 tool。
+
+## Tool 运行时基础（2026-05-20 实机验证）
+
+- **验证日期**：2026-05-20
+- **验证环境**：mock-llm / macOS / main branch / `dist/HandAgentDesktop.app` + standalone agent-server
+- **验证过程**：
+  1. 执行 `bash ./scripts/package-app.sh --mock-llm` 并启动 `dist/HandAgentDesktop.app`，确认状态气泡 `280x62` 可见，agent-server 监听 `*:4317`，子进程命令路径为主仓库 `apps/agent-server/src/server.ts`。
+  2. 备份 `~/.spotAgent/settings.json`，写入 `tools.denylist: ["clipboard.read"]`，不重启 App。
+  3. 通过 PromptPanel 提交 `[mock:clipboard-read] QA clipboard denylist manual 20260520`，确认下一轮请求热加载设置后 SessionWindow 进入 `failed`，显示 `Unknown tool: clipboard.read`。
+  4. 恢复 `settings.json` 后停止桌面 App，单独以 `HANDAGENT_LLM_MODE=mock node --experimental-transform-types --experimental-specifier-resolution=node apps/agent-server/src/server.ts` 启动 agent-server，不连接 desktop platform bridge。
+  5. 通过 WebSocket 客户端发送 `[mock:screen-display] QA desktop offline manual 20260520`，收到 `permission_request` 后回 `allow once`，确认 `screen.capture` 立即返回 platform bridge offline 错误而非超时。
+- **证据**：
+  - App 启动：`ps -o pid,ppid,command -p 52625` 显示命令路径为 `/Users/mu9/proj/handAgent/apps/agent-server/src/server.ts`。
+  - 注册工具列表：standalone agent-server stdout 打印 `[agent-server] registered tools: clipboard.read, app.frontmost, window.list, screen.capture, ocr.read, accessibility.snapshot, accessibility.action, workspace.list, file.read, file.write, workspace.askUser, plugin.echo`。
+  - denylist session：`~/.spotAgent/sessions/E1082024-BAEC-4CE9-A081-76106C3F3B22.json`，events 包含 `Unknown tool: clipboard.read`。
+  - desktop offline session：`~/.spotAgent/sessions/QA-OFFLINE-1779259054383.json`，`screen.capture` tool result `status: error`，output 为 `Platform bridge is not connected (method: screen.capture)`，`durationMs: 1`。
+  - settings 恢复后 `~/.spotAgent/settings.json` 中 `tools.denylist` 为空数组；验证结束后 `*:4317` 无 listener。
+- **结论**：通过。agent-server 启动时注册当前可用工具列表；tool denylist 可在下一轮请求前热加载；desktop 未连接 platform bridge 时平台 tool 会立即返回明确 offline 错误，不会静默超时。
