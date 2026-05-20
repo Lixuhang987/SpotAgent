@@ -20,8 +20,9 @@ Coordinator.handleSubmitPrompt
   └─ SessionWindowLifecycle.ensureWindow()
      └─ 创建/聚焦一个全局 SessionWindow
      └─ SessionWindowViewModel.sendPrompt(...)
-        └─ 无 active tab：history socket 发送 create_session_request
+        └─ 无 active tab：history socket 发送空 create_session_request
         └─ 收到 create_session_response：创建 tab 并连接 tab socket
+        └─ 新 tab 通过自己的 socket 发送 user_message，确保 assistant 流进入 tab 状态
         └─ 有 active tab：activeTab.sendPrompt(...) 发送 user_message
 
 左侧历史项点击

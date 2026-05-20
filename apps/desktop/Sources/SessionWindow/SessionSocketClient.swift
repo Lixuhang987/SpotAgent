@@ -210,7 +210,7 @@ final class SessionSocketClient: @unchecked Sendable {
     }
 
     func sendCreateSession(
-        initialText: String,
+        initialText: String? = nil,
         attachments: [UserMessageAttachmentPayload] = []
     ) {
         let payload: [String: Any?] = [
