@@ -105,6 +105,7 @@ export function attachSessionSocketHandlers(
     for (const [sessionId, token] of boundSessions) {
       const unbound = permissionBridge?.unbindSession(sessionId, token) ?? false;
       if (unbound) {
+        router.interruptSession(sessionId, sendSession);
         permissionPolicy?.clearSessionRules(sessionId);
       }
     }

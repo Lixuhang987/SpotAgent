@@ -1,10 +1,16 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
+import type { AgentMessage } from "@handagent/core/runtime/AgentMessage.ts";
+import type { AgentRuntimeEvent } from "@handagent/core/runtime/AgentRuntime.ts";
 import type { SessionMessage } from "@handagent/core/protocol/SessionMessage.ts";
 import type { PlatformBridgeMessage } from "@handagent/core/protocol/PlatformBridgeMessage.ts";
 import type { FilePermissionPolicy } from "@handagent/core/permission/FilePermissionPolicy.ts";
+import { InMemorySessionStore } from "@handagent/core/storage/index.ts";
 import type { SessionRouter } from "../../src/SessionRouter.ts";
+import { SessionRouter as RealSessionRouter } from "../../src/SessionRouter.ts";
+import { SessionPersistence } from "../../src/SessionPersistence.ts";
 import { SessionPermissionBridge } from "../../src/SessionPermissionBridge.ts";
+import { SessionRuntimeOrchestrator } from "../../src/SessionRuntimeOrchestrator.ts";
 import { SessionWorkspaceAskBridge } from "../../src/SessionWorkspaceAskBridge.ts";
 import { attachSessionSocketHandlers, resolveLLMMode } from "../../src/server.ts";
 
@@ -72,6 +78,7 @@ describe("attachSessionSocketHandlers", () => {
     const socket = new FakeSocket();
     const router = {
       receive: vi.fn(async () => {}),
+      interruptSession: vi.fn(),
     } as unknown as SessionRouter;
     const permissionBridge = {
       bindSession: vi.fn().mockReturnValueOnce(101).mockReturnValueOnce(102),
@@ -103,6 +110,8 @@ describe("attachSessionSocketHandlers", () => {
 
     expect(permissionBridge.unbindSession).toHaveBeenCalledWith("session-A", 101);
     expect(permissionBridge.unbindSession).toHaveBeenCalledWith("session-B", 102);
+    expect(router.interruptSession).toHaveBeenCalledWith("session-A", expect.any(Function));
+    expect(router.interruptSession).toHaveBeenCalledWith("session-B", expect.any(Function));
     expect(permissionPolicy.clearSessionRules).toHaveBeenCalledWith("session-A");
     expect(permissionPolicy.clearSessionRules).toHaveBeenCalledWith("session-B");
   });
@@ -111,6 +120,7 @@ describe("attachSessionSocketHandlers", () => {
     const socket = new FakeSocket();
     const router = {
       receive: vi.fn(async () => {}),
+      interruptSession: vi.fn(),
     } as unknown as SessionRouter;
     const permissionBridge = {
       bindSession: vi.fn().mockReturnValue(101),
@@ -130,6 +140,7 @@ describe("attachSessionSocketHandlers", () => {
     socket.emit("close");
 
     expect(permissionBridge.unbindSession).toHaveBeenCalledWith("session-A", 101);
+    expect(router.interruptSession).not.toHaveBeenCalled();
     expect(permissionPolicy.clearSessionRules).not.toHaveBeenCalled();
   });
 
@@ -283,6 +294,66 @@ describe("attachSessionSocketHandlers", () => {
     await emitMessage(socket, permissionResponse(request.payload.requestId, "allow"));
 
     await expect(ask).resolves.toEqual({ decision: "allow", remember: "session" });
+  });
+
+  it("interrupts the active run owned by a socket when that socket closes", async () => {
+    const socket = new FakeSocket();
+    const persistence = new SessionPersistence(
+      new InMemorySessionStore(),
+      () => "2026-05-20T00:00:00.000Z",
+    );
+    let runtimeSignal: AbortSignal | undefined;
+    let finishRun: ((result: { messages: AgentMessage[]; bubbles: [] }) => void) | undefined;
+    const runStarted = Promise.withResolvers<void>();
+    const orchestrator = new SessionRuntimeOrchestrator(
+      {
+        runWithMessages(messages, _onEvent: (event: AgentRuntimeEvent) => void, runOptions) {
+          runtimeSignal = runOptions?.signal;
+          runOptions?.signal.addEventListener("abort", () => {
+            finishRun?.({
+              messages: [
+                ...messages,
+                {
+                  role: "assistant" as const,
+                  content: "late assistant after close",
+                },
+              ],
+              bubbles: [],
+            });
+          });
+          runStarted.resolve();
+          return new Promise((resolve) => {
+            finishRun = resolve;
+          });
+        },
+      },
+      persistence,
+      () => "2026-05-20T00:00:00.000Z",
+    );
+    const router = new RealSessionRouter(
+      orchestrator,
+      persistence,
+      () => "2026-05-20T00:00:00.000Z",
+    );
+    const permissionBridge = new SessionPermissionBridge();
+
+    await persistence.ensureSession("session-A");
+    attachSessionSocketHandlers(socket as never, {
+      router,
+      permissionBridge,
+    });
+
+    await emitMessage(socket, userMessage("session-A", "close me"));
+    await runStarted.promise;
+
+    socket.emit("close");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(runtimeSignal?.aborted).toBe(true);
+    expect(orchestrator.isSessionRunning("session-A")).toBe(false);
+    expect(await persistence.getMessages("session-A")).toEqual([
+      { role: "user", content: "close me" },
+    ]);
   });
 
   it("detaches bridge sockets with the token returned by attach", async () => {

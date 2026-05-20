@@ -72,6 +72,10 @@ export class SessionRouter {
     }
   }
 
+  interruptSession(sessionId: string, push: PushMessage = () => {}): void {
+    this.orchestrator.interruptSession?.(sessionId, push);
+  }
+
   private async handleOpenSession(
     message: Extract<SessionMessage, { type: "open_session" }>,
     push: PushMessage,

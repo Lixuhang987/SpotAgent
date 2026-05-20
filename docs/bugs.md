@@ -246,9 +246,7 @@
 
 ---
 
-## 当前 bug
-
-### 1. 关闭 SessionWindow 后挂起权限请求未立即取消
+### 7. 关闭 SessionWindow 后挂起权限请求未立即取消
 
 **严重级别**：P2
 
@@ -278,10 +276,37 @@
 - Session 文件：`~/.spotAgent/sessions/8056DDA1-76B5-425B-A8DA-773D1C3CE41C.json` 后续变为 `messageCount: 4`，包含 `toolCalls`、`tool` content `用户拒绝执行该 tool` 与 `Mock permission write completed.`。
 - 后续新会话 `Session 8BFFA3D9` 仍可出现新的 `授权调用 file.write` 气泡，说明权限系统未整体卡死，但旧挂起请求未被立即清理。
 
-**初步调用链 / 根因边界**：
+**原始待验证假设**：
 
 - `SessionWindow` 关闭 -> WebSocket close / session unbind：窗口确实关闭，UI 只剩状态气泡。
-- `SessionPermissionBridge.unbindSession` 后，已挂起的 ask promise 没有立即以 cancelled / deny 结束，仍保留到 60 秒 timeout。
-- `AgentRuntime` 在 timeout deny 后继续把 tool denial 和 final assistant 追加到原 session，说明取消没有传到 runtime 当前 run。
+- `SessionPermissionBridge.unbindSession` 后，已挂起的 ask promise 可能没有立即以 cancelled / deny 结束，仍保留到 60 秒 timeout。
+- `AgentRuntime` 在后续 deny 后继续把 tool denial 和 final assistant 追加到原 session，说明取消没有传到 runtime 当前 run。
+
+**状态**：已修复。
+
+**根因边界**：初步判断中的 `SessionPermissionBridge.unbindSession` 不会立即结束 pending ask 并不成立。`SessionPermissionBridge` 已能在 socket 解绑时用 `reason: "session closed"` 结束同 token 的 pending ask；真正失败点在 `attachSessionSocketHandlers` 的 WebSocket close 处理：关闭当前 socket 时只解绑 permission / workspace 请求并清理 session 权限规则，没有调用 `SessionRuntimeOrchestrator.interruptSession()` 中断该 session 的 active run。`AgentRuntime` 因此会把 permission deny 当作普通 tool 拒绝结果继续跑完后续回合，并最终把 `permission_request`、`tool_result` 和 final assistant 写回已关闭 session。
+
+**checkpoint 与结论**：
+
+- `SessionWindow` 关闭 -> tab socket disconnect：桌面侧 `SessionWindowLifecycle.close()` 会对每个 tab 调用 `SessionTabViewModel.disconnect()`，后者调用 `SessionSocketClient.disconnect()` 并取消 WebSocket；失败点不在窗口外壳释放。
+- WebSocket close -> session unbind：`attachSessionSocketHandlers` close handler 会按 socket 绑定 token 调用 `permissionBridge.unbindSession(sessionId, token)`；既有 server 测试覆盖当前 socket 关闭会解绑，stale socket 关闭不会清理新绑定。
+- session unbind -> pending permission ask：`SessionPermissionBridge.unbindSession()` 已调用 `failPendingForToken()`，可立即 resolve `{ decision: "deny", reason: "session closed" }`；失败点不在 pending ask 超时器。
+- WebSocket close -> active runtime interrupt：修复前 RED 测试 `attachSessionSocketHandlers > interrupts the active run owned by a socket when that socket closes` 失败，`runtimeSignal.aborted` 为 `false`，证明 close 链路没有中断 active run。
+- active runtime interrupt -> 持久化：修复后当前 socket 成功解绑 session 时同步调用 `router.interruptSession(sessionId, sendSession)`；`SessionRuntimeOrchestrator` 复用既有 abort 逻辑，忽略后续 late assistant/tool 输出，持久化只保留用户消息。
+- stale socket 边界：只有 `permissionBridge.unbindSession(sessionId, token)` 返回 `true` 时才中断 runtime；stale socket close 返回 `false`，不会误中断同 session 的新 socket run。
+
+**验证**：
+
+- 修复前 RED 证据：`pnpm vitest run apps/agent-server/tests/server/server.test.ts --testNamePattern 'interrupts the active run owned by a socket when that socket closes'` 失败，断言 `runtimeSignal?.aborted` 期望 `true`、实际 `false`。
+- 修复后定向测试：`pnpm vitest run apps/agent-server/tests/server/server.test.ts` 通过，覆盖当前 socket close 中断 active run、stale socket close 不误中断、permission 绑定清理。
+- 修复后完整 TS 测试：`bash ./scripts/test.sh` 通过，210 个测试通过，1 个 integration 跳过。
 
 **发现日期**：2026-05-20
+
+**修复日期**：2026-05-21
+
+---
+
+## 当前 bug
+
+暂无。
