@@ -10,6 +10,12 @@ import type { BlobStore } from "../blob/BlobStore.ts";
 import { renderStub, type StubCacheScope } from "./Stub.ts";
 import type { TurnSummarizerLike } from "./TurnSummarizer.ts";
 
+const TOOL_USE_SYSTEM_PROMPT =
+  "Tool-use policy: available tools are provided separately by the runtime. " +
+  "When the user asks you to use tools, call tools, read external state, inspect the app, or execute a multi-step workflow that requires tools, emit structured tool call requests instead of only describing planned tool calls in assistant text. " +
+  "When multiple tools are needed, emit all required tool calls in the same assistant response when possible. " +
+  "After tool results are returned, summarize the results for the user.";
+
 export type AgentBubble = {
   id: string;
   text: string;
@@ -246,6 +252,8 @@ export class AgentRuntime {
     const messageId = `assistant-${assistantCount}`;
     let content = "";
     const toolCalls: ToolCallEnvelope[] = [];
+    const tools = this.toolRegistry.list();
+    const llmMessages = withToolUseGuidance(messages, tools.length > 0);
 
     throwIfAborted(runOptions.signal);
     onEvent({
@@ -257,8 +265,8 @@ export class AgentRuntime {
     try {
       for await (const event of streamLLM(
         this.client,
-        messages,
-        this.toolRegistry.list(),
+        llmMessages,
+        tools,
         {
           ...(this.blobStore ? { blobStore: this.blobStore } : {}),
           signal: runOptions.signal,
@@ -376,6 +384,17 @@ function serializeToolResult(value: unknown): string {
   } catch {
     return "[unserializable tool result]";
   }
+}
+
+function withToolUseGuidance(messages: AgentMessage[], hasTools: boolean): AgentMessage[] {
+  if (!hasTools) return messages;
+  return [
+    {
+      role: "system",
+      content: TOOL_USE_SYSTEM_PROMPT,
+    },
+    ...messages,
+  ];
 }
 
 const MAX_OUTPUT_BYTES = 8 * 1024;

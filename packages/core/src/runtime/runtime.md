@@ -19,7 +19,7 @@
 flowchart TD
   A[runWithMessages(messages, onEvent, {sessionId, signal?})] --> A1[await pending turn summaries]
   A1 --> B[turn ← 0]
-  B --> C[LLMClient.stream(messages, registry.list(), {blobStore?})]
+  B --> C[LLMClient.stream(system tool-use policy + messages, registry.list(), {blobStore?})]
   C --> C1[emit assistant start / delta / end]
   C1 --> D[push assistant message]
   D --> E{toolCalls.length > 0?}
@@ -54,6 +54,7 @@ flowchart TD
 
 - `maxTurns = 8`：防失控循环。
 - `permissionPolicy = AllowAllPermissionPolicy()`：仅在测试 / 脚本场景默认放行；生产由 `agent-server` 注入 `FilePermissionPolicy(askResolver)`。
+- 当 `ToolRegistry` 中存在可用 tool 时，runtime 会在每次 LLM 请求前临时前置一条 system tool-use policy，要求模型在用户明确要求使用工具或流程需要读取外部状态时返回结构化 tool call；这条 policy 不写入 `AgentRunResult.messages`，也不会进入会话持久化历史。
 - `serializeToolResult` 把非字符串结果用 `JSON.stringify`，循环引用降级为 `[unserializable tool result]`。
 - 带 `stubByDefault` 的 tool 若输入里显式传 `cached=turn|persist`，runtime 会把序列化结果写入注入的 `BlobStore`，并把 tool message content 渲染成 STUB。
 - runtime 不解析持久化 image STUB；agent-server 会在调用 runtime 前把用户主动提交的 image STUB 转成多模态 image part，runtime 只负责把注入的 `BlobStore` 继续透传给 `LLMClient`。
