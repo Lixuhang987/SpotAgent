@@ -57,14 +57,6 @@ struct SessionWindowView: View {
                     .font(theme.typography.captionFont)
                     .foregroundStyle(theme.colors.textSecondary)
                 Spacer()
-                Button {
-                    viewModel.refreshHistory()
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 11))
-                        .foregroundStyle(theme.colors.textSecondary)
-                }
-                .buttonStyle(.plain)
             }
             .padding(.horizontal, theme.spacing.md)
             .padding(.vertical, theme.spacing.sm)

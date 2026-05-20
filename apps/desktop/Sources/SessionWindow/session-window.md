@@ -19,9 +19,10 @@
 Coordinator.handleSubmitPrompt
   └─ SessionWindowLifecycle.ensureWindow()
      └─ 创建/聚焦一个全局 SessionWindow
+     └─ history socket 自动发送 list_sessions_request
      └─ SessionWindowViewModel.sendPrompt(...)
         └─ 无 active tab：history socket 发送空 create_session_request
-        └─ 收到 create_session_response：创建 tab 并连接 tab socket
+        └─ 收到 create_session_response：创建 tab 并连接 tab socket，再刷新左侧历史
         └─ 新 tab 通过自己的 socket 发送 user_message，确保 assistant 流进入 tab 状态
         └─ 有 active tab：activeTab.sendPrompt(...) 发送 user_message
 
@@ -33,7 +34,7 @@ Coordinator.handleSubmitPrompt
 
 ## SessionEvent 处理规则
 
-- `createSessionResponse` 只由窗口级 view model 消费，用真实 `sessionID` 创建 tab。
+- `createSessionResponse` 只由窗口级 view model 消费，用真实 `sessionID` 创建 tab，并刷新左侧历史列表。
 - `sessionList` 只由窗口级 view model 消费，刷新左侧历史列表。
 - `deleteSessionResponse` 触发历史列表刷新；删除 running session 前由 agent-server 负责 interrupt 并等待清理。
 - `sessionOpenFailed / userMessageFailed` 由 tab 标记为 invalid；窗口会 prune invalid tab，并把失败原因显示为空态提示。
@@ -41,7 +42,9 @@ Coordinator.handleSubmitPrompt
 
 ## 历史入口
 
+- SessionWindow 首次创建时会自动加载左侧历史列表，不依赖手动刷新入口。
 - PromptPanel 的“会话历史”只聚焦全局 SessionWindow 并刷新左侧历史，不改变 active tab、running 状态或草稿。
+- PromptPanel 提交 prompt 创建新会话后，收到 `create_session_response` 会自动刷新左侧历史列表。
 - 点击左侧历史项会创建或激活 tab；不会再打开独立历史窗口。
 - 删除历史项必须先进入待确认状态，确认后发送 `delete_session_request`；server 返回 `delete_session_response` 后刷新列表。
 

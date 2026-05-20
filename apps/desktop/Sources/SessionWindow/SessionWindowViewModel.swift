@@ -36,6 +36,7 @@ final class SessionWindowViewModel {
             Task { @MainActor in self?.handleWindowEvent(event) }
         }
         self.historySocketClient.connect(sessionID: "")
+        refreshHistory()
     }
 
     func openOrFocusHistory() {
@@ -135,6 +136,7 @@ final class SessionWindowViewModel {
                activeTab?.sessionID == sessionID {
                 activeTab?.sendPrompt(pendingPrompt.text, attachments: pendingPrompt.attachments)
             }
+            refreshHistory()
         case .deleteSessionResponse:
             refreshHistory()
         default:

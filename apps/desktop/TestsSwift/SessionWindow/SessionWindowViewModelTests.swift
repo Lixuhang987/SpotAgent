@@ -3,6 +3,50 @@ import XCTest
 
 final class SessionWindowViewModelTests: XCTestCase {
     @MainActor
+    func testInitializesHistoryListRequestWhenWindowModelIsCreated() {
+        let transport = RecordingSessionSocketTransport()
+        _ = SessionWindowViewModel(
+            socketFactory: { _ in .noop },
+            historySocketClient: SessionSocketClient(
+                serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
+                transport: transport,
+                reconnectDelay: 0
+            )
+        )
+
+        XCTAssertEqual(transport.tasks.count, 1)
+        XCTAssertEqual(transport.tasks[0].sentTypes, ["open_session", "list_sessions_request"])
+    }
+
+    @MainActor
+    func testCreateSessionResponseOpensTabAndRefreshesHistoryList() {
+        let historyTransport = RecordingSessionSocketTransport()
+        let tabTransport = RecordingSessionSocketTransport()
+        let model = SessionWindowViewModel(
+            socketFactory: { _ in
+                SessionSocketClient(
+                    serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
+                    transport: tabTransport,
+                    reconnectDelay: 0
+                )
+            },
+            historySocketClient: SessionSocketClient(
+                serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
+                transport: historyTransport,
+                reconnectDelay: 0
+            )
+        )
+
+        model.handleWindowEvent(.createSessionResponse(sessionID: "session-1", title: nil))
+
+        XCTAssertEqual(model.activeTab?.sessionID, "session-1")
+        XCTAssertEqual(
+            historyTransport.tasks[0].sentTypes,
+            ["open_session", "list_sessions_request", "list_sessions_request"]
+        )
+    }
+
+    @MainActor
     func testOpenHistorySessionCreatesAndActivatesTab() {
         let model = SessionWindowViewModel(socketFactory: { _ in .noop })
 
@@ -135,6 +179,43 @@ private final class ViewModelRecordingSessionWebSocketTask: SessionWebSocketTask
         }
         sentTypes.append(type)
         lastPayload = object["payload"] as? [String: Any]
+        completionHandler(nil)
+    }
+
+    func receive(
+        completionHandler: @escaping @Sendable (Result<URLSessionWebSocketTask.Message, Error>) -> Void
+    ) {}
+}
+
+private final class RecordingSessionSocketTransport: SessionSocketTransport {
+    private(set) var tasks: [RecordingSessionWebSocketTask] = []
+
+    func makeWebSocketTask(with url: URL) -> any SessionWebSocketTask {
+        let task = RecordingSessionWebSocketTask()
+        tasks.append(task)
+        return task
+    }
+}
+
+private final class RecordingSessionWebSocketTask: SessionWebSocketTask {
+    private(set) var sentTypes: [String] = []
+
+    func resume() {}
+
+    func cancel(with closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {}
+
+    func send(
+        _ message: URLSessionWebSocketTask.Message,
+        completionHandler: @escaping @Sendable (Error?) -> Void
+    ) {
+        guard case .string(let text) = message,
+              let data = text.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let type = object["type"] as? String else {
+            completionHandler(nil)
+            return
+        }
+        sentTypes.append(type)
         completionHandler(nil)
     }
 
