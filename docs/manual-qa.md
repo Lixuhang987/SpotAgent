@@ -7,7 +7,7 @@
 
 ## 验收目标
 
-确认桌面 Agent MVP 仍未归档的端到端路径可用，并把新通过的条目及时移入归档：ScreenCaptureKit 反向 IPC、协议拆分与多会话绑定、OCR、Accessibility、多 provider LLM。
+确认桌面 Agent MVP 仍未归档的端到端路径可用，并把新通过的条目及时移入归档：ScreenCaptureKit 反向 IPC、多模态图片附件、协议拆分与多会话绑定、OCR、Accessibility、多 provider LLM。
 
 ## 验收前提
 
@@ -23,6 +23,12 @@
 1. 快速连续发送 3 个 `platform_request`，确认通过 `requestId` 隔离，结果不串。
 
 最近阻塞记录：2026-05-21 使用 mock-LLM 触发 `[mock:screen-display]` 已验证到 `screen.capture` 权限气泡与真实 PlatformBridge 调用，但 macOS 返回 `Failed to enumerate shareable content (用户拒绝了应用程序、窗口、显示器捕捉的TCC)。请确认 HandAgent 已获得「屏幕录制」权限。`。复测 session `~/.spotAgent/sessions/session-1779306464331-1c7li4.json` 记录了 `permission_request(action: allow)`、`tool_call(screen.capture display)` 与 `tool_result(status: error)`，错误输出仍为屏幕录制 TCC 拒绝。授权屏幕录制后需重新验证 display/window 截图和 3 个快速 `platform_request` 隔离。
+
+## 多模态图片附件（P1）
+
+1. 使用 `captureRegion` 截取一个区域，提交 prompt「描述这张图片」，确认 LLM 能基于图片内容给出真实描述（非占位文本）。
+
+最近阻塞记录：2026-05-21 原先被归档的 `session-1779313602185-eonh2a` 实际附着的是 `blob-302ca91a-029a-407e-9986-170ae0b5ddf0`，内容是一张二次元插画，不是受控的 QA 目标截图；这次多模态归档无效，需要重新做受控 `captureRegion` 验证后再决定是否移入归档。
 
 ## 单窗口多 Tab 会话历史（P1）
 
@@ -68,4 +74,4 @@
 
 ## 已知问题（待修复）
 
-当前已确认缺陷以 [bugs.md](./bugs.md) 为准。2026-05-21 已确认：删除 running session 后，已打开 tab 仍显示 `运行中`。
+当前状态以 [bugs.md](./bugs.md) 为准。2026-05-21 已确认：删除 running session 后，已打开 tab 仍显示 `运行中`，代码修复和自动化验证已完成，最终 GUI 删除确认后的实机回归闭环仍待完成。

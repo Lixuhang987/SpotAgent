@@ -418,21 +418,6 @@
   - 最终 smoke session：`~/.spotAgent/sessions/session-1779312326930-rilxsi.json`，完成后 `messages: 2`，assistant 内容长度约 `2597`。
 - **结论**：通过。真实 provider streaming 可在 SessionWindow 中以可见增量渲染；网络日志不再为了记录 response 而缓冲 SSE body。
 
-## 多模态图片附件（2026-05-21 实机验证）
-
-- **验证日期**：2026-05-21
-- **验证环境**：real LLM / macOS 15.5 / worktree `codex/fix-delete-running-session-tab` / 非 mock `dist/HandAgentDesktop.app`
-- **验证过程**：
-  1. 通过 `captureRegion` 触发区域截图，并在 PromptPanel 中看到 `image` 附件 chip。
-  2. 提交 prompt「请描述这张图片，列出你看到的文字、颜色和形状。」。
-  3. SessionWindow 显示 assistant 对图像内容的具体描述，而不是占位文本。
-  4. session 完成后保留 user + assistant 两条消息，user content 中含 image stub。
-- **证据**：
-  - UI：PromptPanel 显示 `附件 ×1 · image` 和 `图片 image image/png`；SessionWindow 显示具体视觉描述。
-  - Session 文件：`~/.spotAgent/sessions/session-1779313602185-eonh2a.json`，`messages: 2`，assistant 内容长度约 `739`。
-  - 真实回答内容：assistant 明确描述了图片中的**三位二次元少女角色**、**没有明显可读文字**、以及**蓝/白/粉/棕/青绿/紫蓝/金色**等颜色与圆润椭圆脸、动漫眼睛、和服装饰等形状元素。
-- **结论**：通过。多模态图片附件可经 `captureRegion` 进入 PromptPanel，并由 real LLM 给出基于图像内容的非占位描述。
-
 ## Tool 运行时基础（2026-05-20 实机验证）
 
 - **验证日期**：2026-05-20
