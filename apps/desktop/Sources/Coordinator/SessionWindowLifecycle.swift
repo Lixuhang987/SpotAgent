@@ -38,7 +38,7 @@ final class SessionWindowLifecycle {
         onClosed: @escaping @MainActor () -> Void
     ) {
         let model = ensureWindow(onClosed: onClosed)
-        model.sendPrompt(prompt.composed, attachments: prompt.socketAttachments)
+        model.createTabWithInitialPrompt(prompt.composed, attachments: prompt.socketAttachments)
     }
 
     @discardableResult

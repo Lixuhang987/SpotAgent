@@ -39,7 +39,7 @@
 ## 单窗口多 Tab 会话历史（P1）
 
 1. 从 PromptPanel 提交一条 prompt，确认只打开一个 SessionWindow，并在收到 create 响应后创建一个 active tab。
-1. 再次从 PromptPanel 提交 prompt，确认复用同一个 SessionWindow；若当前已有 active tab，则在当前 tab 继续追问，若处于空态则创建新会话。
+1. 再次从 PromptPanel 提交 prompt，确认复用同一个 SessionWindow，并创建新的 session tab，不会打到当前 active tab。
 1. 从 PromptPanel 执行“会话历史”，确认只聚焦 SessionWindow，不改变 active tab、running 状态或草稿。
 1. 点击左侧历史项，确认已有 tab 会被激活，未打开历史会话会创建新 tab。
 1. 在一个 tab running 时切换到另一个 tab，确认后台 tab 继续输出且状态标记可见。

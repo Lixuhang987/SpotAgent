@@ -26,11 +26,10 @@ Coordinator.handleSubmitPrompt
   └─ SessionWindowLifecycle.ensureWindow()
      └─ 创建/聚焦一个全局 SessionWindow
      └─ history socket 自动发送 list_sessions_request
-     └─ SessionWindowViewModel.sendPrompt(...)
-        └─ 无 active tab：history socket 发送空 create_session_request
+     └─ SessionWindowViewModel.createTabWithInitialPrompt(...)
+        └─ history socket 发送空 create_session_request
         └─ 收到 create_session_response：创建 tab 并连接 tab socket，再刷新左侧历史
         └─ 新 tab 通过自己的 socket 发送 user_message，确保 assistant 流进入 tab 状态
-        └─ 有 active tab：activeTab.sendPrompt(...) 发送 user_message
 
 左侧历史项点击
   └─ SessionWindowViewModel.openHistorySession(id)
@@ -54,6 +53,7 @@ Coordinator.handleSubmitPrompt
 - 右侧顶部状态栏展示当前会话标题、运行/连接状态与已打开 tab 数；Stop 只作用于当前 active tab。
 - 消息列表是工作区主滚动区域；错误、权限审批和 workspace 选择作为消息区底部的内联面板展示。
 - 底部 composer 在无 active tab 时发送会创建新会话；有 active tab 时发送到当前 tab。
+- PromptPanel 提交总是创建新会话 tab，不会把输入发到当前 active tab。
 
 ## SessionEvent 处理规则
 

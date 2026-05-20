@@ -77,6 +77,10 @@ final class SessionWindowViewModel {
             return
         }
 
+        createTabWithInitialPrompt(text, attachments: attachments)
+    }
+
+    func createTabWithInitialPrompt(_ text: String, attachments: [UserMessageAttachmentPayload] = []) {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedText.isEmpty else { return }
 

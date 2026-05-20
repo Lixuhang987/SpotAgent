@@ -102,7 +102,7 @@ final class SessionWindowViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testPromptPanelSubmitCreatesTabThenSendsPromptThroughTabSocket() async {
+    func testComposerSubmitFromEmptyWorkspaceCreatesTabThenSendsPromptThroughTabSocket() async {
         let historyTransport = ViewModelRecordingSessionSocketTransport()
         let historyClient = SessionSocketClient(
             serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
@@ -145,6 +145,57 @@ final class SessionWindowViewModelTests: XCTestCase {
         XCTAssertEqual(model.activeTab?.sessionID, "session-created")
         XCTAssertEqual(model.activeTab?.messages.map(\.text), ["hello from panel"])
         XCTAssertEqual(tabTransports["session-created"]?.tasks[0].sentTypes, ["open_session", "user_message"])
+    }
+
+    @MainActor
+    func testPromptPanelInitialSubmitCreatesNewSessionEvenWhenATabIsActive() async {
+        let historyTransport = ViewModelRecordingSessionSocketTransport()
+        let historyClient = SessionSocketClient(
+            serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
+            transport: historyTransport,
+            reconnectDelay: 0
+        )
+        var tabTransports: [String: ViewModelRecordingSessionSocketTransport] = [:]
+        let model = SessionWindowViewModel(
+            socketFactory: { sessionID in
+                let transport = ViewModelRecordingSessionSocketTransport()
+                tabTransports[sessionID] = transport
+                return SessionSocketClient(
+                    serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
+                    transport: transport,
+                    reconnectDelay: 0
+                )
+            },
+            historySocketClient: historyClient
+        )
+        model.openHistorySession("existing-session")
+
+        model.createTabWithInitialPrompt("new prompt")
+
+        XCTAssertEqual(model.activeTab?.sessionID, "existing-session")
+        XCTAssertEqual(tabTransports["existing-session"]?.tasks[0].sentTypes, ["open_session"])
+        XCTAssertEqual(historyTransport.tasks[0].sentTypes.suffix(1), ["create_session_request"])
+        XCTAssertNil(historyTransport.tasks[0].lastPayload?["initialText"])
+
+        historyClient.handleIncomingTextForTesting(
+            """
+            {
+              "type": "create_session_response",
+              "sessionId": "new-session",
+              "messageId": "create-1",
+              "timestamp": "2026-05-20T00:00:00.000Z",
+              "payload": { "title": null }
+            }
+            """,
+            currentSessionID: ""
+        )
+        await Task.yield()
+
+        XCTAssertEqual(model.activeTab?.sessionID, "new-session")
+        XCTAssertEqual(model.tabs.map(\.sessionID), ["existing-session", "new-session"])
+        XCTAssertEqual(tabTransports["existing-session"]?.tasks[0].sentTypes, ["open_session"])
+        XCTAssertEqual(tabTransports["new-session"]?.tasks[0].sentTypes, ["open_session", "user_message"])
+        XCTAssertEqual(model.activeTab?.messages.map(\.text), ["new prompt"])
     }
 }
 
