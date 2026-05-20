@@ -14,7 +14,7 @@
 - Window 拥有 tabs，tab 拥有完整对话生命周期。
 - 运行中的 tab 允许在后台继续运行，切换 tab 不 interrupt。
 - PromptPanel 不再展示最近会话 action。
-- PromptPanel 的“会话历史”动作改为打开唯一 SessionWindow，并保持未选中 session 的空态。
+- PromptPanel 的“会话历史”动作改为打开或聚焦唯一 SessionWindow，不改变已打开窗口的 active tab 或 tabs 状态。
 - 独立 HistoryWindow 移除。
 - 空态输入消息时显式创建新 session 和新 tab。
 - 协议层去掉“静默失败”和“隐式创建任意 session”的语义。
@@ -32,7 +32,7 @@
 ### PromptPanel
 
 - 普通 prompt 提交：打开或聚焦唯一 SessionWindow，显式创建新 session 和新 tab，并把首条 prompt 发送到该 tab。
-- “会话历史”动作：打开或聚焦唯一 SessionWindow，刷新左侧历史列表，`activeTabId = nil`。右侧显示空态。
+- “会话历史”动作：打开或聚焦唯一 SessionWindow，刷新左侧历史列表；如果窗口已经打开，不改变 `activeTabId`、tabs、运行态或草稿。只有窗口首次创建且还没有 tab 时，右侧自然显示空态。
 - 最近会话 action 删除。PromptPanel 不再承担历史恢复入口。
 
 ### SessionWindow
@@ -111,7 +111,7 @@ SessionTabViewModel
 
 `SessionLifecycle` 需要从 `[sessionId: NSWindow]` 改为唯一 `SessionWindowLifecycle`：
 
-- `openOrFocusEmptyHistory()`：打开唯一窗口，active tab 置空，刷新历史。
+- `openOrFocusHistory()`：打开或聚焦唯一窗口，刷新历史，不改变已存在窗口的 active tab 或 tabs 状态。首次创建窗口时 `activeTabId = nil`。
 - `createTabWithInitialPrompt(prompt)`：打开唯一窗口，创建新 session/tab，并发送首条消息。
 - `openSessionInTab(sessionId)`：打开唯一窗口，在当前窗口创建或激活 tab。
 - `closeWindow()`：关闭唯一窗口时断开所有 tabs socket，更新状态气泡。
@@ -275,7 +275,7 @@ delete_session_request(targetSessionId)
 
 - 删除独立 `SessionHistoryWindowView`、`SessionHistoryViewModel` 和对应 lifecycle/presenter 入口。
 - PromptPanel 删除最近会话 action 生成逻辑。
-- PromptPanel 的“会话历史”action 改为 `openOrFocusEmptyHistory()`。
+- PromptPanel 的“会话历史”action 改为 `openOrFocusHistory()`。
 
 ### ViewModel 拆分
 
@@ -335,13 +335,14 @@ delete_session_request(targetSessionId)
   - permission/workspace ask 只归属当前 tab。
 - `AppCoordinatorTests`
   - PromptPanel 最近会话 action 不再生成。
-  - 会话历史 action 打开唯一空 SessionWindow。
+  - 会话历史 action 打开或聚焦唯一 SessionWindow，且不改变已打开窗口的 active tab。
   - 多次 prompt 提交复用唯一窗口并创建多个 tabs。
 
 ### 手工 QA
 
 - 从 PromptPanel 输入 prompt，唯一 SessionWindow 打开并创建 tab。
-- 从 PromptPanel 打开会话历史，窗口进入无 active tab 空态。
+- 从 PromptPanel 首次打开会话历史，唯一 SessionWindow 进入无 active tab 空态。
+- 在已有 active tab 或 running tab 时从 PromptPanel 打开会话历史，窗口只被聚焦且历史刷新，active tab 和运行态不变。
 - 点击历史项打开 tab，切换 tab 后后台 running 继续输出。
 - 删除 running session，确认 server interrupt 后删除，历史刷新。
 - 删除已打开但 inactive 的历史，再切回或重连时 tab 自动退出。
