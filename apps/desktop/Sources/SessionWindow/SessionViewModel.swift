@@ -373,6 +373,10 @@ final class SessionViewModel {
             self.status = status
             error = nil
             shouldNotifyStateChanged = true
+        case .sessionOpenFailed(_, let message), .userMessageFailed(_, let message):
+            status = "failed"
+            error = message
+            shouldNotifyStateChanged = true
         case .permissionRequest(let requestId, let toolName, let argumentsJSON):
             pendingPermissionRequests.append(
                 SessionPermissionRequest(id: requestId, toolName: toolName, argumentsJSON: argumentsJSON)
@@ -388,6 +392,8 @@ final class SessionViewModel {
             status = "idle"
             error = nil
             shouldNotifyStateChanged = true
+        case .createSessionResponse, .deleteSessionResponse:
+            break
         case .connectionState(let state):
             connectionState = state
             switch state {

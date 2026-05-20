@@ -32,6 +32,10 @@ enum SessionEvent: Equatable {
     case status(value: String)
     case error(messageID: String, message: String, timestamp: String)
     case sessionSnapshot(messages: [SessionBubble], status: String)
+    case sessionOpenFailed(reason: String, message: String)
+    case createSessionResponse(sessionID: String, title: String?)
+    case userMessageFailed(reason: String, message: String)
+    case deleteSessionResponse(targetSessionID: String, status: String)
     case sessionList(sessions: [SessionListItem])
     case sessionLoaded(targetSessionId: String, title: String?, messages: [SessionBubble])
     case connectionState(SessionConnectionState)
@@ -57,6 +61,14 @@ enum SessionEvent: Equatable {
         case let (.error(a1, a2, a3), .error(b1, b2, b3)):
             return a1 == b1 && a2 == b2 && a3 == b3
         case let (.sessionSnapshot(a1, a2), .sessionSnapshot(b1, b2)):
+            return a1 == b1 && a2 == b2
+        case let (.sessionOpenFailed(a1, a2), .sessionOpenFailed(b1, b2)):
+            return a1 == b1 && a2 == b2
+        case let (.createSessionResponse(a1, a2), .createSessionResponse(b1, b2)):
+            return a1 == b1 && a2 == b2
+        case let (.userMessageFailed(a1, a2), .userMessageFailed(b1, b2)):
+            return a1 == b1 && a2 == b2
+        case let (.deleteSessionResponse(a1, a2), .deleteSessionResponse(b1, b2)):
             return a1 == b1 && a2 == b2
         case let (.sessionList(a), .sessionList(b)):
             return a == b
@@ -194,6 +206,23 @@ final class SessionSocketClient: @unchecked Sendable {
             "messageId": UUID().uuidString,
             "timestamp": Self.timestamp(),
             "payload": [:] as [String: Any],
+        ])
+    }
+
+    func sendCreateSession(
+        initialText: String,
+        attachments: [UserMessageAttachmentPayload] = []
+    ) {
+        let payload: [String: Any?] = [
+            "initialText": initialText,
+            "attachments": attachments.isEmpty ? nil : attachments.map(\.jsonObject),
+        ]
+        sendJSON([
+            "type": "create_session_request",
+            "sessionId": "",
+            "messageId": UUID().uuidString,
+            "timestamp": Self.timestamp(),
+            "payload": payload.compactMapValues { $0 },
         ])
     }
 
@@ -344,6 +373,26 @@ final class SessionSocketClient: @unchecked Sendable {
                 messages: bubbles,
                 status: envelope.payload.value ?? "idle"
             )
+        case "session_open_failed":
+            return .sessionOpenFailed(
+                reason: envelope.payload.reason ?? "unavailable",
+                message: envelope.payload.message ?? "Session open failed."
+            )
+        case "create_session_response":
+            return .createSessionResponse(
+                sessionID: envelope.sessionId,
+                title: envelope.payload.title ?? nil
+            )
+        case "user_message_failed":
+            return .userMessageFailed(
+                reason: envelope.payload.reason ?? "invalid_request",
+                message: envelope.payload.message ?? "User message failed."
+            )
+        case "delete_session_response":
+            return .deleteSessionResponse(
+                targetSessionID: envelope.payload.targetSessionId ?? "",
+                status: envelope.payload.status ?? "not_found"
+            )
         case "permission_request":
             return .permissionRequest(
                 requestId: envelope.payload.requestId ?? envelope.messageId,
@@ -377,6 +426,13 @@ final class SessionSocketClient: @unchecked Sendable {
             )
         default:
             return nil
+        }
+    }
+
+    func handleIncomingTextForTesting(_ text: String, currentSessionID: String?) {
+        self.currentSessionID = currentSessionID
+        if let event = decodeEvent(from: text) {
+            onEvent?(event)
         }
     }
 
@@ -555,6 +611,22 @@ struct UserMessageAttachmentPayload: Encodable, Equatable {
     }
 }
 
+private extension UserMessageAttachmentPayload {
+    var jsonObject: [String: Any] {
+        switch kind {
+        case .textSelection:
+            return ["kind": kind.rawValue, "id": id, "text": text ?? ""]
+        case .image:
+            return [
+                "kind": kind.rawValue,
+                "id": id,
+                "mimeType": mimeType ?? "image/png",
+                "base64": base64 ?? "",
+            ]
+        }
+    }
+}
+
 private struct UserMessagePayload: Encodable {
     let text: String
     let attachments: [UserMessageAttachmentPayload]?
@@ -574,6 +646,7 @@ private struct IncomingPayload: Decodable {
     let name: String?
     let value: String?
     let message: String?
+    let reason: String?
     let messages: [IncomingSnapshotMessage]?
     let requestId: String?
     let toolName: String?

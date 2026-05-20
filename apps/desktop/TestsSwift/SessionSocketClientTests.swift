@@ -103,6 +103,47 @@ final class SessionSocketClientTests: XCTestCase {
         XCTAssertEqual(json, "{}")
     }
 
+    func testDecodesSessionOpenFailed() {
+        let client = SessionSocketClient.noop
+        var received: SessionEvent?
+        client.onEvent = { received = $0 }
+
+        client.handleIncomingTextForTesting(
+            """
+            {
+              "type": "session_open_failed",
+              "sessionId": "session-1",
+              "messageId": "open-1",
+              "timestamp": "2026-05-20T00:00:00.000Z",
+              "payload": {
+                "reason": "not_found",
+                "message": "Session not found: session-1"
+              }
+            }
+            """,
+            currentSessionID: "session-1"
+        )
+
+        XCTAssertEqual(
+            received,
+            .sessionOpenFailed(reason: "not_found", message: "Session not found: session-1")
+        )
+    }
+
+    func testSendsCreateSessionRequestWithInitialText() {
+        let transport = RecordingSessionSocketTransport()
+        let client = SessionSocketClient(
+            serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
+            transport: transport,
+            reconnectDelay: 0
+        )
+
+        client.connect(sessionID: "")
+        client.sendCreateSession(initialText: "hello", attachments: [])
+
+        XCTAssertEqual(transport.tasks[0].sentTypes.suffix(1), ["create_session_request"])
+    }
+
     func testDecodesWorkspaceAskRequest() {
         let transport = RecordingSessionSocketTransport()
         let client = SessionSocketClient(
