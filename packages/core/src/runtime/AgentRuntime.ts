@@ -9,6 +9,11 @@ import { AllowAllPermissionPolicy, DENY_TOOL_RESULT_TEXT } from "../permission/P
 import type { BlobStore } from "../blob/BlobStore.ts";
 import { renderStub, type StubCacheScope } from "./Stub.ts";
 import type { TurnSummarizerLike } from "./TurnSummarizer.ts";
+import {
+  buildDefaultSystemPromptSections,
+  buildSystemPromptMessages,
+  type SystemPromptSection,
+} from "./SystemPrompt.ts";
 
 export type AgentBubble = {
   id: string;
@@ -74,6 +79,7 @@ export class AgentRuntime {
   private readonly permissionPolicy: PermissionPolicy;
   private readonly blobStore?: BlobStore;
   private readonly turnSummarizer?: TurnSummarizerLike;
+  private readonly systemPromptSections: SystemPromptSection[];
   private pendingTurnSummary: Promise<void> = Promise.resolve();
 
   constructor(
@@ -84,12 +90,14 @@ export class AgentRuntime {
       permissionPolicy?: PermissionPolicy;
       blobStore?: BlobStore;
       turnSummarizer?: TurnSummarizerLike;
+      systemPromptSections?: SystemPromptSection[];
     }
   ) {
     this.maxTurns = options?.maxTurns ?? 8;
     this.permissionPolicy = options?.permissionPolicy ?? new AllowAllPermissionPolicy();
     this.blobStore = options?.blobStore;
     this.turnSummarizer = options?.turnSummarizer;
+    this.systemPromptSections = options?.systemPromptSections ?? buildDefaultSystemPromptSections();
   }
 
   async run(userInput: string): Promise<AgentRunResult> {
@@ -246,6 +254,12 @@ export class AgentRuntime {
     const messageId = `assistant-${assistantCount}`;
     let content = "";
     const toolCalls: ToolCallEnvelope[] = [];
+    const tools = this.toolRegistry.list();
+    const llmMessages = await buildSystemPromptMessages({
+      sections: this.systemPromptSections,
+      context: { tools },
+      messages,
+    });
 
     throwIfAborted(runOptions.signal);
     onEvent({
@@ -257,8 +271,8 @@ export class AgentRuntime {
     try {
       for await (const event of streamLLM(
         this.client,
-        messages,
-        this.toolRegistry.list(),
+        llmMessages,
+        tools,
         {
           ...(this.blobStore ? { blobStore: this.blobStore } : {}),
           signal: runOptions.signal,

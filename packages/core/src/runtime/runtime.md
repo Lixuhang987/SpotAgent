@@ -10,6 +10,7 @@
 | `ToolCallEnvelope.ts` | `{ id, name, arguments }` 三元组，连接 LLM 输出与 ToolRegistry |
 | `AgentSession.ts` | 把 `AgentSessionInput`（prompt + 可选选区）归一化为首轮 user message；当前未在 agent-server 主链路使用，仅作为脚本入口 |
 | `AgentRuntime.ts` | 主循环：消费 `LLMClient.stream` → 按 delta 发 assistant 事件 → 收集 toolCalls → 走权限策略 → 调 `ToolRegistry` → 把 tool 结果回灌成 tool message，循环 ≤ `maxTurns`；支持 `AbortSignal` 中断 |
+| `SystemPrompt.ts` | system prompt 分段组装器：以 `SystemPromptSection[]` 表达默认策略，按 LLM 请求临时解析成 `system` messages，不写回会话历史 |
 | `Stub.ts` | 统一渲染 / 解析 `[STUB ...]...[/STUB]` 文本，占位引用 Blob 内容 |
 | `TurnSummarizer.ts` | turn 结束后压缩 `cached=turn` 的 tool message，写回 Blob summary 并重渲染消息 |
 
@@ -19,7 +20,8 @@
 flowchart TD
   A[runWithMessages(messages, onEvent, {sessionId, signal?})] --> A1[await pending turn summaries]
   A1 --> B[turn ← 0]
-  B --> C[LLMClient.stream(messages, registry.list(), {blobStore?})]
+  B --> B1[SystemPrompt sections + messages -> LLM messages]
+  B1 --> C[LLMClient.stream(llmMessages, registry.list(), {blobStore?})]
   C --> C1[emit assistant start / delta / end]
   C1 --> D[push assistant message]
   D --> E{toolCalls.length > 0?}
@@ -54,6 +56,7 @@ flowchart TD
 
 - `maxTurns = 8`：防失控循环。
 - `permissionPolicy = AllowAllPermissionPolicy()`：仅在测试 / 脚本场景默认放行；生产由 `agent-server` 注入 `FilePermissionPolicy(askResolver)`。
+- `systemPromptSections = buildDefaultSystemPromptSections()`：默认包含 tool-use policy section；当 `ToolRegistry` 中存在可用 tool 时，每次 LLM 请求前临时前置 system message，要求模型在需要外部状态或多步流程时返回结构化 tool call，而不是只用 assistant 文本描述计划。该 system message 只进入本次 LLM 输入，不进入 `AgentRunResult.messages`，因此不会被 UI 或会话持久化重复保存。
 - `serializeToolResult` 把非字符串结果用 `JSON.stringify`，循环引用降级为 `[unserializable tool result]`。
 - 带 `stubByDefault` 的 tool 若输入里显式传 `cached=turn|persist`，runtime 会把序列化结果写入注入的 `BlobStore`，并把 tool message content 渲染成 STUB。
 - runtime 不解析持久化 image STUB；agent-server 会在调用 runtime 前把用户主动提交的 image STUB 转成多模态 image part，runtime 只负责把注入的 `BlobStore` 继续透传给 `LLMClient`。
@@ -67,6 +70,7 @@ flowchart TD
 - BlobStore 与 TurnSummarizer 由组合根注入；runtime 不创建磁盘 store、不选择具体模型。
 - 不要把 provider 私有 stream / SSE 细节写进 `AgentRuntime`，provider 必须先归一化成 `LLMStreamEvent`。
 - tool 调用以 `ToolRegistry.get(name)` 为唯一入口，不允许直接 `import` builtin tool。
+- 新增 system prompt 规则时优先放入 `SystemPrompt.ts` 的 section builder，不要在 `AgentRuntime.completeTurn()` 里直接拼接策略字符串。
 - 新增事件类型时，`apps/agent-server/src/MessageTranslator.ts` 的 `toSessionMessage` / `toAuditEvent` 必须同步更新。
 
 ## 相关文档
