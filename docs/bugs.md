@@ -373,4 +373,42 @@
 
 ## 当前 bug
 
-暂无未修复 bug。`删除 running session 后已打开 tab 仍显示运行中` 已完成代码修复和自动化验证，仍需完成最终 GUI 删除确认后的实机回归闭环。
+### 9. 真实 provider streaming 被网络日志包装器缓冲，UI 只在完成后一次性显示
+
+**严重级别**：P1
+
+**发现日期**：2026-05-21
+
+**复现步骤**：
+
+1. 使用 real provider 配置启动 packaged App；本次配置为 `provider: openai-compatible`、`api: chat`、`model: gpt-5.3-codex`，`HandAgentRuntimeMode.json` 不存在。
+2. 通过 PromptPanel 提交长回复 prompt：`QA real streaming visible 20260521: Write 800 numbered checklist items about visible streaming in a desktop agent UI...`。
+3. 在 SessionWindow 保持可见时用 Computer Use 连续观察运行态。
+4. 检查 `~/.spotAgent/log/2026-05-21/network-*.jsonl` 与 `~/.spotAgent/sessions/session-1779310927238-nvw6y2.json`。
+
+**实际结果**：
+
+- UI 在请求期间显示 `运行中`、Stop 按钮和空 assistant 气泡占位；多次 Computer Use 采样均未看到 assistant 文本逐段增长。
+- 请求结束后，SessionWindow 一次性显示完整 800 条 assistant 回复。
+- `network-004.jsonl` 记录同一请求的 response 为 `status: 200`，包含 `6544` 个 `chat.completion.chunk`、`6542` 个 `delta.content` 与 `[DONE]`。
+- session 文件在完成后才出现 assistant message，长度约 `11836` 字符。
+
+**期望结果**：
+
+真实 provider 的 SSE content delta 到达后应逐段转成 `assistant_message_delta`，SessionWindow 中 assistant 气泡应在 `运行中` 状态下可见增长，而不是等整个 HTTP 响应结束后一次性渲染。
+
+**证据**：
+
+- UI 运行态证据：Computer Use 采样显示标题区 `运行中 3 个已打开标签页`、Stop 按钮可见、内容区只有 user message 与空 assistant 占位。
+- 后端 SSE 证据：`~/.spotAgent/log/2026-05-21/network-004.jsonl` 第 1 行 response，`chunks: 6544`、`content deltas: 6542`、包含 `[DONE]`。
+- 持久化证据：`~/.spotAgent/sessions/session-1779310927238-nvw6y2.json` 完成后为 2 条 message，assistant 内容完整写入。
+
+**初步调用链 / 根因边界**：
+
+- provider -> HTTP SSE：已验证，网络日志中存在大量 `chat.completion.chunk` 与 `delta.content`。
+- `createLoggingFetch()` -> AI SDK `streamText()`：失败点在 `packages/core/src/logging/createLoggingFetch.ts`。当前实现 `await response.clone().text()` 后才 `return response`，因此 streamed response 会先被日志 clone 完整读完，调用方拿到 response 时 SSE 已结束。
+- AI SDK -> `AgentRuntime` -> WebSocket -> SwiftUI：mock streaming 与自动化测试已覆盖多段 delta 渲染；本次现场表现与 fetch 包装器缓冲一致，仍需修复后做 real provider 实机回归。
+
+**状态**：待修复。
+
+`删除 running session 后已打开 tab 仍显示运行中` 已完成代码修复和自动化验证，仍需完成最终 GUI 删除确认后的实机回归闭环。
