@@ -58,6 +58,8 @@
 1. 用 `window.list` 取得窗口 id 后调用 `accessibility.snapshot({kind: "window", windowId: <id>})`，确认返回的是指定窗口的树；再传入同一 App 下不存在或不匹配的 `windowId`，确认返回 `not_found`，不会退回 focused window。
 1. 临时移除 HandAgent 辅助功能权限后重复 snapshot/action，确认返回 `permission_denied`，文案指向「系统设置 → 隐私与安全性 → 辅助功能」。
 
+已验证子项：2026-05-21 使用 mock-LLM 触发 `[mock:ocr-invalid] QA ocr invalid argument 20260521`，应用内 `ocr.read` 授权气泡参数为空对象 `{}`；选择「仅本次」后 UI 显示 `ocr.read: Invalid input for tool "ocr.read": imageBase64: Invalid input: expected string, received undefined`，session `~/.spotAgent/sessions/session-1779306749007-ojxi0q.json` 记录 `permission_request(action: allow)`、`tool_call(input: {})` 与 `tool_result(status: error)`。该子项证明缺少 `imageBase64` 时返回明确错误，且没有默认读取屏幕、剪贴板或文件。OCR 图片识别与 Accessibility snapshot/action 子项仍待验。
+
 ## 多 provider LLM（P2）
 
 1. 打开 Settings → 模型配置，确认 provider 可在 `openai-compatible` 与 `anthropic` 间切换，保存后 `~/.spotAgent/settings.json` 写入 `llm.provider`。
