@@ -2,6 +2,13 @@ import XCTest
 @testable import HandAgentDesktop
 
 final class SessionTabViewModelTests: XCTestCase {
+    func testSessionRunStatusNormalizesProtocolValues() {
+        XCTAssertEqual(SessionRunStatus.fromProtocolStatus("running"), .running)
+        XCTAssertEqual(SessionRunStatus.fromProtocolStatus("completed"), .idle)
+        XCTAssertEqual(SessionRunStatus.fromProtocolStatus("failed"), .failed)
+        XCTAssertEqual(SessionRunStatus.fromProtocolStatus("unknown"), .idle)
+    }
+
     @MainActor
     func testSnapshotFillsMessages() {
         let tab = SessionTabViewModel(
@@ -16,7 +23,7 @@ final class SessionTabViewModelTests: XCTestCase {
         ))
 
         XCTAssertEqual(tab.messages.map(\.text), ["hello"])
-        XCTAssertEqual(tab.status, "idle")
+        XCTAssertEqual(tab.status, .idle)
     }
 
     @MainActor
@@ -37,7 +44,7 @@ final class SessionTabViewModelTests: XCTestCase {
             timestamp: "2026-05-20T00:00:00.100Z"
         ))
 
-        XCTAssertEqual(tab.status, "running")
+        XCTAssertEqual(tab.status, .running)
         XCTAssertEqual(tab.messages.last?.text, "hello")
     }
 

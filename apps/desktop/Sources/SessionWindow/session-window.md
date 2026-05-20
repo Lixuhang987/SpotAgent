@@ -14,6 +14,7 @@
 | `SessionRequestBubbleViews.swift` | 权限审批气泡与 workspace 选择气泡 |
 | `SessionWindowViewModel.swift` | 窗口级状态：`historyList`、`tabs`、`activeTabID`、删除确认、空态提示；负责打开/激活历史会话、创建新会话、关闭 tab |
 | `SessionTabViewModel.swift` | 单 tab 状态：`sessionID`、socket、消息、运行态、连接态、权限请求、workspace ask；消费 tab 级 `SessionEvent` |
+| `SessionRunStatus.swift` | UI 内部运行态枚举；协议边界仍接收字符串，进入 ViewModel 后归一化为 `idle / running / failed / interrupted` |
 | `SessionViewModel.swift` | 旧单会话 view model 兼容层，保留消息/附件归一化类型与既有测试覆盖 |
 | `SessionSocketClient.swift` | `URLSessionWebSocketTask` 包装：连接、收发 `SessionMessage`、解析 `SessionEvent`，发送 create/open/user/interrupt/list/delete/permission/workspace 响应帧；断线后自动重连 |
 | `SessionStyles.swift` | `MessageBubbleModifier`（按 role 切换 user / assistant / tool 三色） |
@@ -44,6 +45,7 @@ Coordinator.handleSubmitPrompt
 - `deleteSessionResponse` 触发历史列表刷新；删除 running session 前由 agent-server 负责 interrupt 并等待清理。
 - `sessionOpenFailed / userMessageFailed` 由 tab 标记为 invalid；窗口会 prune invalid tab，并把失败原因显示为空态提示。
 - `userMessage / assistantMessageStart / assistantMessageDelta / assistantMessageEnd / toolMessage / status / error / sessionSnapshot / permissionRequest / workspaceAskRequest / connectionState` 由对应 tab 消费，互不影响其他 tab。
+- `assistantMessageEnd(status: "completed")` 在 UI 内归一化为 `SessionRunStatus.idle`；未知协议状态按 `idle` 处理，避免 UI 继续散落字符串比较。
 
 ## 历史入口
 

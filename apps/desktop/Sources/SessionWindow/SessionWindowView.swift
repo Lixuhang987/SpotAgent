@@ -11,7 +11,7 @@ struct SessionWindowView: View {
                 items: viewModel.historyList,
                 activeSessionID: viewModel.activeTab?.sessionID,
                 openSessionIDs: Set(viewModel.tabs.map(\.sessionID)),
-                runningSessionIDs: Set(viewModel.tabs.filter { $0.status == "running" }.map(\.sessionID)),
+                runningSessionIDs: Set(viewModel.tabs.filter { $0.status.isRunning }.map(\.sessionID)),
                 onSelect: viewModel.openHistorySession,
                 onRequestDelete: viewModel.requestDeleteSession
             )

@@ -2,15 +2,39 @@ import SwiftUI
 
 // MARK: - Tab Bar
 
-struct SettingsTabItem: Identifiable, Equatable {
-    let id: String
-    let title: String
-    let icon: String
+enum SettingsTab: String, CaseIterable, Identifiable {
+    case model
+    case tools
+    case permissions
+    case shortcuts
+    case workspaces
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .model: return "模型"
+        case .tools: return "工具"
+        case .permissions: return "权限"
+        case .shortcuts: return "快捷键"
+        case .workspaces: return "工作区"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .model: return "cpu"
+        case .tools: return "slider.horizontal.3"
+        case .permissions: return "lock.shield"
+        case .shortcuts: return "keyboard"
+        case .workspaces: return "folder"
+        }
+    }
 }
 
 struct SettingsTabBar: View {
-    let tabs: [SettingsTabItem]
-    @Binding var selected: String
+    let tabs: [SettingsTab]
+    @Binding var selected: SettingsTab
     @Environment(\.appTheme) private var theme
 
     var body: some View {
@@ -24,10 +48,10 @@ struct SettingsTabBar: View {
         .padding(.bottom, theme.spacing.sm)
     }
 
-    private func tabButton(_ tab: SettingsTabItem) -> some View {
-        let isSelected = selected == tab.id
+    private func tabButton(_ tab: SettingsTab) -> some View {
+        let isSelected = selected == tab
         return Button {
-            selected = tab.id
+            selected = tab
         } label: {
             VStack(spacing: 4) {
                 Image(systemName: tab.icon)
@@ -83,6 +107,23 @@ struct SettingsSection<Content: View>: View {
         }
         .padding(.vertical, theme.spacing.lg)
         .padding(.horizontal, theme.spacing.xxl)
+    }
+}
+
+struct SettingsListSection<Data: RandomAccessCollection, RowContent: View>: View where Data.Element: Identifiable {
+    let items: Data
+    @ViewBuilder let rowContent: (Data.Element) -> RowContent
+
+    var body: some View {
+        SettingsSection {
+            let firstID = items.first?.id
+            ForEach(items) { item in
+                if item.id != firstID {
+                    SettingsRowDivider()
+                }
+                rowContent(item)
+            }
+        }
     }
 }
 

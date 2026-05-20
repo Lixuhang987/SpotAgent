@@ -10,11 +10,8 @@ struct PermissionRulesView: View {
                 if viewModel.rules.isEmpty {
                     emptyState
                 } else {
-                    SettingsSection {
-                        ForEach(Array(viewModel.rules.enumerated()), id: \.element.id) { index, rule in
-                            if index > 0 { SettingsRowDivider() }
-                            ruleRow(rule)
-                        }
+                    SettingsListSection(items: viewModel.rules) { rule in
+                        ruleRow(rule)
                     }
                 }
                 Spacer(minLength: 0)

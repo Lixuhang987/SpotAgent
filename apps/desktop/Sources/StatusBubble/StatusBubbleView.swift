@@ -26,15 +26,29 @@ struct StatusBubbleView: View {
         .statusBubbleContainer(isRunning: viewModel.isRunning)
         .contentShape(Rectangle())
         .onTapGesture { viewModel.tap() }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(viewModel.isRunning ? "HandAgent 正在运行" : "HandAgent 空闲")
+        .accessibilityHint("打开最近会话或输入面板")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction {
+            viewModel.tap()
+        }
+        .onAppear {
+            updateGlowPulse(isRunning: viewModel.isRunning)
+        }
         .onChange(of: viewModel.isRunning) { _, running in
-            if running {
-                withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
-                    glowPulse = true
-                }
-            } else {
-                withAnimation(.easeOut(duration: 0.3)) {
-                    glowPulse = false
-                }
+            updateGlowPulse(isRunning: running)
+        }
+    }
+
+    private func updateGlowPulse(isRunning: Bool) {
+        if isRunning {
+            withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+                glowPulse = true
+            }
+        } else {
+            withAnimation(.easeOut(duration: 0.3)) {
+                glowPulse = false
             }
         }
     }

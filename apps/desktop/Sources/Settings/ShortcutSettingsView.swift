@@ -34,10 +34,7 @@ struct ShortcutSettingsView: View {
                                 .foregroundStyle(theme.colors.textSecondary)
                         }
                     } else {
-                        ForEach(Array(actions.enumerated()), id: \.element.id) { index, action in
-                            if index > 0 {
-                                SettingsRowDivider()
-                            }
+                        SettingsListSection(items: actions) { action in
                             SettingsRow(action.title) {
                                 KeyboardShortcuts.Recorder("", name: action.shortcutName) { _ in
                                     KeyboardShortcuts.disable(action.shortcutName)

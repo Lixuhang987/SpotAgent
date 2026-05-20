@@ -42,7 +42,7 @@ final class SessionViewModelTests: XCTestCase {
 
         model.start(initialPrompt: "hello", startupError: "Node.js not found.")
 
-        XCTAssertEqual(model.status, "failed")
+        XCTAssertEqual(model.status, .failed)
         XCTAssertEqual(model.error, "Node.js not found.")
         XCTAssertEqual(model.messages.map(\.text), ["Node.js not found."])
     }
@@ -68,7 +68,7 @@ final class SessionViewModelTests: XCTestCase {
 
         XCTAssertEqual(model.messages.map(\.text), ["Could not connect to the server."])
         XCTAssertEqual(model.error, "Could not connect to the server.")
-        XCTAssertEqual(model.status, "failed")
+        XCTAssertEqual(model.status, .failed)
     }
 
     @MainActor
@@ -107,7 +107,7 @@ final class SessionViewModelTests: XCTestCase {
         model.start(initialPrompt: "hello")
         model.stop()
 
-        XCTAssertEqual(model.status, "interrupted")
+        XCTAssertEqual(model.status, .interrupted)
         XCTAssertEqual(transport.tasks[0].sentTypes, ["open_session", "user_message", "interrupt"])
         XCTAssertFalse(transport.tasks[0].didCancel)
     }

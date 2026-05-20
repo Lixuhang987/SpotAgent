@@ -62,7 +62,7 @@ struct SessionStatusHeaderView: View {
                 .font(theme.typography.captionFont)
                 .foregroundStyle(theme.colors.textSecondary)
             Spacer()
-            if tab?.status == "running" {
+            if tab?.status.isRunning == true {
                 Button(action: onStop) {
                     Image(systemName: "stop.fill")
                         .font(.system(size: 11))
@@ -82,7 +82,7 @@ struct SessionStatusHeaderView: View {
         }
         switch tab.connectionState {
         case .connected:
-            return tab.status == "running" ? theme.colors.accent : theme.colors.textSecondary.opacity(0.4)
+            return tab.status.isRunning ? theme.colors.accent : theme.colors.textSecondary.opacity(0.4)
         case .connecting, .reconnecting:
             return theme.colors.accent
         case .disconnected:
@@ -94,7 +94,7 @@ struct SessionStatusHeaderView: View {
         guard let tab else { return "idle" }
         switch tab.connectionState {
         case .connected:
-            return tab.status
+            return tab.status.rawValue
         case .connecting:
             return "connecting"
         case .reconnecting:

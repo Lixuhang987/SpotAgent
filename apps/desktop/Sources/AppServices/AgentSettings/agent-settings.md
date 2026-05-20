@@ -7,7 +7,7 @@ LLM 模型配置与 tool allowlist / denylist 的读写。
 | 文件 | 职责 |
 |------|------|
 | `AgentSettingsStore.swift` | `@Observable` + `@MainActor`，从 `~/.spotAgent/settings.json` 读写 LLM 配置与 tool allowlist / denylist，500ms 轮询热加载 |
-| `AgentSettingsView.swift` | 模型设置的 SwiftUI 表单（provider / model / api / baseURL / apiKey），使用 `settingsCard()` + `SettingsFieldStyle` + 自定义 segmented picker，由 [Settings/SettingsView](/Users/mu9/proj/handAgent/apps/desktop/Sources/Settings/settings.md) 嵌入 |
+| `AgentSettingsView.swift` | 模型设置的 SwiftUI 表单（provider / model / api / baseURL / apiKey），使用系统 segmented `Picker`、`SecureField` 与 `SettingsFieldStyle`，由 [Settings/SettingsView](/Users/mu9/proj/handAgent/apps/desktop/Sources/Settings/settings.md) 嵌入 |
 
 ## 数据模型
 
