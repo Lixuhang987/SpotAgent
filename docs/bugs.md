@@ -307,9 +307,7 @@
 
 ---
 
-## 当前 bug
-
-### 1. 删除 running session 后已打开 tab 仍显示运行中
+### 8. 删除 running session 后已打开 tab 仍显示运行中
 
 **严重级别**：P2
 
@@ -342,10 +340,37 @@
 - 删除后 UI：Computer Use 仍可见顶部 tab `切换到 [mock:slow-focus] QA multi tab running de...`；激活该 tab 后标题区显示 `运行中 3 个已打开标签页`，右上角显示 `停止`。
 - agent-server 仍正常：`node ... /Users/mu9/proj/handAgent/apps/agent-server/src/server.ts` 监听 `*:4317`。
 
-**初步调用链 / 根因边界**：
+**原始待验证假设**：
 
 - `SessionRouter.handleDeleteSession()`：如果目标 session running，会调用 `interruptAndWait(targetSessionId, push)`，随后 `persistence.deleteSession(targetSessionId)`，最后发送 `delete_session_response`。本轮文件删除成功，说明 server 侧 interrupt/delete 已执行。
 - `SessionWindowViewModel.handleWindowEvent(.deleteSessionResponse)`：当前只调用 `refreshHistory()`，没有关闭 `tabs` 中 `sessionID == targetSessionId` 的已打开 tab，也没有把对应 tab 状态改为 interrupted/deleted。
 - `SessionTabViewModel`：被删除的 tab 仍保留本地状态与 socket，因此 UI 继续展示旧的 running 状态。
 
-**状态**：未修复。
+**状态**：已修复；实机回归已复现到删除二次确认前，最终 GUI 删除确认等待人工授权。
+
+**根因边界**：server 侧 `SessionRouter.handleDeleteSession()` 已按协议对 running session 执行 interrupt、删除持久化文件，并返回 `delete_session_response`，成功状态为 `deleted`。失败点在桌面端 `SessionWindowViewModel.handleWindowEvent(.deleteSessionResponse)`：旧实现只刷新历史列表，没有关闭 `tabs` 中同 `sessionID` 的已打开 tab，导致 `SessionTabViewModel` 继续保留本地 running 状态、socket 和 Stop 控件。
+
+**checkpoint 与结论**：
+
+- `delete_session_request` -> `SessionRouter.handleDeleteSession()`：源码确认目标 session 存在时会先 `interruptAndWait(targetSessionId, push)`，再 `persistence.deleteSession(targetSessionId)`，最后返回 `payload.status: "deleted"`；既有现场证据显示文件删除成功，server 链路不是本次失败点。
+- `delete_session_response` -> `SessionSocketClient`：桌面端解析 `delete_session_response` 为 `.deleteSessionResponse(targetSessionID:status:)`，能把 `targetSessionId` 和 `status` 传到窗口级 ViewModel。
+- `SessionWindowViewModel.handleWindowEvent(.deleteSessionResponse)` -> tab 状态：修复前 RED 测试证明收到 `.deleteSessionResponse(targetSessionID: "running-session", status: "deleted")` 后，`tabs` 仍为 `["finished-session", "running-session"]`，`activeTab` 仍是 `running-session`，`onTabClosed` 未触发，tab socket 未断开。
+- tab close -> UI 状态：修复后成功删除响应复用既有 `closeTab(tabID)`，同步断开对应 tab socket、触发 `onTabClosed`、从 `tabs` 移除，并在 active tab 被删除时切到剩余最后一个 tab；历史列表仍照常刷新。
+
+**验证**：
+
+- 修复前 RED 证据：`bash ./scripts/swiftw test --filter SessionWindowViewModelTests/testSuccessfulDeleteSessionResponseClosesOpenRunningTabAndRefreshesHistoryList` 失败，断言显示 `tabs` 实际为 `["finished-session", "running-session"]`，`activeTab` 实际为 `running-session`，`closedSessionIDs` 为空，socket `cancelCount` 为 `0`。
+- 修复后定向测试：`bash ./scripts/swiftw test --filter SessionWindowViewModelTests/testSuccessfulDeleteSessionResponseClosesOpenRunningTabAndRefreshesHistoryList` 通过。
+- 修复后边界测试：`SessionWindowViewModelTests/testNonDeletedDeleteSessionResponseKeepsOpenTabAndRefreshesHistoryList` 覆盖 `status != "deleted"` 时只刷新历史、不误关已打开 tab；`bash ./scripts/swiftw test --filter SessionWindowViewModelTests` 通过。
+- 修复后完整 Swift 测试：`bash ./scripts/swiftw test` 通过。
+- 修复后 Swift build：`bash ./scripts/swiftw build` 通过。
+- 修复后完整 TypeScript 测试：`bash ./scripts/test.sh` 通过，210 个测试通过，1 个 integration 跳过。
+- 实机回归进展：`bash ./scripts/package-app.sh --mock-llm` 打包成功，启动的 `HandAgentDesktop` 与 agent-server 均来自 `/Users/mu9/proj/handAgent/.worktrees/delete-running-session-tab`；Computer Use 已确认两个完成态 tab 后创建第三个 `[mock:slow-focus] QA delete running regression target 20260521`，窗口显示 `运行中 3 个已打开标签页`，左侧历史项显示 `当前, 1 条消息, 运行中`。该 session 文件为 `~/.spotAgent/sessions/session-1779305136757-9dtg95.json`，当前 `messageCount: 1`；最终二次确认删除会通过 GUI 删除本地 session 文件，等待人工授权后继续完成回归。
+
+**修复日期**：2026-05-21
+
+---
+
+## 当前 bug
+
+暂无未修复 bug。`删除 running session 后已打开 tab 仍显示运行中` 已完成代码修复和自动化验证，仍需完成最终 GUI 删除确认后的实机回归闭环。

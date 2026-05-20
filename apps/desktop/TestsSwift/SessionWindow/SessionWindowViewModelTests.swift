@@ -47,6 +47,86 @@ final class SessionWindowViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testSuccessfulDeleteSessionResponseClosesOpenRunningTabAndRefreshesHistoryList() {
+        let historyTransport = RecordingSessionSocketTransport()
+        var tabTransports: [String: RecordingSessionSocketTransport] = [:]
+        var closedSessionIDs: [String] = []
+        let model = SessionWindowViewModel(
+            socketFactory: { sessionID in
+                let transport = RecordingSessionSocketTransport()
+                tabTransports[sessionID] = transport
+                return SessionSocketClient(
+                    serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
+                    transport: transport,
+                    reconnectDelay: 0
+                )
+            },
+            historySocketClient: SessionSocketClient(
+                serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
+                transport: historyTransport,
+                reconnectDelay: 0
+            ),
+            onTabClosed: { tab in
+                closedSessionIDs.append(tab.sessionID)
+            }
+        )
+
+        model.openHistorySession("finished-session")
+        model.openHistorySession("running-session")
+        model.activeTab?.sendPrompt("still running")
+
+        model.handleWindowEvent(.deleteSessionResponse(targetSessionID: "running-session", status: "deleted"))
+
+        XCTAssertEqual(model.tabs.map(\.sessionID), ["finished-session"])
+        XCTAssertEqual(model.activeTab?.sessionID, "finished-session")
+        XCTAssertEqual(closedSessionIDs, ["running-session"])
+        XCTAssertEqual(
+            historyTransport.tasks[0].sentTypes,
+            ["open_session", "list_sessions_request", "list_sessions_request"]
+        )
+        XCTAssertEqual(tabTransports["running-session"]?.tasks[0].cancelCount, 1)
+    }
+
+    @MainActor
+    func testNonDeletedDeleteSessionResponseKeepsOpenTabAndRefreshesHistoryList() {
+        let historyTransport = RecordingSessionSocketTransport()
+        var tabTransports: [String: RecordingSessionSocketTransport] = [:]
+        var closedSessionIDs: [String] = []
+        let model = SessionWindowViewModel(
+            socketFactory: { sessionID in
+                let transport = RecordingSessionSocketTransport()
+                tabTransports[sessionID] = transport
+                return SessionSocketClient(
+                    serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
+                    transport: transport,
+                    reconnectDelay: 0
+                )
+            },
+            historySocketClient: SessionSocketClient(
+                serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
+                transport: historyTransport,
+                reconnectDelay: 0
+            ),
+            onTabClosed: { tab in
+                closedSessionIDs.append(tab.sessionID)
+            }
+        )
+
+        model.openHistorySession("target-session")
+
+        model.handleWindowEvent(.deleteSessionResponse(targetSessionID: "target-session", status: "not_found"))
+
+        XCTAssertEqual(model.tabs.map(\.sessionID), ["target-session"])
+        XCTAssertEqual(model.activeTab?.sessionID, "target-session")
+        XCTAssertTrue(closedSessionIDs.isEmpty)
+        XCTAssertEqual(
+            historyTransport.tasks[0].sentTypes,
+            ["open_session", "list_sessions_request", "list_sessions_request"]
+        )
+        XCTAssertEqual(tabTransports["target-session"]?.tasks[0].cancelCount, 0)
+    }
+
+    @MainActor
     func testOpenHistorySessionCreatesAndActivatesTab() {
         let model = SessionWindowViewModel(socketFactory: { _ in .noop })
 
@@ -250,10 +330,13 @@ private final class RecordingSessionSocketTransport: SessionSocketTransport {
 
 private final class RecordingSessionWebSocketTask: SessionWebSocketTask {
     private(set) var sentTypes: [String] = []
+    private(set) var cancelCount = 0
 
     func resume() {}
 
-    func cancel(with closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {}
+    func cancel(with closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
+        cancelCount += 1
+    }
 
     func send(
         _ message: URLSessionWebSocketTask.Message,
