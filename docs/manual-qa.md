@@ -32,6 +32,8 @@
 
 1. 提交一个会产生长回复的 prompt，观察 SessionWindow 中 assistant 气泡逐段更新（至少 5 段 delta），而非一次性出现完整文本。
 
+最近阻塞记录：2026-05-21 当前 `packages/core/src/logging/createLoggingFetch.ts` 对 `text/event-stream` response 仍会 `await response.clone().text()` 后才返回原 response，真实 provider SSE 会被网络日志包装器缓冲到完成；该项已写入 [bugs.md](./bugs.md)，修复后需重新做非 mock 实机 streaming 验证。
+
 ## 单窗口多 Tab 会话历史（P1）
 
 1. 从 PromptPanel 提交一条 prompt，确认只打开一个 SessionWindow，并在收到 create 响应后创建一个 active tab。
@@ -80,4 +82,4 @@
 
 ## 已知问题（待修复）
 
-当前已确认缺陷以 [bugs.md](./bugs.md) 为准。2026-05-21 已确认：删除 running session 后，已打开 tab 仍显示 `运行中`；ScreenCaptureKit 反向 IPC 也仍在 `permission_denied`，两项都需要继续修复并回归验收。
+当前已确认缺陷以 [bugs.md](./bugs.md) 为准。2026-05-21 已确认：删除 running session 后，已打开 tab 仍显示 `运行中`；ScreenCaptureKit 反向 IPC 仍在 `permission_denied`；真实 provider streaming 仍会被网络日志包装器缓冲，三项都需要继续修复并回归验收。

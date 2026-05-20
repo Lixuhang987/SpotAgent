@@ -390,3 +390,39 @@
 - 目前尚未证明是 ScreenCaptureKit / TCC / code-sign requirement 哪一层在误判；下一步需要进一步追踪实现和签名边界。
 
 **状态**：未修复。
+
+### 3. 真实 provider streaming 被网络日志包装器缓冲
+
+**严重级别**：P1
+
+**发现日期**：2026-05-21
+
+**复现步骤**：
+
+1. 使用非 mock `dist/HandAgentDesktop.app` 和真实 `openai-compatible` streaming 配置启动。
+2. 提交一个长回复 prompt，例如要求输出 200 条短列表。
+3. 在 SessionWindow 运行态观察 assistant 气泡是否逐段增长。
+4. 检查 `packages/core/src/logging/createLoggingFetch.ts` 和网络日志。
+
+**实际结果**：
+
+- 当前代码中 `createLoggingFetch()` 对所有 response 都执行 `const cloned = response.clone(); await cloned.text();` 后才 `return response`。
+- 对 `Content-Type: text/event-stream` 来说，日志层会先把 clone 的 SSE body 读到结束，AI SDK 之后才拿到原 response，导致 UI 只能在响应完成后一次性看到完整 assistant 文本。
+- 当前 `packages/core/tests/logging/logging-fetch.test.ts` 只有普通 JSON / raw text / 图片脱敏测试，没有覆盖 streaming response 必须立即返回。
+
+**期望结果**：
+
+`text/event-stream` response 不应被日志包装器 clone/read 阻塞。日志可以记录占位信息，例如 `[streaming response: text/event-stream]`，但必须立即返回原 response，让 AI SDK 按 SSE 增量消费。
+
+**证据**：
+
+- 代码证据：`packages/core/src/logging/createLoggingFetch.ts` 第 33-50 行固定等待 `cloned.text()`。
+- 测试缺口：`packages/core/tests/logging/logging-fetch.test.ts` 未覆盖 streaming response。
+
+**初步调用链 / 根因边界**：
+
+- provider -> HTTP SSE：真实 provider 可返回 `text/event-stream`。
+- `createLoggingFetch()` -> AI SDK：失败点在日志包装器返回 response 前等待 `response.clone().text()`，使 SSE 消费被延迟到完整响应结束。
+- AI SDK -> `AgentRuntime` -> WebSocket -> SwiftUI：mock streaming 已覆盖多段 delta；本缺陷集中在真实 provider fetch 包装层。
+
+**状态**：未修复。
