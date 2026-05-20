@@ -10,6 +10,9 @@ export class SessionScopedToolRegistry {
       builtinRegistry: ToolRegistry;
       listMcpTools: (serverId: string) => Promise<AgentTool[]>;
     },
+    private readonly dependencies: {
+      log?: (message: string) => void;
+    } = {},
   ) {}
 
   async refreshForSession(
@@ -20,7 +23,14 @@ export class SessionScopedToolRegistry {
     const tools: AgentTool[] = [...this.options.builtinRegistry.all()];
 
     for (const serverId of binding?.mcpServerIds ?? []) {
-      tools.push(...(await this.options.listMcpTools(serverId)));
+      try {
+        tools.push(...(await this.options.listMcpTools(serverId)));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.dependencies.log?.(
+          `[agent-server] skipped MCP server ${serverId}: ${message}`,
+        );
+      }
     }
 
     const byName = new Map<string, AgentTool>();

@@ -27,6 +27,31 @@ describe("SessionScopedToolRegistry", () => {
       "mcp.github.create_issue",
     ]);
   });
+
+  it("skips missing mcp servers without dropping builtin tools", async () => {
+    const logs: string[] = [];
+    const builtin = new ToolRegistry([makeTool("clipboard.read")]);
+    const scoped = new SessionScopedToolRegistry(
+      {
+        builtinRegistry: builtin,
+        listMcpTools: async () => {
+          throw new Error("Unknown MCP server: missing");
+        },
+      },
+      { log: (message) => logs.push(message) },
+    );
+
+    await scoped.refreshForSession("action", {
+      pluginId: "review",
+      promptName: "code_review",
+      mcpServerIds: ["missing"],
+    });
+
+    expect(scoped.registry.list().map((tool) => tool.name)).toEqual([
+      "clipboard.read",
+    ]);
+    expect(logs[0]).toContain("skipped MCP server missing");
+  });
 });
 
 function makeTool(name: string): AgentTool {

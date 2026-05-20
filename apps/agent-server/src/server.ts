@@ -1,8 +1,12 @@
+import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import type { SessionMessage } from "@handagent/core/protocol/SessionMessage.ts";
 import type { PlatformBridgeMessage } from "@handagent/core/protocol/PlatformBridgeMessage.ts";
+import type { MCPClient } from "@handagent/core/mcp/MCPClient.ts";
+import type { MCPServerConfig } from "@handagent/core/mcp/MCPConfig.ts";
+import { parseMCPConfig } from "@handagent/core/mcp/MCPConfig.ts";
 import { SessionPersistence } from "./SessionPersistence.ts";
 import { SessionRouter } from "./SessionRouter.ts";
 import { SessionRuntimeOrchestrator } from "./SessionRuntimeOrchestrator.ts";
@@ -177,6 +181,10 @@ export async function startDefaultServer(port = 4317) {
     { SettingsBackedLLMClient },
     { SettingsBackedToolRegistry },
     { SessionScopedToolRegistry },
+    { ActionBindingResolver },
+    { MCPServerRegistry },
+    { StdioMCPClient },
+    { StreamableHttpMCPClient },
     { FileNetworkLogger },
     { FilesystemBlobStore },
     { TurnSummarizer },
@@ -189,6 +197,10 @@ export async function startDefaultServer(port = 4317) {
     import("./SettingsBackedLLMClient.ts"),
     import("./SettingsBackedToolRegistry.ts"),
     import("./SessionScopedToolRegistry.ts"),
+    import("./ActionBindingResolver.ts"),
+    import("./MCPServerRegistry.ts"),
+    import("@handagent/core/mcp/StdioMCPClient.ts"),
+    import("@handagent/core/mcp/StreamableHttpMCPClient.ts"),
     import("@handagent/core/logging/FileNetworkLogger.ts"),
     import("@handagent/core/blob/FilesystemBlobStore.ts"),
     import("@handagent/core/runtime/TurnSummarizer.ts"),
@@ -200,6 +212,9 @@ export async function startDefaultServer(port = 4317) {
   const store = new FileSessionStore(sessionsDir);
   const networkLogger = new FileNetworkLogger({ baseDir: join(spotDir, "log") });
   const blobStore = new FilesystemBlobStore({ rootPath: join(spotDir, "blobs") });
+  const pluginsDir = join(spotDir, "plugins");
+  const mcpConfig = await readMCPConfig(join(spotDir, "mcp.json"));
+  const mcpServers = new Map(mcpConfig.servers.map((server) => [server.id, server]));
 
   const workspaceRegistry = new FileWorkspaceRegistry({
     filePath: join(spotDir, "workspaces.json"),
@@ -214,13 +229,30 @@ export async function startDefaultServer(port = 4317) {
     platform,
     workspaceRegistry,
     workspaceAskResolver: workspaceAskBridge.ask,
-    pluginsDir: join(spotDir, "plugins"),
+    pluginsDir,
   });
   await toolRegistry.refresh();
-  const sessionScopedTools = new SessionScopedToolRegistry({
-    builtinRegistry: toolRegistry.registry,
-    listMcpTools: async () => [],
+  const mcpRegistry = new MCPServerRegistry({
+    createClient: (serverId: string) => {
+      const config = mcpServers.get(serverId);
+      if (!config) {
+        throw new Error(`Unknown MCP server: ${serverId}`);
+      }
+      return createMCPClientFromConfig(config, {
+        StdioMCPClient,
+        StreamableHttpMCPClient,
+      });
+    },
   });
+  const sessionScopedTools = new SessionScopedToolRegistry(
+    {
+      builtinRegistry: toolRegistry.registry,
+      listMcpTools: (serverId: string) => mcpRegistry.listTools(serverId),
+    },
+    {
+      log: (message: string) => console.warn(message),
+    },
+  );
 
   const permissionBridge = new SessionPermissionBridge();
   const permissionPolicy = new FilePermissionPolicy({
@@ -259,7 +291,12 @@ export async function startDefaultServer(port = 4317) {
       );
     },
   );
-  const router = new SessionRouter(orchestrator, persistence);
+  const router = new SessionRouter(
+    orchestrator,
+    persistence,
+    undefined,
+    new ActionBindingResolver({ pluginsDir }),
+  );
 
   return startServer({
     router,
@@ -273,8 +310,42 @@ export async function startDefaultServer(port = 4317) {
 
 export type LLMMode = "settings" | "mock";
 
+export async function readMCPConfig(filePath: string) {
+  try {
+    return parseMCPConfig(JSON.parse(await readFile(filePath, "utf8")));
+  } catch (error) {
+    if (isNotFoundError(error)) {
+      return { version: 1 as const, servers: [] };
+    }
+    throw error;
+  }
+}
+
+export function createMCPClientFromConfig(
+  config: MCPServerConfig,
+  clients: {
+    StdioMCPClient: new (config: Extract<MCPServerConfig, { transport: "stdio" }>) => MCPClient;
+    StreamableHttpMCPClient: new (
+      config: Extract<MCPServerConfig, { transport: "streamableHttp" }>,
+    ) => MCPClient;
+  },
+): MCPClient {
+  return config.transport === "stdio"
+    ? new clients.StdioMCPClient(config)
+    : new clients.StreamableHttpMCPClient(config);
+}
+
 export function resolveLLMMode(env: Record<string, string | undefined> = process.env): LLMMode {
   return env.HANDAGENT_LLM_MODE === "mock" ? "mock" : "settings";
+}
+
+function isNotFoundError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "ENOENT"
+  );
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
