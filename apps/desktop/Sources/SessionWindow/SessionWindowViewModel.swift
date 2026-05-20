@@ -35,6 +35,7 @@ final class SessionWindowViewModel {
             Task { @MainActor in self?.handleWindowEvent(event) }
         }
         self.historySocketClient.connect(sessionID: "")
+        refreshHistory()
     }
 
     func openOrFocusHistory() {
@@ -121,6 +122,7 @@ final class SessionWindowViewModel {
             historyList = sessions
         case .createSessionResponse(let sessionID, _):
             openHistorySession(sessionID)
+            refreshHistory()
         case .deleteSessionResponse:
             refreshHistory()
         default:
