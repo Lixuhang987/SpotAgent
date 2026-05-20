@@ -7,11 +7,11 @@
 | 文件 | 职责 |
 |------|------|
 | `SessionWindowView.swift` | 根布局：组合历史侧栏、右侧会话工作区与删除确认 alert；不直接写行、tab、消息或气泡细节 |
-| `SessionHistorySidebarView.swift` | 左侧历史列表容器与整行可点击的历史行组件 |
-| `SessionWorkspaceView.swift` | 右侧工作区容器、状态 header、连接 banner、空态与输入 composer |
-| `SessionTabBarView.swift` | tab bar 容器与单个 tab item |
-| `SessionContentView.swift` | 消息列表、消息气泡、附件行与错误 banner |
-| `SessionRequestBubbleViews.swift` | 权限审批气泡与 workspace 选择气泡 |
+| `SessionHistorySidebarView.swift` | 左侧历史导航：标题、空态、历史行、打开/运行/当前状态标识 |
+| `SessionWorkspaceView.swift` | 右侧工作区容器：顶部会话上下文栏、tab strip、连接 banner、空态与输入 composer |
+| `SessionTabBarView.swift` | tab strip 容器、tab item、独立关闭按钮与 tab 运行/连接状态点 |
+| `SessionContentView.swift` | 消息主滚动区、消息气泡、附件行与错误内联面板 |
+| `SessionRequestBubbleViews.swift` | 权限审批与 workspace 选择内联面板 |
 | `SessionWindowViewModel.swift` | 窗口级状态：`historyList`、`tabs`、`activeTabID`、删除确认、空态提示；负责打开/激活历史会话、创建新会话、关闭 tab |
 | `SessionTabViewModel.swift` | 单 tab 状态：`sessionID`、socket、消息、运行态、连接态、权限请求、workspace ask；消费 tab 级 `SessionEvent` |
 | `SessionRunStatus.swift` | UI 内部运行态枚举；协议边界仍接收字符串，进入 ViewModel 后归一化为 `idle / running / failed / interrupted` |
@@ -36,7 +36,24 @@ Coordinator.handleSubmitPrompt
   └─ SessionWindowViewModel.openHistorySession(id)
      └─ 已打开同 sessionId：激活已有 tab
      └─ 未打开：创建 tab，tab socket 发送 open_session，等待 session_snapshot
+
+顶部 tab 关闭
+  └─ SessionCloseTabButton.onClose
+     └─ SessionWorkspaceView.onCloseTab(tabID)
+        └─ SessionWindowViewModel.closeTab(tabID)
+           └─ tab.disconnect()
+           └─ onTabClosed(tab) 同步 SessionRegistry
+           └─ 从 tabs 移除；若关闭 active tab，则激活剩余最后一个 tab 或进入空态
 ```
+
+## 布局与交互边界
+
+- 左侧只承担历史导航和持久化历史删除入口；历史删除仍必须走确认弹窗。
+- 上方 tab strip 只管理“当前窗口中已打开的 tab”。关闭 tab 只断开该 tab 的 socket 并从窗口移除，不删除本地历史文件。
+- tab item 内部拆成两个明确点击目标：左侧激活按钮与右侧 `SessionCloseTabButton`。不要把 `xmark` 作为父激活按钮里的被动图标，否则点击关闭会变成激活 tab。
+- 右侧顶部状态栏展示当前会话标题、运行/连接状态与已打开 tab 数；Stop 只作用于当前 active tab。
+- 消息列表是工作区主滚动区域；错误、权限审批和 workspace 选择作为消息区底部的内联面板展示。
+- 底部 composer 在无 active tab 时发送会创建新会话；有 active tab 时发送到当前 tab。
 
 ## SessionEvent 处理规则
 
@@ -68,7 +85,7 @@ Coordinator.handleSubmitPrompt
 - 不要重新引入独立历史窗口；历史列表属于全局 SessionWindow。
 - 新事件类型必须先在 agent-server 与前端 `SessionEvent` enum 同步定义，再加到对应 view model 的 `handle(_:)`。
 - 历史删除必须确认；任何 UI 入口删除持久化会话前都先进入待确认状态。
-- 测试：[SessionTabViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/SessionWindow/SessionTabViewModelTests.swift)、[SessionWindowViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/SessionWindow/SessionWindowViewModelTests.swift)、[SessionSocketClientTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/SessionWindow/SessionSocketClientTests.swift)。
+- 测试：[SessionWindowViewTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/SessionWindow/SessionWindowViewTests.swift)、[SessionTabViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/SessionWindow/SessionTabViewModelTests.swift)、[SessionWindowViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/SessionWindow/SessionWindowViewModelTests.swift)、[SessionSocketClientTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/SessionWindow/SessionSocketClientTests.swift)。
 
 ## 与其他模块的关系
 
