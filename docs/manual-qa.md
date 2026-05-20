@@ -7,7 +7,7 @@
 
 ## 验收目标
 
-确认桌面 Agent MVP 仍未归档的端到端路径可用，并把新通过的条目及时移入归档：ScreenCaptureKit 反向 IPC、多模态图片附件、协议拆分与多会话绑定、OCR、Accessibility、多 provider LLM。
+确认桌面 Agent MVP 仍未归档的端到端路径可用，并把新通过的条目及时移入归档：ScreenCaptureKit 反向 IPC、协议拆分与多会话绑定、OCR、Accessibility、多 provider LLM。
 
 ## 验收前提
 
@@ -23,10 +23,6 @@
 1. 快速连续发送 3 个 `platform_request`，确认通过 `requestId` 隔离，结果不串。
 
 最近阻塞记录：2026-05-21 使用 mock-LLM 触发 `[mock:screen-display]` 已验证到 `screen.capture` 权限气泡与真实 PlatformBridge 调用，但 macOS 返回 `Failed to enumerate shareable content (用户拒绝了应用程序、窗口、显示器捕捉的TCC)。请确认 HandAgent 已获得「屏幕录制」权限。`。复测 session `~/.spotAgent/sessions/session-1779306464331-1c7li4.json` 记录了 `permission_request(action: allow)`、`tool_call(screen.capture display)` 与 `tool_result(status: error)`，错误输出仍为屏幕录制 TCC 拒绝。授权屏幕录制后需重新验证 display/window 截图和 3 个快速 `platform_request` 隔离。
-
-## 多模态图片附件（P1）
-
-1. 使用 `captureRegion` 截取一个区域，提交 prompt「描述这张图片」，确认 LLM 能基于图片内容给出真实描述（非占位文本）。
 
 ## 单窗口多 Tab 会话历史（P1）
 
