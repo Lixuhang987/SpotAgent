@@ -368,6 +368,34 @@
   - settings 恢复后 `~/.spotAgent/settings.json` 中 `tools.denylist` 为空数组。
 - **结论**：通过。本地插件 tool 可在下一轮请求中热加载、进入统一权限审批与 tool result/event 链路；`tools.denylist` 可不重启热禁用插件 tool。
 
+## 用户自定义 tool / 本地插件异常边界（2026-05-21 验证）
+
+- **验证日期**：2026-05-21
+- **验证环境**：mock-llm / macOS 15.5 / worktree `codex/fix-delete-running-session-tab`；进程异常路径使用 `dist/HandAgentDesktop.app` 派生的 agent-server（`*:4317`），冲突与 workspace 路径边界使用同一 worktree 生产模块启动的一次性 WebSocket harness（`*:4318`）。
+- **验证过程**：
+  1. 备份 `~/.spotAgent/plugins/echo/` 与 `~/.spotAgent/settings.json` 到 `~/.spotAgent/qa-backup-plugin-20260521035655/`。
+  2. 依次把 `plugin.echo` 的 `command` 指向非 0 exit、非 JSON stdout、短超时脚本、超过 1 MiB 输出脚本，以及指向插件目录外的 symlink 命令；每次通过 WebSocket 发送 `[mock:plugin-echo]`，收到 `permission_request` 后回 `allow once`。
+  3. 每个失败都作为 `tool_result.status: "error"` 写入 session，assistant 最终消息继续完成；每轮后 `lsof -nP -iTCP:4317 -sTCP:LISTEN` 均显示 agent-server 仍在监听。
+  4. 从备份恢复 `~/.spotAgent/plugins/echo/` 与 `settings.json`，确认 `plugin.echo.command` 恢复为 `echo.js`，`tools.denylist` 为空。
+  5. 在 `/tmp/handagent-plugin-qa-root/` 创建一次性插件目录：一个插件声明 builtin 同名 `file.read`，两个插件重复声明 `plugin.duplicate`，一个插件声明 `plugin.workspaceRead` / `plugin.workspaceWrite` 并带 `permissions.workspace: "read" | "write"`。
+  6. 用生产 `SettingsBackedToolRegistry + AgentRuntime + SessionRouter` 启动一次性 harness 到 `*:4318`，确认日志记录 builtin 冲突与重复插件 tool 的 disabled reason，且注册表仍保留 builtin `file.read`。
+  7. 通过 `*:4318` WebSocket 触发 workspace 插件 tool：合法 read/write 路径收到校验后的 `workspaceRoot` 与 `absolutePath`；`../../escape.txt` 与 workspace 内 symlink 指向外部目录的 `link-out/escape.txt` 均被拦截。
+- **证据**：
+  - 进程异常 session：
+    - `~/.spotAgent/sessions/session-1779307628772-t80wb4.json`：非 0 exit 返回 `plugin tool plugin.echo exited with code 7: qa non-zero exit`。
+    - `~/.spotAgent/sessions/session-1779308097500-iidybt.json`：非 JSON stdout 返回 `plugin tool plugin.echo returned invalid JSON`。
+    - `~/.spotAgent/sessions/session-1779308181300-vpg3tk.json`：超时返回 `plugin tool plugin.echo timed out after 100ms`，`durationMs: 103`。
+    - `~/.spotAgent/sessions/session-1779308283211-y77qm6.json`：输出超限返回 `plugin tool plugin.echo exceeded output limit (1048576 bytes)`。
+    - `~/.spotAgent/sessions/session-1779308389321-hjgcp8.json`：symlink command 返回 `plugin command escapes plugin directory: escape-link.js`。
+  - 恢复状态：`~/.spotAgent/plugins/echo/plugin.json` 恢复为 `command: "echo.js"`，`~/.spotAgent/settings.json` 中 `tools.denylist` 为空数组；`*:4317` 仍由 worktree agent-server 监听。
+  - 冲突日志：一次性 harness stdout 显示 `disabled tool file.read: plugin tool conflicts with builtin` 与 `disabled tool plugin.duplicate: duplicate plugin tool name`，注册工具列表仍包含 builtin `file.read`。
+  - workspace session：
+    - `/tmp/handagent-plugin-qa-root/sessions/session-1779309054108-w8f7vi.json`：`plugin.workspaceRead` 成功，`workspace.absolutePath` 为 `/private/tmp/handagent-plugin-qa-root/workspace/notes/input.txt`，`access: "read"`。
+    - `/tmp/handagent-plugin-qa-root/sessions/session-1779309054583-swgibv.json`：`plugin.workspaceWrite` 成功，`workspace.absolutePath` 为 `/private/tmp/handagent-plugin-qa-root/workspace/notes/output.txt`，`access: "write"`。
+    - `/tmp/handagent-plugin-qa-root/sessions/session-1779309054614-mpidaa.json`：`../../escape.txt` 返回 `Path escapes workspace root: ../../escape.txt`。
+    - `/tmp/handagent-plugin-qa-root/sessions/session-1779309054617-g3aczg.json`：`link-out/escape.txt` 返回 `Path escapes workspace root: link-out/escape.txt`。
+- **结论**：通过。插件异常退出、非 JSON 输出、超时、输出超限、command symlink 越界、builtin/重复 tool 禁用、workspace read/write 参数解析与路径越界拦截均可返回明确错误或校验后数据，不会拖垮 agent-server。workspace 验证只证明传给插件的路径边界，不代表插件进程具备 OS 级沙箱。
+
 ## Tool 运行时基础（2026-05-20 实机验证）
 
 - **验证日期**：2026-05-20
