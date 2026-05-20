@@ -7,7 +7,7 @@
 
 ## 验收目标
 
-确认桌面 Agent MVP 仍未归档的端到端路径可用，并把新通过的条目及时移入归档：权限关闭窗口取消挂起请求、tool 运行时基础、ScreenCaptureKit 反向 IPC、workspace 沙箱、多模态图片附件、真实流式输出、workspace.askUser、协议拆分与多会话绑定、OCR、Accessibility、多 provider LLM、用户自定义 tool / 本地插件系统。
+确认桌面 Agent MVP 仍未归档的端到端路径可用，并把新通过的条目及时移入归档：权限关闭窗口取消挂起请求、tool 运行时基础、ScreenCaptureKit 反向 IPC、多模态图片附件、真实流式输出、协议拆分与多会话绑定、OCR、Accessibility、多 provider LLM、用户自定义 tool 后续异常路径 / 本地插件系统边界。
 
 ## 验收前提
 
@@ -34,12 +34,6 @@
 1. 让 LLM 调 `screen.capture(target: "window", windowId: <frontmost>)`，确认返回指定窗口截图。
 1. 快速连续发送 3 个 `platform_request`，确认通过 `requestId` 隔离，结果不串。
 
-## Workspace 沙箱（P2）
-
-1. 首次启动 App（删除 `~/.spotAgent/workspaces.json`），确认自动创建 default workspace 且 `~/.spotAgent/workspace/` 目录存在。
-1. 通过 LLM 调 `file.write({workspaceId: "default", relativePath: "../../etc/test"})`，确认返回路径越狱错误。
-1. 在 workspace 目录内创建 symlink 指向外部目录，通过 LLM 调 `file.write` 写入该 symlink 路径，确认 realpath 校验拦截。
-
 ## 多模态图片附件（P1）
 
 1. 使用 `captureRegion` 截取一个区域，提交 prompt「描述这张图片」，确认 LLM 能基于图片内容给出真实描述（非占位文本）。
@@ -47,12 +41,6 @@
 ## 真实流式输出（P1）
 
 1. 提交一个会产生长回复的 prompt，观察 SessionWindow 中 assistant 气泡逐段更新（至少 5 段 delta），而非一次性出现完整文本。
-
-## workspace.askUser（P2）
-
-1. 注册 3 个 workspace（Notes / Code / Drafts），让 LLM 保存一个文件但不指定目标，确认 SessionWindow 弹出内联气泡让用户选择 workspace。
-1. 选择一个 workspace，确认文件落到对应目录。
-1. 再次触发，这次点「取消」或等待 60s 超时，确认 LLM 收到 `{cancelled: true}` 并能继续推进。
 
 ## 协议拆分与多会话绑定（P2）
 
@@ -77,12 +65,8 @@
 1. 在 Anthropic provider 下触发一个会调用 tool 的 prompt，确认 tool name 经适配后仍能回到点号风格（如 `file.read`），tool result 可回灌给 LLM。
 1. 将 provider 设为 `openai-compatible` 且 `api` 设为 `completion` 后提交图片附件 prompt，确认返回明确「provider 不支持 multimodal」类错误；提交需要 tool 的 prompt 时确认降级为纯文本请求，不暴露工具列表。
 
-## 用户自定义 tool / 本地插件系统（P2）
+## 用户自定义 tool / 本地插件系统后续边界（P2）
 
-1. 在 `~/.spotAgent/plugins/echo/plugin.json` 准备一个本地插件，tool 名为 `plugin.echo`，`command` 指向插件目录内可执行脚本，脚本从 stdin 读取 JSON 并向 stdout 输出 JSON。
-1. 重启 App 或触发下一轮 user message，确认 agent-server 日志的已注册 tool 列表包含 `plugin.echo`。
-1. 让 LLM 调用 `plugin.echo`，确认插件收到 `{input, context}`，SessionWindow 展示 JSON tool result，session event 中写入 `tool_call/tool_result`。
-1. 在 `~/.spotAgent/settings.json` 设置 `tools.denylist: ["plugin.echo"]`，不重启 App 再触发该 tool，确认下一轮请求热加载后返回 tool 不可用。
 1. 创建一个与 builtin 同名的插件 tool（如 `file.read`）和两个重复同名插件 tool，确认日志记录 disabled reason，builtin 不被覆盖。
 1. 创建一个会非 0 exit、输出非 JSON、超时或输出超过 1 MiB 的插件 tool，确认错误作为 tool result 返回，agent-server 不崩溃；超时或输出超限时确认子进程被终止。
 1. 创建一个 `command` 经 symlink 指向插件目录外的插件 tool，确认调用时返回 command 越界错误；创建声明 `permissions.workspace: "read"` 或 `"write"` 的插件 tool，分别验证合法 `workspaceId/relativePath` 会收到校验后的 `workspaceRoot/absolutePath`，`../../` 或 symlink 越界会被 workspace 路径校验拦截。该验证只覆盖传给插件的路径边界，不代表插件进程拥有 OS 级沙箱。
