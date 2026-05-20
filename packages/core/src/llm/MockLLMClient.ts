@@ -36,6 +36,45 @@ export const mockLLMScenarios: MockLLMScenario[] = [
     }),
   },
   {
+    id: "clipboard-read",
+    triggers: ["[mock:clipboard-read]"],
+    description: "调用 clipboard.read，用于验证 tool settings denylist 和平台 tool 链路。",
+    complete: (context) => toolThenFinal(context, {
+      toolCall: {
+        id: "mock-clipboard-read-1",
+        name: "clipboard.read",
+        arguments: {},
+      },
+      finalText: "Mock clipboard.read completed.",
+    }),
+  },
+  {
+    id: "screen-display",
+    triggers: ["[mock:screen-display]"],
+    description: "调用 screen.capture display，用于验证 ScreenCaptureKit display 截图链路。",
+    complete: (context) => toolThenFinal(context, {
+      toolCall: {
+        id: "mock-screen-display-1",
+        name: "screen.capture",
+        arguments: { target: { kind: "display" } },
+      },
+      finalText: "Mock screen.capture display completed.",
+    }),
+  },
+  {
+    id: "screen-window",
+    triggers: ["[mock:screen-window]"],
+    description: "调用 screen.capture window，prompt 中可用 windowId=<number> 指定窗口 id。",
+    complete: (context) => toolThenFinal(context, {
+      toolCall: {
+        id: "mock-screen-window-1",
+        name: "screen.capture",
+        arguments: { target: { kind: "window", windowId: parseWindowId(context) } },
+      },
+      finalText: "Mock screen.capture window completed.",
+    }),
+  },
+  {
     id: "file-write",
     triggers: ["[mock:file-write]"],
     description: "调用 file.write，参数形态参考真实 API 集成测试。",
@@ -87,6 +126,39 @@ export const mockLLMScenarios: MockLLMScenario[] = [
     }),
   },
   {
+    id: "symlink-escape",
+    triggers: ["[mock:symlink-escape]"],
+    description: "返回指向 symlink 内路径的 file.write，用于验证 workspace realpath 沙箱拒绝。",
+    complete: (context) => toolThenFinal(context, {
+      toolCall: {
+        id: "mock-symlink-escape-1",
+        name: "file.write",
+        arguments: {
+          workspaceId: "qa-workspace",
+          relativePath: "outside-link/escape.txt",
+          content: "should be rejected through symlink",
+        },
+      },
+      finalText: "Mock symlink escape scenario finished.",
+    }),
+  },
+  {
+    id: "workspace-ask",
+    triggers: ["[mock:workspace-ask]"],
+    description: "调用 workspace.askUser，用于验证 SessionWindow 内联 workspace 选择链路。",
+    complete: (context) => toolThenFinal(context, {
+      toolCall: {
+        id: "mock-workspace-ask-1",
+        name: "workspace.askUser",
+        arguments: {
+          prompt: "请选择 QA 要写入的 workspace",
+          candidateIds: ["qa-workspace", "tmp"],
+        },
+      },
+      finalText: "Mock workspace.askUser completed.",
+    }),
+  },
+  {
     id: "permission-write",
     triggers: ["[mock:permission-write]"],
     description: "返回 file.write，用于触发权限审批 UI。",
@@ -101,6 +173,32 @@ export const mockLLMScenarios: MockLLMScenario[] = [
         },
       },
       finalText: "Mock permission write completed.",
+    }),
+  },
+  {
+    id: "plugin-echo",
+    triggers: ["[mock:plugin-echo]"],
+    description: "调用 plugin.echo，用于验证本地插件 tool 加载、执行与热禁用。",
+    complete: (context) => toolThenFinal(context, {
+      toolCall: {
+        id: "mock-plugin-echo-1",
+        name: "plugin.echo",
+        arguments: { message: "hello from MockLLMClient" },
+      },
+      finalText: "Mock plugin.echo completed.",
+    }),
+  },
+  {
+    id: "ocr-invalid",
+    triggers: ["[mock:ocr-invalid]"],
+    description: "调用缺少 imageBase64 的 ocr.read，用于验证明确 invalid_argument 错误。",
+    complete: (context) => toolThenFinal(context, {
+      toolCall: {
+        id: "mock-ocr-invalid-1",
+        name: "ocr.read",
+        arguments: {},
+      },
+      finalText: "Mock ocr invalid scenario finished.",
     }),
   },
   {
@@ -195,6 +293,15 @@ function messageText(message: Extract<AgentMessage, { role: "user" }>): string {
     .filter((part) => part.type === "text")
     .map((part) => part.text)
     .join("\n");
+}
+
+function parseWindowId(context: MockScenarioContext): number {
+  const userText = context.messages
+    .filter((message): message is Extract<AgentMessage, { role: "user" }> => message.role === "user")
+    .map((message) => messageText(message))
+    .join("\n");
+  const match = userText.match(/\bwindowId=(\d+)\b/);
+  return match ? Number(match[1]) : 0;
 }
 
 function assistant(content: string): LLMCompletion {

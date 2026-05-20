@@ -33,11 +33,18 @@ describe("MockLLMClient", () => {
     expect(new Set(triggers).size).toBe(triggers.length);
     expect(triggers).toEqual(expect.arrayContaining([
       "[mock:assistant-ok]",
+      "[mock:clipboard-read]",
       "[mock:file-write]",
       "[mock:file-read]",
       "[mock:workspace-list]",
       "[mock:path-escape]",
+      "[mock:symlink-escape]",
+      "[mock:workspace-ask]",
       "[mock:permission-write]",
+      "[mock:plugin-echo]",
+      "[mock:ocr-invalid]",
+      "[mock:screen-display]",
+      "[mock:screen-window]",
       "[mock:image-summary]",
       "[mock:llm-error]",
       "[mock:slow]",
@@ -102,6 +109,52 @@ describe("MockLLMClient", () => {
         content: "Mock file.write completed for hello.txt.",
       },
       toolCalls: [],
+    });
+  });
+
+  it("returns deterministic platform and plugin QA tool calls", async () => {
+    const client = new MockLLMClient();
+
+    await expect(
+      client.complete([{ role: "user", content: "run [mock:clipboard-read]" }], []),
+    ).resolves.toMatchObject({
+      toolCalls: [{ id: "mock-clipboard-read-1", name: "clipboard.read", arguments: {} }],
+    });
+
+    await expect(
+      client.complete([{ role: "user", content: "run [mock:screen-display]" }], []),
+    ).resolves.toMatchObject({
+      toolCalls: [
+        {
+          id: "mock-screen-display-1",
+          name: "screen.capture",
+          arguments: { target: { kind: "display" } },
+        },
+      ],
+    });
+
+    await expect(
+      client.complete([{ role: "user", content: "run [mock:screen-window] windowId=123" }], []),
+    ).resolves.toMatchObject({
+      toolCalls: [
+        {
+          id: "mock-screen-window-1",
+          name: "screen.capture",
+          arguments: { target: { kind: "window", windowId: 123 } },
+        },
+      ],
+    });
+
+    await expect(
+      client.complete([{ role: "user", content: "run [mock:plugin-echo]" }], []),
+    ).resolves.toMatchObject({
+      toolCalls: [
+        {
+          id: "mock-plugin-echo-1",
+          name: "plugin.echo",
+          arguments: { message: "hello from MockLLMClient" },
+        },
+      ],
     });
   });
 

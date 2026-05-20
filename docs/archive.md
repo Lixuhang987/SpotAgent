@@ -317,3 +317,53 @@
   - Session 文件：`~/.spotAgent/sessions/6D439C8C-ABE0-4380-8F66-9D619401FB7B.json`，中断后 `messageCount: 1`，仅包含 `[mock:slow-focus] QA stop interrupt manual 20260520`。
   - 继续追问后同一 session 文件 `messageCount: 3`，消息为 slow user、follow-up user、`Mock assistant response: main chain is reachable.`，没有 Stop 之后追加的 slow assistant / tool 消息。
 - **结论**：通过。SessionWindow 运行态 Stop 控件可中断当前 run，窗口和 socket 不关闭；中断后的旧 run 不再写入消息，同一窗口可以继续发起新 run 并正常收到回复。
+
+## Workspace 沙箱补充：默认工作区与 symlink 越界（2026-05-20 实机验证）
+
+- **验证日期**：2026-05-20
+- **验证环境**：mock-llm / macOS / worktree `codex/manual-qa-mock-tools` / `dist/HandAgentDesktop.app`
+- **验证过程**：
+  1. 在 worktree 中执行 `pnpm install`、`bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`，均通过；补充 mock trigger 后 `bash ./scripts/test.sh` 为 32 个测试文件、184 个测试通过。
+  2. 备份 `~/.spotAgent/workspaces.json` 与 `~/.spotAgent/workspace/`，临时删除后启动 mock App。
+  3. 确认启动后自动创建 default workspace，`~/.spotAgent/workspaces.json` 只含 `default`，rootPath 为 `~/.spotAgent/workspace`，且目录存在；取证后恢复原 workspace 配置。
+  4. 在 `~/.spotAgent/qa-workspace/outside-link` 创建指向 `/tmp/handagent-symlink-target` 的 symlink。
+  5. 提交 `[mock:symlink-escape] QA symlink escape manual 20260520`，授权 `file.write` 后，tool 返回 `Path escapes workspace root: outside-link/escape.txt`。
+- **证据**：
+  - 默认 workspace 自动创建：`~/.spotAgent/workspaces.json` 包含 `id: 1b48d803-f8c8-4169-a63d-dbd23933de94`、`name: default`、`rootPath: /Users/mu9/.spotAgent/workspace`；`test -d ~/.spotAgent/workspace` 通过。
+  - agent-server：`ps -o pid,ppid,command -p 48155` 显示命令路径为 `/Users/mu9/proj/handAgent/.worktrees/manual-qa-mock-tools/apps/agent-server/src/server.ts`。
+  - Session 文件：`~/.spotAgent/sessions/56B2E9CF-3677-44B4-B543-479206CA5C84.json`，`file.write` 输入为 `outside-link/escape.txt`，`tool_result.status` 为 `error`，输出为 `Path escapes workspace root: outside-link/escape.txt`。
+  - 外部目标：`/tmp/handagent-symlink-target/escape.txt` 不存在，证明未穿透写入 symlink 目标。
+- **结论**：通过。默认 workspace 缺失时可自动重建；workspace 文件 tool 会在 realpath 后拦截 symlink 越界写入。
+
+## workspace.askUser 内联选择与取消（2026-05-20 实机验证）
+
+- **验证日期**：2026-05-20
+- **验证环境**：mock-llm / macOS / worktree `codex/manual-qa-mock-tools` / `dist/HandAgentDesktop.app`
+- **验证过程**：
+  1. 使用现有 `qa-workspace` 与 `tmp` 两个候选 workspace，提交 `[mock:workspace-ask] QA workspace ask manual choose 20260520`。
+  2. 授权 `workspace.askUser` 后，SessionWindow 弹出内联 workspace 选择气泡，展示 prompt `请选择 QA 要写入的 workspace` 与候选 `qa-workspace`。
+  3. 点击 `qa-workspace`，tool result 返回 `{"workspaceId":"qa-workspace"}`，会话继续完成。
+  4. 再次提交 `[mock:workspace-ask] QA workspace ask manual cancel 20260520`，授权后点击内联气泡的「取消」。
+  5. tool result 返回 `{"cancelled":true}`，会话继续完成。
+- **证据**：
+  - Session 文件 `~/.spotAgent/sessions/AD2880EF-E8C4-4B23-BB76-6924908672D4.json`：`workspace.askUser` 输入包含 `candidateIds: ["qa-workspace", "tmp"]`，tool result 为 `{"workspaceId":"qa-workspace"}`。
+  - Session 文件 `~/.spotAgent/sessions/006049B8-5389-4150-B810-901BDC9A4058.json`：同一输入下点击取消，tool result 为 `{"cancelled":true}`。
+  - 两个 session 均在 `tool_result` 后追加 `Mock workspace.askUser completed.`，证明选择和取消路径都能回灌给 LLM 并继续推进。
+- **结论**：通过。`workspace.askUser` 可在 SessionWindow 内联请求用户选择 workspace；用户选择或取消都会作为 tool result 回灌给 runtime，且会话不阻塞。
+
+## 用户自定义 tool / 本地插件基础链路与热禁用（2026-05-20 实机验证）
+
+- **验证日期**：2026-05-20
+- **验证环境**：mock-llm / macOS / worktree `codex/manual-qa-mock-tools` / `dist/HandAgentDesktop.app`
+- **验证过程**：
+  1. 在 `~/.spotAgent/plugins/echo/` 准备 `plugin.json` 与可执行 `echo.js`，声明 tool `plugin.echo`，脚本从 stdin 读取 JSON 并输出 `{ echoed, context }`。
+  2. 不重启 App，触发下一轮 user message：`[mock:plugin-echo] QA plugin echo manual 20260520`。
+  3. SessionWindow 出现 `授权调用 plugin.echo` 权限气泡；选择「仅本次」后，插件收到 `{ input, context }`，tool result 回到 UI 和 session event。
+  4. 将 `~/.spotAgent/settings.json` 写入 `tools.denylist: ["plugin.echo"]`，不重启 App，再提交 `[mock:plugin-echo] QA plugin echo denylist manual 20260520`。
+  5. 下一轮请求热加载设置后返回 `Unknown tool: plugin.echo`；取证后恢复 settings。
+- **证据**：
+  - 插件 manifest：`~/.spotAgent/plugins/echo/plugin.json`，脚本：`~/.spotAgent/plugins/echo/echo.js`。
+  - Session 文件 `~/.spotAgent/sessions/5B6DF2FA-A274-4141-9CC2-832B7B0B68E2.json`：`tool_result.status` 为 `success`，输出包含 `echoed.message: "hello from MockLLMClient"`、`context.pluginId: "echo"`、`context.toolName: "plugin.echo"`。
+  - Session 文件 `~/.spotAgent/sessions/A94C0D17-D697-45AC-A4F7-0552BF2C5545.json`：denylist 生效后 session 状态为 `failed`，event 为 `Unknown tool: plugin.echo`。
+  - settings 恢复后 `~/.spotAgent/settings.json` 中 `tools.denylist` 为空数组。
+- **结论**：通过。本地插件 tool 可在下一轮请求中热加载、进入统一权限审批与 tool result/event 链路；`tools.denylist` 可不重启热禁用插件 tool。
