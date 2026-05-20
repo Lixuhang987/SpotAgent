@@ -327,6 +327,7 @@ final class SessionSocketClient: @unchecked Sendable {
         }
 
         if let currentSessionID,
+           !currentSessionID.isEmpty,
            envelope.sessionId != currentSessionID {
             return nil
         }
