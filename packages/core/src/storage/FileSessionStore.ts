@@ -22,6 +22,7 @@ export class FileSessionStore implements SessionStore {
         createdAt: now,
         updatedAt: now,
         messageCount: 0,
+        actionBinding: input.actionBinding,
       },
       messages: [],
       events: [],

@@ -312,6 +312,53 @@ describe("SessionRouter", () => {
     });
   });
 
+  it("persists action binding from create_session_request", async () => {
+    const persistence = new SessionPersistence(
+      new InMemorySessionStore(),
+      () => "2026-05-21T00:00:00.000Z",
+    );
+    const router = new SessionRouter(
+      { async handleUserMessage() {} },
+      persistence,
+      () => "2026-05-21T00:01:00.000Z",
+      {
+        async resolve(binding) {
+          expect(binding).toEqual({
+            pluginId: "review",
+            promptName: "code_review",
+          });
+          return {
+            pluginId: "review",
+            promptName: "code_review",
+            mcpServerIds: ["github"],
+          };
+        },
+      },
+    );
+    const pushed: SessionMessage[] = [];
+
+    await router.receive(
+      {
+        type: "create_session_request",
+        sessionId: "",
+        messageId: "create-action",
+        timestamp: "2026-05-21T00:01:00.000Z",
+        payload: {
+          initialText: "Review:\\ncode",
+          actionBinding: { pluginId: "review", promptName: "code_review" },
+        },
+      },
+      (message) => pushed.push(message),
+    );
+
+    const created = await persistence.getSession(pushed[0].sessionId);
+    expect(created?.metadata.actionBinding).toEqual({
+      pluginId: "review",
+      promptName: "code_review",
+      mcpServerIds: ["github"],
+    });
+  });
+
   it("returns delete_session_response after deleting existing session", async () => {
     const persistence = new SessionPersistence(
       new InMemorySessionStore(),

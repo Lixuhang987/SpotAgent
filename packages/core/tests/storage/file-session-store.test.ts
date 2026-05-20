@@ -34,6 +34,28 @@ describe("FileSessionStore", () => {
     expect(loaded).toEqual(session);
   });
 
+  it("persists action binding metadata", async () => {
+    const session = await store.create({
+      id: "s-action",
+      title: "Action",
+      createdAt: "2026-05-21T00:00:00.000Z",
+      actionBinding: {
+        pluginId: "review",
+        promptName: "code_review",
+        mcpServerIds: ["github"],
+      },
+    });
+
+    expect(session.metadata.actionBinding).toEqual({
+      pluginId: "review",
+      promptName: "code_review",
+      mcpServerIds: ["github"],
+    });
+
+    const loaded = await store.get("s-action");
+    expect(loaded?.metadata.actionBinding?.mcpServerIds).toEqual(["github"]);
+  });
+
   it("returns null for non-existent session", async () => {
     const result = await store.get("nonexistent");
     expect(result).toBeNull();

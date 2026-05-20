@@ -12,6 +12,10 @@ export type SessionMessage =
       payload: {
         initialText?: string;
         attachments?: UserMessageAttachment[];
+        actionBinding?: {
+          pluginId: string;
+          promptName: string;
+        };
       };
     }
   | {

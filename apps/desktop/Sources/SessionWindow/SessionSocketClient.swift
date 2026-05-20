@@ -211,11 +211,13 @@ final class SessionSocketClient: @unchecked Sendable {
 
     func sendCreateSession(
         initialText: String? = nil,
-        attachments: [UserMessageAttachmentPayload] = []
+        attachments: [UserMessageAttachmentPayload] = [],
+        actionBinding: ActionBindingPayload? = nil
     ) {
         let payload: [String: Any?] = [
             "initialText": initialText,
             "attachments": attachments.isEmpty ? nil : attachments.map(\.jsonObject),
+            "actionBinding": actionBinding?.jsonObject,
         ]
         sendJSON([
             "type": "create_session_request",
@@ -545,6 +547,15 @@ final class SessionSocketClient: @unchecked Sendable {
             return "{}"
         }
         return text
+    }
+}
+
+private extension ActionBindingPayload {
+    var jsonObject: [String: Any] {
+        [
+            "pluginId": pluginId,
+            "promptName": promptName,
+        ]
     }
 }
 

@@ -5,12 +5,20 @@ import type {
 } from "@handagent/core/protocol/SessionMessage.ts";
 import type {
   PersistedSession,
+  SessionActionBinding,
   SessionSummary,
 } from "@handagent/core/storage/index.ts";
 import type { SessionPersistence } from "./SessionPersistence.ts";
 import type { SessionRuntimeOrchestrator } from "./SessionRuntimeOrchestrator.ts";
 
 export type PushMessage = (message: SessionMessage) => void;
+type CreateSessionActionBinding = {
+  pluginId: string;
+  promptName: string;
+};
+type ActionBindingResolver = {
+  resolve(binding: CreateSessionActionBinding): Promise<SessionActionBinding>;
+};
 type RouterOrchestrator = Pick<SessionRuntimeOrchestrator, "handleUserMessage"> &
   Partial<
     Pick<
@@ -24,6 +32,7 @@ export class SessionRouter {
     private readonly orchestrator: RouterOrchestrator,
     private readonly persistence: SessionPersistence,
     private readonly now: () => string = () => new Date().toISOString(),
+    private readonly actionBindingResolver?: ActionBindingResolver,
   ) {}
 
   async createSession(title?: string): Promise<PersistedSession> {
@@ -112,7 +121,27 @@ export class SessionRouter {
     message: Extract<SessionMessage, { type: "create_session_request" }>,
     push: PushMessage,
   ): Promise<void> {
-    const session = await this.persistence.createSession();
+    let actionBinding: SessionActionBinding | undefined;
+    if (message.payload.actionBinding) {
+      actionBinding = await this.actionBindingResolver?.resolve(
+        message.payload.actionBinding,
+      );
+      if (!actionBinding) {
+        push({
+          type: "user_message_failed",
+          sessionId: "",
+          messageId: message.messageId,
+          timestamp: this.now(),
+          payload: {
+            reason: "invalid_request",
+            message: "Action binding resolver is not configured",
+          },
+        });
+        return;
+      }
+    }
+
+    const session = await this.persistence.createSession(undefined, actionBinding);
     const sessionId = session.metadata.id;
 
     push({
