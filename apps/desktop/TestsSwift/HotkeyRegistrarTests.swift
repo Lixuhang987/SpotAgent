@@ -46,6 +46,17 @@ final class HotkeyRegistrarTests: XCTestCase {
 
         XCTAssertEqual(vm.shortcutLabel(for: action), newShortcut.description)
     }
+
+    func testPromptActionShortcutStorePersistsCommandCommaWithoutGlobalRegistration() {
+        let name = KeyboardShortcuts.Name("action.store-test-\(UUID().uuidString)")
+        let shortcut = KeyboardShortcuts.Shortcut(.comma, modifiers: [.command])
+        defer { PromptActionShortcutStore.setShortcut(nil as KeyboardShortcuts.Shortcut?, for: name) }
+
+        PromptActionShortcutStore.setShortcut(shortcut, for: name)
+
+        XCTAssertEqual(KeyboardShortcuts.getShortcut(for: name), shortcut)
+        XCTAssertFalse(KeyboardShortcuts.isEnabled(for: name))
+    }
 }
 
 private final class FakeHotkeyBackend: NamedHotkeyBackend {

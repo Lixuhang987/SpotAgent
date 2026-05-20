@@ -22,7 +22,7 @@ final class PromptPanelController {
             if let defaultShortcut = action.defaultShortcut {
                 let name = action.shortcutName
                 if KeyboardShortcuts.getShortcut(for: name) == nil {
-                    KeyboardShortcuts.setShortcut(defaultShortcut, for: name)
+                    PromptActionShortcutStore.setShortcut(defaultShortcut, for: name)
                 }
             }
         }

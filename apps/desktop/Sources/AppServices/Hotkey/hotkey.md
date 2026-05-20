@@ -8,6 +8,7 @@
 |------|------|
 | `GlobalShortcutNames.swift` | 定义 `KeyboardShortcuts.Name` 扩展（全局热键名称与默认值） |
 | `NamedHotkeyRegistrar.swift` | 对 `KeyboardShortcuts.Name` 建立可测试的注册层；监听快捷键配置变更并重新绑定运行中的全局 handler |
+| `PromptActionShortcutStore.swift` | PromptAction 局部快捷键的 UserDefaults 写入层；沿用 KeyboardShortcuts 的存储格式与变更通知，但不注册全局 Carbon hotkey |
 
 ## 架构
 
@@ -25,11 +26,13 @@
 - 每个 `PromptAction` 通过 `shortcutName` 计算属性生成 `KeyboardShortcuts.Name("action.\(id)")`。
 - **不注册全局监听**；仅在 PromptPanel 可见时通过 `NSEvent.addLocalMonitorForEvents` 拦截 keyDown，构造 `KeyboardShortcuts.Shortcut(event:)` 与已存值比较匹配。
 - 局部匹配不维护独立快捷键缓存；每次显示 label 或处理 keyDown 都读取 `KeyboardShortcuts.getShortcut(for:)`，因此设置页修改后下一次读取即可生效。
+- PromptAction 快捷键通过 `PromptActionShortcutStore` 写入 UserDefaults：存储格式兼容 KeyboardShortcuts，但不会调用 `KeyboardShortcuts.setShortcut` 注册全局 Carbon hotkey。
+- PromptAction 设置页使用局部录制器，允许与 App 主菜单重复，例如「打开设置」可以配置为 `⌘,`，因为它只在 PromptPanel 可见时参与本地匹配。
 - 默认值在 [PromptPanelController.register(actions:)](/Users/mu9/proj/handAgent/apps/desktop/Sources/PromptPanel/prompt-panel.md) 中写入，**仅当用户未自定义时**才设置。
 
 ### 设置界面
 
-- 由 [Settings/ShortcutSettingsView](/Users/mu9/proj/handAgent/apps/desktop/Sources/Settings/settings.md) 渲染，使用 `KeyboardShortcuts.Recorder`。
+- 由 [Settings/ShortcutSettingsView](/Users/mu9/proj/handAgent/apps/desktop/Sources/Settings/settings.md) 渲染：全局热键使用 `KeyboardShortcuts.Recorder`，PromptAction 局部快捷键使用 `PromptActionShortcutRecorder`。
 
 ## 编辑此目录的约束
 

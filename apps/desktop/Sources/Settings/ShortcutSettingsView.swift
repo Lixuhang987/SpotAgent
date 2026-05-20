@@ -37,7 +37,7 @@ struct ShortcutSettingsView: View {
                                 SettingsRowDivider()
                             }
                             SettingsRow(action.title) {
-                                KeyboardShortcuts.Recorder("", name: action.shortcutName)
+                                PromptActionShortcutRecorder(name: action.shortcutName)
                             }
                         }
                     }
