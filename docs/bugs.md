@@ -2,7 +2,7 @@
 
 本文记录当前已知但尚未修复的 bug。功能待办继续放在 [TODO.md](/Users/mu9/proj/handAgent/docs/TODO.md)，架构问题继续放在 [architecture-review.md](/Users/mu9/proj/handAgent/docs/architecture-review.md)。
 
-最后核对日期：2026-05-20。
+最后核对日期：2026-05-21。
 
 ## 修 bug 约束
 
@@ -309,4 +309,43 @@
 
 ## 当前 bug
 
-暂无。
+### 1. 删除 running session 后已打开 tab 仍显示运行中
+
+**严重级别**：P2
+
+**发现日期**：2026-05-21
+
+**复现步骤**：
+
+1. 执行基线命令：`bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`。
+2. 执行 `bash ./scripts/package-app.sh --mock-llm` 并启动 `dist/HandAgentDesktop.app`。
+3. 通过 PromptPanel 连续提交两个 `[mock:assistant-ok]` prompt，确认同一个 SessionWindow 内已有两个完成态 tab。
+4. 再通过 PromptPanel 提交 `[mock:slow-focus] QA multi tab running delete 20260521`，创建一个长时间 running 的第三个 tab。
+5. 切回已完成 tab，确认侧栏中的 slow-focus 会话仍显示 `已打开, 1 条消息, 运行中`。
+6. 在左侧历史列表对该 running session 右键删除，并在 `删除会话？ 删除后无法恢复本地历史文件。` 二次确认弹窗中点击「删除」。
+7. 检查 session 文件、历史列表和已打开 tab 状态。
+
+**实际结果**：
+
+- server 侧会先 interrupt 再删除文件：`~/.spotAgent/sessions/session-1779302931963-dwt1qv.json` 删除成功，按 prompt 搜索 `~/.spotAgent/sessions/` 已无残留文件。
+- 左侧历史列表刷新，running session 不再出现在历史列表中。
+- 但顶部 tab bar 仍保留该 slow-focus tab；点击后该 tab 仍可激活，窗口标题仍显示 `运行中`，右上角仍显示 Stop 控件，内容区仍显示原 user message。
+
+**期望结果**：
+
+删除 running session 后，server 删除文件并返回 `delete_session_response` 时，桌面端应同步关闭对应已打开 tab，或至少将其标记为已删除 / interrupted，不应继续显示可交互的 `运行中` tab。
+
+**证据**：
+
+- 删除前 session 文件：`~/.spotAgent/sessions/session-1779302931963-dwt1qv.json`，`messageCount: 1`，只包含 `[mock:slow-focus] QA multi tab running delete 20260521`。
+- 删除后文件检查：`test ! -f /Users/mu9/.spotAgent/sessions/session-1779302931963-dwt1qv.json` 成功；按 prompt 搜索 sessions 目录返回 `[]`。
+- 删除后 UI：Computer Use 仍可见顶部 tab `切换到 [mock:slow-focus] QA multi tab running de...`；激活该 tab 后标题区显示 `运行中 3 个已打开标签页`，右上角显示 `停止`。
+- agent-server 仍正常：`node ... /Users/mu9/proj/handAgent/apps/agent-server/src/server.ts` 监听 `*:4317`。
+
+**初步调用链 / 根因边界**：
+
+- `SessionRouter.handleDeleteSession()`：如果目标 session running，会调用 `interruptAndWait(targetSessionId, push)`，随后 `persistence.deleteSession(targetSessionId)`，最后发送 `delete_session_response`。本轮文件删除成功，说明 server 侧 interrupt/delete 已执行。
+- `SessionWindowViewModel.handleWindowEvent(.deleteSessionResponse)`：当前只调用 `refreshHistory()`，没有关闭 `tabs` 中 `sessionID == targetSessionId` 的已打开 tab，也没有把对应 tab 状态改为 interrupted/deleted。
+- `SessionTabViewModel`：被删除的 tab 仍保留本地状态与 socket，因此 UI 继续展示旧的 running 状态。
+
+**状态**：未修复。

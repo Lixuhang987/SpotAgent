@@ -7,7 +7,7 @@
 
 ## 验收目标
 
-确认桌面 Agent MVP 仍未归档的端到端路径可用，并把新通过的条目及时移入归档：权限关闭窗口取消挂起请求、ScreenCaptureKit 反向 IPC、多模态图片附件、真实流式输出、协议拆分与多会话绑定、OCR、Accessibility、多 provider LLM、用户自定义 tool 后续异常路径 / 本地插件系统边界。
+确认桌面 Agent MVP 仍未归档的端到端路径可用，并把新通过的条目及时移入归档：ScreenCaptureKit 反向 IPC、多模态图片附件、真实流式输出、协议拆分与多会话绑定、OCR、Accessibility、多 provider LLM、用户自定义 tool 后续异常路径 / 本地插件系统边界。
 
 ## 验收前提
 
@@ -16,17 +16,13 @@
 - 已通过 `bash ./scripts/swiftw test`。
 - 已通过 `bash ./scripts/swiftw build`。
 
-## 权限审批关闭窗口取消挂起请求（P2）
-
-1. 在 SessionWindow 内触发一个需要权限审批且会保持挂起的 tool 请求。
-1. 授权气泡出现后不做选择，直接关闭该 SessionWindow。
-1. 确认挂起请求全部被取消，不留僵尸请求；后续新建会话和权限审批不受影响。
-
 ## ScreenCaptureKit 反向 IPC（P2）
 
 1. 让 LLM 调 `screen.capture(target: "display")`，确认返回当前显示器截图（base64 图片可解码）。
 1. 让 LLM 调 `screen.capture(target: "window", windowId: <frontmost>)`，确认返回指定窗口截图。
 1. 快速连续发送 3 个 `platform_request`，确认通过 `requestId` 隔离，结果不串。
+
+最近阻塞记录：2026-05-21 使用 mock-LLM 触发 `[mock:screen-display]` 已验证到 `screen.capture` 权限气泡与真实 PlatformBridge 调用，但 macOS 返回 `Failed to enumerate shareable content (用户拒绝了应用程序、窗口、显示器捕捉的TCC)。请确认 HandAgent 已获得「屏幕录制」权限。`。授权屏幕录制后需重新验证 display/window 截图和 3 个快速 `platform_request` 隔离。
 
 ## 多模态图片附件（P1）
 
@@ -44,6 +40,8 @@
 1. 点击左侧历史项，确认已有 tab 会被激活，未打开历史会话会创建新 tab。
 1. 在一个 tab running 时切换到另一个 tab，确认后台 tab 继续输出且状态标记可见。
 1. 删除 running session，确认 server 先 interrupt 再删除，历史列表刷新。
+
+最近阻塞记录：2026-05-21 已验证前 5 步通过；第 6 步发现删除 running session 后 session 文件已删除、历史列表已刷新，但已打开 tab 仍停留在 `运行中`，详见 [bugs.md](./bugs.md) 当前 bug。修复后需要重测本条完整链路。
 
 ## 协议拆分与多会话绑定（P2）
 
@@ -82,4 +80,4 @@
 
 ## 已知问题（待修复）
 
-当前没有已确认且未修复的 bug；继续以 [bugs.md](./bugs.md) 为准，发现新缺陷时补充到该文件。
+当前已确认缺陷以 [bugs.md](./bugs.md) 为准。2026-05-21 已确认：删除 running session 后，已打开 tab 仍显示 `运行中`。

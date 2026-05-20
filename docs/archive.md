@@ -4,7 +4,7 @@
 
 新条目从 [待验收.md](./待验收.md) 或 [manual-qa.md](./manual-qa.md) 验证通过后移入此处。
 
-最后更新日期：2026-05-20。
+最后更新日期：2026-05-21。
 
 ---
 
@@ -385,3 +385,24 @@
   - desktop offline session：`~/.spotAgent/sessions/QA-OFFLINE-1779259054383.json`，`screen.capture` tool result `status: error`，output 为 `Platform bridge is not connected (method: screen.capture)`，`durationMs: 1`。
   - settings 恢复后 `~/.spotAgent/settings.json` 中 `tools.denylist` 为空数组；验证结束后 `*:4317` 无 listener。
 - **结论**：通过。agent-server 启动时注册当前可用工具列表；tool denylist 可在下一轮请求前热加载；desktop 未连接 platform bridge 时平台 tool 会立即返回明确 offline 错误，不会静默超时。
+
+## 权限审批关闭窗口取消挂起请求（2026-05-21 实机验证）
+
+- **验证日期**：2026-05-21
+- **验证环境**：mock-llm / macOS 15.5 / main branch / `dist/HandAgentDesktop.app`
+- **验证过程**：
+  1. 执行基线命令：`bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`，均通过；其中 vitest 为 37 个测试文件、210 个测试通过、1 个 integration 跳过。
+  2. 执行 `bash ./scripts/package-app.sh --mock-llm` 并启动 `dist/HandAgentDesktop.app`，确认状态气泡可见，agent-server 监听 `*:4317`。
+  3. 临时清理会影响本轮判断的 `file.write` 等旧权限规则，保留备份 `~/.spotAgent/qa-backup-20260521-0231/`。
+  4. 通过原生事件 `System Events` 发送 `key code 49 using {command down, shift down}` 唤出 PromptPanel，输入 `[mock:permission-write] QA close pending permission 20260521` 并提交。
+  5. SessionWindow 出现 `授权调用 file.write` 内联权限气泡，参数为 `workspaceId: "qa-workspace"`、`relativePath: "permission-check.txt"`、`content: "permission scenario content"`。
+  6. 不点击任何授权按钮，直接关闭 SessionWindow；关闭后只剩状态气泡。
+  7. 关闭后短延迟检查与超过旧 60 秒超时窗口后复查，session 文件都只保留 1 条 user message，没有 `permission_request`、`tool_result` 或 final assistant 迟到写入。
+  8. 随后新建 `screen.capture` 会话仍能出现新的授权气泡，说明权限审批桥没有整体卡死。
+- **证据**：
+  - agent-server：`ps -o pid,ppid,command -p 41306` 显示命令路径为 `/Users/mu9/proj/handAgent/apps/agent-server/src/server.ts`。
+  - 窗口状态：关闭权限气泡所在 SessionWindow 后，`System Events` 只剩状态气泡窗口 `280x62`。
+  - Session 文件：`~/.spotAgent/sessions/session-1779302211552-4n30ke.json`，`messageCount: 1`，`events: []`，仅包含 `[mock:permission-write] QA close pending permission 20260521`。
+  - 后续权限链路：提交 `[mock:screen-display] QA screen display 20260521` 后仍出现 `授权调用 screen.capture` 气泡。
+  - 清理状态：验证结束后退出 `HandAgentDesktop`，`*:4317` 无 listener；`~/.spotAgent/permissions.json` 已从备份恢复。
+- **结论**：通过。关闭带有挂起权限请求的 SessionWindow 会立即中断该会话 run，不再等待超时后向已关闭 session 写入 permission/tool/assistant 消息；后续新会话权限审批仍可正常出现。
