@@ -78,6 +78,7 @@ Coordinator.handleSubmitPrompt
 
 - tab socket 连接时发送 `open_session`；若 server 中已有该 session，agent-server 返回 `session_snapshot`。
 - 新 tab 从 PromptPanel 首次提交时，`open_session` 的空快照可能早于或晚于本地 `user_message` 回路到达；tab 必须保留本地已追加但尚未由后续事件确认的首轮消息，不能让快照把右侧消息列表清空。
+- agent-server 重启后若 snapshot 返回 `status: "failed"`，tab 会把最后一条 assistant 文本作为错误条内容展示；这用于运行中 server 重启丢失 active run 时显示 `本轮运行因 agent-server 重启而中断，请重新发送请求。`，同时保留消息区内的 assistant 错误消息。
 - history socket 使用空 `sessionID` 作为窗口级控制通道，用于 list/create/delete 响应；空 `sessionID` 不参与普通 tab 事件过滤。
 - `receive` 失败且不是用户主动 `disconnect()` 时，客户端进入 `reconnecting`，之后新建 socket 并再次发送 `open_session`。
 

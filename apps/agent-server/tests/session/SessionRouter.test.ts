@@ -175,6 +175,354 @@ describe("SessionRouter", () => {
     ]);
   });
 
+  it("marks an incomplete persisted turn as failed when open_session reconnects after runtime loss", async () => {
+    const store = new InMemorySessionStore();
+    const persistence = new SessionPersistence(
+      store,
+      () => "2026-05-18T00:00:00.000Z",
+    );
+    const router = new SessionRouter(
+      {
+        async handleUserMessage() {},
+      },
+      persistence,
+      () => "2026-05-18T00:02:00.000Z",
+    );
+    const pushed: SessionMessage[] = [];
+
+    await store.create({
+      id: "session-incomplete",
+      createdAt: "2026-05-18T00:00:00.000Z",
+    });
+    await store.appendMessages(
+      "session-incomplete",
+      [{ role: "user", content: "slow prompt" }],
+      "2026-05-18T00:01:00.000Z",
+    );
+
+    await router.receive(
+      {
+        type: "open_session",
+        sessionId: "session-incomplete",
+        messageId: "open-1",
+        timestamp: "2026-05-18T00:02:00.000Z",
+        payload: {},
+      },
+      (message) => pushed.push(message),
+    );
+
+    expect(pushed).toEqual([
+      {
+        type: "session_snapshot",
+        sessionId: "session-incomplete",
+        messageId: "open-1",
+        timestamp: "2026-05-18T00:02:00.000Z",
+        payload: {
+          messages: [
+            {
+              id: "msg-0",
+              role: "user",
+              text: "slow prompt",
+              status: "completed",
+              createdAt: "1970-01-01T00:00:00.000Z",
+              updatedAt: "1970-01-01T00:00:00.000Z",
+            },
+            {
+              id: "msg-1",
+              role: "assistant",
+              text: "本轮运行因 agent-server 重启而中断，请重新发送请求。",
+              status: "completed",
+              createdAt: "1970-01-01T00:00:00.000Z",
+              updatedAt: "1970-01-01T00:00:00.000Z",
+            },
+          ],
+          status: "failed",
+        },
+      },
+    ]);
+    expect((await persistence.getSession("session-incomplete"))?.events).toEqual([
+      {
+        type: "error",
+        timestamp: "2026-05-18T00:02:00.000Z",
+        message: "本轮运行因 agent-server 重启而中断，请重新发送请求。",
+        code: "run_lost_after_restart",
+      },
+    ]);
+  });
+
+  it("keeps a user-interrupted incomplete turn interrupted when open_session reconnects", async () => {
+    const store = new InMemorySessionStore();
+    const persistence = new SessionPersistence(
+      store,
+      () => "2026-05-18T00:00:00.000Z",
+    );
+    const router = new SessionRouter(
+      {
+        async handleUserMessage() {},
+      },
+      persistence,
+      () => "2026-05-18T00:02:00.000Z",
+    );
+    const pushed: SessionMessage[] = [];
+
+    await store.create({
+      id: "session-user-interrupted",
+      createdAt: "2026-05-18T00:00:00.000Z",
+    });
+    await store.appendMessages(
+      "session-user-interrupted",
+      [{ role: "user", content: "stopped prompt" }],
+      "2026-05-18T00:01:00.000Z",
+    );
+    await store.appendEvents("session-user-interrupted", [
+      {
+        type: "error",
+        timestamp: "2026-05-18T00:01:30.000Z",
+        message: "本轮运行已中断。",
+        code: "run_interrupted",
+      },
+    ]);
+
+    await router.receive(
+      {
+        type: "open_session",
+        sessionId: "session-user-interrupted",
+        messageId: "open-1",
+        timestamp: "2026-05-18T00:02:00.000Z",
+        payload: {},
+      },
+      (message) => pushed.push(message),
+    );
+
+    expect(pushed).toEqual([
+      {
+        type: "session_snapshot",
+        sessionId: "session-user-interrupted",
+        messageId: "open-1",
+        timestamp: "2026-05-18T00:02:00.000Z",
+        payload: {
+          messages: [
+            {
+              id: "msg-0",
+              role: "user",
+              text: "stopped prompt",
+              status: "completed",
+              createdAt: "1970-01-01T00:00:00.000Z",
+              updatedAt: "1970-01-01T00:00:00.000Z",
+            },
+          ],
+          status: "interrupted",
+        },
+      },
+    ]);
+    expect((await persistence.getSession("session-user-interrupted"))?.events).toEqual([
+      {
+        type: "error",
+        timestamp: "2026-05-18T00:01:30.000Z",
+        message: "本轮运行已中断。",
+        code: "run_interrupted",
+      },
+    ]);
+  });
+
+  it("does not reuse an older error when recovering a later incomplete turn", async () => {
+    const store = new InMemorySessionStore();
+    const persistence = new SessionPersistence(
+      store,
+      () => "2026-05-18T00:00:00.000Z",
+    );
+    const router = new SessionRouter(
+      {
+        async handleUserMessage() {},
+      },
+      persistence,
+      () => "2026-05-18T00:04:00.000Z",
+    );
+    const pushed: SessionMessage[] = [];
+
+    await store.create({
+      id: "session-new-incomplete-after-error",
+      createdAt: "2026-05-18T00:00:00.000Z",
+    });
+    await store.appendMessages(
+      "session-new-incomplete-after-error",
+      [
+        { role: "user", content: "old prompt" },
+        { role: "assistant", content: "old failure" },
+      ],
+      "2026-05-18T00:01:00.000Z",
+    );
+    await store.appendEvents("session-new-incomplete-after-error", [
+      {
+        type: "error",
+        timestamp: "2026-05-18T00:01:30.000Z",
+        message: "old runtime error",
+      },
+    ]);
+    await store.appendMessages(
+      "session-new-incomplete-after-error",
+      [{ role: "user", content: "new slow prompt" }],
+      "2026-05-18T00:03:00.000Z",
+    );
+
+    await router.receive(
+      {
+        type: "open_session",
+        sessionId: "session-new-incomplete-after-error",
+        messageId: "open-1",
+        timestamp: "2026-05-18T00:04:00.000Z",
+        payload: {},
+      },
+      (message) => pushed.push(message),
+    );
+
+    expect(pushed).toEqual([
+      {
+        type: "session_snapshot",
+        sessionId: "session-new-incomplete-after-error",
+        messageId: "open-1",
+        timestamp: "2026-05-18T00:04:00.000Z",
+        payload: {
+          messages: [
+            {
+              id: "msg-0",
+              role: "user",
+              text: "old prompt",
+              status: "completed",
+              createdAt: "1970-01-01T00:00:00.000Z",
+              updatedAt: "1970-01-01T00:00:00.000Z",
+            },
+            {
+              id: "msg-1",
+              role: "assistant",
+              text: "old failure",
+              status: "completed",
+              createdAt: "1970-01-01T00:00:00.000Z",
+              updatedAt: "1970-01-01T00:00:00.000Z",
+            },
+            {
+              id: "msg-2",
+              role: "user",
+              text: "new slow prompt",
+              status: "completed",
+              createdAt: "1970-01-01T00:00:00.000Z",
+              updatedAt: "1970-01-01T00:00:00.000Z",
+            },
+            {
+              id: "msg-3",
+              role: "assistant",
+              text: "本轮运行因 agent-server 重启而中断，请重新发送请求。",
+              status: "completed",
+              createdAt: "1970-01-01T00:00:00.000Z",
+              updatedAt: "1970-01-01T00:00:00.000Z",
+            },
+          ],
+          status: "failed",
+        },
+      },
+    ]);
+    expect((await persistence.getSession("session-new-incomplete-after-error"))?.events).toEqual([
+      {
+        type: "error",
+        timestamp: "2026-05-18T00:01:30.000Z",
+        message: "old runtime error",
+      },
+      {
+        type: "error",
+        timestamp: "2026-05-18T00:04:00.000Z",
+        message: "本轮运行因 agent-server 重启而中断，请重新发送请求。",
+        code: "run_lost_after_restart",
+      },
+    ]);
+  });
+
+  it("does not reuse a current non-interrupt error when recovering an incomplete turn", async () => {
+    const store = new InMemorySessionStore();
+    const persistence = new SessionPersistence(
+      store,
+      () => "2026-05-18T00:00:00.000Z",
+    );
+    const router = new SessionRouter(
+      {
+        async handleUserMessage() {},
+      },
+      persistence,
+      () => "2026-05-18T00:04:00.000Z",
+    );
+    const pushed: SessionMessage[] = [];
+
+    await store.create({
+      id: "session-current-error",
+      createdAt: "2026-05-18T00:00:00.000Z",
+    });
+    await store.appendMessages(
+      "session-current-error",
+      [{ role: "user", content: "new slow prompt" }],
+      "2026-05-18T00:03:00.000Z",
+    );
+    await store.appendEvents("session-current-error", [
+      {
+        type: "error",
+        timestamp: "2026-05-18T00:03:30.000Z",
+        message: "provider failed",
+      },
+    ]);
+
+    await router.receive(
+      {
+        type: "open_session",
+        sessionId: "session-current-error",
+        messageId: "open-1",
+        timestamp: "2026-05-18T00:04:00.000Z",
+        payload: {},
+      },
+      (message) => pushed.push(message),
+    );
+
+    expect(pushed).toEqual([
+      {
+        type: "session_snapshot",
+        sessionId: "session-current-error",
+        messageId: "open-1",
+        timestamp: "2026-05-18T00:04:00.000Z",
+        payload: {
+          messages: [
+            {
+              id: "msg-0",
+              role: "user",
+              text: "new slow prompt",
+              status: "completed",
+              createdAt: "1970-01-01T00:00:00.000Z",
+              updatedAt: "1970-01-01T00:00:00.000Z",
+            },
+            {
+              id: "msg-1",
+              role: "assistant",
+              text: "本轮运行因 agent-server 重启而中断，请重新发送请求。",
+              status: "completed",
+              createdAt: "1970-01-01T00:00:00.000Z",
+              updatedAt: "1970-01-01T00:00:00.000Z",
+            },
+          ],
+          status: "failed",
+        },
+      },
+    ]);
+    expect((await persistence.getSession("session-current-error"))?.events).toEqual([
+      {
+        type: "error",
+        timestamp: "2026-05-18T00:03:30.000Z",
+        message: "provider failed",
+      },
+      {
+        type: "error",
+        timestamp: "2026-05-18T00:04:00.000Z",
+        message: "本轮运行因 agent-server 重启而中断，请重新发送请求。",
+        code: "run_lost_after_restart",
+      },
+    ]);
+  });
+
   it("returns session_open_failed when open_session targets missing history", async () => {
     const persistence = new SessionPersistence(
       new InMemorySessionStore(),

@@ -105,6 +105,10 @@ export class SessionRouter {
       return;
     }
 
+    const recoveredStatus =
+      !this.orchestrator.isSessionRunning?.(message.sessionId)
+      ? await this.persistence.recoverIncompleteTurnForSnapshot(message.sessionId, this.now())
+      : null;
     const messages = await this.persistence.getConversationMessages(message.sessionId);
     push({
       type: "session_snapshot",
@@ -113,7 +117,7 @@ export class SessionRouter {
       timestamp: this.now(),
       payload: {
         messages,
-        status: "idle",
+        status: recoveredStatus ?? "idle",
       },
     });
   }

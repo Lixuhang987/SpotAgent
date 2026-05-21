@@ -7,6 +7,7 @@ import type {
 import type { SessionMessage } from "@handagent/core/protocol/SessionMessage.ts";
 import type { SessionEvent } from "@handagent/core/storage/index.ts";
 import type { SessionPersistence } from "./SessionPersistence.ts";
+import { RUN_INTERRUPTED_CODE, RUN_INTERRUPTED_MESSAGE } from "./SessionPersistence.ts";
 import {
   agentMessagesToRuntimeMessages,
   toAuditEvent,
@@ -91,6 +92,9 @@ export class SessionRuntimeOrchestrator {
       );
 
       if (!this.isActive(sessionId, activeRun) || activeRun.controller.signal.aborted) {
+        if (this.isActive(sessionId, activeRun) && activeRun.interrupted) {
+          await this.persistInterrupted(sessionId, activeRun);
+        }
         return;
       }
       await this.persistence.persistRunResult(
@@ -100,8 +104,11 @@ export class SessionRuntimeOrchestrator {
       );
     } catch (error) {
       if (isAbortError(error)) {
-        if (!activeRun.interrupted && this.isActive(sessionId, activeRun)) {
-          this.emitInterrupted(sessionId, push, activeRun);
+        if (this.isActive(sessionId, activeRun)) {
+          if (!activeRun.interrupted) {
+            this.emitInterrupted(sessionId, push, activeRun);
+          }
+          await this.persistInterrupted(sessionId, activeRun);
         }
         return;
       }
@@ -162,6 +169,15 @@ export class SessionRuntimeOrchestrator {
       timestamp: this.now(),
       payload: { value: "interrupted" },
     });
+  }
+
+  private async persistInterrupted(sessionId: string, activeRun: ActiveRun): Promise<void> {
+    if (!activeRun.interrupted) return;
+    await this.persistence.persistError(
+      sessionId,
+      RUN_INTERRUPTED_MESSAGE,
+      RUN_INTERRUPTED_CODE,
+    );
   }
 
   private isActive(sessionId: string, activeRun: ActiveRun): boolean {

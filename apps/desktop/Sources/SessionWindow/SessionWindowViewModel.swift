@@ -15,7 +15,7 @@ final class SessionWindowViewModel {
     @ObservationIgnored private let historySocketClient: SessionSocketClient
     @ObservationIgnored private let onTabStateChanged: @MainActor (SessionTabViewModel) -> Void
     @ObservationIgnored private let onTabClosed: @MainActor (SessionTabViewModel) -> Void
-    @ObservationIgnored private var pendingCreatedSessionPrompt: PendingCreatedSessionPrompt?
+    @ObservationIgnored private var pendingCreatedSessionPrompts: [String: PendingCreatedSessionPrompt] = [:]
 
     var activeTab: SessionTabViewModel? {
         guard let activeTabID else { return nil }
@@ -89,12 +89,13 @@ final class SessionWindowViewModel {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedText.isEmpty else { return }
 
-        pendingCreatedSessionPrompt = PendingCreatedSessionPrompt(
+        let pendingPrompt = PendingCreatedSessionPrompt(
             text: trimmedText,
             attachments: attachments,
             actionBinding: actionBinding
         )
-        historySocketClient.sendCreateSession(actionBinding: actionBinding, workspaceId: workspaceId)
+        let requestMessageID = historySocketClient.sendCreateSession(actionBinding: actionBinding, workspaceId: workspaceId)
+        pendingCreatedSessionPrompts[requestMessageID] = pendingPrompt
     }
 
     func createNewSession(workspaceId: String? = nil) {
@@ -142,15 +143,17 @@ final class SessionWindowViewModel {
         switch event {
         case .sessionList(let sessions):
             historyList = sessions
-        case .createSessionResponse(let sessionID, _):
-            let pendingPrompt = pendingCreatedSessionPrompt
-            pendingCreatedSessionPrompt = nil
+        case .createSessionResponse(let sessionID, _, let responseMessageID):
+            let pendingPrompt = pendingCreatedSessionPrompts.removeValue(forKey: responseMessageID)
             openHistorySession(sessionID)
             if let pendingPrompt,
                activeTab?.sessionID == sessionID {
                 activeTab?.sendPrompt(pendingPrompt.text, attachments: pendingPrompt.attachments)
             }
             refreshHistory()
+        case .userMessageFailed(_, let message, let responseMessageID):
+            pendingCreatedSessionPrompts.removeValue(forKey: responseMessageID)
+            noticeMessage = message
         case .deleteSessionResponse(let targetSessionID, let status):
             if status == "deleted",
                let tab = tabs.first(where: { $0.sessionID == targetSessionID }) {

@@ -86,6 +86,50 @@ export class SessionPersistence {
     return agentMessagesToConversation(messages);
   }
 
+  async recoverIncompleteTurnForSnapshot(
+    sessionId: string,
+    timestamp = this.now(),
+  ): Promise<"failed" | "interrupted" | null> {
+    const session = await this.store.get(sessionId);
+    if (!session || !isIncompleteTurn(session.messages)) {
+      return null;
+    }
+
+    const lastError = [...session.events]
+      .reverse()
+      .find(
+        (event) =>
+          event.type === "error" &&
+          event.timestamp.localeCompare(session.metadata.updatedAt) >= 0,
+      );
+    if (lastError?.code === RUN_INTERRUPTED_CODE) {
+      return "interrupted";
+    }
+
+    await this.store.setMessages(
+      sessionId,
+      [
+        ...session.messages,
+        {
+          role: "assistant",
+          content: RUN_LOST_AFTER_RESTART_MESSAGE,
+        },
+      ],
+      timestamp,
+    );
+
+    await this.store.appendEvents(sessionId, [
+      {
+        type: "error",
+        timestamp,
+        message: RUN_LOST_AFTER_RESTART_MESSAGE,
+        code: RUN_LOST_AFTER_RESTART_CODE,
+      },
+    ]);
+
+    return "failed";
+  }
+
   async persistRunResult(
     sessionId: string,
     messages: AgentMessage[],
@@ -97,17 +141,28 @@ export class SessionPersistence {
     }
   }
 
-  async persistError(sessionId: string, errorMessage: string): Promise<void> {
+  async persistError(sessionId: string, errorMessage: string, code?: string): Promise<void> {
+    const event: SessionEvent = {
+      type: "error",
+      timestamp: this.now(),
+      message: errorMessage,
+      ...(code ? { code } : {}),
+    };
     await this.store.appendEvents(sessionId, [
-      {
-        type: "error",
-        timestamp: this.now(),
-        message: errorMessage,
-      },
+      event,
     ]);
   }
 }
 
+export const RUN_INTERRUPTED_CODE = "run_interrupted";
+export const RUN_INTERRUPTED_MESSAGE = "本轮运行已中断。";
+export const RUN_LOST_AFTER_RESTART_CODE = "run_lost_after_restart";
+export const RUN_LOST_AFTER_RESTART_MESSAGE = "本轮运行因 agent-server 重启而中断，请重新发送请求。";
+
 function generateSessionId(): string {
   return `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function isIncompleteTurn(messages: AgentMessage[]): boolean {
+  return messages.at(-1)?.role === "user";
 }

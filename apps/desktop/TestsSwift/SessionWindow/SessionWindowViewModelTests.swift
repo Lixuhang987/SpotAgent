@@ -207,13 +207,14 @@ final class SessionWindowViewModelTests: XCTestCase {
 
         XCTAssertEqual(historyTransport.tasks[0].sentTypes.suffix(1), ["create_session_request"])
         XCTAssertNil(historyTransport.tasks[0].lastPayload?["initialText"])
+        let requestMessageID = historyTransport.tasks[0].sentMessageIDs.last
 
         historyClient.handleIncomingTextForTesting(
             """
             {
               "type": "create_session_response",
               "sessionId": "session-created",
-              "messageId": "create-1",
+              "messageId": "\(requestMessageID ?? "")",
               "timestamp": "2026-05-20T00:00:00.000Z",
               "payload": { "title": null }
             }
@@ -274,13 +275,14 @@ final class SessionWindowViewModelTests: XCTestCase {
         XCTAssertEqual(tabTransports["existing-session"]?.tasks[0].sentTypes, ["open_session"])
         XCTAssertEqual(historyTransport.tasks[0].sentTypes.suffix(1), ["create_session_request"])
         XCTAssertNil(historyTransport.tasks[0].lastPayload?["initialText"])
+        let requestMessageID = historyTransport.tasks[0].sentMessageIDs.last
 
         historyClient.handleIncomingTextForTesting(
             """
             {
               "type": "create_session_response",
               "sessionId": "new-session",
-              "messageId": "create-1",
+              "messageId": "\(requestMessageID ?? "")",
               "timestamp": "2026-05-20T00:00:00.000Z",
               "payload": { "title": null }
             }
@@ -294,6 +296,156 @@ final class SessionWindowViewModelTests: XCTestCase {
         XCTAssertEqual(tabTransports["existing-session"]?.tasks[0].sentTypes, ["open_session"])
         XCTAssertEqual(tabTransports["new-session"]?.tasks[0].sentTypes, ["open_session", "user_message"])
         XCTAssertEqual(model.activeTab?.messages.map(\.text), ["new prompt"])
+    }
+
+    @MainActor
+    func testConsecutiveInitialPromptsAreMatchedToTheirCreateSessionResponses() async {
+        let historyTransport = ViewModelRecordingSessionSocketTransport()
+        let historyClient = SessionSocketClient(
+            serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
+            transport: historyTransport,
+            reconnectDelay: 0
+        )
+        var tabTransports: [String: ViewModelRecordingSessionSocketTransport] = [:]
+        let model = SessionWindowViewModel(
+            socketFactory: { sessionID in
+                let transport = ViewModelRecordingSessionSocketTransport()
+                tabTransports[sessionID] = transport
+                return SessionSocketClient(
+                    serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
+                    transport: transport,
+                    reconnectDelay: 0
+                )
+            },
+            historySocketClient: historyClient
+        )
+
+        model.createTabWithInitialPrompt("prompt A")
+        let requestA = historyTransport.tasks[0].sentMessageIDs.last
+        model.createTabWithInitialPrompt("prompt B")
+        let requestB = historyTransport.tasks[0].sentMessageIDs.last
+
+        XCTAssertNotNil(requestA)
+        XCTAssertNotNil(requestB)
+        XCTAssertNotEqual(requestA, requestB)
+        XCTAssertEqual(historyTransport.tasks[0].sentTypes.suffix(2), [
+            "create_session_request",
+            "create_session_request",
+        ])
+
+        historyClient.handleIncomingTextForTesting(
+            """
+            {
+              "type": "create_session_response",
+              "sessionId": "session-A",
+              "messageId": "\(requestA ?? "")",
+              "timestamp": "2026-05-20T00:00:00.000Z",
+              "payload": { "title": null }
+            }
+            """,
+            currentSessionID: ""
+        )
+        await Task.yield()
+
+        historyClient.handleIncomingTextForTesting(
+            """
+            {
+              "type": "create_session_response",
+              "sessionId": "session-B",
+              "messageId": "\(requestB ?? "")",
+              "timestamp": "2026-05-20T00:00:00.000Z",
+              "payload": { "title": null }
+            }
+            """,
+            currentSessionID: ""
+        )
+        await Task.yield()
+
+        XCTAssertEqual(model.tabs.map(\.sessionID), ["session-A", "session-B"])
+        XCTAssertEqual(model.tabs.first(where: { $0.sessionID == "session-A" })?.messages.map(\.text), ["prompt A"])
+        XCTAssertEqual(model.tabs.first(where: { $0.sessionID == "session-B" })?.messages.map(\.text), ["prompt B"])
+        XCTAssertEqual(tabTransports["session-A"]?.tasks[0].sentTypes, ["open_session", "user_message"])
+        XCTAssertEqual(tabTransports["session-B"]?.tasks[0].sentTypes, ["open_session", "user_message"])
+    }
+
+    @MainActor
+    func testCreateSessionFailureClearsOnlyMatchingPendingInitialPrompt() async {
+        let historyTransport = ViewModelRecordingSessionSocketTransport()
+        let historyClient = SessionSocketClient(
+            serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
+            transport: historyTransport,
+            reconnectDelay: 0
+        )
+        var tabTransports: [String: ViewModelRecordingSessionSocketTransport] = [:]
+        let model = SessionWindowViewModel(
+            socketFactory: { sessionID in
+                let transport = ViewModelRecordingSessionSocketTransport()
+                tabTransports[sessionID] = transport
+                return SessionSocketClient(
+                    serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
+                    transport: transport,
+                    reconnectDelay: 0
+                )
+            },
+            historySocketClient: historyClient
+        )
+
+        model.createTabWithInitialPrompt("prompt A")
+        let requestA = historyTransport.tasks[0].sentMessageIDs.last
+        model.createTabWithInitialPrompt("prompt B")
+        let requestB = historyTransport.tasks[0].sentMessageIDs.last
+
+        historyClient.handleIncomingTextForTesting(
+            """
+            {
+              "type": "user_message_failed",
+              "sessionId": "",
+              "messageId": "\(requestA ?? "")",
+              "timestamp": "2026-05-20T00:00:00.000Z",
+              "payload": {
+                "reason": "invalid_request",
+                "message": "Action binding resolver is not configured"
+              }
+            }
+            """,
+            currentSessionID: ""
+        )
+        await Task.yield()
+
+        historyClient.handleIncomingTextForTesting(
+            """
+            {
+              "type": "create_session_response",
+              "sessionId": "session-A-stale",
+              "messageId": "\(requestA ?? "")",
+              "timestamp": "2026-05-20T00:00:01.000Z",
+              "payload": { "title": null }
+            }
+            """,
+            currentSessionID: ""
+        )
+        await Task.yield()
+
+        historyClient.handleIncomingTextForTesting(
+            """
+            {
+              "type": "create_session_response",
+              "sessionId": "session-B",
+              "messageId": "\(requestB ?? "")",
+              "timestamp": "2026-05-20T00:00:00.000Z",
+              "payload": { "title": null }
+            }
+            """,
+            currentSessionID: ""
+        )
+        await Task.yield()
+
+        XCTAssertEqual(model.noticeMessage, "Action binding resolver is not configured")
+        XCTAssertEqual(model.tabs.map(\.sessionID), ["session-A-stale", "session-B"])
+        XCTAssertEqual(model.tabs.first(where: { $0.sessionID == "session-A-stale" })?.messages, [])
+        XCTAssertEqual(model.activeTab?.messages.map(\.text), ["prompt B"])
+        XCTAssertEqual(tabTransports["session-A-stale"]?.tasks[0].sentTypes, ["open_session"])
+        XCTAssertEqual(tabTransports["session-B"]?.tasks[0].sentTypes, ["open_session", "user_message"])
     }
 }
 
@@ -309,6 +461,7 @@ private final class ViewModelRecordingSessionSocketTransport: SessionSocketTrans
 
 private final class ViewModelRecordingSessionWebSocketTask: SessionWebSocketTask {
     private(set) var sentTypes: [String] = []
+    private(set) var sentMessageIDs: [String] = []
     private(set) var lastPayload: [String: Any]?
     private(set) var cancelCount = 0
 
@@ -330,6 +483,9 @@ private final class ViewModelRecordingSessionWebSocketTask: SessionWebSocketTask
             return
         }
         sentTypes.append(type)
+        if let messageID = object["messageId"] as? String {
+            sentMessageIDs.append(messageID)
+        }
         lastPayload = object["payload"] as? [String: Any]
         completionHandler(nil)
     }

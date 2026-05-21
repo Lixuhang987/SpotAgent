@@ -153,7 +153,7 @@ final class SessionTabViewModel: Identifiable {
         case .sessionSnapshot(let messages, let status):
             applySessionSnapshot(messages: messages, status: status)
             shouldNotifyStateChanged = true
-        case .sessionOpenFailed(_, let message), .userMessageFailed(_, let message):
+        case .sessionOpenFailed(_, let message), .userMessageFailed(_, let message, _):
             pendingLocalTurnStartIndex = nil
             isInvalid = true
             invalidReason = message
@@ -232,8 +232,7 @@ final class SessionTabViewModel: Identifiable {
         let snapshotMessages = messages.map { $0.normalizedForDisplay() }
         guard let pendingLocalTurnStartIndex else {
             self.messages = snapshotMessages
-            self.status = .fromProtocolStatus(status)
-            error = nil
+            applySnapshotStatus(status, messages: snapshotMessages)
             return
         }
 
@@ -252,8 +251,16 @@ final class SessionTabViewModel: Identifiable {
         }
 
         self.pendingLocalTurnStartIndex = nil
+        applySnapshotStatus(status, messages: self.messages)
+    }
+
+    private func applySnapshotStatus(_ status: String, messages: [SessionBubble]) {
         self.status = .fromProtocolStatus(status)
-        error = nil
+        if self.status == .failed {
+            error = messages.last(where: { $0.role == "assistant" && !$0.text.isEmpty })?.text
+        } else {
+            error = nil
+        }
     }
 
     private static func mergeSnapshot(

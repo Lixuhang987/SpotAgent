@@ -34,8 +34,8 @@ enum SessionEvent: Equatable {
     case error(messageID: String, message: String, timestamp: String)
     case sessionSnapshot(messages: [SessionBubble], status: String)
     case sessionOpenFailed(reason: String, message: String)
-    case createSessionResponse(sessionID: String, title: String?)
-    case userMessageFailed(reason: String, message: String)
+    case createSessionResponse(sessionID: String, title: String?, responseMessageID: String = "")
+    case userMessageFailed(reason: String, message: String, responseMessageID: String = "")
     case deleteSessionResponse(targetSessionID: String, status: String)
     case sessionList(sessions: [SessionListItem])
     case sessionLoaded(targetSessionId: String, title: String?, messages: [SessionBubble])
@@ -65,10 +65,10 @@ enum SessionEvent: Equatable {
             return a1 == b1 && a2 == b2
         case let (.sessionOpenFailed(a1, a2), .sessionOpenFailed(b1, b2)):
             return a1 == b1 && a2 == b2
-        case let (.createSessionResponse(a1, a2), .createSessionResponse(b1, b2)):
-            return a1 == b1 && a2 == b2
-        case let (.userMessageFailed(a1, a2), .userMessageFailed(b1, b2)):
-            return a1 == b1 && a2 == b2
+        case let (.createSessionResponse(a1, a2, a3), .createSessionResponse(b1, b2, b3)):
+            return a1 == b1 && a2 == b2 && a3 == b3
+        case let (.userMessageFailed(a1, a2, a3), .userMessageFailed(b1, b2, b3)):
+            return a1 == b1 && a2 == b2 && a3 == b3
         case let (.deleteSessionResponse(a1, a2), .deleteSessionResponse(b1, b2)):
             return a1 == b1 && a2 == b2
         case let (.sessionList(a), .sessionList(b)):
@@ -210,12 +210,14 @@ final class SessionSocketClient: @unchecked Sendable {
         ])
     }
 
+    @discardableResult
     func sendCreateSession(
         initialText: String? = nil,
         attachments: [UserMessageAttachmentPayload] = [],
         actionBinding: ActionBindingPayload? = nil,
         workspaceId: String? = nil
-    ) {
+    ) -> String {
+        let messageID = UUID().uuidString
         let payload: [String: Any?] = [
             "initialText": initialText,
             "attachments": attachments.isEmpty ? nil : attachments.map(\.jsonObject),
@@ -225,10 +227,11 @@ final class SessionSocketClient: @unchecked Sendable {
         sendJSON([
             "type": "create_session_request",
             "sessionId": "",
-            "messageId": UUID().uuidString,
+            "messageId": messageID,
             "timestamp": Self.timestamp(),
             "payload": payload.compactMapValues { $0 },
         ])
+        return messageID
     }
 
     private func sendOpenSession(sessionID: String) {
@@ -377,7 +380,7 @@ final class SessionSocketClient: @unchecked Sendable {
             } ?? []
             return .sessionSnapshot(
                 messages: bubbles,
-                status: envelope.payload.value ?? "idle"
+                status: envelope.payload.status ?? envelope.payload.value ?? "idle"
             )
         case "session_open_failed":
             return .sessionOpenFailed(
@@ -387,12 +390,14 @@ final class SessionSocketClient: @unchecked Sendable {
         case "create_session_response":
             return .createSessionResponse(
                 sessionID: envelope.sessionId,
-                title: envelope.payload.title ?? nil
+                title: envelope.payload.title ?? nil,
+                responseMessageID: envelope.messageId
             )
         case "user_message_failed":
             return .userMessageFailed(
                 reason: envelope.payload.reason ?? "invalid_request",
-                message: envelope.payload.message ?? "User message failed."
+                message: envelope.payload.message ?? "User message failed.",
+                responseMessageID: envelope.messageId
             )
         case "delete_session_response":
             return .deleteSessionResponse(

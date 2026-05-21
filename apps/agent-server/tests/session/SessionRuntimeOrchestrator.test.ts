@@ -458,6 +458,14 @@ describe("SessionRuntimeOrchestrator", () => {
     expect(await persistence.getMessages("session-interrupt")).toEqual([
       { role: "user", content: "停止这轮" },
     ]);
+    expect((await persistence.getSession("session-interrupt"))?.events).toEqual([
+      {
+        type: "error",
+        timestamp: "2026-05-17T00:00:00.000Z",
+        message: "本轮运行已中断。",
+        code: "run_interrupted",
+      },
+    ]);
   });
 
   it("reports running sessions and waits for interrupt cleanup", async () => {
@@ -504,6 +512,14 @@ describe("SessionRuntimeOrchestrator", () => {
     expect(orchestrator.isSessionRunning("session-delete-running")).toBe(false);
     expect(await persistence.getMessages("session-delete-running")).toEqual([
       { role: "user", content: "删除中" },
+    ]);
+    expect((await persistence.getSession("session-delete-running"))?.events).toEqual([
+      {
+        type: "error",
+        timestamp: "2026-05-20T00:00:00.000Z",
+        message: "本轮运行已中断。",
+        code: "run_interrupted",
+      },
     ]);
     expect(pushed).toEqual([
       {

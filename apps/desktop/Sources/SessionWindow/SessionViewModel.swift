@@ -379,7 +379,7 @@ final class SessionViewModel {
             self.status = .fromProtocolStatus(status)
             error = nil
             shouldNotifyStateChanged = true
-        case .sessionOpenFailed(_, let message), .userMessageFailed(_, let message):
+        case .sessionOpenFailed(_, let message), .userMessageFailed(_, let message, _):
             status = .failed
             error = message
             shouldNotifyStateChanged = true

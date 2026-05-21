@@ -177,9 +177,123 @@ final class SessionSocketClientTests: XCTestCase {
         )
 
         client.connect(sessionID: "")
-        client.sendCreateSession(initialText: "hello", attachments: [])
+        let requestMessageID = client.sendCreateSession(initialText: "hello", attachments: [])
 
         XCTAssertEqual(transport.tasks[0].sentTypes.suffix(1), ["create_session_request"])
+        XCTAssertEqual(transport.tasks[0].sentObjects.last?["messageId"] as? String, requestMessageID)
+    }
+
+    func testDecodesCreateSessionResponseWithResponseMessageID() {
+        let client = SessionSocketClient.noop
+        var received: SessionEvent?
+        client.onEvent = { received = $0 }
+
+        client.handleIncomingTextForTesting(
+            """
+            {
+              "type": "create_session_response",
+              "sessionId": "session-1",
+              "messageId": "create-request-1",
+              "timestamp": "2026-05-20T00:00:00.000Z",
+              "payload": { "title": "New Session" }
+            }
+            """,
+            currentSessionID: ""
+        )
+
+        XCTAssertEqual(
+            received,
+            .createSessionResponse(
+                sessionID: "session-1",
+                title: "New Session",
+                responseMessageID: "create-request-1"
+            )
+        )
+    }
+
+    func testDecodesUserMessageFailedWithResponseMessageID() {
+        let client = SessionSocketClient.noop
+        var received: SessionEvent?
+        client.onEvent = { received = $0 }
+
+        client.handleIncomingTextForTesting(
+            """
+            {
+              "type": "user_message_failed",
+              "sessionId": "",
+              "messageId": "create-request-1",
+              "timestamp": "2026-05-20T00:00:00.000Z",
+              "payload": {
+                "reason": "invalid_request",
+                "message": "Action binding resolver is not configured"
+              }
+            }
+            """,
+            currentSessionID: ""
+        )
+
+        XCTAssertEqual(
+            received,
+            .userMessageFailed(
+                reason: "invalid_request",
+                message: "Action binding resolver is not configured",
+                responseMessageID: "create-request-1"
+            )
+        )
+    }
+
+    func testDecodesSessionSnapshotStatusFromStatusPayload() {
+        let client = SessionSocketClient.noop
+        var received: SessionEvent?
+        client.onEvent = { received = $0 }
+
+        client.handleIncomingTextForTesting(
+            """
+            {
+              "type": "session_snapshot",
+              "sessionId": "session-1",
+              "messageId": "open-1",
+              "timestamp": "2026-05-22T00:00:00.000Z",
+              "payload": {
+                "status": "failed",
+                "messages": [
+                  {
+                    "id": "msg-0",
+                    "role": "user",
+                    "text": "slow prompt",
+                    "status": "completed",
+                    "createdAt": "1970-01-01T00:00:00.000Z",
+                    "updatedAt": "1970-01-01T00:00:00.000Z"
+                  },
+                  {
+                    "id": "msg-1",
+                    "role": "assistant",
+                    "text": "本轮运行因 agent-server 重启而中断，请重新发送请求。",
+                    "status": "completed",
+                    "createdAt": "1970-01-01T00:00:00.000Z",
+                    "updatedAt": "1970-01-01T00:00:00.000Z"
+                  }
+                ]
+              }
+            }
+            """,
+            currentSessionID: "session-1"
+        )
+
+        XCTAssertEqual(
+            received,
+            .sessionSnapshot(
+                messages: [
+                    SessionBubble(id: "msg-0", role: "user", text: "slow prompt"),
+                    SessionBubble(
+                        id: "msg-1",
+                        role: "assistant",
+                        text: "本轮运行因 agent-server 重启而中断，请重新发送请求。"
+                    ),
+                ],
+                status: "failed"
+            )
+        )
     }
 
     func testSendsCreateSessionRequestWithActionBinding() {

@@ -200,6 +200,30 @@ final class SessionTabViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testFailedSnapshotUsesLastAssistantMessageAsErrorBanner() {
+        let tab = SessionTabViewModel(
+            tabID: "tab-1",
+            sessionID: "session-1",
+            socketClient: .noop
+        )
+
+        tab.handle(.sessionSnapshot(
+            messages: [
+                SessionBubble(id: "msg-0", role: "user", text: "slow prompt"),
+                SessionBubble(
+                    id: "msg-1",
+                    role: "assistant",
+                    text: "本轮运行因 agent-server 重启而中断，请重新发送请求。"
+                ),
+            ],
+            status: "failed"
+        ))
+
+        XCTAssertEqual(tab.status, .failed)
+        XCTAssertEqual(tab.error, "本轮运行因 agent-server 重启而中断，请重新发送请求。")
+    }
+
+    @MainActor
     func testTerminalToolMessageClearsMatchingPendingPermissionRequest() {
         let tab = SessionTabViewModel(
             tabID: "tab-1",

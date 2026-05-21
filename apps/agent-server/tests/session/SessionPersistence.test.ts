@@ -214,5 +214,6 @@ describe("SessionPersistence", () => {
         message: "Missing apiKey",
       },
     ]);
+    expect("code" in session!.events[0]).toBe(false);
   });
 });
