@@ -80,13 +80,15 @@ final class MacPlatformProvider: PlatformProvider {
         let target = argsDict["target"] as? [String: Any]
         let kind = target?["kind"] as? String
 
+        let hasScreenCaptureAccess = try MacPlatformScreenCapturePermission.ensureAllowed()
+
         let content: SCShareableContent
         do {
             content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
         } catch {
-            throw PlatformBridgeError(
-                code: "permission_denied",
-                message: "Failed to enumerate shareable content (\(error.localizedDescription))。请确认 HandAgent 已获得「屏幕录制」权限。"
+            throw MacPlatformScreenCapturePermission.shareableContentError(
+                error,
+                preflightAccess: hasScreenCaptureAccess
             )
         }
 
@@ -590,6 +592,47 @@ enum MacPlatformAccessibilityPermission {
         PlatformBridgeError(
             code: "permission_denied",
             message: "HandAgent 没有辅助功能权限。请打开「系统设置 → 隐私与安全性 → 辅助功能」，允许 HandAgent 后重试。"
+        )
+    }
+}
+
+enum MacPlatformScreenCapturePermission {
+    static func isAllowed() -> Bool {
+        CGPreflightScreenCaptureAccess()
+    }
+
+    static func requestAccess() -> Bool {
+        CGRequestScreenCaptureAccess()
+    }
+
+    static func ensureAllowed(
+        preflight: () -> Bool = isAllowed,
+        request: () -> Bool = requestAccess
+    ) throws -> Bool {
+        if preflight() {
+            return true
+        }
+        guard request() else {
+            throw deniedError()
+        }
+        return true
+    }
+
+    static func deniedError() -> PlatformBridgeError {
+        PlatformBridgeError(
+            code: "permission_denied",
+            message: "HandAgent 没有屏幕录制权限。请打开「系统设置 → 隐私与安全性 → 屏幕录制」，允许 HandAgent 后重试。"
+        )
+    }
+
+    static func shareableContentError(_ error: Error, preflightAccess: Bool) -> PlatformBridgeError {
+        let nsError = error as NSError
+        return PlatformBridgeError(
+            code: preflightAccess ? "capture_failed" : "permission_denied",
+            message: """
+            Failed to enumerate ScreenCaptureKit shareable content \
+            (preflight=\(preflightAccess), domain=\(nsError.domain), code=\(nsError.code), message=\(nsError.localizedDescription)).
+            """
         )
     }
 }

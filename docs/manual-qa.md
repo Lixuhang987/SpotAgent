@@ -7,7 +7,7 @@
 
 ## 验收目标
 
-确认桌面 Agent MVP 仍未归档的端到端路径可用，并把新通过的条目及时移入归档：ScreenCaptureKit 反向 IPC、多模态图片附件、真实流式输出、协议拆分与多会话绑定、OCR、Accessibility、多 provider LLM、用户自定义 tool 后续异常路径 / 本地插件系统边界。
+确认桌面 Agent MVP 仍未归档的端到端路径可用，并把新通过的条目及时移入归档：ScreenCaptureKit 反向 IPC、Accessibility、多 provider LLM。
 
 ## 验收前提
 
@@ -22,57 +22,24 @@
 1. 让 LLM 调 `screen.capture(target: "window", windowId: <frontmost>)`，确认返回指定窗口截图。
 1. 快速连续发送 3 个 `platform_request`，确认通过 `requestId` 隔离，结果不串。
 
-最近阻塞记录：2026-05-21 使用 mock-LLM 触发 `[mock:screen-display]` 已验证到 `screen.capture` 权限气泡与真实 PlatformBridge 调用，但即使 `kTCCServiceScreenCapture` 已允许、`CGPreflightScreenCaptureAccess()` 也返回 `true`，应用内 `SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)` 仍返回 `Failed to enumerate shareable content (用户拒绝了应用程序、窗口、显示器捕捉的TCC)。请确认 HandAgent 已获得「屏幕录制」权限。`。该项已写入 [bugs.md](./bugs.md)；修复后需重新验证 display/window 截图和 3 个快速 `platform_request` 隔离。
+最近阻塞记录：2026-05-21 使用 mock-LLM 触发 `[mock:screen-display]` 已验证到 `screen.capture` 权限气泡与真实 PlatformBridge 调用；代码侧已改为先在 packaged app 进程内执行 `CGPreflightScreenCaptureAccess()` / `CGRequestScreenCaptureAccess()`，并在预检通过但 `SCShareableContent` 仍失败时返回 `capture_failed` 与 `preflight/domain/code/message`，不再把所有枚举失败都冒充为用户拒绝。当前仍未做实机通过归档，因为本机 `kTCCServiceScreenCapture` 记录与当前打包 app 的签名身份不匹配；重置并重新授予屏幕录制权限属于 macOS 隐私状态变更，需用户明确同意后才能执行。获得授权后需重新验证 display/window 截图和 3 个快速 `platform_request` 隔离。
 
-## 多模态图片附件（P1）
+## Accessibility 平台能力（P2）
 
-1. 使用 `captureRegion` 截取一个区域，提交 prompt「描述这张图片」，确认 LLM 能基于图片内容给出真实描述（非占位文本）。
-
-## 真实流式输出（P1）
-
-1. 提交一个会产生长回复的 prompt，观察 SessionWindow 中 assistant 气泡逐段更新（至少 5 段 delta），而非一次性出现完整文本。
-
-最近阻塞记录：2026-05-21 当前 `packages/core/src/logging/createLoggingFetch.ts` 对 `text/event-stream` response 仍会 `await response.clone().text()` 后才返回原 response，真实 provider SSE 会被网络日志包装器缓冲到完成；该项已写入 [bugs.md](./bugs.md)，修复后需重新做非 mock 实机 streaming 验证。
-
-## 单窗口多 Tab 会话历史（P1）
-
-1. 从 PromptPanel 提交一条 prompt，确认只打开一个 SessionWindow，并在收到 create 响应后创建一个 active tab。
-1. 再次从 PromptPanel 提交 prompt，确认复用同一个 SessionWindow，并创建新的 session tab，不会打到当前 active tab。
-1. 从 PromptPanel 执行“会话历史”，确认只聚焦 SessionWindow，不改变 active tab、running 状态或草稿。
-1. 点击左侧历史项，确认已有 tab 会被激活，未打开历史会话会创建新 tab。
-1. 在一个 tab running 时切换到另一个 tab，确认后台 tab 继续输出且状态标记可见。
-1. 删除 running session，确认 server 先 interrupt 再删除，历史列表刷新。
-
-最近阻塞记录：2026-05-21 已验证前 5 步通过；第 6 步发现删除 running session 后 session 文件已删除、历史列表已刷新，但已打开 tab 仍停留在 `运行中`，详见 [bugs.md](./bugs.md) 当前 bug。修复后需要重测本条完整链路。
-
-## 协议拆分与多会话绑定（P2）
-
-1. 在同一个 SessionWindow 内打开两个不同 session tab，在两个 tab 中同时触发需要 platform 能力的 tool，确认两个请求通过 `requestId` 隔离，结果不串。
-1. 关闭其中一个 tab，确认另一个 session 的 platform 请求不受影响。
-
-## OCR 与 Accessibility 平台能力（P2）
-
-1. 在「系统设置 → 隐私与安全性 → 辅助功能」允许 HandAgent；如要用截图生成 OCR 输入，也在「屏幕录制」里允许 HandAgent。
-1. 使用 `captureRegion` 截取包含清晰文字的区域，或让 LLM 先调用 `screen.capture` 获得图片，再调用 `ocr.read({imageBase64, mimeType: "image/png"})`，确认返回 `text` 与 `lines[].confidence`，且文字内容与图片一致。
-1. 让 LLM 直接调用缺少 `imageBase64` 的 `ocr.read`，确认返回明确 `invalid_argument`，且不会默认读取屏幕、剪贴板或文件。
+1. 在「系统设置 → 隐私与安全性 → 辅助功能」允许 HandAgent。
 1. 打开 TextEdit、系统设置或 Finder 作为前台 App，让 LLM 调用 `accessibility.snapshot({kind: "frontmost_app"})`，确认返回有限层级的 `children`，节点包含 `role`、可读 label/value 和可复用 `elementId`。
 1. 选择一个快照中的按钮或文本框，用对应 `elementId` 调用 `accessibility.action`：按钮验证 `press` 或 `click`，文本框验证 `set_value`。
 1. 用 `window.list` 取得窗口 id 后调用 `accessibility.snapshot({kind: "window", windowId: <id>})`，确认返回的是指定窗口的树；再传入同一 App 下不存在或不匹配的 `windowId`，确认返回 `not_found`，不会退回 focused window。
 1. 临时移除 HandAgent 辅助功能权限后重复 snapshot/action，确认返回 `permission_denied`，文案指向「系统设置 → 隐私与安全性 → 辅助功能」。
 
+最近阻塞记录：2026-05-21 已用 mock-LLM 验证 OCR 正向与缺参错误路径，并归档到 [archive.md](./archive.md)。同日保持 TextEdit 前台，通过 agent-server WebSocket 触发 `[mock:accessibility-frontmost]` 与 `[mock:accessibility-set-frontmost]`，两者都经过真实 PlatformBridge 到达桌面 provider，但当前 packaged app 没有辅助功能权限，session `~/.spotAgent/sessions/session-1779352892449-iyjcj0.json` 与 `~/.spotAgent/sessions/session-1779352937653-pt4c60.json` 均记录 `tool_result.status: error`，输出为 `HandAgent 没有辅助功能权限。请打开「系统设置 → 隐私与安全性 → 辅助功能」，允许 HandAgent 后重试。`。未获用户明确授权前，不重置或修改 macOS 隐私权限；获得权限后需回归 frontmost snapshot、element action、window target 与 `not_found` 边界。
+
 ## 多 provider LLM（P2）
 
-1. 打开 Settings → 模型配置，确认 provider 可在 `openai-compatible` 与 `anthropic` 间切换，保存后 `~/.spotAgent/settings.json` 写入 `llm.provider`。
-1. 选择 `openai-compatible`，使用当前 OpenAI 兼容端点提交普通文本 prompt，确认 streaming、tool call 与图片附件路径仍按原逻辑工作。
-1. 选择 `anthropic`，配置可用 Anthropic API key 与模型后提交普通文本 prompt，确认 assistant 回复可见且逐段 streaming。
+1. 配置可用 Anthropic API key 与模型后提交普通文本 prompt，确认 assistant 回复可见且逐段 streaming。
 1. 在 Anthropic provider 下触发一个会调用 tool 的 prompt，确认 tool name 经适配后仍能回到点号风格（如 `file.read`），tool result 可回灌给 LLM。
-1. 将 provider 设为 `openai-compatible` 且 `api` 设为 `completion` 后提交图片附件 prompt，确认返回明确「provider 不支持 multimodal」类错误；提交需要 tool 的 prompt 时确认降级为纯文本请求，不暴露工具列表。
 
-## 用户自定义 tool / 本地插件系统后续边界（P2）
-
-1. 创建一个与 builtin 同名的插件 tool（如 `file.read`）和两个重复同名插件 tool，确认日志记录 disabled reason，builtin 不被覆盖。
-1. 创建一个会非 0 exit、输出非 JSON、超时或输出超过 1 MiB 的插件 tool，确认错误作为 tool result 返回，agent-server 不崩溃；超时或输出超限时确认子进程被终止。
-1. 创建一个 `command` 经 symlink 指向插件目录外的插件 tool，确认调用时返回 command 越界错误；创建声明 `permissions.workspace: "read"` 或 `"write"` 的插件 tool，分别验证合法 `workspaceId/relativePath` 会收到校验后的 `workspaceRoot/absolutePath`，`../../` 或 symlink 越界会被 workspace 路径校验拦截。该验证只覆盖传给插件的路径边界，不代表插件进程拥有 OS 级沙箱。
+最近阻塞记录：2026-05-21 打开 Settings → 模型配置，Computer Use 确认 provider segmented control 同时展示 `OpenAI 兼容` 与 `Anthropic`，当前 UI 与 `~/.spotAgent/settings.json` 均为 `provider: "openai-compatible"`、`api: "chat"`、`model: "gpt-5.3-codex"`、`baseUrl: "https://lpgpt.us/v1"`，API key 已配置但不展示。OpenAI 兼容端真实 streaming、真实 vision 底层请求、区域截图附件路径、`openai-compatible + completion` 的多模态拒绝和 tool 降级纯文本请求均已归档到 [archive.md](./archive.md)。配置文件没有可用的 Anthropic key 或 Anthropic 模型；在没有用户提供真实 Anthropic 配置前，不能验证 Anthropic streaming 与 tool call 回灌，本项不归档为通过。
 
 ## 通过标准
 
@@ -82,4 +49,4 @@
 
 ## 已知问题（待修复）
 
-当前已确认缺陷以 [bugs.md](./bugs.md) 为准。2026-05-21 已确认：删除 running session 后，已打开 tab 仍显示 `运行中`；ScreenCaptureKit 反向 IPC 仍在 `permission_denied`；真实 provider streaming 仍会被网络日志包装器缓冲，三项都需要继续修复并回归验收。
+当前已确认缺陷以 [bugs.md](./bugs.md) 为准。2026-05-21 已确认：重新打包后的 HandAgent 会被 macOS 视为不同 App，既有屏幕录制 / 辅助功能权限不能稳定复用；ScreenCaptureKit 错误分类代码侧已修复，但反向 IPC 仍需在当前 packaged app 重新授权后回归验收。

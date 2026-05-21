@@ -230,6 +230,37 @@ final class SessionViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testTerminalToolMessageClearsMatchingPendingPermissionRequest() {
+        let model = SessionViewModel(sessionID: "session-1", socketClient: .noop)
+
+        model.handle(.permissionRequest(
+            requestId: "session-1:req-1",
+            toolName: "clipboard.read",
+            toolCallId: "tool-1",
+            argumentsJSON: "{}"
+        ))
+        model.handle(.toolMessage(
+            messageID: "session-1-tool-1",
+            name: "clipboard.read",
+            text: "{}",
+            status: "running",
+            timestamp: "2026-05-21T00:00:00.000Z"
+        ))
+
+        XCTAssertEqual(model.pendingPermissionRequests.map(\.id), ["session-1:req-1"])
+
+        model.handle(.toolMessage(
+            messageID: "session-1-tool-1",
+            name: "clipboard.read",
+            text: "用户拒绝执行该 tool",
+            status: "failed",
+            timestamp: "2026-05-21T00:01:00.000Z"
+        ))
+
+        XCTAssertTrue(model.pendingPermissionRequests.isEmpty)
+    }
+
+    @MainActor
     func testWorkspaceAskRequestsAreQueuedAndResolvedInOrder() {
         let model = SessionViewModel(sessionID: "session-1", socketClient: .noop)
 

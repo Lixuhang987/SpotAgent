@@ -422,4 +422,64 @@ describe("VercelClient adapters", () => {
       }),
     );
   });
+
+  it("throws when AI SDK fullStream reports a provider error", async () => {
+    const streamText = vi.fn(() => ({
+      fullStream: (async function* () {
+        yield {
+          type: "error",
+          error: new Error("Provider request failed with status 404"),
+        };
+      })(),
+    }));
+    const client = new VercelClient(
+      {
+        apiKey: "test-key",
+        api: "completion",
+      },
+      {
+        createOpenAI: vi.fn(() => ({
+          responses: vi.fn(() => "responses-model"),
+          chat: vi.fn(() => "chat-model"),
+          completion: vi.fn(() => "completion-model"),
+        })),
+        streamText: streamText as never,
+      },
+    );
+
+    await expect(client.complete([{ role: "user", content: "hi" }], [])).rejects.toThrow(
+      "Provider request failed with status 404",
+    );
+  });
+
+  it("throws when AI SDK fullStream finishes without assistant content or tool calls", async () => {
+    const streamText = vi.fn(() => ({
+      fullStream: (async function* () {
+        yield {
+          type: "finish",
+          finishReason: "stop",
+          rawFinishReason: "stop",
+          totalUsage: {},
+        };
+      })(),
+    }));
+    const client = new VercelClient(
+      {
+        apiKey: "test-key",
+        api: "completion",
+      },
+      {
+        createOpenAI: vi.fn(() => ({
+          responses: vi.fn(() => "responses-model"),
+          chat: vi.fn(() => "chat-model"),
+          completion: vi.fn(() => "completion-model"),
+        })),
+        streamText: streamText as never,
+      },
+    );
+
+    await expect(client.complete([{ role: "user", content: "hi" }], [])).rejects.toThrow(
+      "AI SDK stream finished without assistant content or tool calls.",
+    );
+  });
 });

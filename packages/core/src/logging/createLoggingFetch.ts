@@ -22,7 +22,7 @@ export function createLoggingFetch(options: LoggingFetchOptions): typeof fetch {
     const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
 
     const requestBody = init?.body !== undefined ? init.body : undefined;
-    void options.logger.log({
+    safeLog(options.logger, {
       timestamp: now().toISOString(),
       direction: "request",
       url,
@@ -31,6 +31,19 @@ export function createLoggingFetch(options: LoggingFetchOptions): typeof fetch {
     });
 
     const response = await baseFetch(input, init);
+    const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+    if (contentType.includes("text/event-stream")) {
+      safeLog(options.logger, {
+        timestamp: now().toISOString(),
+        direction: "response",
+        url,
+        method,
+        status: response.status,
+        body: "[streaming response: text/event-stream]",
+      });
+      return response;
+    }
+
     const cloned = response.clone();
     let parsed: unknown;
     try {
@@ -39,7 +52,7 @@ export function createLoggingFetch(options: LoggingFetchOptions): typeof fetch {
     } catch {
       parsed = null;
     }
-    void options.logger.log({
+    safeLog(options.logger, {
       timestamp: now().toISOString(),
       direction: "response",
       url,
@@ -49,6 +62,10 @@ export function createLoggingFetch(options: LoggingFetchOptions): typeof fetch {
     });
     return response;
   };
+}
+
+function safeLog(logger: NetworkLogger, entry: Parameters<NetworkLogger["log"]>[0]): void {
+  void logger.log(entry).catch(() => {});
 }
 
 function tryParseBody(body: unknown): unknown {

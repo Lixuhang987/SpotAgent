@@ -13,13 +13,15 @@
 
 ##  测试备注
 
-### mock-llm 不能证明真实 vision 与真实 provider token streaming
+### mock-llm 不能证明真实 vision；真实 provider token streaming 已单独验证
 
 - 2026-05-19 本轮实机 QA 使用 `bash ./scripts/package-app.sh --mock-llm` 打包启动。
 - 图片附件链路可验证到 Quick Look、SessionWindow 摘要、blob stub 持久化；但 `[mock:image-summary]` 只返回固定文本，不能证明真实 LLM 基于图片内容描述。
 - 2026-05-20 已补充 `MockLLMClient.stream()`；`[mock:assistant-ok]` 可验证 mock 模式下 agent-server 到 desktop 的多段 `assistant_message_delta` 渲染链路。
-- 但 mock delta 是本地确定性分片，仍不能证明真实 provider 的网络 streaming、token 到达节奏或 vision 理解能力。
-- 结论：真实 vision 与真实 provider token streaming 仍需要 real LLM 环境单独验证。
+- mock delta 是本地确定性分片，不能证明真实 provider 的网络 streaming 或 token 到达节奏；该项已在 2026-05-21 使用非 mock App 与真实 `text/event-stream` 响应完成单独验证。
+- 2026-05-21 直接向 agent-server 发送 PNG 附件的真实 provider 会话 `~/.spotAgent/sessions/session-1779350388296-2gmta1.json` 已证明 image STUB 会展开为多模态请求，provider 可读出图片 token `VISION_PASS_20260521`。
+- 2026-05-21 PromptPanel 区域截图 UI 重试已证明 image chip、session image STUB 与真实多模态 provider 请求链路会打通；用户同日手动确认重新授予当前打包 App 权限后，区域圈选路径可正常工作。
+- 结论：真实 provider token streaming、真实 vision 底层请求与区域截图附件路径均已归档到 [archive.md](./archive.md)；后续权限异常按当前 bug「重新打包后的 HandAgent 会被 macOS 视为不同 App」追踪。
 
 ### `System Events click at` 不适合作为状态气泡点击的唯一证据
 
@@ -307,48 +309,194 @@
 
 ---
 
-## 当前 bug
-
-### 1. 删除 running session 后已打开 tab 仍显示运行中
+### 8. 删除 running session 后已打开 tab 仍显示运行中
 
 **严重级别**：P2
+
+**现象**：通过历史侧栏删除一个正在运行且已打开的 session 后，server 已删除 session 文件、历史列表已刷新，但顶部 tab bar 仍保留该 running tab，点击后仍显示 `运行中` 与 Stop 控件。
+
+**期望结果**：
+
+删除 running session 后，server 删除文件并返回 `delete_session_response` 时，桌面端应同步关闭对应已打开 tab，不应继续显示可交互的 `运行中` tab。
+
+**状态**：已修复。
+
+**根因边界**：
+
+- `SessionRouter.handleDeleteSession()` 已先 interrupt 再删除 session 文件，并发送 `delete_session_response`；原始 QA 中 session 文件删除成功，说明 server 侧链路正常。
+- 失败点在 `SessionWindowViewModel.handleWindowEvent(.deleteSessionResponse)`：旧实现只调用 `refreshHistory()`，没有关闭 `tabs` 中 `sessionID == targetSessionID` 的已打开 tab。
+- 修复后仅当 `status == "deleted"` 且本窗口存在匹配 tab 时调用 `closeTab(tab.tabID)`，再刷新历史；`not_found` 等非删除响应只刷新历史，不关闭当前 tab。
+
+**checkpoint 与结论**：
+
+- server delete -> 持久化：实机回归中目标文件 `~/.spotAgent/sessions/session-1779320015436-9bdfno.json` 删除后不存在，按 prompt 搜索 `~/.spotAgent/sessions/` 无残留。
+- `delete_session_response` -> ViewModel：修复后的 `SessionWindowViewModel` 会关闭匹配 open tab，并触发该 tab socket disconnect。
+- UI tab bar：实机回归中删除前标题显示 `运行中 4 个已打开标签页`，删除后回到完成态 tab，标题显示 `空闲 3 个已打开标签页`，顶部 slow-focus tab 消失。
+- socket 清理：删除前 `lsof -nP -iTCP:4317` 有 `HandAgent` fd `17` / node fd `17` 的 session WebSocket；删除后该连接消失，只剩 platform、history 与 3 个 open tab 连接。
+
+**验证**：
+
+- 桌面定向测试覆盖删除成功后关闭匹配 active tab 并回退到剩余 tab：`SessionWindowViewModelTests.testDeletedSessionResponseClosesMatchingActiveTabAndFallsBackToRemainingTab`。
+- 桌面定向测试覆盖非 deleted 响应不关闭 tab：`SessionWindowViewModelTests.testNonDeletedSessionResponseOnlyRefreshesHistoryList`。
+- 实机回归环境：mock-llm / worktree `codex/manual-qa-audit` / `dist/HandAgentDesktop.app`，desktop pid `47574`，agent-server pid `47575`，node 命令路径为 `/Users/mu9/proj/handAgent/.worktrees/manual-qa-audit/apps/agent-server/src/server.ts`。
+- 实机回归目标 session：`~/.spotAgent/sessions/session-1779320015436-9bdfno.json`，prompt 为 `[mock:slow-focus] QA delete running regression fixed 20260521 target`，删除前 `messageCount: 1`，删除后文件不存在。
+
+**发现日期**：2026-05-21
+
+**修复日期**：2026-05-21
+
+---
+
+### 9. 真实 provider streaming 被网络日志包装器缓冲
+
+**严重级别**：P1
+
+**现象**：真实 provider 返回 `text/event-stream` 时，网络日志包装器先读取 clone body，导致 AI SDK 只能在响应结束后消费原 response，SessionWindow 里看不到真实 token 级逐段更新。
+
+**期望结果**：`text/event-stream` response 不应被日志包装器 clone/read 阻塞。日志可以记录占位信息，但必须立即返回原 response，让 AI SDK 按 SSE 增量消费。
+
+**状态**：已修复。
+
+**根因边界**：
+
+- provider -> HTTP SSE：真实 provider 可返回 `text/event-stream`。
+- `createLoggingFetch()` -> AI SDK：失败点在日志包装器返回 response 前等待 `response.clone().text()`，使 SSE 消费被延迟到完整响应结束。
+- AI SDK -> `AgentRuntime` -> WebSocket -> SwiftUI：mock streaming 已覆盖多段 delta；真实 provider 回归证明修复后该链路也能逐段进入 UI。
+
+**修复方式**：
+
+- `packages/core/src/logging/createLoggingFetch.ts` 在 response `content-type` 包含 `text/event-stream` 时，不再 clone/read body，只记录 `[streaming response: text/event-stream]` 并立即返回原 response。
+- `safeLog()` 改为吞掉 logger 异常，避免网络日志失败影响真实 fetch。
+
+**验证**：
+
+- 定向测试覆盖 streaming response 会立即返回，且不会等待 body close：`packages/core/tests/logging/logging-fetch.test.ts`。
+- 定向测试覆盖 logger 失败不会让 fetch 失败。
+- 实机回归环境：real LLM / worktree `codex/manual-qa-audit` / 非 mock `dist/HandAgentDesktop.app`，desktop pid `53098`，agent-server pid `53099`，node 命令路径为 `/Users/mu9/proj/handAgent/.worktrees/manual-qa-audit/apps/agent-server/src/server.ts`。
+- 网络日志：`~/.spotAgent/log/2026-05-21/network-005.jsonl` 第 13-14 行，`2026-05-21T00:07:31.103Z` 真实请求，`2026-05-21T00:07:33.759Z` 响应为 `[streaming response: text/event-stream]`。
+- UI 截图序列：`/tmp/handagent-qa/streaming/clean-real-ui-20260521/frame-05-w52241.png` 为空 assistant 气泡，`frame-07-w52241.png` 显示 `LIVE_STREAM_START`，`frame-08-w52241.png` 显示第 1-7 行并正在输出第 8 行，`frame-09-w52241.png` 显示第 1-14 行并正在输出第 15 行；这些帧顶部都处于 `运行中`。
+- Session 文件：`~/.spotAgent/sessions/session-1779322051046-px8urh.json`，`messageCount: 2`，assistant 长度 `35801`，共 `901` 行，末尾为 `900. Line 900: visible streaming proof.`。
+
+**发现日期**：2026-05-21
+
+**修复日期**：2026-05-21
+
+---
+
+### 10. 权限请求超时后授权气泡仍残留
+
+**严重级别**：P2
+
+**现象**：一个 tool 权限请求等待 60 秒超时后，server 已写入 deny 的 `permission_request` 和 failed `tool_result`，SessionWindow 也显示了 `clipboard.read: 用户拒绝执行该 tool`，但同一 tab 底部仍保留 `授权调用 clipboard.read` 的 pending 授权气泡。
+
+**期望结果**：server 端权限超时或用户拒绝后，只要对应 tool call 已收到 terminal `tool_message`，桌面端就应清理同一个 pending 授权气泡，不应继续展示可点击的过期审批 UI。
+
+**状态**：已修复。
+
+**根因边界**：
+
+- `SessionPermissionBridge` 超时链路正常：session 文件已记录 deny 的 `permission_request` 和 failed `tool_result`。
+- `MessageTranslator` 正常把 failed `tool_result` 下发为 terminal `tool_message`，`messageId` 为 `${sessionId}-${toolCallId}`。
+- 失败点在桌面端 `SessionTabViewModel`：旧实现只在用户点击授权按钮的 `resolvePermission()` 中移除 `pendingPermissionRequests`，没有在 terminal `tool_message` 到达时清理对应 request；同时 `SessionEvent.permissionRequest` 未携带 `toolCallId`，无法可靠匹配同一 tool call。
+
+**checkpoint 与结论**：
+
+- permission request -> UI：实机复现中 SessionWindow 出现 `授权调用 clipboard.read` 气泡，说明请求已到达对应 tab。
+- server timeout -> 持久化：`~/.spotAgent/sessions/session-1779324248724-d3or6x.json` 记录 `clipboard.read` 超时拒绝与 `tool_result.status: error`。
+- terminal tool message -> UI：修复前截图 `/tmp/handagent-qa/protocol-retry-a-mixed-20260521.png` 同时显示 `clipboard.read: 用户拒绝执行该 tool` 和残留的授权气泡，证明失败点在桌面端 pending UI 清理。
+- 修复后 `SessionEvent.permissionRequest`、`SessionPermissionRequest` 与 socket 解码携带 `toolCallId`；`SessionTabViewModel` 和 legacy `SessionViewModel` 在收到 `completed` / `failed` 的 terminal `tool_message` 后按 `sessionID + toolCallId + toolName` 清理匹配的 pending 请求。
+
+**验证**：
+
+- 修复前 RED 证据：`bash ./scripts/swiftw test --filter SessionTabViewModelTests/testTerminalToolMessageClearsMatchingPendingPermissionRequest` 编译失败，提示 `permissionRequest` 缺少 `toolCallId` 参数，覆盖了无法匹配 pending request 的数据缺口。
+- 修复后定向测试通过：
+  - `bash ./scripts/swiftw test --filter SessionTabViewModelTests/testTerminalToolMessageClearsMatchingPendingPermissionRequest`
+  - `bash ./scripts/swiftw test --filter SessionSocketClientTests`
+  - `bash ./scripts/swiftw test --filter SessionViewModelTests`
+- 实机回归环境：mock-llm / worktree `codex/manual-qa-audit` / `dist/HandAgentDesktop.app`，desktop pid `62834`，agent-server pid `62836`，node 命令路径为 `/Users/mu9/proj/handAgent/.worktrees/manual-qa-audit/apps/agent-server/src/server.ts`。
+- 实机回归 session：`~/.spotAgent/sessions/session-1779325061390-dcp2gi.json`，prompt 为 `[mock:clipboard-read] QA stale permission bubble timeout 20260521`；超时后 UI 只显示 `clipboard.read: 用户拒绝执行该 tool` 与 `Mock clipboard.read completed.`，不再显示 `授权调用 clipboard.read` 气泡。
+
+**发现日期**：2026-05-21
+
+**修复日期**：2026-05-21
+
+---
+
+### 11. OpenAI-compatible completion provider 404 后会话静默完成为空 assistant
+
+**严重级别**：P1
+
+**现象**：`openai-compatible + completion` 请求走 `/v1/completions` 后，provider 返回 404，但 session 被保存为成功完成的空 assistant，且没有 `error` event。
+
+**期望结果**：provider 返回 HTTP 404、401、429、5xx 等失败响应时，agent-server 应把失败作为错误传播到 session：写入 `error` event，SessionWindow 显示明确错误，不能把失败请求保存为成功完成的空 assistant。
+
+**状态**：已修复。
+
+**根因边界**：
+
+- `SettingsBackedLLMClient` 正确读取临时 settings 并构造 `openai-compatible + completion` client。
+- `CapabilityAwareLLMClient` 正确把工具降级为 `[]`；网络日志证明请求体没有 `tools`、`tool_choice` 或点号风格 tool name。
+- 失败点在 provider HTTP 错误传播：`VercelClient.stream()` 消费 AI SDK `response.fullStream` 时没有处理 `error` part；当 stream 没有 assistant 内容和 tool call 时仍 yield `message_end`，导致 `SessionRuntimeOrchestrator` 按正常完成持久化空 assistant。
+
+**修复方式**：
+
+- `packages/core/src/llm/VercelClient.ts` 遇到 AI SDK `fullStream` 的 `error` part 时立即抛出错误。
+- 同一 stream 结束后如果既没有 assistant content，也没有 tool call，则抛出 `AI SDK stream finished without assistant content or tool calls.`，避免空 assistant 被当作成功结果。
+
+**验证**：
+
+- 修复前证据：session `~/.spotAgent/sessions/session-1779353692180-irv7zb.json` 只记录 user message 与空 assistant message，`events: []`；网络日志 `~/.spotAgent/log/2026-05-21/network-005.jsonl` 中 `2026-05-21T08:54:52.214Z` 请求 `https://lpgpt.us/v1/completions`，`2026-05-21T08:54:54.535Z` 响应为 provider 404。
+- RED 测试覆盖：新增 `VercelClient` 测试先证明 AI SDK `error` part 和空 stream 都会被旧实现吞掉。
+- 修复后定向测试通过：`pnpm exec vitest run packages/core/tests/llm/vercel-client.test.ts`，14 个测试通过。
+- 修复后相关 LLM / runtime 测试通过：`pnpm exec vitest run packages/core/tests/llm/llm-client-factory.test.ts apps/agent-server/tests/settings/SettingsBackedLLMClient.test.ts apps/agent-server/tests/session/SessionRuntimeOrchestrator.test.ts`，20 个测试通过。
+- 直接 WebSocket 回归：`~/.spotAgent/sessions/session-1779354423036-68vu3t.json` 只保留 user message，events 记录 `error`，message 为 `openai_error`，不再持久化空 assistant。
+- UI 回归：使用原生事件 `System Events` 发送 `key code 49 using {command down, shift down}` 唤出 PromptPanel，提交 `QA completion tool downgrade fixed UI 20260521...` 后 SessionWindow 标题进入 `失败`，界面显示 `openai_error`；session `~/.spotAgent/sessions/session-1779354494947-a0uwtr.json` 只保留 user message，events 记录 `error: openai_error`。
+- 清理状态：`~/.spotAgent/settings.json` 已恢复为 `provider: "openai-compatible"`、`api: "chat"`、`model: "gpt-5.3-codex"`、`baseUrl: "https://lpgpt.us/v1"`。
+
+**发现日期**：2026-05-21
+
+**修复日期**：2026-05-21
+
+---
+
+## 当前 bug
+
+### 1. 重新打包后的 HandAgent 会被 macOS 视为不同 App，既有隐私权限不通用
+
+**严重级别**：P1
 
 **发现日期**：2026-05-21
 
 **复现步骤**：
 
-1. 执行基线命令：`bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`。
-2. 执行 `bash ./scripts/package-app.sh --mock-llm` 并启动 `dist/HandAgentDesktop.app`。
-3. 通过 PromptPanel 连续提交两个 `[mock:assistant-ok]` prompt，确认同一个 SessionWindow 内已有两个完成态 tab。
-4. 再通过 PromptPanel 提交 `[mock:slow-focus] QA multi tab running delete 20260521`，创建一个长时间 running 的第三个 tab。
-5. 切回已完成 tab，确认侧栏中的 slow-focus 会话仍显示 `已打开, 1 条消息, 运行中`。
-6. 在左侧历史列表对该 running session 右键删除，并在 `删除会话？ 删除后无法恢复本地历史文件。` 二次确认弹窗中点击「删除」。
-7. 检查 session 文件、历史列表和已打开 tab 状态。
+1. 打包并启动 `dist/HandAgentDesktop.app`，在「系统设置 → 隐私与安全性」里授予屏幕录制 / 辅助功能等权限。
+2. 修改代码后重新执行 `bash ./scripts/package-app.sh` 或 `bash ./scripts/package-app.sh --mock-llm`，生成新的 `dist/HandAgentDesktop.app`。
+3. 启动重新打包后的 App，继续执行 `screen.capture`、`accessibility.snapshot` 或用户主动 `captureRegion` 圈选。
 
 **实际结果**：
 
-- server 侧会先 interrupt 再删除文件：`~/.spotAgent/sessions/session-1779302931963-dwt1qv.json` 删除成功，按 prompt 搜索 `~/.spotAgent/sessions/` 已无残留文件。
-- 左侧历史列表刷新，running session 不再出现在历史列表中。
-- 但顶部 tab bar 仍保留该 slow-focus tab；点击后该 tab 仍可激活，窗口标题仍显示 `运行中`，右上角仍显示 Stop 控件，内容区仍显示原 user message。
+- 重新打包后的 App 在运行时可能不再复用旧 TCC 授权；`screen.capture` 在 packaged app 进程内 `CGPreflightScreenCaptureAccess()` 返回 false，提示需要重新授予「屏幕录制」权限。
+- `accessibility.snapshot` / `accessibility.action` 经过真实 PlatformBridge 到达桌面 provider 后返回 `HandAgent 没有辅助功能权限。请打开「系统设置 → 隐私与安全性 → 辅助功能」，允许 HandAgent 后重试。`
+- 用户主动 `captureRegion` 路径在重新授予当前打包 App 的权限后可正常工作；未重新授权时，自动化圈选容易得到错误的屏幕内容或权限相关行为，不能作为产品链路失败证据。
 
 **期望结果**：
 
-删除 running session 后，server 删除文件并返回 `delete_session_response` 时，桌面端应同步关闭对应已打开 tab，或至少将其标记为已删除 / interrupted，不应继续显示可交互的 `运行中` tab。
+开发 / QA 打包产物应尽量保持稳定的 macOS TCC 身份，或者文档和打包流程必须明确提示：每次签名身份变化后，需要对当前 `dist/HandAgentDesktop.app` 重新授予屏幕录制、辅助功能等隐私权限，再继续实机 QA。
 
 **证据**：
 
-- 删除前 session 文件：`~/.spotAgent/sessions/session-1779302931963-dwt1qv.json`，`messageCount: 1`，只包含 `[mock:slow-focus] QA multi tab running delete 20260521`。
-- 删除后文件检查：`test ! -f /Users/mu9/.spotAgent/sessions/session-1779302931963-dwt1qv.json` 成功；按 prompt 搜索 sessions 目录返回 `[]`。
-- 删除后 UI：Computer Use 仍可见顶部 tab `切换到 [mock:slow-focus] QA multi tab running de...`；激活该 tab 后标题区显示 `运行中 3 个已打开标签页`，右上角显示 `停止`。
-- agent-server 仍正常：`node ... /Users/mu9/proj/handAgent/apps/agent-server/src/server.ts` 监听 `*:4317`。
+- ScreenCaptureKit clean bridge 回归中，当前 packaged app 进程内预检返回 false，session `~/.spotAgent/sessions/session-1779319444567-r98dh6.json` 记录 `permission_request(action: allow)` 后仍得到中文屏幕录制权限指引。
+- 同轮取证显示当前 app 的 designated requirement 为 `designated => identifier "com.yourname.HandAgentDesktop"`；TCC 中旧 `kTCCServiceScreenCapture` 记录的 `csreq` 为旧 hash-style requirement：`FADE0C0000000028000000010000000800000014398791BDD8B31D8F6048BE46BB3973B34FEE5611`。
+- Accessibility 回归 session `~/.spotAgent/sessions/session-1779352892449-iyjcj0.json` 与 `~/.spotAgent/sessions/session-1779352937653-pt4c60.json` 均经过真实 PlatformBridge，但返回辅助功能权限缺失。
+- 2026-05-21 用户手动确认：重新授予当前打包 App 权限后，用户主动区域圈选路径可正常工作。
 
 **初步调用链 / 根因边界**：
 
-- `SessionRouter.handleDeleteSession()`：如果目标 session running，会调用 `interruptAndWait(targetSessionId, push)`，随后 `persistence.deleteSession(targetSessionId)`，最后发送 `delete_session_response`。本轮文件删除成功，说明 server 侧 interrupt/delete 已执行。
-- `SessionWindowViewModel.handleWindowEvent(.deleteSessionResponse)`：当前只调用 `refreshHistory()`，没有关闭 `tabs` 中 `sessionID == targetSessionId` 的已打开 tab，也没有把对应 tab 状态改为 interrupted/deleted。
-- `SessionTabViewModel`：被删除的 tab 仍保留本地状态与 socket，因此 UI 继续展示旧的 running 状态。
+- `MockLLMClient` / real LLM -> tool call -> `SessionRuntimeOrchestrator` -> `WebSocketPlatformBridge` -> `PlatformBridgeService` 的请求链路已被多项 QA 证明可达。
+- 失败点不在 tool schema、session 绑定或 PlatformBridge 连通性，而在 macOS TCC 对 bundle id、签名 requirement、应用路径 / 代码签名状态的身份判定。
+- 当前仓库打包流程若产生新的签名 requirement，系统会把重新打包后的 `HandAgentDesktop.app` 当成新的受控主体；旧授权不能稳定迁移。
 
-**状态**：未修复。
+**状态**：未修复。后续需要在打包 / 签名策略或 QA 文档中固定开发构建的 TCC 身份；在修复前，每次重新打包后都要对当前 App 重新授权再做屏幕录制和辅助功能实机 QA。
 
 ### 2. ScreenCaptureKit 反向 IPC 在已开启屏幕录制权限后仍返回 permission_denied
 
@@ -371,6 +519,8 @@
 - session 文件 `~/.spotAgent/sessions/session-1779316378563-ce3kgj.json` 记录了 `permission_request(action: allow)`、`tool_call(screen.capture display)` 与 `tool_result(status: error)`。
 - `sqlite3 "$HOME/Library/Application Support/com.apple.TCC/TCC.db"` 可查到 `kTCCServiceScreenCapture|com.yourname.HandAgentDesktop|0|2|4|1779316195`。
 - `swift -e 'import CoreGraphics; print(CGPreflightScreenCaptureAccess())'` 返回 `true`，说明系统侧预检已通过，但应用内 `SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)` 仍报 TCC 拒绝。
+- 2026-05-21 重新打包后清理重复 bundle-id 进程并只保留 worktree `codex/manual-qa-audit` 的 desktop pid `47574` / agent-server pid `47575`，`[mock:screen-display] QA screen capture display clean bridge 20260521` 已确认能通过 platform bridge 到达桌面 provider，但当前 app 进程内 `CGPreflightScreenCaptureAccess()` 返回 false，tool result 为 `HandAgent 没有屏幕录制权限。请打开「系统设置 → 隐私与安全性 → 屏幕录制」，允许 HandAgent 后重试。`
+- 同轮取证显示当前 app 的 designated requirement 为 `designated => identifier "com.yourname.HandAgentDesktop"`，但 TCC 中 `kTCCServiceScreenCapture` 的 `csreq` 是旧 hash-style requirement：`FADE0C0000000028000000010000000800000014398791BDD8B31D8F6048BE46BB3973B34FEE5611`。因此当前 blocker 更接近本地 TCC 身份记录与新打包 app 不匹配，而不是 platform bridge 未连通。
 
 **期望结果**：
 
@@ -380,49 +530,22 @@
 
 - UI：PromptPanel 授权气泡参数为 `{ "target": { "kind": "display" } }`；确认授权后 SessionWindow 仍显示上述错误。
 - session 文件：`~/.spotAgent/sessions/session-1779316378563-ce3kgj.json`。
+- 重新验证 session 文件：`~/.spotAgent/sessions/session-1779319444567-r98dh6.json`，记录 `permission_request(action: allow)`、`tool_call(screen.capture display)` 与 `tool_result(status: error)`，输出为当前 app 进程内 preflight denied 的中文权限引导。
 - TCC 数据库：`kTCCServiceScreenCapture|com.yourname.HandAgentDesktop|0|2|4|1779316195`。
-- 系统预检：`CGPreflightScreenCaptureAccess()` 返回 `true`。
+- shell 进程系统预检：`swift -e 'import CoreGraphics; print(CGPreflightScreenCaptureAccess())'` 返回 `true`，但该结果不等同于 packaged HandAgent 进程的 TCC 状态。
+- 签名取证：`codesign -dvvv --requirements - dist/HandAgentDesktop.app` 输出当前 app requirement 为 `designated => identifier "com.yourname.HandAgentDesktop"`；`codesign --verify --verbose=4 dist/HandAgentDesktop.app` 显示 app satisfies its Designated Requirement。
 
 **初步调用链 / 根因边界**：
 
 - `MockLLMClient` -> `tool_call(screen.capture)` -> `SessionPermissionBridge`：权限审批链路正常，用户已允许本次调用。
-- `SessionRuntimeOrchestrator` -> `PlatformBridgeService` -> `MacPlatformProvider.captureScreen()`：失败点停在 `SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)`，它抛出带 TCC 文案的错误。
-- 目前尚未证明是 ScreenCaptureKit / TCC / code-sign requirement 哪一层在误判；下一步需要进一步追踪实现和签名边界。
+- `SessionRuntimeOrchestrator` -> `WebSocketPlatformBridge` -> `PlatformBridgeService`：2026-05-21 clean bridge 回归中已验证 platform bridge 可连通；重复 bundle-id 进程曾导致 `Platform bridge is not connected`，清理后该问题消失，属于 QA 环境干扰。
+- `PlatformBridgeService` -> `MacPlatformProvider.captureScreen()`：当前失败点前移到 packaged app 进程内 `CGPreflightScreenCaptureAccess()` 返回 false。
+- TCC / code-sign requirement：现有 TCC allow row 与当前 app signing requirement 不一致，下一步应重置/重新授权当前 bundle id 后复测 display/window/3-request，或把 package/TCC 身份稳定性继续做成可回归的 QA 步骤。
 
-**状态**：未修复。
+**修复进展**：
 
-### 3. 真实 provider streaming 被网络日志包装器缓冲
+- 2026-05-21 已修改 `MacPlatformProvider.captureScreen()`：进入 ScreenCaptureKit 枚举前先在当前 packaged app 进程内执行 `CGPreflightScreenCaptureAccess()`，必要时调用 `CGRequestScreenCaptureAccess()`；预检拒绝时返回中文 `permission_denied` 权限指引。
+- 若预检通过但 `SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)` 仍失败，错误改为 `capture_failed`，并携带 `preflight`、`domain`、`code`、`message`，不再把 ScreenCaptureKit 枚举失败统一报告成用户拒绝。
+- 定向测试已覆盖：预检通过时不重复请求、预检拒绝时请求权限、请求拒绝时返回中文权限指引、预检通过但 shareable content 枚举失败时返回 `capture_failed`。
 
-**严重级别**：P1
-
-**发现日期**：2026-05-21
-
-**复现步骤**：
-
-1. 使用非 mock `dist/HandAgentDesktop.app` 和真实 `openai-compatible` streaming 配置启动。
-2. 提交一个长回复 prompt，例如要求输出 200 条短列表。
-3. 在 SessionWindow 运行态观察 assistant 气泡是否逐段增长。
-4. 检查 `packages/core/src/logging/createLoggingFetch.ts` 和网络日志。
-
-**实际结果**：
-
-- 当前代码中 `createLoggingFetch()` 对所有 response 都执行 `const cloned = response.clone(); await cloned.text();` 后才 `return response`。
-- 对 `Content-Type: text/event-stream` 来说，日志层会先把 clone 的 SSE body 读到结束，AI SDK 之后才拿到原 response，导致 UI 只能在响应完成后一次性看到完整 assistant 文本。
-- 当前 `packages/core/tests/logging/logging-fetch.test.ts` 只有普通 JSON / raw text / 图片脱敏测试，没有覆盖 streaming response 必须立即返回。
-
-**期望结果**：
-
-`text/event-stream` response 不应被日志包装器 clone/read 阻塞。日志可以记录占位信息，例如 `[streaming response: text/event-stream]`，但必须立即返回原 response，让 AI SDK 按 SSE 增量消费。
-
-**证据**：
-
-- 代码证据：`packages/core/src/logging/createLoggingFetch.ts` 第 33-50 行固定等待 `cloned.text()`。
-- 测试缺口：`packages/core/tests/logging/logging-fetch.test.ts` 未覆盖 streaming response。
-
-**初步调用链 / 根因边界**：
-
-- provider -> HTTP SSE：真实 provider 可返回 `text/event-stream`。
-- `createLoggingFetch()` -> AI SDK：失败点在日志包装器返回 response 前等待 `response.clone().text()`，使 SSE 消费被延迟到完整响应结束。
-- AI SDK -> `AgentRuntime` -> WebSocket -> SwiftUI：mock streaming 已覆盖多段 delta；本缺陷集中在真实 provider fetch 包装层。
-
-**状态**：未修复。
+**状态**：代码侧错误分类已修复，实机 display/window 截图仍待用户明确允许重置并重新授予当前 bundle id 的屏幕录制权限后回归。

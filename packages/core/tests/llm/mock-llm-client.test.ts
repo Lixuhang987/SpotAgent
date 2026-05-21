@@ -42,7 +42,14 @@ describe("MockLLMClient", () => {
       "[mock:workspace-ask]",
       "[mock:permission-write]",
       "[mock:plugin-echo]",
+      "[mock:plugin-workspace-read]",
+      "[mock:plugin-workspace-write]",
+      "[mock:plugin-workspace-escape]",
+      "[mock:plugin-workspace-symlink]",
       "[mock:ocr-invalid]",
+      "[mock:ocr-sample]",
+      "[mock:accessibility-frontmost]",
+      "[mock:accessibility-set-frontmost]",
       "[mock:screen-display]",
       "[mock:screen-window]",
       "[mock:image-summary]",
@@ -225,6 +232,97 @@ describe("MockLLMClient", () => {
           id: "mock-plugin-echo-1",
           name: "plugin.echo",
           arguments: { message: "hello from MockLLMClient" },
+        },
+      ],
+    });
+
+    await expect(
+      client.complete([{ role: "user", content: "run [mock:plugin-workspace-read]" }], []),
+    ).resolves.toMatchObject({
+      toolCalls: [
+        {
+          id: "mock-plugin-workspace-read-1",
+          name: "plugin.echo",
+          arguments: { workspaceId: "qa-workspace", relativePath: "plugin-input.txt" },
+        },
+      ],
+    });
+
+    await expect(
+      client.complete([{ role: "user", content: "run [mock:plugin-workspace-write]" }], []),
+    ).resolves.toMatchObject({
+      toolCalls: [
+        {
+          id: "mock-plugin-workspace-write-1",
+          name: "plugin.echo",
+          arguments: { workspaceId: "qa-workspace", relativePath: "plugin-output.txt" },
+        },
+      ],
+    });
+
+    await expect(
+      client.complete([{ role: "user", content: "run [mock:plugin-workspace-escape]" }], []),
+    ).resolves.toMatchObject({
+      toolCalls: [
+        {
+          id: "mock-plugin-workspace-escape-1",
+          name: "plugin.echo",
+          arguments: { workspaceId: "qa-workspace", relativePath: "../../etc/passwd" },
+        },
+      ],
+    });
+
+    await expect(
+      client.complete([{ role: "user", content: "run [mock:plugin-workspace-symlink]" }], []),
+    ).resolves.toMatchObject({
+      toolCalls: [
+        {
+          id: "mock-plugin-workspace-symlink-1",
+          name: "plugin.echo",
+          arguments: { workspaceId: "qa-workspace", relativePath: "outside-link/plugin.txt" },
+        },
+      ],
+    });
+
+    await expect(
+      client.complete([{ role: "user", content: "run [mock:ocr-sample]" }], []),
+    ).resolves.toMatchObject({
+      toolCalls: [
+        {
+          id: "mock-ocr-sample-1",
+          name: "ocr.read",
+          arguments: {
+            mimeType: "image/png",
+            language: "en-US",
+            imageBase64: expect.any(String),
+          },
+        },
+      ],
+    });
+
+    await expect(
+      client.complete([{ role: "user", content: "run [mock:accessibility-frontmost]" }], []),
+    ).resolves.toMatchObject({
+      toolCalls: [
+        {
+          id: "mock-accessibility-frontmost-1",
+          name: "accessibility.snapshot",
+          arguments: { kind: "frontmost_app" },
+        },
+      ],
+    });
+
+    await expect(
+      client.complete([{ role: "user", content: "run [mock:accessibility-set-frontmost]" }], []),
+    ).resolves.toMatchObject({
+      toolCalls: [
+        {
+          id: "mock-accessibility-set-frontmost-1",
+          name: "accessibility.action",
+          arguments: {
+            target: { kind: "frontmost_app" },
+            action: { kind: "set_value", value: "HANDAGENT_ACCESSIBILITY_SET_VALUE_20260521" },
+          },
         },
       ],
     });

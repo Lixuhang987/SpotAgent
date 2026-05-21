@@ -194,6 +194,70 @@ export const mockLLMScenarios: MockLLMScenario[] = [
     }),
   },
   {
+    id: "plugin-workspace-read",
+    triggers: ["[mock:plugin-workspace-read]"],
+    description: "调用带合法 workspace read 参数的 plugin.echo，用于验证插件 workspace 注入。",
+    complete: (context) => toolThenFinal(context, {
+      toolCall: {
+        id: "mock-plugin-workspace-read-1",
+        name: "plugin.echo",
+        arguments: {
+          workspaceId: "qa-workspace",
+          relativePath: "plugin-input.txt",
+        },
+      },
+      finalText: "Mock plugin workspace read completed.",
+    }),
+  },
+  {
+    id: "plugin-workspace-write",
+    triggers: ["[mock:plugin-workspace-write]"],
+    description: "调用带合法 workspace write 参数的 plugin.echo，用于验证插件 workspace 注入。",
+    complete: (context) => toolThenFinal(context, {
+      toolCall: {
+        id: "mock-plugin-workspace-write-1",
+        name: "plugin.echo",
+        arguments: {
+          workspaceId: "qa-workspace",
+          relativePath: "plugin-output.txt",
+        },
+      },
+      finalText: "Mock plugin workspace write completed.",
+    }),
+  },
+  {
+    id: "plugin-workspace-escape",
+    triggers: ["[mock:plugin-workspace-escape]"],
+    description: "调用带 ../../ 越界路径的 plugin.echo，用于验证插件 workspace 路径拦截。",
+    complete: (context) => toolThenFinal(context, {
+      toolCall: {
+        id: "mock-plugin-workspace-escape-1",
+        name: "plugin.echo",
+        arguments: {
+          workspaceId: "qa-workspace",
+          relativePath: "../../etc/passwd",
+        },
+      },
+      finalText: "Mock plugin workspace escape completed.",
+    }),
+  },
+  {
+    id: "plugin-workspace-symlink",
+    triggers: ["[mock:plugin-workspace-symlink]"],
+    description: "调用指向 workspace symlink 的 plugin.echo，用于验证插件 workspace realpath 拦截。",
+    complete: (context) => toolThenFinal(context, {
+      toolCall: {
+        id: "mock-plugin-workspace-symlink-1",
+        name: "plugin.echo",
+        arguments: {
+          workspaceId: "qa-workspace",
+          relativePath: "outside-link/plugin.txt",
+        },
+      },
+      finalText: "Mock plugin workspace symlink completed.",
+    }),
+  },
+  {
     id: "ocr-invalid",
     triggers: ["[mock:ocr-invalid]"],
     description: "调用缺少 imageBase64 的 ocr.read，用于验证明确 invalid_argument 错误。",
@@ -204,6 +268,55 @@ export const mockLLMScenarios: MockLLMScenario[] = [
         arguments: {},
       },
       finalText: "Mock ocr invalid scenario finished.",
+    }),
+  },
+  {
+    id: "ocr-sample",
+    triggers: ["[mock:ocr-sample]"],
+    description: "调用带 imageBase64 的 ocr.read，prompt 可用 imageBase64=<base64> 覆盖默认样例。",
+    complete: (context) => toolThenFinal(context, {
+      toolCall: {
+        id: "mock-ocr-sample-1",
+        name: "ocr.read",
+        arguments: {
+          imageBase64: parseInlineValue(context, "imageBase64") ?? samplePngBase64,
+          mimeType: "image/png",
+          language: "en-US",
+        },
+      },
+      finalText: "Mock ocr sample completed.",
+    }),
+  },
+  {
+    id: "accessibility-frontmost",
+    triggers: ["[mock:accessibility-frontmost]"],
+    description: "调用 accessibility.snapshot frontmost_app，用于验证辅助功能快照或权限错误。",
+    complete: (context) => toolThenFinal(context, {
+      toolCall: {
+        id: "mock-accessibility-frontmost-1",
+        name: "accessibility.snapshot",
+        arguments: { kind: "frontmost_app" },
+      },
+      finalText: "Mock accessibility snapshot completed.",
+    }),
+  },
+  {
+    id: "accessibility-set-frontmost",
+    triggers: ["[mock:accessibility-set-frontmost]"],
+    description: "调用 accessibility.action set_value frontmost_app，用于验证辅助功能动作或权限错误。",
+    complete: (context) => toolThenFinal(context, {
+      toolCall: {
+        id: "mock-accessibility-set-frontmost-1",
+        name: "accessibility.action",
+        arguments: {
+          target: { kind: "frontmost_app" },
+          action: {
+            kind: "set_value",
+            value: "HANDAGENT_ACCESSIBILITY_SET_VALUE_20260521",
+          },
+        },
+      },
+      finalText: "Mock accessibility action completed.",
     }),
   },
   {
@@ -335,12 +448,25 @@ function parseWindowId(context: MockScenarioContext): number {
   return match ? Number(match[1]) : 0;
 }
 
+function parseInlineValue(context: MockScenarioContext, key: string): string | undefined {
+  const userText = context.messages
+    .filter((message): message is Extract<AgentMessage, { role: "user" }> => message.role === "user")
+    .map((message) => messageText(message))
+    .join("\n");
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = userText.match(new RegExp(`\\b${escapedKey}=([^\\s]+)`));
+  return match?.[1];
+}
+
 function assistant(content: string): LLMCompletion {
   return {
     message: { role: "assistant", content },
     toolCalls: [],
   };
 }
+
+const samplePngBase64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGNgAAAAAgABSK+kcQAAAABJRU5ErkJggg==";
 
 function delay(ms: number, signal?: AbortSignal): Promise<void> {
   if (signal?.aborted) {

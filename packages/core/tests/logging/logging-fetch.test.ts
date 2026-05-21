@@ -3,6 +3,38 @@ import { createLoggingFetch } from "../../src/logging/createLoggingFetch";
 import type { NetworkLogEntry } from "../../src/logging/NetworkLogger";
 
 describe("createLoggingFetch", () => {
+  it("returns streaming responses immediately without waiting for the body to close", async () => {
+    const entries: NetworkLogEntry[] = [];
+    const logger = {
+      log: vi.fn(async (entry: NetworkLogEntry) => {
+        entries.push(entry);
+      }),
+    };
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("data: {\"delta\":\"hi\"}\n\n"));
+      },
+    });
+    const streamingResponse = new Response(stream, {
+      status: 200,
+      headers: { "content-type": "text/event-stream; charset=utf-8" },
+    });
+    const baseFetch = vi.fn(async () => streamingResponse) as unknown as typeof fetch;
+    const wrapped = createLoggingFetch({ logger, baseFetch });
+
+    const result = await Promise.race([
+      wrapped("https://api.example.com/v1/chat/completions", { method: "POST" }),
+      new Promise((resolve) => setTimeout(() => resolve("still-pending"), 25)),
+    ]);
+
+    expect(result).toBe(streamingResponse);
+    expect(entries[1]).toMatchObject({
+      direction: "response",
+      status: 200,
+      body: "[streaming response: text/event-stream]",
+    });
+  });
+
   it("logs the request body and response body as parsed JSON entries", async () => {
     const entries: NetworkLogEntry[] = [];
     const logger = {
@@ -60,6 +92,26 @@ describe("createLoggingFetch", () => {
 
     expect(entries[0]).toMatchObject({ direction: "request", body: "raw-string" });
     expect(entries[1]).toMatchObject({ direction: "response", status: 500, body: "not-json" });
+  });
+
+  it("does not let logger failures fail the fetch", async () => {
+    const logger = {
+      log: vi.fn(async () => {
+        throw new Error("disk is full");
+      }),
+    };
+    const baseFetch = vi.fn(async () =>
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    ) as unknown as typeof fetch;
+    const wrapped = createLoggingFetch({ logger, baseFetch });
+
+    const response = await wrapped("https://api.example.com/v1/chat/completions");
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ ok: true });
   });
 
   it("redacts image payloads from parsed JSON request logs", async () => {
