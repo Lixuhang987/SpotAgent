@@ -8,6 +8,7 @@ describe("SessionScopedToolRegistry", () => {
     const builtin = new ToolRegistry([makeTool("clipboard.read")]);
     const scoped = new SessionScopedToolRegistry({
       builtinRegistry: builtin,
+      globalMcpServerIds: [],
       listMcpTools: async (serverId) =>
         serverId === "github" ? [makeTool("mcp.github.create_issue")] : [],
     });
@@ -28,12 +29,49 @@ describe("SessionScopedToolRegistry", () => {
     ]);
   });
 
+  it("loads global mcp servers for all sessions regardless of binding", async () => {
+    const builtin = new ToolRegistry([makeTool("clipboard.read")]);
+    const scoped = new SessionScopedToolRegistry({
+      builtinRegistry: builtin,
+      globalMcpServerIds: ["github"],
+      listMcpTools: async (serverId) =>
+        serverId === "github" ? [makeTool("mcp.github.create_issue")] : [],
+    });
+
+    await scoped.refreshForSession("plain", undefined);
+    expect(scoped.registry.list().map((tool) => tool.name)).toEqual([
+      "clipboard.read",
+      "mcp.github.create_issue",
+    ]);
+  });
+
+  it("deduplicates when global and binding reference the same server", async () => {
+    const builtin = new ToolRegistry([makeTool("clipboard.read")]);
+    const scoped = new SessionScopedToolRegistry({
+      builtinRegistry: builtin,
+      globalMcpServerIds: ["github"],
+      listMcpTools: async (serverId) =>
+        serverId === "github" ? [makeTool("mcp.github.create_issue")] : [],
+    });
+
+    await scoped.refreshForSession("action", {
+      pluginId: "review",
+      promptName: "code_review",
+      mcpServerIds: ["github"],
+    });
+    expect(scoped.registry.list().map((tool) => tool.name)).toEqual([
+      "clipboard.read",
+      "mcp.github.create_issue",
+    ]);
+  });
+
   it("skips missing mcp servers without dropping builtin tools", async () => {
     const logs: string[] = [];
     const builtin = new ToolRegistry([makeTool("clipboard.read")]);
     const scoped = new SessionScopedToolRegistry(
       {
         builtinRegistry: builtin,
+        globalMcpServerIds: ["missing"],
         listMcpTools: async () => {
           throw new Error("Unknown MCP server: missing");
         },
@@ -41,11 +79,7 @@ describe("SessionScopedToolRegistry", () => {
       { log: (message) => logs.push(message) },
     );
 
-    await scoped.refreshForSession("action", {
-      pluginId: "review",
-      promptName: "code_review",
-      mcpServerIds: ["missing"],
-    });
+    await scoped.refreshForSession("action", undefined);
 
     expect(scoped.registry.list().map((tool) => tool.name)).toEqual([
       "clipboard.read",
