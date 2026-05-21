@@ -128,6 +128,21 @@ flowchart TD
 - `conversation` 是 UI/持久化消息模型，与 LLM 面向的 `AgentMessage` 解耦。
 - `selection` 只定义用户选区抽象，不做宿主编排。
 
+## 开发约定
+
+### LLM 与 tool 约定
+
+- LLM 通过 `LLMClient` 抽象接入，不要把具体 provider 写死在 runtime。
+- tool 名称保持点号风格，例如 `file.read`、`screen.capture`、`app.frontmost`。
+- tool 输出要尽量可序列化，错误语义要明确。
+- 新 tool 优先保持单一职责，输入和输出都要小。
+
+### 输入边界
+
+- 在会话开始前，不要默认抓取额外上下文；只有用户主动输入和用户主动选区可以作为初始上下文。
+- 屏幕、窗口、文件、剪贴板、App 状态一律通过 tool 按需读取。
+- 任何 tool 的输入 schema 必须清晰、稳定、可序列化，避免把宿主内部状态直接暴露给 LLM。
+
 ## 测试目录
 
 `packages/core/tests/` 按 `src/` 的模块边界分组，例如 `runtime/`、`tools/`、`llm/`、`workspace/`、`actions/`、`mcp/`。新增测试优先放入对应模块目录；builtin tool 相关测试放在 `tests/tools/builtins/`。

@@ -52,16 +52,10 @@ struct SessionTabItemView: View {
 
     var body: some View {
         HStack(spacing: theme.spacing.xs) {
-            Button(action: onActivate) {
-                Text(tabTitle)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("切换到 \(tabTitle)")
-            .accessibilityAddTraits(isActive ? [.isSelected] : [])
+            Text(tabTitle)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             if isHovering || isActive {
                 SessionCloseTabButton(onClose: onClose)
@@ -74,6 +68,9 @@ struct SessionTabItemView: View {
         .background(isActive ? theme.colors.background : (isHovering ? theme.colors.surfaceHover : theme.colors.surface))
         .clipShape(UnevenRoundedRectangle(topLeadingRadius: theme.radius.md, topTrailingRadius: theme.radius.md))
         .contentShape(Rectangle())
+        .onTapGesture(perform: onActivate)
+        .accessibilityLabel("切换到 \(tabTitle)")
+        .accessibilityAddTraits(isActive ? [.isSelected] : [])
         .onHover { isHovering = $0 }
         .contextMenu {
             Button("关闭", action: onClose)

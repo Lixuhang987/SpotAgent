@@ -40,11 +40,26 @@
 - 宿主层只通过 `WebSocket + SessionMessage` 与 agent-server 通信；**不组装 LLM 消息、不读取 runtime 内部状态、不直接执行 tool 编排**。
 - 快捷键配置只保存在宿主层本地（UserDefaults，由 `KeyboardShortcuts` 库管理），不下沉到 runtime。
 
-### 6. 测试与验证
+### 6. 点击区域：视觉边界 = 可交互边界
+
+- 用户看到的可视区域（背景色、hover 高亮、圆角裁切）必须与实际可点击区域完全一致。
+- 典型错误：`Button` 只包裹了内部文字/图标，外层容器虽有 `.contentShape` 和 hover 效果但没有绑定 tap action，导致"看起来能点但点不动"。
+- 正确做法：将 tap 行为（`onTapGesture` 或 `Button`）绑定在**定义视觉边界的那一层**，而不是内部子元素。确保 `.contentShape(Rectangle())` 与 tap gesture 在同一层级。
+- 审查清单：新增可交互组件时，确认 `background` / `clipShape` / `frame` 所在层级同时拥有对应的 tap action。如果 hover 区域能响应但点击不能，说明 hit area 和 action 分离了。
+
+### 7. 测试与验证
 
 - `TestsSwift/` 按 `Sources/` 目录结构分组；每个 ViewModel / 协调器都有对应 `*Tests.swift`，共享测试辅助放在 `TestsSwift/TestSupport/`。
 - 新增 ViewModel 必须配测试；不把依赖系统权限或真实屏幕状态的 spike 放进自动化测试，真实平台能力走 `docs/manual-qa.md` 与模块 QA 步骤。
 - 提交前在当前 shell 跑：`bash ./scripts/swiftw test` + `bash ./scripts/swiftw build` + `bash ./scripts/test.sh`。Stop hook 不跑 Swift 校验，必须手动。
+
+### 8. macOS 15+ 能力策略
+
+- 桌面端默认直接面向 `macOS 15+` 能力设计，不再为了旧系统保留 `if #available` 分支或命令行 fallback。
+- 屏幕与窗口采集优先使用 `ScreenCaptureKit`，包括窗口/应用/显示器级过滤、截图与后续可扩展的流式采集能力。
+- 与系统控制相关的能力优先使用原生 macOS API，例如 `Accessibility`、`NSWorkspace`、`ScreenCaptureKit`、`AppKit/SwiftUI` 提供的窗口分享与内容选择接口。
+- 只有在原生 API 明确无法覆盖需求时，才退回 `osascript` 或其他兼容性方案；若采用退回方案，必须在设计或实现文档中说明原因。
+- 新增桌面能力时，默认目标是"尽可能支持系统已提供的高能力接口"，例如系统级内容选择器、窗口级共享、录制或更完整的 accessibility 读写能力。
 
 ## 目录索引
 
