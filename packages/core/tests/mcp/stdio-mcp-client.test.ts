@@ -111,27 +111,14 @@ process.stdin.on("data", (chunk) => {
     await client.close();
   });
 
-  it("rejects pending requests when the stdio server does not respond in time", async () => {
+  it("rejects pending tool calls when the stdio server does not respond in time", async () => {
     const dir = await mkdtemp(join(tmpdir(), "stdio-mcp-timeout-"));
     const serverPath = join(dir, "server.js");
     await writeFile(
       serverPath,
       `#!/usr/bin/env node
-let buffer = "";
 process.stdin.setEncoding("utf8");
-process.stdin.on("data", (chunk) => {
-  buffer += chunk;
-  let index;
-  while ((index = buffer.indexOf("\\n")) !== -1) {
-    const line = buffer.slice(0, index).trim();
-    buffer = buffer.slice(index + 1);
-    if (!line) continue;
-    const req = JSON.parse(line);
-    if (req.method === "initialize") {
-      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: req.id, result: { protocolVersion: "2025-11-25" } }) + "\\n");
-    }
-  }
-});
+process.stdin.resume();
 `,
       "utf8",
     );
@@ -145,7 +132,6 @@ process.stdin.on("data", (chunk) => {
       requestTimeoutMs: 500,
     });
 
-    await client.initialize();
     await expect(client.callTool("hangs", {})).rejects.toThrow(
       "MCP stdio request timed out after 500ms: tools/call",
     );
