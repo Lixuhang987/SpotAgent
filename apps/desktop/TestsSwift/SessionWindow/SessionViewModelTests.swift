@@ -330,6 +330,37 @@ final class SessionViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testRunningToolMessageKeepsSessionRunningAfterAssistantEndCompleted() {
+        var stateChangeStatuses: [SessionRunStatus] = []
+        let model = SessionViewModel(
+            sessionID: "session-1",
+            socketClient: .noop,
+            onStateChanged: { stateChangeStatuses.append($0.status) }
+        )
+
+        model.handle(.assistantMessageStart(
+            messageID: "assistant-1",
+            timestamp: "2026-05-22T00:00:00.000Z"
+        ))
+        model.handle(.assistantMessageEnd(
+            messageID: "assistant-1",
+            status: "completed",
+            timestamp: "2026-05-22T00:00:00.100Z"
+        ))
+        model.handle(.toolMessage(
+            messageID: "session-1-tool-1",
+            name: "workspace.list",
+            text: "{}",
+            status: "running",
+            timestamp: "2026-05-22T00:00:00.200Z"
+        ))
+
+        XCTAssertEqual(model.status, .running)
+        XCTAssertEqual(model.messages.last?.text, "workspace.list: {}")
+        XCTAssertEqual(stateChangeStatuses.last, .running)
+    }
+
+    @MainActor
     func testWorkspaceAskRequestsAreQueuedAndResolvedInOrder() {
         let model = SessionViewModel(sessionID: "session-1", socketClient: .noop)
 

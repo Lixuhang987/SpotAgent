@@ -329,4 +329,36 @@ final class SessionTabViewModelTests: XCTestCase {
 
         XCTAssertEqual(tab.status, .running)
     }
+
+    @MainActor
+    func testRunningToolMessageKeepsTabRunningAfterAssistantEndCompleted() {
+        var stateChangeStatuses: [SessionRunStatus] = []
+        let tab = SessionTabViewModel(
+            tabID: "tab-1",
+            sessionID: "session-1",
+            socketClient: .noop,
+            onStateChanged: { stateChangeStatuses.append($0.status) }
+        )
+
+        tab.handle(.assistantMessageStart(
+            messageID: "assistant-1",
+            timestamp: "2026-05-22T00:00:00.000Z"
+        ))
+        tab.handle(.assistantMessageEnd(
+            messageID: "assistant-1",
+            status: "completed",
+            timestamp: "2026-05-22T00:00:00.100Z"
+        ))
+        tab.handle(.toolMessage(
+            messageID: "session-1-tool-1",
+            name: "workspace.list",
+            text: "{}",
+            status: "running",
+            timestamp: "2026-05-22T00:00:00.200Z"
+        ))
+
+        XCTAssertEqual(tab.status, .running)
+        XCTAssertEqual(tab.messages.last?.text, "workspace.list: {}")
+        XCTAssertEqual(stateChangeStatuses.last, .running)
+    }
 }

@@ -357,6 +357,9 @@ final class SessionViewModel {
             } else {
                 messages.append(SessionBubble(id: messageID, role: "tool", text: displayText))
             }
+            if status == "running" {
+                self.status = .running
+            }
             clearPendingPermissionIfTerminalToolMessage(
                 messageID: messageID,
                 toolName: name,
