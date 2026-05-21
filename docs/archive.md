@@ -709,3 +709,11 @@
 - **验证过程**：在 main 上先通过 `bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`；随后 `bash ./scripts/package-app.sh --mock-llm` 打包并启动 `dist/HandAgentDesktop.app`。通过原生 `⌘⇧Space` 唤起 PromptPanel，提交 `[mock:slow-focus] QA_RUNNING_SERVER_RESTART_FIXED_20260522_044757`。Computer Use 确认 SessionWindow 进入运行态且停止按钮可见后，终止 agent-server node PID `614`；desktop 自动拉起新 node PID `795`。恢复后 UI 消息区和错误条均显示 `本轮运行因 agent-server 重启而中断，请重新发送请求。`，composer 恢复可发送。
 - **证据**：新进程 `node 795` 监听 `*:4317`，`ps -o pid,ppid,command -p 795` 显示父进程为 HandAgentDesktop PID `613`。session 文件 `/Users/mu9/.spotAgent/sessions/session-1779396542090-wvgrbv.json` 包含 2 条消息：user prompt 与 assistant 错误文案；`events[0]` 为 `{ type: "error", code: "run_lost_after_restart" }`。
 - **结论**：通过。运行中 agent-server 重启不再只留下通用连接错误或空事件历史，UI 与持久化均能恢复为明确失败状态。
+
+### FileSessionStore 同 session 并发写回归
+
+- **验证日期**：2026-05-22
+- **验证环境**：main 分支，命令行回归验证。
+- **验证过程**：先执行 `pnpm exec vitest run packages/core/tests/storage/file-session-store.test.ts`，发现 Vitest 会同时匹配 `.worktrees/` 下旧 worktree 的同名测试，不能作为本条验收的精确证据；随后执行 `pnpm exec vitest run packages/core/tests/storage/file-session-store.test.ts --exclude '.worktrees/**'`，只运行主仓库 storage 测试文件。
+- **证据**：第二次命令输出 `packages/core/tests/storage/file-session-store.test.ts (14 tests)`，`Test Files 1 passed (1)`，`Tests 14 passed (14)`；其中包含 `preserves concurrent appends to the same session`、`preserves concurrent event appends to the same session` 与不同 session 写入不互相阻塞的回归用例。
+- **结论**：FileSessionStore 同一 session 并发写入 messages/events 的回归验证通过；该项已从 `docs/manual-qa.md` 移除。
