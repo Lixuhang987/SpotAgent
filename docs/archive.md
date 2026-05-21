@@ -631,3 +631,26 @@
 - **验证过程**：先用真实 provider 会话复现：`window.list` 返回 TextEdit 窗口 `未命名2.rtf`、`id=52648`，随后 `accessibility.snapshot({ "kind": "window", "windowId": 52648 })` 返回 `No accessibility window found for windowId 52648`。根因定位为 TextEdit AX window 不暴露私有 `AXWindowNumber`，而 provider 只按 `AXWindowNumber` 匹配 CG window id。修复后 cherry-pick commit `6fe9ef9` 到 main，执行 `bash ./scripts/swiftw test --filter MacPlatformProviderParsingTests`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build` 均通过；重新打包非 mock App 后再次让 LLM 调 `window.list`、`accessibility.snapshot({ "kind": "window", "windowId": 52648 })` 和 `accessibility.snapshot({ "kind": "window", "windowId": 999999999 })`。
 - **证据**：复现 session 为 `/Users/mu9/.spotAgent/sessions/session-1779364564002-3wqf7g.json`。修复后回归 session 为 `/Users/mu9/.spotAgent/sessions/session-1779366519673-yu9crt.json`，其中 `windowId=52648` 的 `tool_result.status=success`，返回 `role=AXWindow`、`title=未命名2.rtf`、`children=9`，包含 `AXTextArea` 与文本 `HANDAGENT_ACCESSIBILITY_SET_VALUE_20260521`；`windowId=999999999` 的 `tool_result.status=error`，输出 `No app found for windowId 999999999`，未退回 focused window。
 - **结论**：已修复。显式 window id 现在先按 `AXWindowNumber` 匹配，失败时用同 pid 的 CG window title/bounds 与 AX title/frame 做唯一保守 fallback；匹配不到仍返回 not found，不回退 focused window。
+### 修复回归：状态气泡不会随 SessionWindow 失败状态更新
+
+- **验证日期**：2026-05-21
+- **验证环境**：mock-llm / macOS 15+ / `/Users/mu9/proj/handAgent` main / `dist/HandAgentDesktop.app`
+- **验证过程**：使用 `bash ./scripts/package-app.sh --mock-llm` 打包启动，通过原生 `⌘⇧Space` 唤起 PromptPanel，提交 `[mock:llm-error] QA status bubble failed sync 20260521`。SessionWindow 显示失败状态与错误文案 `MockLLMClient forced failure for QA.`，随后关闭 SessionWindow 观察状态气泡。
+- **证据**：UI 中 SessionWindow 标题区显示 `失败`，底部错误条显示 `MockLLMClient forced failure for QA.`；关闭窗口后 Computer Use 观察状态气泡为 `Idle / 点击开始`，没有停留在 `Running`。session 文件 `/Users/mu9/.spotAgent/sessions/session-1779366760527-69r8zw.json` 记录 error event `MockLLMClient forced failure for QA.`。
+- **结论**：通过，旧问题不再复现。
+
+### 修复回归：Tool message UI 展示实际结果
+
+- **验证日期**：2026-05-21
+- **验证环境**：mock-llm / macOS 15+ / `/Users/mu9/proj/handAgent` main / `dist/HandAgentDesktop.app`
+- **验证过程**：提交 `[mock:workspace-list] QA tool bubble workspace result 20260521`，确认完成态 tool 气泡展示 workspace 列表；再提交 `[mock:path-escape] QA tool bubble path escape result 20260521`，在权限气泡点「仅本次」，确认完成态 tool 气泡展示实际错误结果。
+- **证据**：workspace session `/Users/mu9/.spotAgent/sessions/session-1779366862582-mpi5cf.json` 的 tool message 内容包含 `default`、`tmp`、`qa-workspace`、`handagent-test`。path escape session `/Users/mu9/.spotAgent/sessions/session-1779366917099-8y1h9x.json` 的 tool message 与 `tool_result.output` 均为 `Path escapes workspace root: ../../etc/passwd`；UI 同步显示 `file.write: Path escapes workspace root: ../../etc/passwd`，未显示入参 JSON。
+- **结论**：通过，旧问题不再复现。
+
+### 修复回归：关闭 SessionWindow 后挂起权限请求立即取消
+
+- **验证日期**：2026-05-21
+- **验证环境**：mock-llm / macOS 15+ / `/Users/mu9/proj/handAgent` main / `dist/HandAgentDesktop.app`
+- **验证过程**：提交 `[mock:permission-write] QA close pending permission regression 20260521`，等待 `file.write` 权限审批气泡出现，不点击授权/拒绝，直接关闭 SessionWindow。关闭后立即检查 session 文件，再等待 66 秒后复查。
+- **证据**：关闭前 UI 显示 `授权调用 file.write`，参数为 `workspaceId: "qa-workspace"`、`relativePath: "permission-check.txt"`、`content: "permission scenario content"`。session 文件 `/Users/mu9/.spotAgent/sessions/session-1779367083904-eo4eri.json` 在关闭后即时与 66 秒后均保持 `messageCount: 1`，messages 只有 user message，events 为空。
+- **结论**：通过，旧的 60 秒后 late permission/tool/final assistant 写回问题不再复现。
