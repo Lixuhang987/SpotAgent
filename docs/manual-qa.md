@@ -30,6 +30,15 @@
 
 最近阻塞记录：2026-05-22 在 `main` 分支 `4547246` 验证，`mcp.computer_use.list_apps` 已返回 App 列表，`mcp.computer_use.get_app_state` 也不再出现 `tools/call` 超时；但 `app: "Finder"` 被解析为 `Keka Finder Integration`（`bundleId: "com.aone.keka.KekaFinderIntegration"`），不是真正 Finder / 访达（`bundleId: "com.apple.finder"`）。已记录到 [bugs.md](./bugs.md)「Computer Use MCP `get_app_state` 会把 `Finder` 误匹配为 `Keka Finder Integration`」。本项在该 bug 修复前不能归档为通过。
 
+## 侧边栏 Workspace 分组（P1）
+
+1. 在 `~/.spotAgent/workspaces.json` 配置至少两个非默认 workspace 后打开 SessionWindow，确认左侧侧边栏显示 workspace 折叠列表。
+1. 点击 workspace 行，确认展开/折叠切换正常，展开后显示该 workspace 下的会话。
+1. 点击 workspace 行右侧 "+" 按钮，确认在该 workspace 下创建新对话（不触发展开/折叠）。
+1. 确认无 workspaceId 的旧会话显示在 "默认" 分隔线下方。
+1. 在搜索框输入关键词，确认忽略分组、平铺显示所有匹配结果。
+1. 无 workspace 配置时（workspaces.json 为空或只有 default），确认侧边栏退化为平铺列表，无 "默认" 分隔线。
+
 ## 通过标准
 
 - 本文件中对应条目的用户可见行为、持久化记录、错误文案和隔离边界均符合预期。
