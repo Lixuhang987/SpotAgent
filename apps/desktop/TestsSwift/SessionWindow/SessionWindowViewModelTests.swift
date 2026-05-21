@@ -47,18 +47,13 @@ final class SessionWindowViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testDeletedSessionResponseClosesMatchingActiveTabAndFallsBackToRemainingTab() {
-        let historyTransport = ViewModelRecordingSessionSocketTransport()
-        let historyClient = SessionSocketClient(
-            serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
-            transport: historyTransport,
-            reconnectDelay: 0
-        )
-        var tabTransports: [String: ViewModelRecordingSessionSocketTransport] = [:]
+    func testSuccessfulDeleteSessionResponseClosesOpenRunningTabAndRefreshesHistoryList() {
+        let historyTransport = RecordingSessionSocketTransport()
+        var tabTransports: [String: RecordingSessionSocketTransport] = [:]
         var closedSessionIDs: [String] = []
         let model = SessionWindowViewModel(
             socketFactory: { sessionID in
-                let transport = ViewModelRecordingSessionSocketTransport()
+                let transport = RecordingSessionSocketTransport()
                 tabTransports[sessionID] = transport
                 return SessionSocketClient(
                     serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
@@ -66,63 +61,69 @@ final class SessionWindowViewModelTests: XCTestCase {
                     reconnectDelay: 0
                 )
             },
-            historySocketClient: historyClient,
-            onTabClosed: { closedSessionIDs.append($0.sessionID) }
+            historySocketClient: SessionSocketClient(
+                serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
+                transport: historyTransport,
+                reconnectDelay: 0
+            ),
+            onTabClosed: { tab in
+                closedSessionIDs.append(tab.sessionID)
+            }
         )
-        model.openHistorySession("session-1")
-        model.openHistorySession("session-2")
-        model.activeTab?.handle(.assistantMessageStart(
-            messageID: "assistant-1",
-            timestamp: "2026-05-20T00:00:00.000Z"
-        ))
 
-        model.handleWindowEvent(.deleteSessionResponse(targetSessionID: "session-2", status: "deleted"))
+        model.openHistorySession("finished-session")
+        model.openHistorySession("running-session")
+        model.activeTab?.sendPrompt("still running")
 
-        XCTAssertEqual(model.tabs.map(\.sessionID), ["session-1"])
-        XCTAssertEqual(model.activeTab?.sessionID, "session-1")
-        XCTAssertEqual(closedSessionIDs, ["session-2"])
-        XCTAssertEqual(tabTransports["session-2"]?.tasks[0].cancelCount, 1)
-        XCTAssertEqual(historyTransport.tasks[0].sentTypes, [
-            "open_session",
-            "list_sessions_request",
-            "list_sessions_request",
-        ])
+        model.handleWindowEvent(.deleteSessionResponse(targetSessionID: "running-session", status: "deleted"))
+
+        XCTAssertEqual(model.tabs.map(\.sessionID), ["finished-session"])
+        XCTAssertEqual(model.activeTab?.sessionID, "finished-session")
+        XCTAssertEqual(closedSessionIDs, ["running-session"])
+        XCTAssertEqual(
+            historyTransport.tasks[0].sentTypes,
+            ["open_session", "list_sessions_request", "list_sessions_request"]
+        )
+        XCTAssertEqual(tabTransports["running-session"]?.tasks[0].cancelCount, 1)
     }
 
     @MainActor
-    func testNonDeletedSessionResponseOnlyRefreshesHistoryList() {
-        let historyTransport = ViewModelRecordingSessionSocketTransport()
-        let historyClient = SessionSocketClient(
-            serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
-            transport: historyTransport,
-            reconnectDelay: 0
-        )
-        let tabTransport = ViewModelRecordingSessionSocketTransport()
+    func testNonDeletedDeleteSessionResponseKeepsOpenTabAndRefreshesHistoryList() {
+        let historyTransport = RecordingSessionSocketTransport()
+        var tabTransports: [String: RecordingSessionSocketTransport] = [:]
         var closedSessionIDs: [String] = []
         let model = SessionWindowViewModel(
-            socketFactory: { _ in
-                SessionSocketClient(
+            socketFactory: { sessionID in
+                let transport = RecordingSessionSocketTransport()
+                tabTransports[sessionID] = transport
+                return SessionSocketClient(
                     serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
-                    transport: tabTransport,
+                    transport: transport,
                     reconnectDelay: 0
                 )
             },
-            historySocketClient: historyClient,
-            onTabClosed: { closedSessionIDs.append($0.sessionID) }
+            historySocketClient: SessionSocketClient(
+                serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
+                transport: historyTransport,
+                reconnectDelay: 0
+            ),
+            onTabClosed: { tab in
+                closedSessionIDs.append(tab.sessionID)
+            }
         )
-        model.openHistorySession("session-1")
 
-        model.handleWindowEvent(.deleteSessionResponse(targetSessionID: "session-1", status: "not_found"))
+        model.openHistorySession("target-session")
 
-        XCTAssertEqual(model.tabs.map(\.sessionID), ["session-1"])
-        XCTAssertEqual(model.activeTab?.sessionID, "session-1")
+        model.handleWindowEvent(.deleteSessionResponse(targetSessionID: "target-session", status: "not_found"))
+
+        XCTAssertEqual(model.tabs.map(\.sessionID), ["target-session"])
+        XCTAssertEqual(model.activeTab?.sessionID, "target-session")
         XCTAssertTrue(closedSessionIDs.isEmpty)
-        XCTAssertEqual(tabTransport.tasks[0].cancelCount, 0)
-        XCTAssertEqual(historyTransport.tasks[0].sentTypes, [
-            "open_session",
-            "list_sessions_request",
-            "list_sessions_request",
-        ])
+        XCTAssertEqual(
+            historyTransport.tasks[0].sentTypes,
+            ["open_session", "list_sessions_request", "list_sessions_request"]
+        )
+        XCTAssertEqual(tabTransports["target-session"]?.tasks[0].cancelCount, 0)
     }
 
     @MainActor
@@ -332,10 +333,13 @@ private final class RecordingSessionSocketTransport: SessionSocketTransport {
 
 private final class RecordingSessionWebSocketTask: SessionWebSocketTask {
     private(set) var sentTypes: [String] = []
+    private(set) var cancelCount = 0
 
     func resume() {}
 
-    func cancel(with closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {}
+    func cancel(with closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
+        cancelCount += 1
+    }
 
     func send(
         _ message: URLSessionWebSocketTask.Message,

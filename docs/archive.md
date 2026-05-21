@@ -368,6 +368,56 @@
   - settings 恢复后 `~/.spotAgent/settings.json` 中 `tools.denylist` 为空数组。
 - **结论**：通过。本地插件 tool 可在下一轮请求中热加载、进入统一权限审批与 tool result/event 链路；`tools.denylist` 可不重启热禁用插件 tool。
 
+## 用户自定义 tool / 本地插件异常边界（2026-05-21 验证）
+
+- **验证日期**：2026-05-21
+- **验证环境**：mock-llm / macOS 15.5 / worktree `codex/fix-delete-running-session-tab`；进程异常路径使用 `dist/HandAgentDesktop.app` 派生的 agent-server（`*:4317`），冲突与 workspace 路径边界使用同一 worktree 生产模块启动的一次性 WebSocket harness（`*:4318`）。
+- **验证过程**：
+  1. 备份 `~/.spotAgent/plugins/echo/` 与 `~/.spotAgent/settings.json` 到 `~/.spotAgent/qa-backup-plugin-20260521035655/`。
+  2. 依次把 `plugin.echo` 的 `command` 指向非 0 exit、非 JSON stdout、短超时脚本、超过 1 MiB 输出脚本，以及指向插件目录外的 symlink 命令；每次通过 WebSocket 发送 `[mock:plugin-echo]`，收到 `permission_request` 后回 `allow once`。
+  3. 每个失败都作为 `tool_result.status: "error"` 写入 session，assistant 最终消息继续完成；每轮后 `lsof -nP -iTCP:4317 -sTCP:LISTEN` 均显示 agent-server 仍在监听。
+  4. 从备份恢复 `~/.spotAgent/plugins/echo/` 与 `settings.json`，确认 `plugin.echo.command` 恢复为 `echo.js`，`tools.denylist` 为空。
+  5. 在 `/tmp/handagent-plugin-qa-root/` 创建一次性插件目录：一个插件声明 builtin 同名 `file.read`，两个插件重复声明 `plugin.duplicate`，一个插件声明 `plugin.workspaceRead` / `plugin.workspaceWrite` 并带 `permissions.workspace: "read" | "write"`。
+  6. 用生产 `SettingsBackedToolRegistry + AgentRuntime + SessionRouter` 启动一次性 harness 到 `*:4318`，确认日志记录 builtin 冲突与重复插件 tool 的 disabled reason，且注册表仍保留 builtin `file.read`。
+  7. 通过 `*:4318` WebSocket 触发 workspace 插件 tool：合法 read/write 路径收到校验后的 `workspaceRoot` 与 `absolutePath`；`../../escape.txt` 与 workspace 内 symlink 指向外部目录的 `link-out/escape.txt` 均被拦截。
+- **证据**：
+  - 进程异常 session：
+    - `~/.spotAgent/sessions/session-1779307628772-t80wb4.json`：非 0 exit 返回 `plugin tool plugin.echo exited with code 7: qa non-zero exit`。
+    - `~/.spotAgent/sessions/session-1779308097500-iidybt.json`：非 JSON stdout 返回 `plugin tool plugin.echo returned invalid JSON`。
+    - `~/.spotAgent/sessions/session-1779308181300-vpg3tk.json`：超时返回 `plugin tool plugin.echo timed out after 100ms`，`durationMs: 103`。
+    - `~/.spotAgent/sessions/session-1779308283211-y77qm6.json`：输出超限返回 `plugin tool plugin.echo exceeded output limit (1048576 bytes)`。
+    - `~/.spotAgent/sessions/session-1779308389321-hjgcp8.json`：symlink command 返回 `plugin command escapes plugin directory: escape-link.js`。
+  - 恢复状态：`~/.spotAgent/plugins/echo/plugin.json` 恢复为 `command: "echo.js"`，`~/.spotAgent/settings.json` 中 `tools.denylist` 为空数组；`*:4317` 仍由 worktree agent-server 监听。
+  - 冲突日志：一次性 harness stdout 显示 `disabled tool file.read: plugin tool conflicts with builtin` 与 `disabled tool plugin.duplicate: duplicate plugin tool name`，注册工具列表仍包含 builtin `file.read`。
+  - workspace session：
+    - `/tmp/handagent-plugin-qa-root/sessions/session-1779309054108-w8f7vi.json`：`plugin.workspaceRead` 成功，`workspace.absolutePath` 为 `/private/tmp/handagent-plugin-qa-root/workspace/notes/input.txt`，`access: "read"`。
+    - `/tmp/handagent-plugin-qa-root/sessions/session-1779309054583-swgibv.json`：`plugin.workspaceWrite` 成功，`workspace.absolutePath` 为 `/private/tmp/handagent-plugin-qa-root/workspace/notes/output.txt`，`access: "write"`。
+    - `/tmp/handagent-plugin-qa-root/sessions/session-1779309054614-mpidaa.json`：`../../escape.txt` 返回 `Path escapes workspace root: ../../escape.txt`。
+    - `/tmp/handagent-plugin-qa-root/sessions/session-1779309054617-g3aczg.json`：`link-out/escape.txt` 返回 `Path escapes workspace root: link-out/escape.txt`。
+- **结论**：通过。插件异常退出、非 JSON 输出、超时、输出超限、command symlink 越界、builtin/重复 tool 禁用、workspace read/write 参数解析与路径越界拦截均可返回明确错误或校验后数据，不会拖垮 agent-server。workspace 验证只证明传给插件的路径边界，不代表插件进程具备 OS 级沙箱。
+
+## 真实 provider 流式输出（2026-05-21 实机验证）
+
+- **验证日期**：2026-05-21
+- **验证环境**：real LLM / macOS 15.5 / worktree `codex/fix-delete-running-session-tab` / 非 mock `dist/HandAgentDesktop.app`
+- **验证过程**：
+  1. 使用 real provider 配置启动重新打包的 App，确认 `HandAgentRuntimeMode.json` 不存在，agent-server 子进程来自当前 worktree。
+  2. 修复前用 `QA real streaming visible 20260521...` 复现到 UI 在 `运行中` 状态只显示空 assistant 占位；`network-004.jsonl` 中有 `6542` 个 content delta，说明失败点不是 provider 未返回 SSE，而是本地 fetch 日志包装器缓冲 streamed response。
+  3. 修复 `createLoggingFetch()` 后执行自动化验证：`pnpm vitest run packages/core/tests/logging/logging-fetch.test.ts`、`bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build` 均通过。
+  4. 重新 `bash ./scripts/package-app.sh` 打包非 mock App 并启动，提交 `QA real streaming fixed 20260521: Begin immediately with STREAM_START...`。
+  5. Computer Use 第一次运行态采样显示标题区 `运行中`、Stop 按钮可见，assistant 气泡已显示 `STREAM_START` 与 `1.`。
+  6. 同一 run 第二次运行态采样仍显示 `运行中`，assistant 气泡已增长到至少第 86 条，证明 SessionWindow 在真实 provider SSE 到达时逐段追加文本，而非完成后一次性渲染。
+  7. 处理 code review 后再次执行自动化验证并重新打包非 mock App；提交 `QA real streaming exact-code smoke 20260521...`，运行态采样仍显示 `运行中` 且 assistant 气泡已从 `EXACT_STREAM_START` 增长到第 250 条。
+  8. 两次 real provider run 完成后 session 持久化均写入 user + assistant 两条消息，assistant 内容完整。
+- **证据**：
+  - 进程：最终 smoke 中 `HandAgentDesktop` pid `27106`，agent-server pid `27108`，命令路径为 `/Users/mu9/proj/handAgent/.worktrees/delete-running-session-tab/apps/agent-server/src/server.ts`。
+  - UI：Computer Use 运行态采样可见 `STREAM_START`、`1.`；后续运行态采样可见条目 `1` 到 `86`，窗口仍为 `运行中`。
+  - 最终 smoke UI：Computer Use 运行态采样可见 `EXACT_STREAM_START` 与条目 `1` 到 `250`，窗口仍为 `运行中`，Stop 按钮可见。
+  - 网络日志：`~/.spotAgent/log/2026-05-21/network-005.jsonl`，request 包含 `QA real streaming fixed 20260521` 与 `QA real streaming exact-code smoke 20260521`，对应 response 均为 `status: 200`、`body: "[streaming response: text/event-stream]"`，证明日志层不再完整读取 SSE body。
+  - Session 文件：`~/.spotAgent/sessions/session-1779311685828-kaqr5f.json`，完成后 `messages: 2`，assistant 内容长度约 `8353`。
+  - 最终 smoke session：`~/.spotAgent/sessions/session-1779312326930-rilxsi.json`，完成后 `messages: 2`，assistant 内容长度约 `2597`。
+- **结论**：通过。真实 provider streaming 可在 SessionWindow 中以可见增量渲染；网络日志不再为了记录 response 而缓冲 SSE body。
+
 ## Tool 运行时基础（2026-05-20 实机验证）
 
 - **验证日期**：2026-05-20
