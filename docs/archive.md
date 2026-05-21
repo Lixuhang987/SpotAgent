@@ -654,3 +654,10 @@
 - **验证过程**：提交 `[mock:permission-write] QA close pending permission regression 20260521`，等待 `file.write` 权限审批气泡出现，不点击授权/拒绝，直接关闭 SessionWindow。关闭后立即检查 session 文件，再等待 66 秒后复查。
 - **证据**：关闭前 UI 显示 `授权调用 file.write`，参数为 `workspaceId: "qa-workspace"`、`relativePath: "permission-check.txt"`、`content: "permission scenario content"`。session 文件 `/Users/mu9/.spotAgent/sessions/session-1779367083904-eo4eri.json` 在关闭后即时与 66 秒后均保持 `messageCount: 1`，messages 只有 user message，events 为空。
 - **结论**：通过，旧的 60 秒后 late permission/tool/final assistant 写回问题不再复现。
+### Accessibility 平台能力
+
+- **验证日期**：2026-05-21
+- **验证环境**：mock-llm + 非 mock LLM / macOS 15+ / `/Users/mu9/proj/handAgent` main / `dist/HandAgentDesktop.app`
+- **验证过程**：在允许 HandAgent 辅助功能权限后，保持 TextEdit 前台，分别触发 `[mock:accessibility-frontmost]` 和 `[mock:accessibility-set-frontmost]`，验证 frontmost snapshot 与 `set_value` 动作；修复 CG window id 与 AX window 映射后，用真实 provider 会话调用 `window.list`、`accessibility.snapshot({ "kind": "window", "windowId": 52648 })` 和不存在的 `windowId=999999999`，验证窗口目标和 not found 边界。随后按用户授权执行 `tccutil reset Accessibility com.yourname.HandAgentDesktop`，重启 App 并触发 `[mock:accessibility-frontmost]`，验证 `permission_denied`；最后在系统设置「隐私与安全性 → 辅助功能」重新打开 `HandAgentDesktop` 开关，重启 App 后再次触发 snapshot 验证权限恢复。
+- **证据**：frontmost snapshot session `/Users/mu9/.spotAgent/sessions/session-1779364328843-mryubj.json` 返回 TextEdit AX 树，包含 `AXTextArea`、可读 value 和 `elementId`；action session `/Users/mu9/.spotAgent/sessions/session-1779364361967-p3vtsm.json` 成功把 TextEdit 内容改为 `HANDAGENT_ACCESSIBILITY_SET_VALUE_20260521`；window target session `/Users/mu9/.spotAgent/sessions/session-1779366519673-yu9crt.json` 中 `windowId=52648` 返回 `AXWindow`、`children=9`，`windowId=999999999` 返回错误且未退回 focused window；permission denied session `/Users/mu9/.spotAgent/sessions/session-1779367658334-jrtx2p.json` 的 `tool_result.status=error`，输出 `HandAgent 没有辅助功能权限。请打开「系统设置 → 隐私与安全性 → 辅助功能」，允许 HandAgent 后重试。`；恢复权限 session `/Users/mu9/.spotAgent/sessions/session-1779367767232-gh3ned.json` 再次返回 TextEdit `AXApplication` / `AXWindow` / `AXTextArea`。
+- **结论**：通过。正向 snapshot、action、window target、not found 边界、未授权 `permission_denied` 文案和权限恢复后正向调用均符合预期。

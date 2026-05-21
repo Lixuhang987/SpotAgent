@@ -15,12 +15,6 @@
 - 已通过 `bash ./scripts/swiftw test`。
 - 已通过 `bash ./scripts/swiftw build`。
 
-## Accessibility 平台能力（P2）
-
-1. 临时移除 HandAgent 辅助功能权限后重复 snapshot/action，确认返回 `permission_denied`，文案指向「系统设置 → 隐私与安全性 → 辅助功能」。
-
-最近阻塞记录：2026-05-21 已验证 Accessibility 正向链路：`/Users/mu9/.spotAgent/sessions/session-1779364328843-mryubj.json` 证明 `accessibility.snapshot({kind:"frontmost_app"})` 返回 TextEdit AX 树，包含 `AXTextArea`、可读 value 和 `elementId`；`/Users/mu9/.spotAgent/sessions/session-1779364361967-p3vtsm.json` 证明 `accessibility.action({kind:"set_value"})` 成功把 TextEdit 内容改为 `HANDAGENT_ACCESSIBILITY_SET_VALUE_20260521`；修复 `window.list` CG id 与 AX window 映射后，`/Users/mu9/.spotAgent/sessions/session-1779366519673-yu9crt.json` 证明 `accessibility.snapshot({kind:"window", windowId:52648})` 返回 `AXWindow`、`children=9` 且不匹配 id `999999999` 不会退回 focused window。当前仅剩“临时移除 HandAgent 辅助功能权限后返回 `permission_denied`”未验证；这需要修改 macOS「隐私与安全性 → 辅助功能」权限，未获用户明确授权前不执行。
-
 ## 多 provider LLM（P2）
 
 1. 配置可用 Anthropic API key 与模型后提交普通文本 prompt，确认 assistant 回复可见且逐段 streaming。
