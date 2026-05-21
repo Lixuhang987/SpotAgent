@@ -8,6 +8,7 @@ export class SessionScopedToolRegistry {
   constructor(
     private readonly options: {
       builtinRegistry: ToolRegistry;
+      globalMcpServerIds: string[];
       listMcpTools: (serverId: string) => Promise<AgentTool[]>;
     },
     private readonly dependencies: {
@@ -22,7 +23,12 @@ export class SessionScopedToolRegistry {
     void sessionId;
     const tools: AgentTool[] = [...this.options.builtinRegistry.all()];
 
-    for (const serverId of binding?.mcpServerIds ?? []) {
+    const serverIds = new Set([
+      ...this.options.globalMcpServerIds,
+      ...(binding?.mcpServerIds ?? []),
+    ]);
+
+    for (const serverId of serverIds) {
       try {
         tools.push(...(await this.options.listMcpTools(serverId)));
       } catch (error) {

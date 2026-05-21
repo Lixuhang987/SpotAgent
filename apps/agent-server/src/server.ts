@@ -242,9 +242,11 @@ export async function startDefaultServer(port = 4317) {
       });
     },
   });
+  const globalMcpServerIds = [...mcpServers.keys()];
   const sessionScopedTools = new SessionScopedToolRegistry(
     {
       builtinRegistry: toolRegistry.registry,
+      globalMcpServerIds,
       listMcpTools: (serverId: string) => mcpRegistry.listTools(serverId),
     },
     {

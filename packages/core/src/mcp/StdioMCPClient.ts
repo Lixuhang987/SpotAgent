@@ -2,15 +2,22 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import type {
   MCPCallToolResult,
   MCPClient,
+  MCPGetPromptResult,
+  MCPPromptDescription,
+  MCPReadResourceResult,
+  MCPResourceDescription,
+  MCPServerCapabilities,
+  MCPServerInfo,
   MCPToolDescription,
 } from "./MCPClient.ts";
 import type { MCPServerConfig } from "./MCPConfig.ts";
 
 type StdioServerConfig = Extract<MCPServerConfig, { transport: "stdio" }>;
 
-type JsonRpcResponse = {
+type JsonRpcMessage = {
   jsonrpc: "2.0";
-  id: number;
+  id?: number;
+  method?: string;
   result?: unknown;
   error?: { message?: string };
 };
@@ -19,6 +26,7 @@ export class StdioMCPClient implements MCPClient {
   private child?: ChildProcessWithoutNullStreams;
   private nextId = 1;
   private buffer = "";
+  private info?: MCPServerInfo;
   private readonly pending = new Map<
     number,
     {
@@ -29,13 +37,29 @@ export class StdioMCPClient implements MCPClient {
 
   constructor(private readonly config: StdioServerConfig) {}
 
-  async initialize(): Promise<void> {
-    await this.request("initialize", {
+  async initialize(): Promise<MCPServerInfo> {
+    const result = await this.request("initialize", {
       protocolVersion: "2025-11-25",
       capabilities: {},
       clientInfo: { name: "handagent", version: "0.1.0" },
     });
+    const r = isRecord(result) ? result : {};
+    const serverInfo = isRecord(r.serverInfo) ? r.serverInfo : {};
+    this.info = {
+      name: typeof serverInfo.name === "string" ? serverInfo.name : this.config.id,
+      version: typeof serverInfo.version === "string" ? serverInfo.version : "unknown",
+      protocolVersion: typeof r.protocolVersion === "string" ? r.protocolVersion : "2025-11-25",
+      capabilities: isRecord(r.capabilities) ? (r.capabilities as MCPServerCapabilities) : {},
+    };
+    this.sendNotification("notifications/initialized", {});
+    return this.info;
   }
+
+  serverInfo(): MCPServerInfo | undefined {
+    return this.info;
+  }
+
+  // --- Tools ---
 
   async listTools(): Promise<MCPToolDescription[]> {
     const result = await this.request("tools/list", {});
@@ -51,6 +75,46 @@ export class StdioMCPClient implements MCPClient {
     return isRecord(result) ? (result as MCPCallToolResult) : { content: [] };
   }
 
+  // --- Prompts ---
+
+  async listPrompts(): Promise<MCPPromptDescription[]> {
+    const result = await this.request("prompts/list", {});
+    if (!isRecord(result) || !Array.isArray(result.prompts)) return [];
+    return result.prompts.map(parsePromptDescription);
+  }
+
+  async getPrompt(
+    name: string,
+    args?: Record<string, string>,
+  ): Promise<MCPGetPromptResult> {
+    const params: Record<string, unknown> = { name };
+    if (args) params.arguments = args;
+    const result = await this.request("prompts/get", params);
+    if (!isRecord(result)) return { messages: [] };
+    return {
+      description: typeof result.description === "string" ? result.description : undefined,
+      messages: Array.isArray(result.messages) ? result.messages : [],
+    } as MCPGetPromptResult;
+  }
+
+  // --- Resources ---
+
+  async listResources(): Promise<MCPResourceDescription[]> {
+    const result = await this.request("resources/list", {});
+    if (!isRecord(result) || !Array.isArray(result.resources)) return [];
+    return result.resources.map(parseResourceDescription);
+  }
+
+  async readResource(uri: string): Promise<MCPReadResourceResult> {
+    const result = await this.request("resources/read", { uri });
+    if (!isRecord(result) || !Array.isArray(result.contents)) {
+      return { contents: [] };
+    }
+    return { contents: result.contents } as MCPReadResourceResult;
+  }
+
+  // --- Lifecycle ---
+
   async close(): Promise<void> {
     this.child?.kill("SIGTERM");
     this.child = undefined;
@@ -59,6 +123,8 @@ export class StdioMCPClient implements MCPClient {
     }
     this.pending.clear();
   }
+
+  // --- Transport ---
 
   private ensureChild(): ChildProcessWithoutNullStreams {
     if (this.child) return this.child;
@@ -86,6 +152,12 @@ export class StdioMCPClient implements MCPClient {
     return promise;
   }
 
+  private sendNotification(method: string, params: unknown): void {
+    const child = this.ensureChild();
+    const payload = JSON.stringify({ jsonrpc: "2.0", method, params }) + "\n";
+    child.stdin.write(payload);
+  }
+
   private handleData(chunk: string): void {
     this.buffer += chunk;
     let index: number;
@@ -93,14 +165,17 @@ export class StdioMCPClient implements MCPClient {
       const line = this.buffer.slice(0, index).trim();
       this.buffer = this.buffer.slice(index + 1);
       if (!line) continue;
-      this.handleResponse(JSON.parse(line) as JsonRpcResponse);
+      const message = JSON.parse(line) as JsonRpcMessage;
+      if (message.id !== undefined) {
+        this.handleResponse(message);
+      }
     }
   }
 
-  private handleResponse(response: JsonRpcResponse): void {
-    const pending = this.pending.get(response.id);
+  private handleResponse(response: JsonRpcMessage): void {
+    const pending = this.pending.get(response.id!);
     if (!pending) return;
-    this.pending.delete(response.id);
+    this.pending.delete(response.id!);
     if (response.error) {
       pending.reject(new Error(response.error.message ?? "MCP stdio request failed"));
       return;
@@ -124,6 +199,31 @@ function parseToolDescription(value: unknown): MCPToolDescription {
     name: value.name,
     description: typeof value.description === "string" ? value.description : undefined,
     inputSchema: isRecord(value.inputSchema) ? value.inputSchema : undefined,
+  };
+}
+
+function parsePromptDescription(value: unknown): MCPPromptDescription {
+  if (!isRecord(value) || typeof value.name !== "string") {
+    throw new Error("Invalid MCP prompt description");
+  }
+  return {
+    name: value.name,
+    title: typeof value.title === "string" ? value.title : undefined,
+    description: typeof value.description === "string" ? value.description : undefined,
+    arguments: Array.isArray(value.arguments) ? value.arguments : undefined,
+  };
+}
+
+function parseResourceDescription(value: unknown): MCPResourceDescription {
+  if (!isRecord(value) || typeof value.uri !== "string" || typeof value.name !== "string") {
+    throw new Error("Invalid MCP resource description");
+  }
+  return {
+    uri: value.uri,
+    name: value.name,
+    title: typeof value.title === "string" ? value.title : undefined,
+    description: typeof value.description === "string" ? value.description : undefined,
+    mimeType: typeof value.mimeType === "string" ? value.mimeType : undefined,
   };
 }
 
