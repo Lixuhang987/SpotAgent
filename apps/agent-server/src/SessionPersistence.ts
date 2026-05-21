@@ -105,6 +105,20 @@ export class SessionPersistence {
     if (lastError?.code === RUN_INTERRUPTED_CODE) {
       return "interrupted";
     }
+    if (lastError) {
+      await this.store.setMessages(
+        sessionId,
+        [
+          ...session.messages,
+          {
+            role: "assistant",
+            content: lastError.message,
+          },
+        ],
+        timestamp,
+      );
+      return "failed";
+    }
 
     await this.store.setMessages(
       sessionId,

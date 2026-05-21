@@ -436,7 +436,7 @@ describe("SessionRouter", () => {
     ]);
   });
 
-  it("does not reuse a current non-interrupt error when recovering an incomplete turn", async () => {
+  it("restores a current runtime error when recovering an incomplete turn", async () => {
     const store = new InMemorySessionStore();
     const persistence = new SessionPersistence(
       store,
@@ -498,7 +498,7 @@ describe("SessionRouter", () => {
             {
               id: "msg-1",
               role: "assistant",
-              text: "本轮运行因 agent-server 重启而中断，请重新发送请求。",
+              text: "provider failed",
               status: "completed",
               createdAt: "1970-01-01T00:00:00.000Z",
               updatedAt: "1970-01-01T00:00:00.000Z",
@@ -513,12 +513,6 @@ describe("SessionRouter", () => {
         type: "error",
         timestamp: "2026-05-18T00:03:30.000Z",
         message: "provider failed",
-      },
-      {
-        type: "error",
-        timestamp: "2026-05-18T00:04:00.000Z",
-        message: "本轮运行因 agent-server 重启而中断，请重新发送请求。",
-        code: "run_lost_after_restart",
       },
     ]);
   });
