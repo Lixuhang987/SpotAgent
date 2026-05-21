@@ -539,6 +539,133 @@ describe("SessionRuntimeOrchestrator", () => {
     ]);
   });
 
+  it("times out interrupt cleanup when the runtime ignores abort", async () => {
+    const pushed: SessionMessage[] = [];
+    const persistence = new SessionPersistence(
+      new InMemorySessionStore(),
+      () => "2026-05-22T00:00:00.000Z",
+    );
+    const runStarted = Promise.withResolvers<void>();
+    const orchestrator = new SessionRuntimeOrchestrator(
+      {
+        runWithMessages() {
+          runStarted.resolve();
+          return new Promise(() => {});
+        },
+      },
+      persistence,
+      () => "2026-05-22T00:00:00.000Z",
+      () => {},
+      { interruptWaitTimeoutMs: 20, interruptPollIntervalMs: 1 },
+    );
+
+    await persistence.ensureSession("session-stubborn-runtime");
+    void orchestrator.handleUserMessage(
+      createUserMessage("session-stubborn-runtime", "删除中", "user-1"),
+      (message) => pushed.push(message),
+    );
+    await runStarted.promise;
+
+    expect(orchestrator.isSessionRunning("session-stubborn-runtime")).toBe(true);
+    const outcome = await Promise.race([
+      orchestrator.interruptAndWait("session-stubborn-runtime", (message) => pushed.push(message))
+        .then(() => "resolved"),
+      new Promise((resolve) => setTimeout(() => resolve("timed-out"), 100)),
+    ]);
+
+    expect(outcome).toBe("resolved");
+    expect(orchestrator.isSessionRunning("session-stubborn-runtime")).toBe(false);
+    expect(pushed).toEqual([
+      {
+        type: "assistant_message_end",
+        sessionId: "session-stubborn-runtime",
+        messageId: "session-stubborn-runtime-interrupted",
+        timestamp: "2026-05-22T00:00:00.000Z",
+        payload: { status: "interrupted" },
+      },
+      {
+        type: "status",
+        sessionId: "session-stubborn-runtime",
+        messageId: "session-stubborn-runtime-status",
+        timestamp: "2026-05-22T00:00:00.000Z",
+        payload: { value: "interrupted" },
+      },
+    ]);
+    expect((await persistence.getSession("session-stubborn-runtime"))?.events).toEqual([
+      {
+        type: "error",
+        timestamp: "2026-05-22T00:00:00.000Z",
+        message: "本轮运行已中断。",
+        code: "run_interrupted",
+      },
+    ]);
+  });
+
+  it("records interrupted instead of runtime error when an aborted run rejects without AbortError", async () => {
+    const pushed: SessionMessage[] = [];
+    const persistence = new SessionPersistence(
+      new InMemorySessionStore(),
+      () => "2026-05-22T00:00:00.000Z",
+    );
+    const runStarted = Promise.withResolvers<void>();
+    let rejectRun: ((error: Error) => void) | undefined;
+    const orchestrator = new SessionRuntimeOrchestrator(
+      {
+        runWithMessages(_messages, _onEvent, runOptions) {
+          runOptions?.signal.addEventListener("abort", () => {
+            rejectRun?.(new Error("provider closed stream after abort"));
+          });
+          runStarted.resolve();
+          return new Promise((_, reject) => {
+            rejectRun = reject;
+          });
+        },
+      },
+      persistence,
+      () => "2026-05-22T00:00:00.000Z",
+      () => {},
+      { interruptWaitTimeoutMs: 20, interruptPollIntervalMs: 1 },
+    );
+
+    await persistence.ensureSession("session-non-abort-reject");
+    const runPromise = orchestrator.handleUserMessage(
+      createUserMessage("session-non-abort-reject", "停止这轮", "user-1"),
+      (message) => pushed.push(message),
+    );
+    await runStarted.promise;
+
+    await orchestrator.interruptAndWait(
+      "session-non-abort-reject",
+      (message) => pushed.push(message),
+    );
+    await runPromise;
+
+    expect(pushed).toEqual([
+      {
+        type: "assistant_message_end",
+        sessionId: "session-non-abort-reject",
+        messageId: "session-non-abort-reject-interrupted",
+        timestamp: "2026-05-22T00:00:00.000Z",
+        payload: { status: "interrupted" },
+      },
+      {
+        type: "status",
+        sessionId: "session-non-abort-reject",
+        messageId: "session-non-abort-reject-status",
+        timestamp: "2026-05-22T00:00:00.000Z",
+        payload: { value: "interrupted" },
+      },
+    ]);
+    expect((await persistence.getSession("session-non-abort-reject"))?.events).toEqual([
+      {
+        type: "error",
+        timestamp: "2026-05-22T00:00:00.000Z",
+        message: "本轮运行已中断。",
+        code: "run_interrupted",
+      },
+    ]);
+  });
+
   it("pushes and records an error when runtime execution fails", async () => {
     const pushed: SessionMessage[] = [];
     const persistence = new SessionPersistence(

@@ -786,6 +786,66 @@ describe("SessionRouter", () => {
     expect(pushed[0]?.type).toBe("delete_session_response");
   });
 
+  it("returns delete_session_response when a running session ignores abort", async () => {
+    const persistence = new SessionPersistence(
+      new InMemorySessionStore(),
+      () => "2026-05-22T00:00:00.000Z",
+    );
+    const runStarted = Promise.withResolvers<void>();
+    const orchestrator = new SessionRuntimeOrchestrator(
+      {
+        runWithMessages() {
+          runStarted.resolve();
+          return new Promise(() => {});
+        },
+      },
+      persistence,
+      () => "2026-05-22T00:00:00.000Z",
+      () => {},
+      { interruptWaitTimeoutMs: 20, interruptPollIntervalMs: 1 },
+    );
+    const router = new SessionRouter(
+      orchestrator,
+      persistence,
+      () => "2026-05-22T00:01:00.000Z",
+    );
+    const pushed: SessionMessage[] = [];
+
+    await persistence.ensureSession("session-stubborn-delete");
+    void router.receive(
+      createUserMessage("session-stubborn-delete", "删除中", "user-1"),
+      (message) => pushed.push(message),
+    );
+    await runStarted.promise;
+
+    const outcome = await Promise.race([
+      router.receive(
+        {
+          type: "delete_session_request",
+          sessionId: "request-session",
+          messageId: "delete-1",
+          timestamp: "2026-05-22T00:01:00.000Z",
+          payload: { targetSessionId: "session-stubborn-delete" },
+        },
+        (message) => pushed.push(message),
+      ).then(() => "resolved"),
+      new Promise((resolve) => setTimeout(() => resolve("timed-out"), 100)),
+    ]);
+
+    expect(outcome).toBe("resolved");
+    expect(await persistence.getSession("session-stubborn-delete")).toBeNull();
+    expect(pushed.at(-1)).toEqual({
+      type: "delete_session_response",
+      sessionId: "request-session",
+      messageId: "delete-1",
+      timestamp: "2026-05-22T00:01:00.000Z",
+      payload: {
+        targetSessionId: "session-stubborn-delete",
+        status: "deleted",
+      },
+    });
+  });
+
   it("dispatches deletes and user messages to their owning modules", async () => {
     const persistence = new SessionPersistence(
       new InMemorySessionStore(),

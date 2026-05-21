@@ -15,6 +15,16 @@
 - 已通过 `bash ./scripts/swiftw test`。
 - 已通过 `bash ./scripts/swiftw build`。
 
+## 删除 running session 回归（P1）
+
+1. 使用 mock LLM 打包并启动桌面 App：`bash ./scripts/package-app.sh --mock-llm`，再打开 `dist/HandAgentDesktop.app`。
+1. 通过 PromptPanel 提交 `[mock:slow-focus] QA_DELETE_RUNNING_SESSION_TIMEOUT_YYYYMMDD_HHMMSS`，确认 SessionWindow 中该 session 进入 running 状态。
+1. 在左侧历史列表删除同一 session，并确认删除弹窗。
+1. 确认 UI 在有限时间内返回删除结果：对应 tab 被关闭，历史列表不再展示该 session，窗口没有长期停在 running 或等待删除状态。
+1. 记录删除前 session id，并确认 `~/.spotAgent/sessions/<session-id>.json` 已不存在。
+
+说明：不响应 abort 的 runtime 强制清理边界已由 `SessionRuntimeOrchestrator` 与 `SessionRouter` 自动化测试覆盖；本条实机 QA 只验证桌面删除 running session 的用户可见链路。
+
 ## Anthropic Provider 真实调用（P1）
 
 1. 配置可用 Anthropic API key 与模型后提交普通文本 prompt，确认 assistant 回复可见且逐段 streaming。

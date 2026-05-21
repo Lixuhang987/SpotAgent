@@ -70,7 +70,7 @@ MCP server 与 Action Plugin 是两条相互独立的注入通道，作用时机
 4. `workspace_ask_response` → 从 `requestId` 还原 sessionId，取该 socket 持有的 workspace ask binding token，并调用 `workspaceAskBridge.handleResponse(payload, token)`；旧 socket 晚到的选择响应会被忽略。
 5. `user_message` → 若该 socket 尚未绑定此 session，则分别调用 `permissionBridge.bindSession(...)` 与 `workspaceAskBridge.bindSession(...)`，把这条 socket 注册为该会话的审批 / workspace 选择回流通道；同 socket 同 session 的后续消息复用原 token，避免挂起请求被本 socket 自己重绑成 stale。
 
-随后所有未命中上述分支的消息都交给 `router.receive(message, send)`，由 `SessionRouter` 决定如何处理。
+随后所有未命中上述分支的消息都交给 `router.receive(message, send)`，由 `SessionRouter` 决定如何处理。删除 running session 时，`SessionRouter` 会先调用 `SessionRuntimeOrchestrator.interruptAndWait`；若 runtime / LLM / tool 不响应 abort，orchestrator 会在 3 秒后按 active run generation 强制清理运行态并记录 `run_interrupted`，保证 `delete_session_response` 有有限返回边界，且旧 run 的晚到输出不会污染已删除或新一代 session。
 
 socket 关闭时，若该 socket 持有 bridge token，会调用 `bridge.detach(token)`；旧 socket close 不会摘掉新 bridge。随后遍历 `boundSessions`，逐个 `permissionBridge.unbindSession(sessionId, token)`；只有 token 仍是当前 owner 时才清理该 session 的审批回流与 `permissionPolicy.clearSessionRules(sessionId)`。若同一 session 已被新 socket 重绑，旧 socket close 只会让旧 token 下的 pending 审批返回 `deny/session closed`，不会删除新绑定或清掉新会话的 session-scope 规则。workspace ask 绑定同样按 token fencing 清理；旧 token 下 active / queued ask 都返回 `{ cancelled: true }`。
 

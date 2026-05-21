@@ -31,21 +31,6 @@
 
 ## 当前 bug
 
-### 删除运行中的会话时，若 active run 不响应 abort，delete_session_request 可能无限等待
-
-- **严重级别**：P1
-- **发现日期**：2026-05-22
-- **发现方式**：主链路可靠性代码审计。
-- **复现步骤**：
-  1. 构造一个运行中的 session，使 `SessionRuntimeOrchestrator.handleUserMessage` 内部的 `runtime.runWithMessages` 返回永不 resolve / reject 的 Promise，或让 LLM/tool 调用忽略 `AbortSignal`。
-  2. 对同一 session 发送 `delete_session_request`。
-  3. 观察 `SessionRouter.handleDeleteSession` 在删除前调用 `await interruptAndWait(...)`。
-- **实际结果**：`SessionRuntimeOrchestrator.interruptAndWait` 只循环等待 `activeRuns.has(sessionId)` 变为 false；`activeRuns` 只在 `handleUserMessage` 的 `finally` 中清理。如果 runtime promise 永不 settle，`finally` 不执行，删除请求不返回 `delete_session_response`，SessionWindow 也不会关闭 tab 或刷新历史。
-- **期望结果**：删除 running session 时应有超时或强制清理边界；即使 LLM/tool 不响应 abort，server 也应在有限时间内返回明确的删除结果，并避免旧 run 晚到结果污染已删除 session。
-- **证据**：`apps/agent-server/src/SessionRouter.ts` 的 `delete_session_request` 分支在删除前等待 `interruptAndWait`；`apps/agent-server/src/SessionRuntimeOrchestrator.ts` 的 `interruptAndWait` 当前无超时轮询 `activeRuns`；`activeRuns` 清理依赖 `handleUserMessage` 的 `finally`。core runtime 的 LLM stream、legacy complete 或 tool call 如果不响应 abort，都可能让 runtime promise 不 settle。
-- **初步调用链 / 根因边界**：SessionWindow 删除历史项 → `delete_session_request` → `SessionRouter.handleDeleteSession` → `SessionRuntimeOrchestrator.interruptAndWait` → `AbortController.abort()` → runtime/LLM/tool 未结束 → `activeRuns` 不清理 → router 无响应 → UI 等不到删除结果。
-- **清理状态**：发现时未启动 HandAgentDesktop；`pgrep -fl HandAgentDesktop` 与 `lsof -nP -iTCP:4317 -sTCP:LISTEN` 均无输出。
-
 ### FileSessionStore 同一 session 并发写入可能丢失 messages 或 events
 
 - **严重级别**：P1
