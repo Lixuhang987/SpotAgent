@@ -2,14 +2,17 @@ import SwiftUI
 
 struct SessionHistorySidebarView: View {
     let items: [SessionListItem]
+    let workspaces: [WorkspaceEntry]
     let activeSessionID: String?
     let onSelect: (String) -> Void
     let onRequestDelete: (String) -> Void
     let onNewSession: () -> Void
+    let onNewSessionInWorkspace: (String) -> Void
 
     @Environment(\.appTheme) private var theme
     @State private var searchText = ""
     @State private var isSearching = false
+    @State private var expandedWorkspaces: Set<String> = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -79,23 +82,153 @@ struct SessionHistorySidebarView: View {
     private var scrollableContent: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: theme.spacing.xs) {
-                ForEach(filteredItems) { item in
-                    SessionHistoryRowView(
-                        item: item,
-                        isActive: activeSessionID == item.id,
-                        onSelect: { onSelect(item.id) }
-                    )
-                    .contextMenu {
-                        Button("删除", role: .destructive) {
-                            onRequestDelete(item.id)
-                        }
-                    }
+                if searchText.isEmpty {
+                    groupedContent
+                } else {
+                    filteredFlatContent
                 }
             }
             .padding(.horizontal, theme.spacing.sm)
             .padding(.vertical, theme.spacing.xs)
         }
         .frame(maxHeight: .infinity)
+    }
+
+    // MARK: - Grouped Content
+
+    @ViewBuilder
+    private var groupedContent: some View {
+        let nonDefaultWorkspaces = workspaces.filter { !$0.isDefault }
+
+        ForEach(nonDefaultWorkspaces) { workspace in
+            workspaceSection(workspace)
+        }
+
+        if !nonDefaultWorkspaces.isEmpty {
+            defaultSectionDivider
+        }
+
+        ForEach(defaultSessions) { item in
+            sessionRow(item)
+        }
+    }
+
+    // MARK: - Workspace Section
+
+    private func workspaceSection(_ workspace: WorkspaceEntry) -> some View {
+        let sessions = items.filter { $0.workspaceId == workspace.id }
+        let isExpanded = expandedWorkspaces.contains(workspace.id)
+
+        return VStack(alignment: .leading, spacing: 0) {
+            workspaceSectionHeader(workspace: workspace, isExpanded: isExpanded)
+
+            if isExpanded {
+                ForEach(sessions) { item in
+                    sessionRow(item)
+                        .padding(.leading, theme.spacing.md)
+                }
+            }
+        }
+    }
+
+    private func workspaceSectionHeader(workspace: WorkspaceEntry, isExpanded: Bool) -> some View {
+        HStack(spacing: theme.spacing.sm) {
+            Button(action: { toggleWorkspace(workspace.id) }) {
+                HStack(spacing: theme.spacing.sm) {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(theme.colors.textSecondary)
+                        .frame(width: 12)
+
+                    Image(systemName: "folder")
+                        .font(.system(size: 12))
+                        .foregroundStyle(theme.colors.textSecondary)
+
+                    Text(workspace.name)
+                        .font(theme.typography.captionFont)
+                        .foregroundStyle(theme.colors.textPrimary)
+                        .lineLimit(1)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            Button(action: { onNewSessionInWorkspace(workspace.id) }) {
+                Image(systemName: "plus")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(theme.colors.textSecondary)
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("在 \(workspace.name) 中新建会话")
+        }
+        .padding(.horizontal, theme.spacing.sm)
+        .padding(.vertical, theme.spacing.xs)
+    }
+
+    // MARK: - Default Section
+
+    private var defaultSectionDivider: some View {
+        HStack(spacing: theme.spacing.sm) {
+            Rectangle()
+                .fill(theme.colors.border)
+                .frame(height: 1)
+            Text("默认")
+                .font(theme.typography.captionFont)
+                .foregroundStyle(theme.colors.textSecondary)
+            Rectangle()
+                .fill(theme.colors.border)
+                .frame(height: 1)
+        }
+        .padding(.horizontal, theme.spacing.sm)
+        .padding(.vertical, theme.spacing.sm)
+    }
+
+    private var defaultSessions: [SessionListItem] {
+        items.filter { $0.workspaceId == nil }
+    }
+
+    // MARK: - Flat Filtered Content
+
+    private var filteredFlatContent: some View {
+        ForEach(filteredItems) { item in
+            sessionRow(item)
+        }
+    }
+
+    // MARK: - Session Row
+
+    private func sessionRow(_ item: SessionListItem) -> some View {
+        SessionHistoryRowView(
+            item: item,
+            isActive: activeSessionID == item.id,
+            onSelect: { onSelect(item.id) }
+        )
+        .contextMenu {
+            Button("删除", role: .destructive) {
+                onRequestDelete(item.id)
+            }
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func toggleWorkspace(_ id: String) {
+        if expandedWorkspaces.contains(id) {
+            expandedWorkspaces.remove(id)
+        } else {
+            expandedWorkspaces.insert(id)
+        }
+    }
+
+    private var filteredItems: [SessionListItem] {
+        guard !searchText.isEmpty else { return items }
+        return items.filter { item in
+            (item.title ?? "").localizedCaseInsensitiveContains(searchText)
+        }
     }
 
     private var sidebarFooter: some View {
@@ -117,13 +250,6 @@ struct SessionHistorySidebarView: View {
             }
             .buttonStyle(.plain)
             .help("设置")
-        }
-    }
-
-    private var filteredItems: [SessionListItem] {
-        guard !searchText.isEmpty else { return items }
-        return items.filter { item in
-            (item.title ?? "").localizedCaseInsensitiveContains(searchText)
         }
     }
 }

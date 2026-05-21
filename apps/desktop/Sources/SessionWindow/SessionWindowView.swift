@@ -4,15 +4,18 @@ struct SessionWindowView: View {
     @Bindable var viewModel: SessionWindowViewModel
     @Environment(\.appTheme) private var theme
     @State private var draft = ""
+    @State private var workspaceVM = WorkspaceSettingsViewModel()
 
     var body: some View {
         HStack(spacing: 0) {
             SessionHistorySidebarView(
                 items: viewModel.historyList,
+                workspaces: workspaceVM.workspaces,
                 activeSessionID: viewModel.activeTab?.sessionID,
                 onSelect: viewModel.openHistorySession,
                 onRequestDelete: viewModel.requestDeleteSession,
-                onNewSession: { viewModel.createNewSession() }
+                onNewSession: { viewModel.createNewSession() },
+                onNewSessionInWorkspace: { wsId in viewModel.createNewSession(workspaceId: wsId) }
             )
             .frame(width: 240)
 
@@ -29,6 +32,7 @@ struct SessionWindowView: View {
             )
         }
         .background(theme.colors.background)
+        .onAppear { workspaceVM.reload() }
         .alert("删除会话？", isPresented: pendingHistoryDeleteBinding) {
             Button("取消", role: .cancel) {
                 viewModel.cancelDeleteSession()
