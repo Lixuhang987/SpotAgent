@@ -74,7 +74,7 @@ MCP server 与 Action Plugin 是两条相互独立的注入通道，作用时机
 
 socket 关闭时，若该 socket 持有 bridge token，会调用 `bridge.detach(token)`；旧 socket close 不会摘掉新 bridge。随后遍历 `boundSessions`，逐个 `permissionBridge.unbindSession(sessionId, token)`；只有 token 仍是当前 owner 时才清理该 session 的审批回流与 `permissionPolicy.clearSessionRules(sessionId)`。若同一 session 已被新 socket 重绑，旧 socket close 只会让旧 token 下的 pending 审批返回 `deny/session closed`，不会删除新绑定或清掉新会话的 session-scope 规则。workspace ask 绑定同样按 token fencing 清理；旧 token 下 active / queued ask 都返回 `{ cancelled: true }`。
 
-其中 `open_session` 是 SessionWindow 的订阅 / 恢复握手：客户端首次连接与断线重连都会发送它；若 store 中已有对应 session，server 回 `session_snapshot`，让窗口在 agent-server 重启后恢复消息列表与状态。若持久化消息最后停在 user message 且当前进程没有该 session 的 active run，`SessionPersistence.recoverIncompleteTurnForSnapshot` 会在 snapshot 前补齐恢复状态：已持久化 `run_interrupted` 的轮次保持 `interrupted`，否则追加 assistant 错误消息与 `run_lost_after_restart` error 事件，并返回 `failed`，避免 server 重启后历史里只剩用户消息。
+其中 `open_session` 是 SessionWindow 的订阅 / 恢复握手：客户端首次连接与断线重连都会发送它；若 store 中已有对应 session，server 回 `session_snapshot`，让窗口在 agent-server 重启后恢复消息列表与状态。若持久化消息最后停在 user message 且当前进程没有该 session 的 active run，`SessionPersistence.recoverIncompleteTurnForSnapshot` 会在 snapshot 前补齐恢复状态：已持久化 `run_interrupted` 的轮次保持 `interrupted`；同一轮已有普通 runtime error 时，把原始 error message 作为 assistant 消息补回并返回 `failed`；没有可归属 error 事件时，才追加 assistant 错误消息与 `run_lost_after_restart` error 事件，避免 server 重启后历史里只剩用户消息。
 
 ## 与文件系统约定
 
