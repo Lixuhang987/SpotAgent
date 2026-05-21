@@ -13,11 +13,19 @@ struct MarkdownMessageView: View {
             .textSelection(.enabled)
     }
 
+    private var textColor: Color {
+        role == "tool" ? theme.colors.textSecondary : theme.colors.textPrimary
+    }
+
+    private var textSize: CGFloat {
+        role == "tool" ? 13 : 15
+    }
+
     private var handAgentTheme: MarkdownUI.Theme {
         .init()
             .text {
-                ForegroundColor(theme.colors.textPrimary)
-                FontSize(15)
+                ForegroundColor(textColor)
+                FontSize(textSize)
             }
             .code {
                 FontFamilyVariant(.monospaced)
@@ -37,7 +45,7 @@ struct MarkdownMessageView: View {
                     .markdownTextStyle {
                         FontWeight(.bold)
                         FontSize(.em(1.5))
-                        ForegroundColor(theme.colors.textPrimary)
+                        ForegroundColor(textColor)
                     }
             }
             .heading2 { configuration in
@@ -46,7 +54,7 @@ struct MarkdownMessageView: View {
                     .markdownTextStyle {
                         FontWeight(.semibold)
                         FontSize(.em(1.3))
-                        ForegroundColor(theme.colors.textPrimary)
+                        ForegroundColor(textColor)
                     }
             }
             .heading3 { configuration in
@@ -55,7 +63,7 @@ struct MarkdownMessageView: View {
                     .markdownTextStyle {
                         FontWeight(.semibold)
                         FontSize(.em(1.1))
-                        ForegroundColor(theme.colors.textPrimary)
+                        ForegroundColor(textColor)
                     }
             }
             .paragraph { configuration in
