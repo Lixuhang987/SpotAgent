@@ -35,15 +35,20 @@ struct SessionMessageListView: View {
 
     @Environment(\.appTheme) private var theme
 
+    private var lastAssistantMessageID: String? {
+        messages.last(where: { $0.role == "assistant" && !$0.text.isEmpty })?.id
+    }
+
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: theme.spacing.md) {
                 ForEach(messages) { message in
-                    SessionMessageBubbleView(
-                        message: message,
-                        onCopyMessage: { onCopyMessage(message.id) }
-                    )
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    SessionMessageBubbleView(message: message)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+
+                    if message.id == lastAssistantMessageID {
+                        SessionMessageActionRow(onCopy: { onCopyMessage(message.id) })
+                    }
                 }
             }
             .padding(.horizontal, theme.spacing.xl)
@@ -58,10 +63,8 @@ struct SessionMessageListView: View {
 
 struct SessionMessageBubbleView: View {
     let message: SessionBubble
-    let onCopyMessage: () -> Void
 
     @Environment(\.appTheme) private var theme
-    @State private var isHovering = false
 
     var body: some View {
         VStack(alignment: message.role == "user" ? .trailing : .leading, spacing: theme.spacing.sm) {
@@ -81,16 +84,23 @@ struct SessionMessageBubbleView: View {
                 }
             }
             .messageBubble(role: message.role)
-
-            if isHovering && !message.text.isEmpty && message.role != "user" {
-                HStack(spacing: theme.spacing.sm) {
-                    SessionMessageCopyButton(isDisabled: false, onCopy: onCopyMessage)
-                }
-            }
         }
         .frame(maxWidth: message.role == "user" ? UIConstants.maxContentWidth * 0.85 : .infinity,
                alignment: message.role == "user" ? .trailing : .leading)
-        .onHover { isHovering = $0 }
+    }
+}
+
+struct SessionMessageActionRow: View {
+    let onCopy: () -> Void
+
+    @Environment(\.appTheme) private var theme
+
+    var body: some View {
+        HStack(spacing: theme.spacing.sm) {
+            SessionMessageCopyButton(isDisabled: false, onCopy: onCopy)
+            Spacer()
+        }
+        .frame(height: theme.spacing.xxl)
     }
 }
 
