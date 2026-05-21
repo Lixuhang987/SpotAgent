@@ -31,42 +31,6 @@
 
 ## 当前 bug
 
-### 1. 重新打包后的 HandAgent 会被 macOS 视为不同 App，既有隐私权限不通用
-
-**严重级别**：P1
-
-**发现日期**：2026-05-21
-
-**复现步骤**：
-
-1. 打包并启动 `dist/HandAgentDesktop.app`，在「系统设置 → 隐私与安全性」里授予屏幕录制 / 辅助功能等权限。
-2. 修改代码后重新执行 `bash ./scripts/package-app.sh` 或 `bash ./scripts/package-app.sh --mock-llm`，生成新的 `dist/HandAgentDesktop.app`。
-3. 启动重新打包后的 App，继续执行 `screen.capture`、`accessibility.snapshot` 或用户主动 `captureRegion` 圈选。
-
-**实际结果**：
-
-- 重新打包后的 App 在运行时可能不再复用旧 TCC 授权；`screen.capture` 在 packaged app 进程内 `CGPreflightScreenCaptureAccess()` 返回 false，提示需要重新授予「屏幕录制」权限。
-- `accessibility.snapshot` / `accessibility.action` 经过真实 PlatformBridge 到达桌面 provider 后返回 `HandAgent 没有辅助功能权限。请打开「系统设置 → 隐私与安全性 → 辅助功能」，允许 HandAgent 后重试。`
-- 用户主动 `captureRegion` 路径在重新授予当前打包 App 的权限后可正常工作；未重新授权时，自动化圈选容易得到错误的屏幕内容或权限相关行为，不能作为产品链路失败证据。
-
-**期望结果**：
-
-开发 / QA 打包产物应尽量保持稳定的 macOS TCC 身份，或者文档和打包流程必须明确提示：每次签名身份变化后，需要对当前 `dist/HandAgentDesktop.app` 重新授予屏幕录制、辅助功能等隐私权限，再继续实机 QA。
-
-**证据**：
-
-- ScreenCaptureKit clean bridge 回归中，当前 packaged app 进程内预检返回 false，session `~/.spotAgent/sessions/session-1779319444567-r98dh6.json` 记录 `permission_request(action: allow)` 后仍得到中文屏幕录制权限指引。
-- 同轮取证显示当前 app 的 designated requirement 为 `designated => identifier "com.yourname.HandAgentDesktop"`；TCC 中旧 `kTCCServiceScreenCapture` 记录的 `csreq` 为旧 hash-style requirement：`FADE0C0000000028000000010000000800000014398791BDD8B31D8F6048BE46BB3973B34FEE5611`。
-- Accessibility 回归 session `~/.spotAgent/sessions/session-1779352892449-iyjcj0.json` 与 `~/.spotAgent/sessions/session-1779352937653-pt4c60.json` 均经过真实 PlatformBridge，但返回辅助功能权限缺失。
-- 2026-05-21 用户手动确认：重新授予当前打包 App 权限后，用户主动区域圈选路径可正常工作。
-
-**初步调用链 / 根因边界**：
-
-- `MockLLMClient` / real LLM -> tool call -> `SessionRuntimeOrchestrator` -> `WebSocketPlatformBridge` -> `PlatformBridgeService` 的请求链路已被多项 QA 证明可达。
-- 失败点不在 tool schema、session 绑定或 PlatformBridge 连通性，而在 macOS TCC 对 bundle id、签名 requirement、应用路径 / 代码签名状态的身份判定。
-- 当前仓库打包流程若产生新的签名 requirement，系统会把重新打包后的 `HandAgentDesktop.app` 当成新的受控主体；旧授权不能稳定迁移。
-
-**状态**：未修复。后续需要在打包 / 签名策略或 QA 文档中固定开发构建的 TCC 身份；在修复前，每次重新打包后都要对当前 App 重新授权再做屏幕录制和辅助功能实机 QA。
 
 ### 2. ScreenCaptureKit 反向 IPC 在已开启屏幕录制权限后仍返回 permission_denied
 
