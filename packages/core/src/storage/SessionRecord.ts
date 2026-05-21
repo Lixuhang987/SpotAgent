@@ -6,6 +6,7 @@ export type SessionMetadata = {
   createdAt: string;
   updatedAt: string;
   messageCount: number;
+  workspaceId?: string | null;
   actionBinding?: SessionActionBinding;
 };
 

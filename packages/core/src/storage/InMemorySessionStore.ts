@@ -19,6 +19,7 @@ export class InMemorySessionStore implements SessionStore {
         createdAt: now,
         updatedAt: now,
         messageCount: 0,
+        workspaceId: input.workspaceId ?? null,
         actionBinding: input.actionBinding,
       },
       messages: [],
