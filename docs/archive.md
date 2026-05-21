@@ -717,3 +717,11 @@
 - **验证过程**：先执行 `pnpm exec vitest run packages/core/tests/storage/file-session-store.test.ts`，发现 Vitest 会同时匹配 `.worktrees/` 下旧 worktree 的同名测试，不能作为本条验收的精确证据；随后执行 `pnpm exec vitest run packages/core/tests/storage/file-session-store.test.ts --exclude '.worktrees/**'`，只运行主仓库 storage 测试文件。
 - **证据**：第二次命令输出 `packages/core/tests/storage/file-session-store.test.ts (14 tests)`，`Test Files 1 passed (1)`，`Tests 14 passed (14)`；其中包含 `preserves concurrent appends to the same session`、`preserves concurrent event appends to the same session` 与不同 session 写入不互相阻塞的回归用例。
 - **结论**：FileSessionStore 同一 session 并发写入 messages/events 的回归验证通过；该项已从 `docs/manual-qa.md` 移除。
+
+### runtime 错误历史恢复回归
+
+- **验证日期**：2026-05-22
+- **验证环境**：mock-llm / macOS 15.5 (24F74) / `dist/HandAgentDesktop.app`
+- **验证过程**：基线 `bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build` 通过后，使用 `bash ./scripts/package-app.sh --mock-llm` 打包并启动 App。通过原生快捷键打开 PromptPanel，提交 `[mock:unknown-tool] QA_UNKNOWN_TOOL_HISTORY_RECOVERY_20260522_055505`。实时 SessionWindow 消息区和底部错误条显示 `Unknown tool: mock.missing_tool`。关闭当前 tab 后从左侧历史重新打开同一 session，恢复后的消息区和底部错误条仍显示 `Unknown tool: mock.missing_tool`，没有显示 `本轮运行因 agent-server 重启而中断，请重新发送请求。`
+- **证据**：会话文件 `/Users/mu9/.spotAgent/sessions/session-1779400526701-e3a0j3.json`。首次运行后 messages 只有 user，events 只有 `{ type: "error", message: "Unknown tool: mock.missing_tool" }`；历史恢复后 messages 为 user + assistant `Unknown tool: mock.missing_tool`，events 仍只有原始 error，`hasRunLost false`。进程证据：`HandAgentDesktop` pid 28118，agent-server `node` pid 28125 监听 TCP 4317。
+- **结论**：通过。已持久化 runtime error 的历史恢复会保留原始错误原因，不再误报 `run_lost_after_restart`。

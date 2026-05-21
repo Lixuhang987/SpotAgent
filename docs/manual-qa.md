@@ -25,18 +25,6 @@
 
 说明：不响应 abort 的 runtime 强制清理边界已由 `SessionRuntimeOrchestrator` 与 `SessionRouter` 自动化测试覆盖；本条实机 QA 只验证桌面删除 running session 的用户可见链路。
 
-## runtime 错误历史恢复回归（P2）
-
-1. 使用 mock LLM 打包并启动桌面 App：`bash ./scripts/package-app.sh --mock-llm`，再打开 `dist/HandAgentDesktop.app`。
-1. 通过 PromptPanel 提交 `[mock:unknown-tool] QA_UNKNOWN_TOOL_HISTORY_RECOVERY_YYYYMMDD_HHMMSS`。
-1. 确认当前 SessionWindow 实时显示 `Unknown tool: mock.missing_tool`。
-1. 关闭该 tab，但不要删除历史会话。
-1. 从左侧历史列表重新打开同一 session。
-1. 确认消息区仍显示 `Unknown tool: mock.missing_tool`，底部状态为 failed / error，不显示 `本轮运行因 agent-server 重启而中断，请重新发送请求。`。
-1. 记录 session id，并确认 `~/.spotAgent/sessions/<session-id>.json` 中没有追加 `code: "run_lost_after_restart"` 的 error event。
-
-说明：已持久化 runtime error 的 incomplete turn 恢复边界由 `SessionRouter` 自动化测试覆盖；本条实机 QA 验证桌面历史重开后的用户可见错误文案和持久化文件。
-
 ## Anthropic Provider 真实调用（P1）
 
 1. 配置可用 Anthropic API key 与模型后提交普通文本 prompt，确认 assistant 回复可见且逐段 streaming。
