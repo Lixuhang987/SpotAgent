@@ -1,3 +1,4 @@
+import CoreGraphics
 import XCTest
 @testable import HandAgentDesktop
 
@@ -146,6 +147,69 @@ final class MacPlatformProviderParsingTests: XCTestCase {
         )
 
         XCTAssertNil(missing)
+    }
+
+    func testAccessibilityWindowSelectionPrefersWindowNumberMatch() {
+        let targetWindow = MacPlatformCGWindowMetadata(
+            windowId: 42,
+            ownerPid: 123,
+            title: "未命名2.rtf",
+            bounds: CGRect(x: 20, y: 40, width: 800, height: 600)
+        )
+
+        let selected = selectAccessibilityWindow(
+            windowId: 42,
+            focusedWindow: "focused",
+            windows: ["fallback", "direct"],
+            targetWindow: targetWindow,
+            appProcessIdentifier: 123,
+            windowNumber: { $0 == "direct" ? 42 : nil },
+            windowTitle: { _ in "未命名2.rtf" },
+            windowFrame: { _ in CGRect(x: 20, y: 40, width: 800, height: 600) }
+        )
+
+        XCTAssertEqual(selected, "direct")
+    }
+
+    func testAccessibilityWindowSelectionFallsBackToTitleAndFrameWhenWindowNumberIsUnavailable() {
+        let targetWindow = MacPlatformCGWindowMetadata(
+            windowId: 52648,
+            ownerPid: 321,
+            title: "未命名2.rtf",
+            bounds: CGRect(x: 16, y: 72, width: 960, height: 720)
+        )
+
+        let selected = selectAccessibilityWindow(
+            windowId: 52648,
+            focusedWindow: "focused",
+            windows: ["other", "target"],
+            targetWindow: targetWindow,
+            appProcessIdentifier: 321,
+            windowNumber: { _ in nil },
+            windowTitle: { $0 == "target" ? "未命名2.rtf" : "未命名.rtf" },
+            windowFrame: {
+                $0 == "target"
+                    ? CGRect(x: 16.5, y: 72, width: 960, height: 720)
+                    : CGRect(x: 120, y: 120, width: 960, height: 720)
+            }
+        )
+
+        XCTAssertEqual(selected, "target")
+    }
+
+    func testAccessibilityWindowSelectionReturnsNilWhenExplicitWindowCannotBeMatched() {
+        let selected = selectAccessibilityWindow(
+            windowId: 99,
+            focusedWindow: "focused",
+            windows: ["target"],
+            targetWindow: nil,
+            appProcessIdentifier: 321,
+            windowNumber: { _ in nil },
+            windowTitle: { _ in "未命名2.rtf" },
+            windowFrame: { _ in CGRect(x: 16, y: 72, width: 960, height: 720) }
+        )
+
+        XCTAssertNil(selected)
     }
 
     func testAccessibilityWindowSelectionUsesFocusedWindowWhenWindowIdIsOmitted() {
