@@ -701,3 +701,11 @@
 - **验证过程**：在 SessionWindow 已打开并显示会话 `/Users/mu9/.spotAgent/sessions/session-1779392614813-khh13t.json` 时，手动 `kill -TERM` 当前监听 4317 的 agent-server 子进程 `77113`，保留 HandAgentDesktop 进程运行。约 2 秒后确认 agent-server 自动重启为新 PID `77697`，父进程仍为 HandAgentDesktop。随后在同一个已恢复 tab 内发送 `[mock:assistant-ok] QA_RECONNECT_FOLLOWUP_20260522_0350`。
 - **证据**：重启后 `lsof -nP -iTCP:4317 -sTCP:LISTEN` 显示 `node 77697` 监听，`ps -o pid,ppid,command -p 77697` 显示父进程为 `77112 /Users/mu9/proj/handAgent/dist/HandAgentDesktop.app/Contents/MacOS/HandAgentDesktop`。SessionWindow 没有停留在重连提示，原会话内容仍可见，follow-up 成功显示在同一消息区。同一 session 文件 `session-1779392614813-khh13t.json` 中 `messageCount: 4`，包含重启前的 user/assistant 和重启后的 user/assistant 两轮消息。
 - **结论**：通过。agent-server 子进程异常退出后会自动重启；SessionWindow socket 可重新连接并通过 `session_snapshot` 保持当前会话，恢复后仍能继续提交新消息并写回同一持久化文件。
+
+### 运行中 agent-server 重启中断恢复回归（P1）
+
+- **验证日期**：2026-05-22
+- **验证环境**：mock-llm / macOS 15+ / `/Users/mu9/proj/handAgent` main `2b7ef57`
+- **验证过程**：在 main 上先通过 `bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`；随后 `bash ./scripts/package-app.sh --mock-llm` 打包并启动 `dist/HandAgentDesktop.app`。通过原生 `⌘⇧Space` 唤起 PromptPanel，提交 `[mock:slow-focus] QA_RUNNING_SERVER_RESTART_FIXED_20260522_044757`。Computer Use 确认 SessionWindow 进入运行态且停止按钮可见后，终止 agent-server node PID `614`；desktop 自动拉起新 node PID `795`。恢复后 UI 消息区和错误条均显示 `本轮运行因 agent-server 重启而中断，请重新发送请求。`，composer 恢复可发送。
+- **证据**：新进程 `node 795` 监听 `*:4317`，`ps -o pid,ppid,command -p 795` 显示父进程为 HandAgentDesktop PID `613`。session 文件 `/Users/mu9/.spotAgent/sessions/session-1779396542090-wvgrbv.json` 包含 2 条消息：user prompt 与 assistant 错误文案；`events[0]` 为 `{ type: "error", code: "run_lost_after_restart" }`。
+- **结论**：通过。运行中 agent-server 重启不再只留下通用连接错误或空事件历史，UI 与持久化均能恢复为明确失败状态。
