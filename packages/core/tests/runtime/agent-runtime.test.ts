@@ -58,16 +58,18 @@ class StubbedTool implements AgentTool {
 }
 
 class NamedResultTool implements AgentTool {
-  description = "return a fixed result";
+  description: string;
   inputSchema = { type: "object", additionalProperties: false } as const;
 
   constructor(
     readonly name: string,
-    private readonly result: unknown,
-  ) {}
+    private readonly output: unknown,
+  ) {
+    this.description = `${name} test tool`;
+  }
 
   async call(): Promise<unknown> {
-    return this.result;
+    return this.output;
   }
 }
 
@@ -295,7 +297,6 @@ describe("AgentRuntime", () => {
       async complete(messages: AgentMessage[]) {
         seenTurns.push(messages.map((message) => ({ ...message })));
         const lastMessage = messages[messages.length - 1];
-
         if (lastMessage.role === "user") {
           return {
             message: { role: "assistant" as const, content: "我会读取前台 App 和剪贴板。" },
