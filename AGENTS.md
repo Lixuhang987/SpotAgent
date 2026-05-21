@@ -99,3 +99,4 @@ flowchart TD
 - 进行代码修改。
 - 验证通过后，更新已有文档。
 - 执行 `git commit` 并在 commit message 中总结改动，不要让完成的工作长时间不提交。
+- 最后将完成的改动加入到 manual-qa 中
