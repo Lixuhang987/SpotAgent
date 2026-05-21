@@ -13,6 +13,8 @@ type MockScenarioContext = {
   options?: LLMCompleteOptions;
 };
 
+type MockToolCall = NonNullable<LLMCompletion["toolCalls"]>[number];
+
 export type MockLLMScenario = {
   id: string;
   triggers: string[];
@@ -27,311 +29,271 @@ export const mockLLMScenarios: MockLLMScenario[] = [
     description: "普通 assistant 回复，用于验证主链路。",
     complete: () => assistant("Mock assistant response: main chain is reachable."),
   },
-  {
+  toolScenario({
     id: "workspace-list",
-    triggers: ["[mock:workspace-list]"],
+    trigger: "[mock:workspace-list]",
     description: "调用 workspace.list，再根据 tool result 返回最终回复。",
-    complete: (context) => toolThenFinal(context, {
-      toolCall: {
-        id: "mock-workspace-list-1",
-        name: "workspace.list",
-        arguments: {},
-      },
-      finalText: "Mock workspace.list completed.",
-    }),
-  },
-  {
+    toolCall: {
+      id: "mock-workspace-list-1",
+      name: "workspace.list",
+      arguments: {},
+    },
+    finalText: "Mock workspace.list completed.",
+  }),
+  toolScenario({
     id: "clipboard-read",
-    triggers: ["[mock:clipboard-read]"],
+    trigger: "[mock:clipboard-read]",
     description: "调用 clipboard.read，用于验证 tool settings denylist 和平台 tool 链路。",
-    complete: (context) => toolThenFinal(context, {
-      toolCall: {
-        id: "mock-clipboard-read-1",
-        name: "clipboard.read",
-        arguments: {},
-      },
-      finalText: "Mock clipboard.read completed.",
-    }),
-  },
-  {
+    toolCall: {
+      id: "mock-clipboard-read-1",
+      name: "clipboard.read",
+      arguments: {},
+    },
+    finalText: "Mock clipboard.read completed.",
+  }),
+  toolScenario({
     id: "screen-display",
-    triggers: ["[mock:screen-display]"],
+    trigger: "[mock:screen-display]",
     description: "调用 screen.capture display，用于验证 ScreenCaptureKit display 截图链路。",
-    complete: (context) => toolThenFinal(context, {
-      toolCall: {
-        id: "mock-screen-display-1",
-        name: "screen.capture",
-        arguments: { target: { kind: "display" } },
-      },
-      finalText: "Mock screen.capture display completed.",
-    }),
-  },
-  {
+    toolCall: {
+      id: "mock-screen-display-1",
+      name: "screen.capture",
+      arguments: { target: { kind: "display" } },
+    },
+    finalText: "Mock screen.capture display completed.",
+  }),
+  toolScenario({
     id: "screen-window",
-    triggers: ["[mock:screen-window]"],
+    trigger: "[mock:screen-window]",
     description: "调用 screen.capture window，prompt 中可用 windowId=<number> 指定窗口 id。",
-    complete: (context) => toolThenFinal(context, {
-      toolCall: {
-        id: "mock-screen-window-1",
-        name: "screen.capture",
-        arguments: { target: { kind: "window", windowId: parseWindowId(context) } },
-      },
-      finalText: "Mock screen.capture window completed.",
+    toolCall: (context) => ({
+      id: "mock-screen-window-1",
+      name: "screen.capture",
+      arguments: { target: { kind: "window", windowId: parseWindowId(context) } },
     }),
-  },
-  {
+    finalText: "Mock screen.capture window completed.",
+  }),
+  toolScenario({
     id: "file-write",
-    triggers: ["[mock:file-write]"],
+    trigger: "[mock:file-write]",
     description: "调用 file.write，参数形态参考真实 API 集成测试。",
-    complete: (context) => toolThenFinal(context, {
-      toolCall: {
-        id: "mock-file-write-1",
-        name: "file.write",
-        arguments: {
-          workspaceId: "qa-workspace",
-          relativePath: "hello.txt",
-          content: "hello from MockLLMClient",
-        },
+    toolCall: {
+      id: "mock-file-write-1",
+      name: "file.write",
+      arguments: {
+        workspaceId: "qa-workspace",
+        relativePath: "hello.txt",
+        content: "hello from MockLLMClient",
       },
-      finalText: "Mock file.write completed for hello.txt.",
-    }),
-  },
-  {
+    },
+    finalText: "Mock file.write completed for hello.txt.",
+  }),
+  toolScenario({
     id: "file-read",
-    triggers: ["[mock:file-read]"],
+    trigger: "[mock:file-read]",
     description: "调用 file.read，覆盖 cached=turn 的读取链路。",
-    complete: (context) => toolThenFinal(context, {
-      toolCall: {
-        id: "mock-file-read-1",
-        name: "file.read",
-        arguments: {
-          workspaceId: "qa-workspace",
-          relativePath: "hello.txt",
-          cached: "turn",
-        },
+    toolCall: {
+      id: "mock-file-read-1",
+      name: "file.read",
+      arguments: {
+        workspaceId: "qa-workspace",
+        relativePath: "hello.txt",
+        cached: "turn",
       },
-      finalText: "Mock file.read completed for hello.txt.",
-    }),
-  },
-  {
+    },
+    finalText: "Mock file.read completed for hello.txt.",
+  }),
+  toolScenario({
     id: "path-escape",
-    triggers: ["[mock:path-escape]"],
+    trigger: "[mock:path-escape]",
     description: "返回越狱路径 file.write，用于验证 workspace 沙箱拒绝。",
-    complete: (context) => toolThenFinal(context, {
-      toolCall: {
-        id: "mock-path-escape-1",
-        name: "file.write",
-        arguments: {
-          workspaceId: "qa-workspace",
-          relativePath: "../../etc/passwd",
-          content: "should be rejected",
-        },
+    toolCall: {
+      id: "mock-path-escape-1",
+      name: "file.write",
+      arguments: {
+        workspaceId: "qa-workspace",
+        relativePath: "../../etc/passwd",
+        content: "should be rejected",
       },
-      finalText: "Mock path escape scenario finished.",
-    }),
-  },
-  {
+    },
+    finalText: "Mock path escape scenario finished.",
+  }),
+  toolScenario({
     id: "symlink-escape",
-    triggers: ["[mock:symlink-escape]"],
+    trigger: "[mock:symlink-escape]",
     description: "返回指向 symlink 内路径的 file.write，用于验证 workspace realpath 沙箱拒绝。",
-    complete: (context) => toolThenFinal(context, {
-      toolCall: {
-        id: "mock-symlink-escape-1",
-        name: "file.write",
-        arguments: {
-          workspaceId: "qa-workspace",
-          relativePath: "outside-link/escape.txt",
-          content: "should be rejected through symlink",
-        },
+    toolCall: {
+      id: "mock-symlink-escape-1",
+      name: "file.write",
+      arguments: {
+        workspaceId: "qa-workspace",
+        relativePath: "outside-link/escape.txt",
+        content: "should be rejected through symlink",
       },
-      finalText: "Mock symlink escape scenario finished.",
-    }),
-  },
-  {
+    },
+    finalText: "Mock symlink escape scenario finished.",
+  }),
+  toolScenario({
     id: "workspace-ask",
-    triggers: ["[mock:workspace-ask]"],
+    trigger: "[mock:workspace-ask]",
     description: "调用 workspace.askUser，用于验证 SessionWindow 内联 workspace 选择链路。",
-    complete: (context) => toolThenFinal(context, {
-      toolCall: {
-        id: "mock-workspace-ask-1",
-        name: "workspace.askUser",
-        arguments: {
-          prompt: "请选择 QA 要写入的 workspace",
-          candidateIds: ["qa-workspace", "tmp"],
-        },
+    toolCall: {
+      id: "mock-workspace-ask-1",
+      name: "workspace.askUser",
+      arguments: {
+        prompt: "请选择 QA 要写入的 workspace",
+        candidateIds: ["qa-workspace", "tmp"],
       },
-      finalText: "Mock workspace.askUser completed.",
-    }),
-  },
-  {
+    },
+    finalText: "Mock workspace.askUser completed.",
+  }),
+  toolScenario({
     id: "permission-write",
-    triggers: ["[mock:permission-write]"],
+    trigger: "[mock:permission-write]",
     description: "返回 file.write，用于触发权限审批 UI。",
-    complete: (context) => toolThenFinal(context, {
-      toolCall: {
-        id: "mock-permission-write-1",
-        name: "file.write",
-        arguments: {
-          workspaceId: "qa-workspace",
-          relativePath: "permission-check.txt",
-          content: "permission scenario content",
-        },
+    toolCall: {
+      id: "mock-permission-write-1",
+      name: "file.write",
+      arguments: {
+        workspaceId: "qa-workspace",
+        relativePath: "permission-check.txt",
+        content: "permission scenario content",
       },
-      finalText: "Mock permission write completed.",
-    }),
-  },
-  {
+    },
+    finalText: "Mock permission write completed.",
+  }),
+  toolScenario({
     id: "plugin-echo",
-    triggers: ["[mock:plugin-echo]"],
+    trigger: "[mock:plugin-echo]",
     description: "调用 plugin.echo，用于验证本地插件 tool 加载、执行与热禁用。",
-    complete: (context) => toolThenFinal(context, {
-      toolCall: {
-        id: "mock-plugin-echo-1",
-        name: "plugin.echo",
-        arguments: { message: "hello from MockLLMClient" },
-      },
-      finalText: "Mock plugin.echo completed.",
-    }),
-  },
-  {
+    toolCall: {
+      id: "mock-plugin-echo-1",
+      name: "plugin.echo",
+      arguments: { message: "hello from MockLLMClient" },
+    },
+    finalText: "Mock plugin.echo completed.",
+  }),
+  toolScenario({
     id: "plugin-workspace-read",
-    triggers: ["[mock:plugin-workspace-read]"],
+    trigger: "[mock:plugin-workspace-read]",
     description: "调用带合法 workspace read 参数的 plugin.echo，用于验证插件 workspace 注入。",
-    complete: (context) => toolThenFinal(context, {
-      toolCall: {
-        id: "mock-plugin-workspace-read-1",
-        name: "plugin.echo",
-        arguments: {
-          workspaceId: "qa-workspace",
-          relativePath: "plugin-input.txt",
-        },
+    toolCall: {
+      id: "mock-plugin-workspace-read-1",
+      name: "plugin.echo",
+      arguments: {
+        workspaceId: "qa-workspace",
+        relativePath: "plugin-input.txt",
       },
-      finalText: "Mock plugin workspace read completed.",
-    }),
-  },
-  {
+    },
+    finalText: "Mock plugin workspace read completed.",
+  }),
+  toolScenario({
     id: "plugin-workspace-write",
-    triggers: ["[mock:plugin-workspace-write]"],
+    trigger: "[mock:plugin-workspace-write]",
     description: "调用带合法 workspace write 参数的 plugin.echo，用于验证插件 workspace 注入。",
-    complete: (context) => toolThenFinal(context, {
-      toolCall: {
-        id: "mock-plugin-workspace-write-1",
-        name: "plugin.echo",
-        arguments: {
-          workspaceId: "qa-workspace",
-          relativePath: "plugin-output.txt",
-        },
+    toolCall: {
+      id: "mock-plugin-workspace-write-1",
+      name: "plugin.echo",
+      arguments: {
+        workspaceId: "qa-workspace",
+        relativePath: "plugin-output.txt",
       },
-      finalText: "Mock plugin workspace write completed.",
-    }),
-  },
-  {
+    },
+    finalText: "Mock plugin workspace write completed.",
+  }),
+  toolScenario({
     id: "plugin-workspace-escape",
-    triggers: ["[mock:plugin-workspace-escape]"],
+    trigger: "[mock:plugin-workspace-escape]",
     description: "调用带 ../../ 越界路径的 plugin.echo，用于验证插件 workspace 路径拦截。",
-    complete: (context) => toolThenFinal(context, {
-      toolCall: {
-        id: "mock-plugin-workspace-escape-1",
-        name: "plugin.echo",
-        arguments: {
-          workspaceId: "qa-workspace",
-          relativePath: "../../etc/passwd",
-        },
+    toolCall: {
+      id: "mock-plugin-workspace-escape-1",
+      name: "plugin.echo",
+      arguments: {
+        workspaceId: "qa-workspace",
+        relativePath: "../../etc/passwd",
       },
-      finalText: "Mock plugin workspace escape completed.",
-    }),
-  },
-  {
+    },
+    finalText: "Mock plugin workspace escape completed.",
+  }),
+  toolScenario({
     id: "plugin-workspace-symlink",
-    triggers: ["[mock:plugin-workspace-symlink]"],
+    trigger: "[mock:plugin-workspace-symlink]",
     description: "调用指向 workspace symlink 的 plugin.echo，用于验证插件 workspace realpath 拦截。",
-    complete: (context) => toolThenFinal(context, {
-      toolCall: {
-        id: "mock-plugin-workspace-symlink-1",
-        name: "plugin.echo",
-        arguments: {
-          workspaceId: "qa-workspace",
-          relativePath: "outside-link/plugin.txt",
-        },
+    toolCall: {
+      id: "mock-plugin-workspace-symlink-1",
+      name: "plugin.echo",
+      arguments: {
+        workspaceId: "qa-workspace",
+        relativePath: "outside-link/plugin.txt",
       },
-      finalText: "Mock plugin workspace symlink completed.",
-    }),
-  },
-  {
+    },
+    finalText: "Mock plugin workspace symlink completed.",
+  }),
+  toolScenario({
     id: "mcp-echo",
-    triggers: ["[mock:mcp-echo]"],
+    trigger: "[mock:mcp-echo]",
     description: "调用 mcp.qa_echo.echo，用于验证 Action Plugin 绑定的 MCP tool 作用域。",
-    complete: (context) => toolThenFinal(context, {
-      toolCall: {
-        id: "mock-mcp-echo-1",
-        name: "mcp.qa_echo.echo",
-        arguments: { text: "hello from MockLLMClient" },
-      },
-      finalText: "Mock MCP echo completed.",
-    }),
-  },
-  {
+    toolCall: {
+      id: "mock-mcp-echo-1",
+      name: "mcp.qa_echo.echo",
+      arguments: { text: "hello from MockLLMClient" },
+    },
+    finalText: "Mock MCP echo completed.",
+  }),
+  toolScenario({
     id: "ocr-invalid",
-    triggers: ["[mock:ocr-invalid]"],
+    trigger: "[mock:ocr-invalid]",
     description: "调用缺少 imageBase64 的 ocr.read，用于验证明确 invalid_argument 错误。",
-    complete: (context) => toolThenFinal(context, {
-      toolCall: {
-        id: "mock-ocr-invalid-1",
-        name: "ocr.read",
-        arguments: {},
-      },
-      finalText: "Mock ocr invalid scenario finished.",
-    }),
-  },
-  {
+    toolCall: {
+      id: "mock-ocr-invalid-1",
+      name: "ocr.read",
+      arguments: {},
+    },
+    finalText: "Mock ocr invalid scenario finished.",
+  }),
+  toolScenario({
     id: "ocr-sample",
-    triggers: ["[mock:ocr-sample]"],
+    trigger: "[mock:ocr-sample]",
     description: "调用带 imageBase64 的 ocr.read，prompt 可用 imageBase64=<base64> 覆盖默认样例。",
-    complete: (context) => toolThenFinal(context, {
-      toolCall: {
-        id: "mock-ocr-sample-1",
-        name: "ocr.read",
-        arguments: {
-          imageBase64: parseInlineValue(context, "imageBase64") ?? samplePngBase64,
-          mimeType: "image/png",
-          language: "en-US",
-        },
+    toolCall: (context) => ({
+      id: "mock-ocr-sample-1",
+      name: "ocr.read",
+      arguments: {
+        imageBase64: parseInlineValue(context, "imageBase64") ?? samplePngBase64,
+        mimeType: "image/png",
+        language: "en-US",
       },
-      finalText: "Mock ocr sample completed.",
     }),
-  },
-  {
+    finalText: "Mock ocr sample completed.",
+  }),
+  toolScenario({
     id: "accessibility-frontmost",
-    triggers: ["[mock:accessibility-frontmost]"],
+    trigger: "[mock:accessibility-frontmost]",
     description: "调用 accessibility.snapshot frontmost_app，用于验证辅助功能快照或权限错误。",
-    complete: (context) => toolThenFinal(context, {
-      toolCall: {
-        id: "mock-accessibility-frontmost-1",
-        name: "accessibility.snapshot",
-        arguments: { kind: "frontmost_app" },
-      },
-      finalText: "Mock accessibility snapshot completed.",
-    }),
-  },
-  {
+    toolCall: {
+      id: "mock-accessibility-frontmost-1",
+      name: "accessibility.snapshot",
+      arguments: { kind: "frontmost_app" },
+    },
+    finalText: "Mock accessibility snapshot completed.",
+  }),
+  toolScenario({
     id: "accessibility-set-frontmost",
-    triggers: ["[mock:accessibility-set-frontmost]"],
+    trigger: "[mock:accessibility-set-frontmost]",
     description: "调用 accessibility.action set_value frontmost_app，用于验证辅助功能动作或权限错误。",
-    complete: (context) => toolThenFinal(context, {
-      toolCall: {
-        id: "mock-accessibility-set-frontmost-1",
-        name: "accessibility.action",
-        arguments: {
-          target: { kind: "frontmost_app" },
-          action: {
-            kind: "set_value",
-            value: "HANDAGENT_ACCESSIBILITY_SET_VALUE_20260521",
-          },
+    toolCall: {
+      id: "mock-accessibility-set-frontmost-1",
+      name: "accessibility.action",
+      arguments: {
+        target: { kind: "frontmost_app" },
+        action: {
+          kind: "set_value",
+          value: "HANDAGENT_ACCESSIBILITY_SET_VALUE_20260521",
         },
       },
-      finalText: "Mock accessibility action completed.",
-    }),
-  },
+    },
+    finalText: "Mock accessibility action completed.",
+  }),
   {
     id: "image-summary",
     triggers: ["[mock:image-summary]"],
@@ -427,19 +389,48 @@ export class MockLLMClient implements LLMClient {
   }
 }
 
+function toolScenario(config: {
+  id: string;
+  trigger: string;
+  description: string;
+  toolCall: MockToolCall | ((context: MockScenarioContext) => MockToolCall);
+  finalText: string;
+}): MockLLMScenario {
+  return {
+    id: config.id,
+    triggers: [config.trigger],
+    description: config.description,
+    complete: (context) => toolThenFinal(context, {
+      toolCall: resolveMockToolCall(config.toolCall, context),
+      finalText: config.finalText,
+    }),
+  };
+}
+
+function resolveMockToolCall(
+  toolCall: MockToolCall | ((context: MockScenarioContext) => MockToolCall),
+  context: MockScenarioContext,
+): MockToolCall {
+  return typeof toolCall === "function" ? toolCall(context) : toolCall;
+}
+
 function findScenario(
   messages: AgentMessage[],
   scenarios: MockLLMScenario[],
 ): MockLLMScenario | undefined {
-  const userTexts = messages
-    .filter((message): message is Extract<AgentMessage, { role: "user" }> => message.role === "user")
-    .map((message) => messageText(message));
+  const userTexts = userMessageTexts(messages);
 
   return scenarios.find((scenario) =>
     scenario.triggers.some((trigger) =>
       userTexts.some((text) => text.includes(trigger)),
     ),
   );
+}
+
+function userMessageTexts(messages: AgentMessage[]): string[] {
+  return messages
+    .filter((message): message is Extract<AgentMessage, { role: "user" }> => message.role === "user")
+    .map((message) => messageText(message));
 }
 
 function messageText(message: Extract<AgentMessage, { role: "user" }>): string {
@@ -453,19 +444,13 @@ function messageText(message: Extract<AgentMessage, { role: "user" }>): string {
 }
 
 function parseWindowId(context: MockScenarioContext): number {
-  const userText = context.messages
-    .filter((message): message is Extract<AgentMessage, { role: "user" }> => message.role === "user")
-    .map((message) => messageText(message))
-    .join("\n");
+  const userText = userMessageTexts(context.messages).join("\n");
   const match = userText.match(/\bwindowId=(\d+)\b/);
   return match ? Number(match[1]) : 0;
 }
 
 function parseInlineValue(context: MockScenarioContext, key: string): string | undefined {
-  const userText = context.messages
-    .filter((message): message is Extract<AgentMessage, { role: "user" }> => message.role === "user")
-    .map((message) => messageText(message))
-    .join("\n");
+  const userText = userMessageTexts(context.messages).join("\n");
   const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const match = userText.match(new RegExp(`\\b${escapedKey}=([^\\s]+)`));
   return match?.[1];
@@ -513,7 +498,7 @@ function createAbortError(): Error {
 function toolThenFinal(
   context: MockScenarioContext,
   config: {
-    toolCall: NonNullable<LLMCompletion["toolCalls"]>[number];
+    toolCall: MockToolCall;
     finalText: string;
   },
 ): LLMCompletion {

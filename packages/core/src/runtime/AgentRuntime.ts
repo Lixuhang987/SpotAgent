@@ -3,6 +3,7 @@ import type { ToolCallEnvelope } from "./ToolCallEnvelope.ts";
 import type { LLMClientLike } from "../llm/LLMClient.ts";
 import type { LLMCompletion } from "../llm/LLMClient.ts";
 import { streamLLM, throwIfAborted } from "../llm/LLMClient.ts";
+import type { AgentTool } from "../tools/AgentTool.ts";
 import { ToolRegistry } from "../tools/ToolRegistry.ts";
 import type { PermissionPolicy } from "../permission/PermissionPolicy.ts";
 import { AllowAllPermissionPolicy, DENY_TOOL_RESULT_TEXT } from "../permission/PermissionPolicy.ts";
@@ -72,6 +73,14 @@ export type AgentRuntimeEvent =
 export type AgentRuntimeRunOptions = {
   sessionId?: string;
   signal?: AbortSignal;
+};
+
+type AgentRuntimeEventSink = (event: AgentRuntimeEvent) => void;
+
+type ToolExecutionResult = {
+  content: string;
+  status: "success" | "error";
+  durationMs: number;
 };
 
 export class AgentRuntime {
@@ -150,94 +159,11 @@ export class AgentRuntime {
       }
 
       for (const toolCall of toolCalls) {
-        throwIfAborted(runOptions.signal);
-        const tool = this.toolRegistry.get(toolCall.name);
-        if (!tool) {
-          throw new Error(`Unknown tool: ${toolCall.name}`);
-        }
-
-        const permRequest = {
-          toolName: toolCall.name,
-          arguments: toolCall.arguments,
-          sessionId: runOptions.sessionId,
-          toolCallId: toolCall.id,
-        };
-
-        let decision = await this.permissionPolicy.check(permRequest);
-        throwIfAborted(runOptions.signal);
-        if (decision === "ask") {
-          const resolution = await this.permissionPolicy.resolveAsk(permRequest);
-          throwIfAborted(runOptions.signal);
-          await this.permissionPolicy.remember(permRequest, resolution);
-          decision = resolution.decision;
-          onEvent({
-            type: "permission_decision",
-            toolCallId: toolCall.id,
-            toolName: toolCall.name,
-            decision: resolution.decision,
-            scope: resolution.remember,
-            reason: resolution.decision === "deny" ? resolution.reason : undefined,
-          });
-        }
-
-        if (decision === "deny") {
-          nextMessages.push({
-            role: "tool",
-            toolCallId: toolCall.id,
-            name: toolCall.name,
-            content: DENY_TOOL_RESULT_TEXT,
-          });
-          onEvent({
-            type: "tool_result",
-            toolCallId: toolCall.id,
-            toolName: toolCall.name,
-            status: "error",
-            output: DENY_TOOL_RESULT_TEXT,
-            durationMs: 0,
-          });
-          continue;
-        }
-
-        onEvent({
-          type: "tool_call",
-          toolCallId: toolCall.id,
-          toolName: toolCall.name,
-          input: toolCall.arguments,
-        });
-
-        const startedAt = Date.now();
-        let toolContent: string;
-        let toolStatus: "success" | "error" = "success";
-        try {
-          const result = await tool.call(toolCall.arguments, {
-            sessionId: runOptions.sessionId,
-            toolCallId: toolCall.id,
-          });
-          throwIfAborted(runOptions.signal);
-          toolContent = serializeToolResult(result);
-        } catch (error) {
-          throwIfAborted(runOptions.signal);
-          toolStatus = "error";
-          toolContent = error instanceof Error ? error.message : String(error);
-        }
-        const durationMs = Date.now() - startedAt;
-
-        const toolMessage = await this.createToolMessage({
-          toolCallId: toolCall.id,
-          toolName: toolCall.name,
-          toolContent,
-          cached: tool.stubByDefault ? parseCached(toolCall.arguments.cached) : undefined,
-        });
-        throwIfAborted(runOptions.signal);
-        nextMessages.push(toolMessage);
-
-        onEvent({
-          type: "tool_result",
-          toolCallId: toolCall.id,
-          toolName: toolCall.name,
-          status: toolStatus,
-          output: truncateOutput(toolContent),
-          durationMs,
+        await this.handleToolCall({
+          toolCall,
+          messages: nextMessages,
+          onEvent,
+          runOptions,
         });
       }
     }
@@ -245,9 +171,138 @@ export class AgentRuntime {
     throw new Error(`AgentRuntime exceeded maxTurns: ${this.maxTurns}`);
   }
 
+  private async handleToolCall(input: {
+    toolCall: ToolCallEnvelope;
+    messages: AgentMessage[];
+    onEvent: AgentRuntimeEventSink;
+    runOptions: AgentRuntimeRunOptions;
+  }): Promise<void> {
+    const { toolCall, messages, onEvent, runOptions } = input;
+    throwIfAborted(runOptions.signal);
+
+    const tool = this.toolRegistry.get(toolCall.name);
+    if (!tool) {
+      throw new Error(`Unknown tool: ${toolCall.name}`);
+    }
+
+    const decision = await this.resolveToolPermission(toolCall, onEvent, runOptions);
+    if (decision === "deny") {
+      this.appendDeniedToolResult(toolCall, messages, onEvent);
+      return;
+    }
+
+    onEvent({
+      type: "tool_call",
+      toolCallId: toolCall.id,
+      toolName: toolCall.name,
+      input: toolCall.arguments,
+    });
+
+    const execution = await this.callTool(tool, toolCall, runOptions);
+    const toolMessage = await this.createToolMessage({
+      toolCallId: toolCall.id,
+      toolName: toolCall.name,
+      toolContent: execution.content,
+      cached: tool.stubByDefault ? parseCached(toolCall.arguments.cached) : undefined,
+    });
+    throwIfAborted(runOptions.signal);
+    messages.push(toolMessage);
+
+    onEvent({
+      type: "tool_result",
+      toolCallId: toolCall.id,
+      toolName: toolCall.name,
+      status: execution.status,
+      output: truncateOutput(execution.content),
+      durationMs: execution.durationMs,
+    });
+  }
+
+  private async resolveToolPermission(
+    toolCall: ToolCallEnvelope,
+    onEvent: AgentRuntimeEventSink,
+    runOptions: AgentRuntimeRunOptions,
+  ): Promise<"allow" | "deny"> {
+    const permRequest = {
+      toolName: toolCall.name,
+      arguments: toolCall.arguments,
+      sessionId: runOptions.sessionId,
+      toolCallId: toolCall.id,
+    };
+
+    const decision = await this.permissionPolicy.check(permRequest);
+    throwIfAborted(runOptions.signal);
+    if (decision !== "ask") {
+      return decision;
+    }
+
+    const resolution = await this.permissionPolicy.resolveAsk(permRequest);
+    throwIfAborted(runOptions.signal);
+    await this.permissionPolicy.remember(permRequest, resolution);
+    onEvent({
+      type: "permission_decision",
+      toolCallId: toolCall.id,
+      toolName: toolCall.name,
+      decision: resolution.decision,
+      scope: resolution.remember,
+      reason: resolution.decision === "deny" ? resolution.reason : undefined,
+    });
+    return resolution.decision;
+  }
+
+  private appendDeniedToolResult(
+    toolCall: ToolCallEnvelope,
+    messages: AgentMessage[],
+    onEvent: AgentRuntimeEventSink,
+  ): void {
+    messages.push({
+      role: "tool",
+      toolCallId: toolCall.id,
+      name: toolCall.name,
+      content: DENY_TOOL_RESULT_TEXT,
+    });
+    onEvent({
+      type: "tool_result",
+      toolCallId: toolCall.id,
+      toolName: toolCall.name,
+      status: "error",
+      output: DENY_TOOL_RESULT_TEXT,
+      durationMs: 0,
+    });
+  }
+
+  private async callTool(
+    tool: AgentTool,
+    toolCall: ToolCallEnvelope,
+    runOptions: AgentRuntimeRunOptions,
+  ): Promise<ToolExecutionResult> {
+    const startedAt = Date.now();
+    let content: string;
+    let status: ToolExecutionResult["status"] = "success";
+
+    try {
+      const result = await tool.call(toolCall.arguments, {
+        sessionId: runOptions.sessionId,
+        toolCallId: toolCall.id,
+      });
+      throwIfAborted(runOptions.signal);
+      content = serializeToolResult(result);
+    } catch (error) {
+      throwIfAborted(runOptions.signal);
+      status = "error";
+      content = error instanceof Error ? error.message : String(error);
+    }
+
+    return {
+      content,
+      status,
+      durationMs: Date.now() - startedAt,
+    };
+  }
+
   private async completeTurn(
     messages: AgentMessage[],
-    onEvent: (event: AgentRuntimeEvent) => void,
+    onEvent: AgentRuntimeEventSink,
     assistantCount: number,
     runOptions: AgentRuntimeRunOptions,
   ): Promise<LLMCompletion> {
