@@ -54,10 +54,10 @@ final class SessionWindowViewTests: XCTestCase {
     }
 
     func testMessageBubblesEnableTextSelection() throws {
-        let messageBubbleSource = try messageBubbleSource()
+        let source = try sessionWindowSources()
 
         XCTAssertTrue(
-            messageBubbleSource.contains(".textSelection(.enabled)"),
+            source.contains(".textSelection(.enabled)"),
             "Message bubble text must remain selectable so users can copy arbitrary ranges."
         )
     }

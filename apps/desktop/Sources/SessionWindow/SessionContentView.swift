@@ -66,8 +66,7 @@ struct SessionMessageBubbleView: View {
     var body: some View {
         VStack(alignment: message.role == "user" ? .trailing : .leading, spacing: theme.spacing.sm) {
             VStack(alignment: .leading, spacing: theme.spacing.sm) {
-                Text(message.text)
-                    .textSelection(.enabled)
+                MarkdownMessageView(text: message.text, role: message.role)
                     .frame(maxWidth: message.role == "user" ? nil : .infinity, alignment: .leading)
 
                 if let attachmentSummaryText = message.attachmentSummaryText {
