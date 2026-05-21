@@ -725,3 +725,11 @@
 - **验证过程**：基线 `bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build` 通过后，使用 `bash ./scripts/package-app.sh --mock-llm` 打包并启动 App。通过原生快捷键打开 PromptPanel，提交 `[mock:unknown-tool] QA_UNKNOWN_TOOL_HISTORY_RECOVERY_20260522_055505`。实时 SessionWindow 消息区和底部错误条显示 `Unknown tool: mock.missing_tool`。关闭当前 tab 后从左侧历史重新打开同一 session，恢复后的消息区和底部错误条仍显示 `Unknown tool: mock.missing_tool`，没有显示 `本轮运行因 agent-server 重启而中断，请重新发送请求。`
 - **证据**：会话文件 `/Users/mu9/.spotAgent/sessions/session-1779400526701-e3a0j3.json`。首次运行后 messages 只有 user，events 只有 `{ type: "error", message: "Unknown tool: mock.missing_tool" }`；历史恢复后 messages 为 user + assistant `Unknown tool: mock.missing_tool`，events 仍只有原始 error，`hasRunLost false`。进程证据：`HandAgentDesktop` pid 28118，agent-server `node` pid 28125 监听 TCP 4317。
 - **结论**：通过。已持久化 runtime error 的历史恢复会保留原始错误原因，不再误报 `run_lost_after_restart`。
+
+### 权限 / tool 等待态 running 状态回归
+
+- **验证日期**：2026-05-22
+- **验证环境**：mock-llm / macOS 15+ / main 分支，`dist/HandAgentDesktop.app`，agent-server 监听 `4317`。
+- **验证过程**：通过 PromptPanel 提交 `[mock:workspace-ask] QA_PERMISSION_RUNNING_STATUS_20260522_063515`。权限审批面板 `授权调用 workspace.askUser` 可见时，SessionWindow 底部 composer 显示 `stop.fill` Stop 按钮，状态气泡显示 `Running`。点击 `仅本次` 后，workspace 选择面板可见时 composer 仍显示 Stop，状态气泡仍显示 `Running`。选择 `qa-workspace` 后最终显示 `Mock workspace.askUser completed.`，composer 恢复 disabled `arrow.up`。
+- **证据**：session 文件 `/Users/mu9/.spotAgent/sessions/session-1779402948136-rnhamm.json` 包含 `workspace.askUser` tool call、tool result `{\"workspaceId\":\"qa-workspace\"}`、最终 assistant 消息 `Mock workspace.askUser completed.`，events 包含 `permission_request allow`、`tool_call workspace.askUser`、`tool_result success`。权限审批阶段截图：`/var/folders/m7/6b3swwk92mb0zthbzy5pfjvc0000gn/T/codex-shot-2026-05-22_06-36-07.png`；workspace 选择阶段截图：`/var/folders/m7/6b3swwk92mb0zthbzy5pfjvc0000gn/T/codex-shot-2026-05-22_06-36-55.png`。
+- **结论**：通过。`assistant_message_end(completed)` 后续权限等待态和 workspace 选择等待态均保持 running，SessionWindow 与 StatusBubble 状态一致。

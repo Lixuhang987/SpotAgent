@@ -25,19 +25,6 @@
 
 说明：不响应 abort 的 runtime 强制清理边界已由 `SessionRuntimeOrchestrator` 与 `SessionRouter` 自动化测试覆盖；本条实机 QA 只验证桌面删除 running session 的用户可见链路。
 
-## 权限 / tool 等待态 running 状态回归（P2）
-
-1. 使用 mock LLM 打包并启动桌面 App：`bash ./scripts/package-app.sh --mock-llm`，再打开 `dist/HandAgentDesktop.app`。
-1. 通过 PromptPanel 提交 `[mock:workspace-ask] QA_PERMISSION_RUNNING_STATUS_YYYYMMDD_HHMMSS`。
-1. 等待 SessionWindow 显示 `授权调用 workspace.askUser` 权限审批面板。
-1. 确认权限审批面板可见期间，底部 composer 显示 Stop 按钮，不显示普通发送箭头；状态气泡也显示运行态。
-1. 点击 `仅本次` 允许权限请求，等待 workspace 选择面板出现。
-1. 确认 workspace 选择面板可见期间，底部 composer 仍显示 Stop 按钮，状态气泡仍显示运行态。
-1. 选择 `qa-workspace`，等待最终 assistant 回复完成，并确认底部 composer 恢复普通发送按钮。
-1. 记录 session id，并确认 `~/.spotAgent/sessions/<session-id>.json` 中有 `workspace.askUser` 的 tool result 和最终 assistant 消息。
-
-说明：`assistant_message_end(completed)` 只表示当前 assistant 消息片段结束，不表示整轮运行结束；权限审批、workspace 选择和 tool running frame 到达时，桌面端必须继续把会话视为 running。
-
 ## Anthropic Provider 真实调用（P1）
 
 1. 配置可用 Anthropic API key 与模型后提交普通文本 prompt，确认 assistant 回复可见且逐段 streaming。
