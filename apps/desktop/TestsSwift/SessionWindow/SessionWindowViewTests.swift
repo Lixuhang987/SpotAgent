@@ -7,7 +7,6 @@ final class SessionWindowViewTests: XCTestCase {
             "SessionHistorySidebarView",
             "SessionHistoryRowView",
             "SessionWorkspaceView",
-            "SessionStatusHeaderView",
             "SessionTabBarView",
             "SessionTabItemView",
             "SessionCloseTabButton",

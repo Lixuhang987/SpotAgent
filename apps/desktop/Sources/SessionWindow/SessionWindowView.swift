@@ -10,14 +10,12 @@ struct SessionWindowView: View {
             SessionHistorySidebarView(
                 items: viewModel.historyList,
                 activeSessionID: viewModel.activeTab?.sessionID,
-                openSessionIDs: Set(viewModel.tabs.map(\.sessionID)),
-                runningSessionIDs: Set(viewModel.tabs.filter { $0.status.isRunning }.map(\.sessionID)),
+                connectionState: viewModel.activeTab?.connectionState ?? .disconnected,
                 onSelect: viewModel.openHistorySession,
-                onRequestDelete: viewModel.requestDeleteSession
+                onRequestDelete: viewModel.requestDeleteSession,
+                onNewSession: { viewModel.sendPrompt("") }
             )
             .frame(width: 240)
-
-            Divider().overlay(theme.colors.border)
 
             SessionWorkspaceView(
                 tabs: viewModel.tabs,
@@ -26,6 +24,7 @@ struct SessionWindowView: View {
                 draft: $draft,
                 onActivateTab: viewModel.activateTab,
                 onCloseTab: viewModel.closeTab,
+                onNewTab: { viewModel.sendPrompt("") },
                 onStopActiveTab: viewModel.stopActiveTab,
                 onSendPrompt: { text in viewModel.sendPrompt(text) }
             )

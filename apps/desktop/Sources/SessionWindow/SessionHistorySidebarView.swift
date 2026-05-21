@@ -3,91 +3,160 @@ import SwiftUI
 struct SessionHistorySidebarView: View {
     let items: [SessionListItem]
     let activeSessionID: String?
-    let openSessionIDs: Set<String>
-    let runningSessionIDs: Set<String>
+    let connectionState: SessionConnectionState
     let onSelect: (String) -> Void
     let onRequestDelete: (String) -> Void
+    let onNewSession: () -> Void
 
     @Environment(\.appTheme) private var theme
+    @State private var searchText = ""
+    @State private var isSearching = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header
+        VStack(spacing: 0) {
+            sidebarHeader
+            scrollableContent
+            sidebarFooter
+        }
+        .background(theme.colors.surface)
+    }
+
+    private var sidebarHeader: some View {
+        HStack(spacing: theme.spacing.sm) {
+            if isSearching {
+                HStack(spacing: theme.spacing.sm) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 13))
+                        .foregroundStyle(theme.colors.textSecondary)
+                    TextField("搜索", text: $searchText)
+                        .textFieldStyle(.plain)
+                        .font(theme.typography.bodyFont)
+                        .foregroundStyle(theme.colors.textPrimary)
+                    Button(action: { isSearching = false; searchText = "" }) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(theme.colors.textSecondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, theme.spacing.sm)
+                .padding(.vertical, 6)
+                .background(theme.colors.surfaceHover)
+                .clipShape(RoundedRectangle(cornerRadius: theme.radius.sm))
+            } else {
+                Button(action: onNewSession) {
+                    HStack(spacing: theme.spacing.xs) {
+                        Image(systemName: "plus.bubble")
+                            .font(.system(size: 13))
+                        Text("新会话")
+                            .font(theme.typography.bodyFont)
+                    }
+                    .foregroundStyle(theme.colors.textPrimary)
+                    .padding(.horizontal, theme.spacing.sm)
+                    .padding(.vertical, 6)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("新会话")
+
+                Spacer()
+
+                Button(action: { isSearching = true }) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 13))
+                        .foregroundStyle(theme.colors.textSecondary)
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("搜索会话")
+            }
+        }
+        .padding(.horizontal, theme.spacing.md)
+        .padding(.top, theme.spacing.lg)
+        .padding(.bottom, theme.spacing.sm)
+    }
+
+    private var scrollableContent: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: theme.spacing.xs) {
+                ForEach(filteredItems) { item in
+                    SessionHistoryRowView(
+                        item: item,
+                        isActive: activeSessionID == item.id,
+                        onSelect: { onSelect(item.id) }
+                    )
+                    .contextMenu {
+                        Button("删除", role: .destructive) {
+                            onRequestDelete(item.id)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, theme.spacing.sm)
+            .padding(.vertical, theme.spacing.xs)
+        }
+        .frame(maxHeight: .infinity)
+    }
+
+    private var sidebarFooter: some View {
+        VStack(spacing: 0) {
+            if connectionState == .reconnecting {
+                HStack(spacing: theme.spacing.sm) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("重连中")
+                        .font(theme.typography.captionFont)
+                        .foregroundStyle(theme.colors.textSecondary)
+                }
+                .padding(.horizontal, theme.spacing.md)
+                .padding(.vertical, theme.spacing.sm)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else if connectionState == .disconnected {
+                HStack(spacing: theme.spacing.sm) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(theme.colors.error)
+                    Text("连接已断开")
+                        .font(theme.typography.captionFont)
+                        .foregroundStyle(theme.colors.error)
+                }
+                .padding(.horizontal, theme.spacing.md)
+                .padding(.vertical, theme.spacing.sm)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
 
             Divider().overlay(theme.colors.border)
 
-            if items.isEmpty {
-                SessionHistoryEmptyView()
-            } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: theme.spacing.xs) {
-                        ForEach(items) { item in
-                            SessionHistoryRowView(
-                                item: item,
-                                isActive: activeSessionID == item.id,
-                                isOpen: openSessionIDs.contains(item.id),
-                                isRunning: runningSessionIDs.contains(item.id),
-                                onSelect: { onSelect(item.id) }
-                            )
-                            .contextMenu {
-                                Button("删除", role: .destructive) {
-                                    onRequestDelete(item.id)
-                                }
-                            }
-                        }
-                    }
-                    .padding(theme.spacing.sm)
+            Button(action: {}) {
+                HStack(spacing: theme.spacing.sm) {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 13))
+                    Text("设置")
+                        .font(theme.typography.bodyFont)
                 }
+                .foregroundStyle(theme.colors.textSecondary)
+                .padding(.horizontal, theme.spacing.md)
+                .padding(.vertical, theme.spacing.sm)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .help("设置")
         }
-        .background(theme.colors.surface.opacity(0.30))
     }
 
-    private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("会话")
-                    .font(theme.typography.titleFont)
-                    .foregroundStyle(theme.colors.textPrimary)
-                Text("\(items.count) 条历史")
-                    .font(theme.typography.captionFont)
-                    .foregroundStyle(theme.colors.textSecondary)
-            }
-            Spacer()
+    private var filteredItems: [SessionListItem] {
+        guard !searchText.isEmpty else { return items }
+        return items.filter { item in
+            (item.title ?? "").localizedCaseInsensitiveContains(searchText)
         }
-        .padding(.horizontal, theme.spacing.lg)
-        .padding(.top, theme.spacing.xl)
-        .padding(.bottom, theme.spacing.md)
-    }
-}
-
-struct SessionHistoryEmptyView: View {
-    @Environment(\.appTheme) private var theme
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: theme.spacing.sm) {
-            Image(systemName: "tray")
-                .font(.system(size: 18, weight: .medium))
-                .foregroundStyle(theme.colors.textSecondary)
-                .accessibilityHidden(true)
-            Text("还没有历史会话")
-                .font(theme.typography.bodyFont)
-                .foregroundStyle(theme.colors.textPrimary)
-            Text("从底部输入发送第一条消息后，会话会出现在这里。")
-                .font(theme.typography.captionFont)
-                .foregroundStyle(theme.colors.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(theme.spacing.lg)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
 struct SessionHistoryRowView: View {
     let item: SessionListItem
     let isActive: Bool
-    let isOpen: Bool
-    let isRunning: Bool
     let onSelect: () -> Void
 
     @Environment(\.appTheme) private var theme
@@ -95,38 +164,27 @@ struct SessionHistoryRowView: View {
 
     var body: some View {
         Button(action: onSelect) {
-            VStack(alignment: .leading, spacing: theme.spacing.xs) {
-                HStack(spacing: theme.spacing.sm) {
-                    SessionHistoryStatusDot(isRunning: isRunning, isOpen: isOpen, isActive: isActive)
-                    Text(item.title ?? "未命名会话")
-                        .font(theme.typography.bodyFont)
-                        .foregroundStyle(isActive ? theme.colors.textPrimary : theme.colors.textPrimary.opacity(0.9))
-                        .lineLimit(1)
-                    Spacer(minLength: theme.spacing.sm)
-                    if isOpen {
-                        SessionHistoryBadge(label: isActive ? "当前" : "已打开")
-                    }
+            HStack(spacing: 0) {
+                if isActive {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(theme.colors.accent)
+                        .frame(width: 2, height: 16)
+                        .padding(.trailing, theme.spacing.sm)
                 }
 
-                HStack(spacing: theme.spacing.sm) {
-                    Text("\(item.messageCount) 条消息")
-                    if isRunning {
-                        Text("运行中")
-                    }
-                }
-                .font(theme.typography.captionFont)
-                .foregroundStyle(theme.colors.textSecondary)
+                Text(item.title ?? "未命名会话")
+                    .font(theme.typography.bodyFont)
+                    .foregroundStyle(theme.colors.textPrimary)
+                    .lineLimit(1)
+
+                Spacer()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, theme.spacing.md)
             .padding(.vertical, theme.spacing.sm)
             .contentShape(Rectangle())
             .background(rowBackground)
-            .clipShape(RoundedRectangle(cornerRadius: theme.radius.sm))
-            .overlay(
-                RoundedRectangle(cornerRadius: theme.radius.sm)
-                    .strokeBorder(rowBorder, lineWidth: 0.75)
-            )
+            .clipShape(RoundedRectangle(cornerRadius: theme.radius.md))
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
@@ -135,50 +193,8 @@ struct SessionHistoryRowView: View {
     }
 
     private var rowBackground: Color {
-        if isActive { return theme.colors.accentSubtle }
-        if isHovering { return theme.colors.surface.opacity(0.64) }
-        return theme.colors.surface.opacity(0.001)
-    }
-
-    private var rowBorder: Color {
-        isActive ? theme.colors.accentRing : theme.colors.border.opacity(isHovering ? 0.95 : 0)
-    }
-}
-
-struct SessionHistoryStatusDot: View {
-    let isRunning: Bool
-    let isOpen: Bool
-    let isActive: Bool
-
-    @Environment(\.appTheme) private var theme
-
-    var body: some View {
-        Circle()
-            .fill(color)
-            .frame(width: 7, height: 7)
-            .accessibilityHidden(true)
-    }
-
-    private var color: Color {
-        if isRunning { return theme.colors.accent }
-        if isActive { return theme.colors.accentHover }
-        if isOpen { return theme.colors.textSecondary.opacity(0.55) }
-        return theme.colors.textSecondary.opacity(0.25)
-    }
-}
-
-struct SessionHistoryBadge: View {
-    let label: String
-
-    @Environment(\.appTheme) private var theme
-
-    var body: some View {
-        Text(label)
-            .font(theme.typography.captionFont)
-            .foregroundStyle(theme.colors.textSecondary)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(theme.colors.surface.opacity(0.65))
-            .clipShape(RoundedRectangle(cornerRadius: theme.radius.sm))
+        if isActive { return theme.colors.surfaceHover }
+        if isHovering { return theme.colors.surfaceHover }
+        return theme.colors.surfaceHover.opacity(0.001)
     }
 }

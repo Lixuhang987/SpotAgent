@@ -1,5 +1,9 @@
 import SwiftUI
 
+private enum UIConstants {
+    static let maxContentWidth: CGFloat = 720
+}
+
 struct SessionContentView: View {
     let tab: SessionTabViewModel
 
@@ -39,12 +43,13 @@ struct SessionMessageListView: View {
                         message: message,
                         onCopyMessage: { onCopyMessage(message.id) }
                     )
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
             .padding(.horizontal, theme.spacing.xl)
             .padding(.vertical, theme.spacing.lg)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: UIConstants.maxContentWidth)
+            .frame(maxWidth: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(theme.colors.background)
@@ -56,31 +61,36 @@ struct SessionMessageBubbleView: View {
     let onCopyMessage: () -> Void
 
     @Environment(\.appTheme) private var theme
+    @State private var isHovering = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: theme.spacing.sm) {
-            HStack(alignment: .top, spacing: theme.spacing.sm) {
+        VStack(alignment: message.role == "user" ? .trailing : .leading, spacing: theme.spacing.sm) {
+            VStack(alignment: .leading, spacing: theme.spacing.sm) {
                 Text(message.text)
                     .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: message.role == "user" ? nil : .infinity, alignment: .leading)
 
-                SessionMessageCopyButton(
-                    isDisabled: message.text.isEmpty,
-                    onCopy: onCopyMessage
-                )
+                if let attachmentSummaryText = message.attachmentSummaryText {
+                    Text(attachmentSummaryText)
+                        .font(theme.typography.captionFont)
+                        .foregroundStyle(theme.colors.textSecondary)
+
+                    ForEach(message.attachments) { attachment in
+                        SessionAttachmentRowView(attachment: attachment)
+                    }
+                }
             }
+            .messageBubble(role: message.role)
 
-            if let attachmentSummaryText = message.attachmentSummaryText {
-                Text(attachmentSummaryText)
-                    .font(theme.typography.captionFont)
-                    .foregroundStyle(theme.colors.textSecondary)
-
-                ForEach(message.attachments) { attachment in
-                    SessionAttachmentRowView(attachment: attachment)
+            if isHovering && !message.text.isEmpty && message.role != "user" {
+                HStack(spacing: theme.spacing.sm) {
+                    SessionMessageCopyButton(isDisabled: false, onCopy: onCopyMessage)
                 }
             }
         }
-        .messageBubble(role: message.role)
+        .frame(maxWidth: message.role == "user" ? UIConstants.maxContentWidth * 0.85 : .infinity,
+               alignment: message.role == "user" ? .trailing : .leading)
+        .onHover { isHovering = $0 }
     }
 }
 
@@ -155,9 +165,5 @@ struct SessionErrorBannerView: View {
         .padding(.horizontal, theme.spacing.xl)
         .padding(.vertical, theme.spacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(theme.colors.error.opacity(0.09))
-        .overlay(alignment: .top) {
-            Divider().overlay(theme.colors.error.opacity(0.18))
-        }
     }
 }

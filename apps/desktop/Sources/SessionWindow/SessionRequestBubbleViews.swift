@@ -39,10 +39,12 @@ struct SessionPermissionBubbleView: View {
         .padding(.horizontal, theme.spacing.xl)
         .padding(.vertical, theme.spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(theme.colors.accentSubtle.opacity(0.72))
-        .overlay(alignment: .top) {
-            Divider().overlay(theme.colors.accentRing)
-        }
+        .background(theme.colors.surface)
+        .clipShape(RoundedRectangle(cornerRadius: theme.radius.md))
+        .overlay(
+            RoundedRectangle(cornerRadius: theme.radius.md)
+                .strokeBorder(theme.colors.border, lineWidth: 0.75)
+        )
     }
 
     private func permissionButton(
@@ -119,10 +121,12 @@ struct SessionWorkspaceAskBubbleView: View {
         .padding(.horizontal, theme.spacing.xl)
         .padding(.vertical, theme.spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(theme.colors.accentSubtle.opacity(0.72))
-        .overlay(alignment: .top) {
-            Divider().overlay(theme.colors.accentRing)
-        }
+        .background(theme.colors.surface)
+        .clipShape(RoundedRectangle(cornerRadius: theme.radius.md))
+        .overlay(
+            RoundedRectangle(cornerRadius: theme.radius.md)
+                .strokeBorder(theme.colors.border, lineWidth: 0.75)
+        )
     }
 
     private func workspaceCandidateButton(_ candidate: WorkspaceAskCandidate) -> some View {
