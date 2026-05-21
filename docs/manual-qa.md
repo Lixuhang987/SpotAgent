@@ -28,7 +28,7 @@
 1. 提交 `run [mock:computer-use-list-apps]`，允许 `mcp.computer_use.list_apps`，确认返回 App 列表而不是 `tools/call` 超时。
 1. 提交 `run [mock:computer-use-get-finder]`，允许 `mcp.computer_use.get_app_state`，确认返回 Finder 的截图与 accessibility tree，或 Computer Use 明确的策略/授权错误。
 
-最近阻塞记录：2026-05-22 在 `main` 分支 `5aa979d` 验证，`mcp.computer_use.list_apps` 与 `mcp.computer_use.get_app_state` 均可完成 MCP server 注入、SessionWindow 权限审批与 `tool_call` 记录，但 Computer Use MCP 子进程在 `tools/call` 阶段 10 秒超时。已记录到 [bugs.md](./bugs.md)「Computer Use MCP 在 HandAgent 会话内可注入但 `tools/call` 超时」。本项在该 bug 修复前不能归档为通过。
+最近阻塞记录：2026-05-22 在 `main` 分支 `4547246` 验证，`mcp.computer_use.list_apps` 已返回 App 列表，`mcp.computer_use.get_app_state` 也不再出现 `tools/call` 超时；但 `app: "Finder"` 被解析为 `Keka Finder Integration`（`bundleId: "com.aone.keka.KekaFinderIntegration"`），不是真正 Finder / 访达（`bundleId: "com.apple.finder"`）。已记录到 [bugs.md](./bugs.md)「Computer Use MCP `get_app_state` 会把 `Finder` 误匹配为 `Keka Finder Integration`」。本项在该 bug 修复前不能归档为通过。
 
 ## 通过标准
 
