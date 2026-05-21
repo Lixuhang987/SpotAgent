@@ -11,6 +11,7 @@ struct SessionContentView: View {
         VStack(spacing: 0) {
             SessionMessageListView(
                 messages: tab.messages,
+                connectionState: tab.connectionState,
                 onCopyMessage: { tab.copyMessage(messageID: $0) }
             )
 
@@ -31,6 +32,7 @@ struct SessionContentView: View {
 
 struct SessionMessageListView: View {
     let messages: [SessionBubble]
+    let connectionState: SessionConnectionState
     let onCopyMessage: (String) -> Void
 
     @Environment(\.appTheme) private var theme
@@ -48,6 +50,10 @@ struct SessionMessageListView: View {
 
                     if message.id == lastAssistantMessageID {
                         SessionMessageActionRow(onCopy: { onCopyMessage(message.id) })
+
+                        if connectionState == .reconnecting || connectionState == .disconnected {
+                            SessionConnectionBannerView(state: connectionState)
+                        }
                     }
                 }
             }
@@ -154,6 +160,34 @@ struct SessionAttachmentRowView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+struct SessionConnectionBannerView: View {
+    let state: SessionConnectionState
+
+    @Environment(\.appTheme) private var theme
+
+    var body: some View {
+        HStack(spacing: theme.spacing.sm) {
+            if state == .reconnecting {
+                ProgressView()
+                    .controlSize(.small)
+                Text("连接已断开，正在自动重连…")
+                    .font(theme.typography.captionFont)
+                    .foregroundStyle(theme.colors.textSecondary)
+            } else {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(theme.colors.error)
+                Text("连接已断开")
+                    .font(theme.typography.captionFont)
+                    .foregroundStyle(theme.colors.error)
+            }
+        }
+        .padding(.vertical, theme.spacing.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .transition(.opacity)
     }
 }
 

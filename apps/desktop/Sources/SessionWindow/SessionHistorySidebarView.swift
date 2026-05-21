@@ -3,7 +3,6 @@ import SwiftUI
 struct SessionHistorySidebarView: View {
     let items: [SessionListItem]
     let activeSessionID: String?
-    let connectionState: SessionConnectionState
     let onSelect: (String) -> Void
     let onRequestDelete: (String) -> Void
     let onNewSession: () -> Void
@@ -101,31 +100,6 @@ struct SessionHistorySidebarView: View {
 
     private var sidebarFooter: some View {
         VStack(spacing: 0) {
-            if connectionState == .reconnecting {
-                HStack(spacing: theme.spacing.sm) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("重连中")
-                        .font(theme.typography.captionFont)
-                        .foregroundStyle(theme.colors.textSecondary)
-                }
-                .padding(.horizontal, theme.spacing.md)
-                .padding(.vertical, theme.spacing.sm)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            } else if connectionState == .disconnected {
-                HStack(spacing: theme.spacing.sm) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 11))
-                        .foregroundStyle(theme.colors.error)
-                    Text("连接已断开")
-                        .font(theme.typography.captionFont)
-                        .foregroundStyle(theme.colors.error)
-                }
-                .padding(.horizontal, theme.spacing.md)
-                .padding(.vertical, theme.spacing.sm)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
             Divider().overlay(theme.colors.border)
 
             Button(action: {}) {

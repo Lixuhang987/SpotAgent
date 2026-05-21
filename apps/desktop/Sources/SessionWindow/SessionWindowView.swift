@@ -10,7 +10,6 @@ struct SessionWindowView: View {
             SessionHistorySidebarView(
                 items: viewModel.historyList,
                 activeSessionID: viewModel.activeTab?.sessionID,
-                connectionState: viewModel.activeTab?.connectionState ?? .disconnected,
                 onSelect: viewModel.openHistorySession,
                 onRequestDelete: viewModel.requestDeleteSession,
                 onNewSession: viewModel.createNewSession
