@@ -15,14 +15,6 @@
 - 已通过 `bash ./scripts/swiftw test`。
 - 已通过 `bash ./scripts/swiftw build`。
 
-## ScreenCaptureKit 反向 IPC（P2）
-
-1. 让 LLM 调 `screen.capture(target: "display")`，确认返回当前显示器截图（base64 图片可解码）。
-1. 让 LLM 调 `screen.capture(target: "window", windowId: <frontmost>)`，确认返回指定窗口截图。
-1. 快速连续发送 3 个 `platform_request`，确认通过 `requestId` 隔离，结果不串。
-
-最近阻塞记录：2026-05-21 使用 mock-LLM 触发 `[mock:screen-display]` 已验证到 `screen.capture` 权限气泡与真实 PlatformBridge 调用；代码侧已改为先在 packaged app 进程内执行 `CGPreflightScreenCaptureAccess()` / `CGRequestScreenCaptureAccess()`，并在预检通过但 `SCShareableContent` 仍失败时返回 `capture_failed` 与 `preflight/domain/code/message`，不再把所有枚举失败都冒充为用户拒绝。当前仍未做实机通过归档，因为本机 `kTCCServiceScreenCapture` 记录与当前打包 app 的签名身份不匹配；重置并重新授予屏幕录制权限属于 macOS 隐私状态变更，需用户明确同意后才能执行。获得授权后需重新验证 display/window 截图和 3 个快速 `platform_request` 隔离。
-
 ## Accessibility 平台能力（P2）
 
 1. 在「系统设置 → 隐私与安全性 → 辅助功能」允许 HandAgent。
