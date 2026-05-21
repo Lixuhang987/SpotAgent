@@ -21,7 +21,7 @@ struct PromptPanelView: View {
         }
         .promptPanelContainer()
         .onAppear { isQueryFocused = true }
-        .onChange(of: viewModel.focusSeed) { _, _ in isQueryFocused = true }
+        .onChange(of: viewModel.focusSeed) { isQueryFocused = true }
     }
 
     private var attachmentRow: some View {
@@ -52,14 +52,7 @@ struct PromptPanelView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
-        .background(
-            RoundedRectangle(cornerRadius: theme.radius.sm)
-                .fill(background)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: theme.radius.sm)
-                .strokeBorder(theme.colors.border, lineWidth: 0.5)
-        )
+        .borderedCard(fill: background, border: theme.colors.border, cornerRadius: theme.radius.sm)
         .help(tooltip(for: attachment))
     }
 
@@ -120,14 +113,7 @@ struct PromptPanelView: View {
         .padding(.horizontal, theme.spacing.md)
         .padding(.vertical, 10)
         .frame(width: 360)
-        .background(
-            RoundedRectangle(cornerRadius: theme.radius.md)
-                .fill(theme.colors.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: theme.radius.md)
-                .strokeBorder(theme.colors.border, lineWidth: 0.5)
-        )
+        .borderedCard(fill: theme.colors.surface, border: theme.colors.border, cornerRadius: theme.radius.md)
     }
 
     private func submissionDisabledBanner(_ message: String) -> some View {

@@ -77,6 +77,7 @@ export class SessionRouter {
         this.orchestrator.interruptSession?.(message.sessionId, push);
         return;
       default:
+        console.warn(`[SessionRouter] unhandled message type: ${message.type}`);
         return;
     }
   }

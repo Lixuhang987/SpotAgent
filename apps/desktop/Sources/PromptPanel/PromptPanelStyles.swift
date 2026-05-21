@@ -9,11 +9,7 @@ struct PromptPanelContainerModifier: ViewModifier {
             .frame(minWidth: 640, minHeight: 420)
             .background(.ultraThinMaterial)
             .background(theme.colors.background.opacity(0.85))
-            .clipShape(RoundedRectangle(cornerRadius: theme.radius.lg))
-            .overlay(
-                RoundedRectangle(cornerRadius: theme.radius.lg)
-                    .strokeBorder(theme.colors.border, lineWidth: 0.5)
-            )
+            .borderedCard(fill: .clear, border: theme.colors.border, cornerRadius: theme.radius.lg)
     }
 }
 
