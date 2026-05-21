@@ -14,10 +14,13 @@ import type { MCPServerConfig } from "./MCPConfig.ts";
 
 type StdioServerConfig = Extract<MCPServerConfig, { transport: "stdio" }>;
 
+const DEFAULT_REQUEST_TIMEOUT_MS = 60_000;
+
 type JsonRpcMessage = {
   jsonrpc: "2.0";
-  id?: number;
+  id?: number | string;
   method?: string;
+  params?: unknown;
   result?: unknown;
   error?: { message?: string };
 };
@@ -32,6 +35,7 @@ export class StdioMCPClient implements MCPClient {
     {
       resolve: (value: unknown) => void;
       reject: (error: Error) => void;
+      timeout: NodeJS.Timeout;
     }
   >();
 
@@ -40,7 +44,7 @@ export class StdioMCPClient implements MCPClient {
   async initialize(): Promise<MCPServerInfo> {
     const result = await this.request("initialize", {
       protocolVersion: "2025-11-25",
-      capabilities: {},
+      capabilities: this.clientCapabilities(),
       clientInfo: { name: "handagent", version: "0.1.0" },
     });
     const r = isRecord(result) ? result : {};
@@ -126,11 +130,18 @@ export class StdioMCPClient implements MCPClient {
 
   // --- Transport ---
 
+  private clientCapabilities(): Record<string, unknown> {
+    return this.config.elicitation?.autoAcceptEmptyForm === true
+      ? { elicitation: { form: {} } }
+      : {};
+  }
+
   private ensureChild(): ChildProcessWithoutNullStreams {
     if (this.child) return this.child;
 
     const child = spawn(this.config.command, this.config.args ?? [], {
       env: { ...process.env, ...(this.config.env ?? {}) },
+      cwd: this.config.cwd,
       stdio: ["pipe", "pipe", "pipe"],
     });
     child.stdout.setEncoding("utf8");
@@ -146,10 +157,22 @@ export class StdioMCPClient implements MCPClient {
     const id = this.nextId++;
     const payload = JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n";
     const promise = new Promise<unknown>((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+      const timeout = setTimeout(() => {
+        this.pending.delete(id);
+        reject(
+          new Error(
+            `MCP stdio request timed out after ${this.requestTimeoutMs()}ms: ${method}`,
+          ),
+        );
+      }, this.requestTimeoutMs());
+      this.pending.set(id, { resolve, reject, timeout });
     });
     child.stdin.write(payload);
     return promise;
+  }
+
+  private requestTimeoutMs(): number {
+    return this.config.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
   }
 
   private sendNotification(method: string, params: unknown): void {
@@ -166,16 +189,20 @@ export class StdioMCPClient implements MCPClient {
       this.buffer = this.buffer.slice(index + 1);
       if (!line) continue;
       const message = JSON.parse(line) as JsonRpcMessage;
-      if (message.id !== undefined) {
+      if (message.method) {
+        this.handleServerRequest(message);
+      } else if (message.id !== undefined) {
         this.handleResponse(message);
       }
     }
   }
 
   private handleResponse(response: JsonRpcMessage): void {
-    const pending = this.pending.get(response.id!);
+    if (typeof response.id !== "number") return;
+    const pending = this.pending.get(response.id);
     if (!pending) return;
-    this.pending.delete(response.id!);
+    this.pending.delete(response.id);
+    clearTimeout(pending.timeout);
     if (response.error) {
       pending.reject(new Error(response.error.message ?? "MCP stdio request failed"));
       return;
@@ -183,8 +210,27 @@ export class StdioMCPClient implements MCPClient {
     pending.resolve(response.result);
   }
 
+  private handleServerRequest(request: JsonRpcMessage): void {
+    if (request.id === undefined) return;
+    if (request.method === "elicitation/create") {
+      const canAccept =
+        this.config.elicitation?.autoAcceptEmptyForm === true &&
+        isEmptyFormElicitation(request.params);
+      this.sendResponse(request.id, canAccept
+        ? { action: "accept", content: {} }
+        : { action: "decline" });
+    }
+  }
+
+  private sendResponse(id: number | string, result: unknown): void {
+    const child = this.ensureChild();
+    const payload = JSON.stringify({ jsonrpc: "2.0", id, result }) + "\n";
+    child.stdin.write(payload);
+  }
+
   private rejectAll(error: Error): void {
     for (const pending of this.pending.values()) {
+      clearTimeout(pending.timeout);
       pending.reject(error);
     }
     this.pending.clear();
@@ -229,4 +275,12 @@ function parseResourceDescription(value: unknown): MCPResourceDescription {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isEmptyFormElicitation(params: unknown): boolean {
+  if (!isRecord(params) || !isRecord(params.requestedSchema)) return false;
+  const schema = params.requestedSchema;
+  if (schema.type !== "object") return false;
+  if (Array.isArray(schema.required) && schema.required.length > 0) return false;
+  return !isRecord(schema.properties) || Object.keys(schema.properties).length === 0;
 }

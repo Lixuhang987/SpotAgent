@@ -241,6 +241,28 @@ export const mockLLMScenarios: MockLLMScenario[] = [
     finalText: "Mock MCP echo completed.",
   }),
   toolScenario({
+    id: "computer-use-list-apps",
+    trigger: "[mock:computer-use-list-apps]",
+    description: "调用 mcp.computer_use.list_apps，用于验证 Computer Use MCP 全局注入与只读工具调用。",
+    toolCall: {
+      id: "mock-computer-use-list-apps-1",
+      name: "mcp.computer_use.list_apps",
+      arguments: {},
+    },
+    finalText: "Mock Computer Use list_apps completed.",
+  }),
+  toolScenario({
+    id: "computer-use-get-finder",
+    trigger: "[mock:computer-use-get-finder]",
+    description: "调用 mcp.computer_use.get_app_state，用于验证 Computer Use MCP app 授权 elicitation 与读取链路。",
+    toolCall: {
+      id: "mock-computer-use-get-finder-1",
+      name: "mcp.computer_use.get_app_state",
+      arguments: { app: "Finder" },
+    },
+    finalText: "Mock Computer Use get_app_state completed.",
+  }),
+  toolScenario({
     id: "ocr-invalid",
     trigger: "[mock:ocr-invalid]",
     description: "调用缺少 imageBase64 的 ocr.read，用于验证明确 invalid_argument 错误。",

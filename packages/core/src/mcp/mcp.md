@@ -4,9 +4,9 @@
 
 | 文件 | 职责 |
 |------|------|
-| `MCPConfig.ts` | 解析 `~/.spotAgent/mcp.json` |
+| `MCPConfig.ts` | 解析 `~/.spotAgent/mcp.json`，含 stdio elicitation 策略 |
 | `MCPClient.ts` | MCP client 接口：`initialize` / `tools/*` / `prompts/*` / `resources/*` |
-| `StdioMCPClient.ts` | JSON-RPC over stdio，含 `notifications/initialized` 握手 |
+| `StdioMCPClient.ts` | JSON-RPC over stdio，含 `notifications/initialized` 握手与空表单 elicitation 自动响应 |
 | `StreamableHttpMCPClient.ts` | JSON-RPC over Streamable HTTP，支持 JSON 和 SSE 响应，跟踪 `Mcp-Session-Id` |
 | `MCPToolAdapter.ts` | 把 MCP tool 包装为 `AgentTool`，暴露名为 `mcp.<serverId>.<toolName>` |
 
@@ -32,7 +32,10 @@
       "transport": "stdio",
       "command": "node",
       "args": ["server.js"],
-      "env": { "TOKEN": "..." }
+      "cwd": "/path/to/server",
+      "requestTimeoutMs": 60000,
+      "env": { "TOKEN": "..." },
+      "elicitation": { "autoAcceptEmptyForm": true }
     },
     {
       "id": "docs",
@@ -49,6 +52,8 @@
 
 - `mcp.json` 中配置的所有 server 默认作为**全局** MCP server，会被注入每个 session 的 tool registry，无需依赖 plugin 触发；plugin 的 `mcpServerIds` 与全局列表合并并去重。
 - MCP exposed tool name 统一为 `mcp.<serverId>.<toolName>`，避免与 builtin tool 冲突。
+- stdio server 可配置 `cwd`，用于兼容插件原始配置中的相对 command 路径；也可配置 `requestTimeoutMs`，默认 60s，避免外部 server 卡死时拖挂整个会话。
+- stdio server 可配置 `elicitation.autoAcceptEmptyForm: true`。该选项只自动接受 `requestedSchema` 为空对象且无必填字段的 form-mode `elicitation/create`，用于 Computer Use 这类本地 App 授权握手；带字段表单或 URL mode 仍返回 decline，不代替用户填写敏感信息或打开外部 URL。
 - `MCPConfig.ts` 只解析配置；client 生命周期、capability 缓存与 prompt/resource 调用由 agent-server 的 `MCPServerRegistry` 管理。
 - Streamable HTTP headers 支持 `${ENV_NAME}` 插值，未设置的环境变量会替换为空字符串。
 

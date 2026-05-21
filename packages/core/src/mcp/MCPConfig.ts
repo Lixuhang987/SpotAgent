@@ -6,6 +6,9 @@ export type MCPServerConfig =
       command: string;
       args?: string[];
       env?: Record<string, string>;
+      cwd?: string;
+      requestTimeoutMs?: number;
+      elicitation?: MCPElicitationConfig;
     }
   | {
       id: string;
@@ -18,6 +21,10 @@ export type MCPServerConfig =
 export type MCPConfig = {
   version: 1;
   servers: MCPServerConfig[];
+};
+
+export type MCPElicitationConfig = {
+  autoAcceptEmptyForm?: boolean;
 };
 
 export function parseMCPConfig(value: unknown): MCPConfig {
@@ -46,6 +53,9 @@ function parseServer(value: unknown): MCPServerConfig {
       command: requiredString(value, "command"),
       args: stringArray(value.args),
       env: isRecord(value.env) ? stringRecord(value.env, "env") : undefined,
+      cwd: optionalString(value, "cwd"),
+      requestTimeoutMs: optionalPositiveInteger(value, "requestTimeoutMs"),
+      elicitation: parseElicitation(value.elicitation),
     };
   }
   if (value.transport === "streamableHttp") {
@@ -82,6 +92,27 @@ function requiredString(record: Record<string, unknown>, key: string): string {
   return value;
 }
 
+function optionalString(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key];
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(`mcp ${key} must be a non-empty string`);
+  }
+  return value;
+}
+
+function optionalPositiveInteger(
+  record: Record<string, unknown>,
+  key: string,
+): number | undefined {
+  const value = record[key];
+  if (value === undefined) return undefined;
+  if (!Number.isInteger(value) || typeof value !== "number" || value <= 0) {
+    throw new Error(`mcp ${key} must be a positive integer`);
+  }
+  return value;
+}
+
 function stringArray(value: unknown): string[] | undefined {
   if (value === undefined) return undefined;
   if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {
@@ -99,6 +130,20 @@ function stringRecord(
     throw new Error(`mcp ${key} must be a string record`);
   }
   return Object.fromEntries(entries) as Record<string, string>;
+}
+
+function parseElicitation(value: unknown): MCPElicitationConfig | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) throw new Error("mcp elicitation must be an object");
+  if (
+    value.autoAcceptEmptyForm !== undefined &&
+    typeof value.autoAcceptEmptyForm !== "boolean"
+  ) {
+    throw new Error("mcp elicitation autoAcceptEmptyForm must be a boolean");
+  }
+  return {
+    autoAcceptEmptyForm: value.autoAcceptEmptyForm,
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

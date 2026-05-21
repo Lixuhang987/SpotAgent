@@ -53,7 +53,7 @@ bash ./scripts/swiftw run HandAgentDesktop
 
 Action Plugin manifest 位于 `~/.spotAgent/plugins/<plugin-id>/plugin.json`，第一版只声明 `prompts[]`、`template`、参数和 `mcpServerIds`。Desktop 负责 trigger 解析、参数填充和 template 渲染；agent-server 只校验 `actionBinding`，并把 manifest 中的 `mcpServerIds` 持久化到新 session metadata。
 
-MCP server 配置位于 `~/.spotAgent/mcp.json`，支持 `stdio` 与 `streamableHttp`。Action session 运行前会把 builtin tools 与该 session 绑定的 MCP tools 组合到同一个 registry；普通 prompt session 不会暴露这些 MCP tools。
+MCP server 配置位于 `~/.spotAgent/mcp.json`，支持 `stdio` 与 `streamableHttp`。所有配置的 MCP server 会作为全局 tools 注入每个 session；Action Plugin 的 `mcpServerIds` 只是在全局集合之外追加 session 绑定的 server。stdio server 可按需配置 `elicitation.autoAcceptEmptyForm: true`，用于 Computer Use 这类只要求空表单确认的本地授权握手。
 
 ## 说明
 

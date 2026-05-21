@@ -12,6 +12,9 @@ describe("parseMCPConfig", () => {
           transport: "stdio",
           command: "node",
           args: ["server.js"],
+          cwd: "/tmp/mcp",
+          requestTimeoutMs: 5_000,
+          elicitation: { autoAcceptEmptyForm: true },
         },
         {
           id: "github",
@@ -23,5 +26,10 @@ describe("parseMCPConfig", () => {
     });
 
     expect(config.servers.map((server) => server.id)).toEqual(["fs", "github"]);
+    expect(config.servers[0]).toMatchObject({
+      cwd: "/tmp/mcp",
+      requestTimeoutMs: 5_000,
+      elicitation: { autoAcceptEmptyForm: true },
+    });
   });
 });

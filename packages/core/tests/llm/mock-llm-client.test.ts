@@ -47,6 +47,8 @@ describe("MockLLMClient", () => {
       "[mock:plugin-workspace-escape]",
       "[mock:plugin-workspace-symlink]",
       "[mock:mcp-echo]",
+      "[mock:computer-use-list-apps]",
+      "[mock:computer-use-get-finder]",
       "[mock:ocr-invalid]",
       "[mock:ocr-sample]",
       "[mock:accessibility-frontmost]",
@@ -293,6 +295,30 @@ describe("MockLLMClient", () => {
           id: "mock-mcp-echo-1",
           name: "mcp.qa_echo.echo",
           arguments: { text: "hello from MockLLMClient" },
+        },
+      ],
+    });
+
+    await expect(
+      client.complete([{ role: "user", content: "run [mock:computer-use-list-apps]" }], []),
+    ).resolves.toMatchObject({
+      toolCalls: [
+        {
+          id: "mock-computer-use-list-apps-1",
+          name: "mcp.computer_use.list_apps",
+          arguments: {},
+        },
+      ],
+    });
+
+    await expect(
+      client.complete([{ role: "user", content: "run [mock:computer-use-get-finder]" }], []),
+    ).resolves.toMatchObject({
+      toolCalls: [
+        {
+          id: "mock-computer-use-get-finder-1",
+          name: "mcp.computer_use.get_app_state",
+          arguments: { app: "Finder" },
         },
       ],
     });
