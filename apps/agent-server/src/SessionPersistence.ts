@@ -24,9 +24,10 @@ export class SessionPersistence {
   async createSession(
     title?: string,
     actionBinding?: SessionActionBinding,
+    workspaceId?: string | null,
   ): Promise<PersistedSession> {
     const id = generateSessionId();
-    return this.store.create({ id, title, createdAt: this.now(), actionBinding });
+    return this.store.create({ id, title, createdAt: this.now(), workspaceId, actionBinding });
   }
 
   async deleteSession(sessionId: string): Promise<void> {

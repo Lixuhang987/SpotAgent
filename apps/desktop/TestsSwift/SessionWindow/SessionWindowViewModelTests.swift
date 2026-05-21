@@ -228,6 +228,24 @@ final class SessionWindowViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testCreateNewSessionSendsWorkspaceId() {
+        let historyTransport = ViewModelRecordingSessionSocketTransport()
+        let model = SessionWindowViewModel(
+            socketFactory: { _ in .noop },
+            historySocketClient: SessionSocketClient(
+                serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
+                transport: historyTransport,
+                reconnectDelay: 0
+            )
+        )
+
+        model.createNewSession(workspaceId: "ws-abc")
+
+        XCTAssertEqual(historyTransport.tasks[0].sentTypes.last, "create_session_request")
+        XCTAssertEqual(historyTransport.tasks[0].lastPayload?["workspaceId"] as? String, "ws-abc")
+    }
+
+    @MainActor
     func testPromptPanelInitialSubmitCreatesNewSessionEvenWhenATabIsActive() async {
         let historyTransport = ViewModelRecordingSessionSocketTransport()
         let historyClient = SessionSocketClient(

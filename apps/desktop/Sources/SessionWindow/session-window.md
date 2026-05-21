@@ -7,7 +7,7 @@
 | 文件 | 职责 |
 |------|------|
 | `SessionWindowView.swift` | 根布局：组合历史侧栏、右侧会话工作区与删除确认 alert；不直接写行、tab、消息或气泡细节 |
-| `SessionHistorySidebarView.swift` | 左侧历史导航：标题、空态、历史行、打开/运行/当前状态标识 |
+| `SessionHistorySidebarView.swift` | 左侧历史导航：按 workspace 分组展示会话（可折叠），每个 workspace 行右侧有新建按钮；搜索模式下平铺所有匹配结果 |
 | `SessionWorkspaceView.swift` | 右侧工作区容器：顶部会话上下文栏、tab strip、连接 banner、空态与输入 composer |
 | `SessionTabBarView.swift` | tab strip 容器、tab item、独立关闭按钮与 tab 运行/连接状态点 |
 | `SessionContentView.swift` | 消息主滚动区、消息气泡、消息文本选择 / 复制入口、附件行与错误内联面板 |

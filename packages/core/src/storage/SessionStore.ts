@@ -8,13 +8,14 @@ import type {
 
 export type SessionSummary = Pick<
   SessionMetadata,
-  "id" | "title" | "createdAt" | "updatedAt" | "messageCount"
+  "id" | "title" | "createdAt" | "updatedAt" | "messageCount" | "workspaceId"
 >;
 
 export type CreateSessionInput = {
   id: string;
   title?: string | null;
   createdAt?: string;
+  workspaceId?: string | null;
   actionBinding?: SessionActionBinding;
 };
 

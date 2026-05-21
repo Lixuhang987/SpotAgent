@@ -77,6 +77,7 @@ describe("SessionRouter", () => {
               createdAt: "2026-05-14T00:00:00.000Z",
               updatedAt: "2026-05-14T00:00:00.000Z",
               messageCount: 1,
+              workspaceId: null,
             },
           ],
         },
@@ -522,6 +523,48 @@ describe("SessionRouter", () => {
     expect(await router.getSessionHistory(session.metadata.id)).toEqual([]);
     await router.deleteSession(session.metadata.id);
     expect(await router.getSession(session.metadata.id)).toBeNull();
+  });
+
+  it("passes workspaceId through create and includes it in list response", async () => {
+    const store = new InMemorySessionStore();
+    const persistence = new SessionPersistence(
+      store,
+      () => "2026-05-22T00:00:00.000Z",
+    );
+    const router = new SessionRouter(
+      { async handleUserMessage() {} },
+      persistence,
+      () => "2026-05-22T00:00:00.000Z",
+    );
+    const pushed: SessionMessage[] = [];
+
+    await router.receive(
+      {
+        type: "create_session_request",
+        sessionId: "",
+        messageId: "create-1",
+        timestamp: "2026-05-22T00:00:00.000Z",
+        payload: { workspaceId: "ws-abc" },
+      },
+      (message) => pushed.push(message),
+    );
+
+    await router.receive(
+      {
+        type: "list_sessions_request",
+        sessionId: "",
+        messageId: "list-1",
+        timestamp: "2026-05-22T00:00:00.000Z",
+        payload: {},
+      },
+      (message) => pushed.push(message),
+    );
+
+    const listResponse = pushed.find((m) => m.type === "list_sessions_response");
+    expect(listResponse).toBeDefined();
+    if (listResponse?.type === "list_sessions_response") {
+      expect(listResponse.payload.sessions[0].workspaceId).toBe("ws-abc");
+    }
   });
 
   it("forwards websocket messages through SessionRouter and sends outgoing JSON", async () => {

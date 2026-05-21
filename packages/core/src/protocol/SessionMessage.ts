@@ -12,6 +12,7 @@ export type SessionMessage =
       payload: {
         initialText?: string;
         attachments?: UserMessageAttachment[];
+        workspaceId?: string | null;
         actionBinding?: {
           pluginId: string;
           promptName: string;
@@ -231,6 +232,7 @@ export type SessionListEntry = {
   createdAt: string;
   updatedAt: string;
   messageCount: number;
+  workspaceId?: string | null;
 };
 
 export type WorkspaceAskCandidate = {

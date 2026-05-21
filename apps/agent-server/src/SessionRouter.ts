@@ -142,7 +142,7 @@ export class SessionRouter {
       }
     }
 
-    const session = await this.persistence.createSession(undefined, actionBinding);
+    const session = await this.persistence.createSession(undefined, actionBinding, message.payload.workspaceId);
     const sessionId = session.metadata.id;
 
     push({
@@ -277,5 +277,6 @@ function toSessionListEntry(summary: SessionSummary): SessionListEntry {
     createdAt: summary.createdAt,
     updatedAt: summary.updatedAt,
     messageCount: summary.messageCount,
+    workspaceId: summary.workspaceId,
   };
 }

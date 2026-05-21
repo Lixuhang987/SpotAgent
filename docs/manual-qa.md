@@ -22,6 +22,15 @@
 
 最近阻塞记录：2026-05-21 打开 Settings → 模型配置，Computer Use 确认 provider segmented control 同时展示 `OpenAI 兼容` 与 `Anthropic`。当前 `~/.spotAgent/settings.json` 只有 `provider: "openai-compatible"`、`api: "chat"`、`model: "gpt-5.2"`、`baseUrl: "https://new.cooree.de/v1"`，API key 已配置但不展示；环境变量中也没有 `ANTHROPIC_API_KEY` 或 `CLAUDE_API_KEY`。OpenAI 兼容端真实 streaming、真实 vision 底层请求、区域截图附件路径、`openai-compatible + completion` 的多模态拒绝和 tool 降级纯文本请求均已归档到 [archive.md](./archive.md)。配置文件没有可用的 Anthropic key 或 Anthropic 模型；在没有用户提供真实 Anthropic 配置前，不能验证 Anthropic streaming 与 tool call 回灌，本项不归档为通过。
 
+## 侧边栏 Workspace 分组（P1）
+
+1. 在 `~/.spotAgent/workspaces.json` 配置至少两个非默认 workspace 后打开 SessionWindow，确认左侧侧边栏显示 workspace 折叠列表。
+1. 点击 workspace 行，确认展开/折叠切换正常，展开后显示该 workspace 下的会话。
+1. 点击 workspace 行右侧 "+" 按钮，确认在该 workspace 下创建新对话（不触发展开/折叠）。
+1. 确认无 workspaceId 的旧会话显示在 "默认" 分隔线下方。
+1. 在搜索框输入关键词，确认忽略分组、平铺显示所有匹配结果。
+1. 无 workspace 配置时（workspaces.json 为空或只有 default），确认侧边栏退化为平铺列表，无 "默认" 分隔线。
+
 ## 通过标准
 
 - 本文件中对应条目的用户可见行为、持久化记录、错误文案和隔离边界均符合预期。

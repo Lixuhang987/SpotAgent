@@ -83,7 +83,8 @@ final class SessionWindowViewModel {
     func createTabWithInitialPrompt(
         _ text: String,
         attachments: [UserMessageAttachmentPayload] = [],
-        actionBinding: ActionBindingPayload? = nil
+        actionBinding: ActionBindingPayload? = nil,
+        workspaceId: String? = nil
     ) {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedText.isEmpty else { return }
@@ -93,11 +94,11 @@ final class SessionWindowViewModel {
             attachments: attachments,
             actionBinding: actionBinding
         )
-        historySocketClient.sendCreateSession(actionBinding: actionBinding)
+        historySocketClient.sendCreateSession(actionBinding: actionBinding, workspaceId: workspaceId)
     }
 
-    func createNewSession() {
-        historySocketClient.sendCreateSession()
+    func createNewSession(workspaceId: String? = nil) {
+        historySocketClient.sendCreateSession(workspaceId: workspaceId)
     }
 
     func stopActiveTab() {
