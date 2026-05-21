@@ -7,7 +7,7 @@
 
 ## 验收目标
 
-确认桌面 Agent MVP 仍未归档的端到端路径可用，并把新通过的条目及时移入归档：ScreenCaptureKit 反向 IPC、Accessibility、多 provider LLM、Action Plugin / MCP 会话绑定。
+确认桌面 Agent MVP 仍未归档的端到端路径可用，并把新通过的条目及时移入归档：ScreenCaptureKit 反向 IPC、Accessibility、多 provider LLM。
 
 ## 验收前提
 
@@ -40,12 +40,6 @@
 1. 在 Anthropic provider 下触发一个会调用 tool 的 prompt，确认 tool name 经适配后仍能回到点号风格（如 `file.read`），tool result 可回灌给 LLM。
 
 最近阻塞记录：2026-05-21 打开 Settings → 模型配置，Computer Use 确认 provider segmented control 同时展示 `OpenAI 兼容` 与 `Anthropic`，当前 UI 与 `~/.spotAgent/settings.json` 均为 `provider: "openai-compatible"`、`api: "chat"`、`model: "gpt-5.3-codex"`、`baseUrl: "https://lpgpt.us/v1"`，API key 已配置但不展示。OpenAI 兼容端真实 streaming、真实 vision 底层请求、区域截图附件路径、`openai-compatible + completion` 的多模态拒绝和 tool 降级纯文本请求均已归档到 [archive.md](./archive.md)。配置文件没有可用的 Anthropic key 或 Anthropic 模型；在没有用户提供真实 Anthropic 配置前，不能验证 Anthropic streaming 与 tool call 回灌，本项不归档为通过。
-
-## Action Plugin / MCP 会话绑定（P2）
-
-1. 在 `~/.spotAgent/plugins/<plugin-id>/plugin.json` 创建包含 `prompts[]` 与 `mcpServerIds` 的 Action Plugin，打开 PromptPanel 后确认 trigger row 可见，提交后强制创建新 session。
-1. 配置 `~/.spotAgent/mcp.json` 中的 stdio 或 Streamable HTTP MCP server，确认 Action session 内可调用 `mcp.<serverId>.<toolName>`，普通 prompt session 不暴露该 MCP tool。
-1. 让 Action Plugin 引用一个不存在的 MCP server，确认 agent-server 记录 skip 日志，builtin tools 仍可用，prompt runtime 不因该 server 缺失而中断。
 
 ## 通过标准
 

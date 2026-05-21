@@ -258,6 +258,19 @@ export const mockLLMScenarios: MockLLMScenario[] = [
     }),
   },
   {
+    id: "mcp-echo",
+    triggers: ["[mock:mcp-echo]"],
+    description: "调用 mcp.qa_echo.echo，用于验证 Action Plugin 绑定的 MCP tool 作用域。",
+    complete: (context) => toolThenFinal(context, {
+      toolCall: {
+        id: "mock-mcp-echo-1",
+        name: "mcp.qa_echo.echo",
+        arguments: { text: "hello from MockLLMClient" },
+      },
+      finalText: "Mock MCP echo completed.",
+    }),
+  },
+  {
     id: "ocr-invalid",
     triggers: ["[mock:ocr-invalid]"],
     description: "调用缺少 imageBase64 的 ocr.read，用于验证明确 invalid_argument 错误。",

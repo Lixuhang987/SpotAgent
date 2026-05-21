@@ -46,6 +46,7 @@ describe("MockLLMClient", () => {
       "[mock:plugin-workspace-write]",
       "[mock:plugin-workspace-escape]",
       "[mock:plugin-workspace-symlink]",
+      "[mock:mcp-echo]",
       "[mock:ocr-invalid]",
       "[mock:ocr-sample]",
       "[mock:accessibility-frontmost]",
@@ -280,6 +281,18 @@ describe("MockLLMClient", () => {
           id: "mock-plugin-workspace-symlink-1",
           name: "plugin.echo",
           arguments: { workspaceId: "qa-workspace", relativePath: "outside-link/plugin.txt" },
+        },
+      ],
+    });
+
+    await expect(
+      client.complete([{ role: "user", content: "run [mock:mcp-echo]" }], []),
+    ).resolves.toMatchObject({
+      toolCalls: [
+        {
+          id: "mock-mcp-echo-1",
+          name: "mcp.qa_echo.echo",
+          arguments: { text: "hello from MockLLMClient" },
         },
       ],
     });

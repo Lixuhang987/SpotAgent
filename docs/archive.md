@@ -543,3 +543,27 @@
   - 区域截图附件历史实机记录：2026-05-19 `PromptPanel 区域截图附件` 归档，session `~/.spotAgent/sessions/179F2D7B-B509-42EB-B056-C51ECCB298B1.json` 与 blob `~/.spotAgent/blobs/2026-05-19/8b127e30-a551-4969-ae85-9f80c567de32.png`。
   - UI 多模态提交记录：`~/.spotAgent/sessions/session-1779355056379-ss0d3g.json`、`~/.spotAgent/sessions/session-1779355342676-03v1x6.json`、`~/.spotAgent/sessions/session-1779355661086-flo5nm.json` 均有 `附件 ×1 · image` 对应的 image STUB。
 - **结论**：通过。多模态图片附件从 PromptPanel 到 session 持久化、image STUB 展开、真实 provider vision 理解的关键链路已验证；区域圈选是否拿到前台窗口内容取决于当前 packaged app 的 macOS 屏幕录制权限状态，权限身份问题不再放在本条 manual QA 中重复追踪。
+
+## Action Plugin / MCP 会话绑定（2026-05-21 实机验证）
+
+- **验证日期**：2026-05-21
+- **验证环境**：mock-llm / macOS / worktree `codex/action-plugin-mcp-qa` / `dist/HandAgentDesktop.app`
+- **验证过程**：
+  1. 在最新 `main` 基础上新增并验证 mock 触发器 `[mock:mcp-echo]`，让 mock LLM 调用 `mcp.qa_echo.echo`，参数为 `{ "text": "hello from MockLLMClient" }`。
+  2. 备份当前 `~/.spotAgent/plugins` 和 `~/.spotAgent/mcp.json` 到 `~/.spotAgent/qa-backup-action-mcp-20260521-180251`，随后创建 `action-mcp-qa` Action Plugin、`action-mcp-missing` Action Plugin 与 stdio MCP server `~/.spotAgent/qa-mcp-echo-server.js`。
+  3. 执行基线命令：`bash ./scripts/test.sh`、`bash ./scripts/swiftw build`、`bash ./scripts/swiftw test`，均通过；打包 `bash ./scripts/package-app.sh --mock-llm` 并启动 worktree 下的 `dist/HandAgentDesktop.app`。
+  4. 用原生事件 `System Events` 发送默认快捷键后，Computer Use 确认 PromptPanel 显示 `QA MCP Echo /qa-mcp` 与 `QA MCP Missing /qa-mcp-missing` action row。
+  5. 点击 `QA MCP Echo`，输入参数 `smoke` 并提交，SessionWindow 出现 `授权调用 mcp.qa_echo.echo` 权限气泡；选择「仅本次」后，tool 返回 `QA_MCP_ECHO:hello from MockLLMClient`，assistant 返回 `Mock MCP echo completed.`。
+  6. 通过 WebSocket 创建不带 `actionBinding` 的普通 session，发送同样的 `[mock:mcp-echo]`，确认 session 记录 `Unknown tool: mcp.qa_echo.echo`，证明 MCP tool 未暴露给普通 prompt session。
+  7. 通过 WebSocket 创建绑定 `action-mcp-missing` 的 action session，manifest 引用不存在的 `missing_qa_server`；runtime 仍正常返回 `Mock assistant response: main chain is reachable.`。
+  8. 在同类缺失 MCP action session 中触发 builtin `workspace.list`，确认该 session 仍可执行 builtin tool 并返回 workspace 列表。
+  9. 退出 GUI app 后从终端直接启动 mock agent-server，再触发缺失 MCP action session，捕获到日志 `[agent-server] skipped MCP server missing_qa_server: Unknown MCP server: missing_qa_server`。
+- **证据**：
+  - 进程：GUI 验证时 `HandAgentDesktop` pid `37753`，agent-server pid `37758`，node 命令路径为 `/Users/mu9/proj/handAgent/.worktrees/action-plugin-mcp-qa/apps/agent-server/src/server.ts`。
+  - PromptPanel UI：Computer Use 可见 `QA MCP Echo, /qa-mcp` 与 `QA MCP Missing, /qa-mcp-missing`。
+  - Action MCP 成功 session：`~/.spotAgent/sessions/session-1779358014324-8nxgrv.json`，metadata 记录 `actionBinding: { pluginId: "action-mcp-qa", promptName: "echo", mcpServerIds: ["qa_echo"] }`；messages 记录 `tool_call(mcp.qa_echo.echo)`、tool result `QA_MCP_ECHO:hello from MockLLMClient` 与 final assistant `Mock MCP echo completed.`。
+  - 普通 session 隔离：`~/.spotAgent/sessions/session-1779358069149-hd7435.json` 没有 `metadata.actionBinding`，events 记录 `Unknown tool: mcp.qa_echo.echo`。
+  - 缺失 MCP server action：`~/.spotAgent/sessions/session-1779358114294-v25fcp.json`，metadata 记录 `mcpServerIds: ["missing_qa_server"]`，messages 正常写入 user 与 assistant，events 为空。
+  - 缺失 MCP server 下 builtin tool：`~/.spotAgent/sessions/session-1779358505604-ffayxx.json`，metadata 同样记录 `mcpServerIds: ["missing_qa_server"]`，events 记录 `tool_call(workspace.list)` 与 success `tool_result`，messages 最终返回 `Mock workspace.list completed.`。
+  - skip 日志：终端运行 agent-server 后，触发 `session-1779358229825-j0v3wz` 时 stdout/stderr 捕获到 `[agent-server] skipped MCP server missing_qa_server: Unknown MCP server: missing_qa_server`。
+- **结论**：通过。Action Plugin trigger row 可见；action 提交会创建带 `actionBinding` 的新 session；绑定 session 可调用对应 MCP tool；普通 prompt session 不暴露该 MCP tool；缺失 MCP server 会记录 skip 日志且不会中断 builtin/runtime 主链路。
