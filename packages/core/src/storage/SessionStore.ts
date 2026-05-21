@@ -3,6 +3,7 @@ import type {
   SessionMetadata,
   SessionEvent,
   PersistedSession,
+  SessionActionBinding,
 } from "./SessionRecord.ts";
 
 export type SessionSummary = Pick<
@@ -14,6 +15,7 @@ export type CreateSessionInput = {
   id: string;
   title?: string | null;
   createdAt?: string;
+  actionBinding?: SessionActionBinding;
 };
 
 export interface SessionStore {

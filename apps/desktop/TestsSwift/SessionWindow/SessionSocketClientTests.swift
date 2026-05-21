@@ -144,6 +144,27 @@ final class SessionSocketClientTests: XCTestCase {
         XCTAssertEqual(transport.tasks[0].sentTypes.suffix(1), ["create_session_request"])
     }
 
+    func testSendsCreateSessionRequestWithActionBinding() {
+        let transport = RecordingSessionSocketTransport()
+        let client = SessionSocketClient(
+            serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
+            transport: transport,
+            reconnectDelay: 0
+        )
+
+        client.connect(sessionID: "")
+        client.sendCreateSession(
+            initialText: "Review:\\ncode",
+            attachments: [],
+            actionBinding: ActionBindingPayload(pluginId: "review", promptName: "code_review")
+        )
+
+        let payload = transport.tasks[0].sentObjects.last?["payload"] as? [String: Any]
+        let binding = payload?["actionBinding"] as? [String: Any]
+        XCTAssertEqual(binding?["pluginId"] as? String, "review")
+        XCTAssertEqual(binding?["promptName"] as? String, "code_review")
+    }
+
     func testDecodesWorkspaceAskRequest() {
         let transport = RecordingSessionSocketTransport()
         let client = SessionSocketClient(
@@ -214,6 +235,7 @@ private final class RecordingSessionSocketTransport: SessionSocketTransport {
 private final class RecordingSessionWebSocketTask: SessionWebSocketTask {
     private var receiveHandler: ((Result<URLSessionWebSocketTask.Message, Error>) -> Void)?
     private(set) var sentTypes: [String] = []
+    private(set) var sentObjects: [[String: Any]] = []
 
     func resume() {}
 
@@ -231,6 +253,7 @@ private final class RecordingSessionWebSocketTask: SessionWebSocketTask {
             return
         }
         sentTypes.append(type)
+        sentObjects.append(object)
         completionHandler(nil)
     }
 

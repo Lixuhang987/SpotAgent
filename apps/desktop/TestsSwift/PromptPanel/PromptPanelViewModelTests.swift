@@ -1,5 +1,4 @@
 import XCTest
-import KeyboardShortcuts
 @testable import HandAgentDesktop
 
 final class PromptPanelViewModelTests: XCTestCase {
@@ -26,12 +25,19 @@ final class PromptPanelViewModelTests: XCTestCase {
         let vm = PromptPanelViewModel(actions: makeTestActions())
 
         vm.updateActions([
-            PromptAction(
+            ActionDefinition(
                 id: "recent-session-1",
+                pluginId: "history",
+                promptName: "recent",
+                trigger: "history",
                 title: "最近会话：API 设计",
-                keywords: ["history", "session"],
-                defaultShortcut: nil,
-                perform: {}
+                description: "session",
+                template: "{{query}}",
+                arguments: [
+                    ActionArgumentDefinition(name: "query", description: nil, required: false)
+                ],
+                mcpServerIds: [],
+                icons: []
             )
         ])
 
@@ -100,24 +106,42 @@ final class PromptPanelViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testSubmitActionCallsPerformAndOnHide() {
-        let actions = makeTestActions()
-        let vm = PromptPanelViewModel(actions: actions)
-        var performed = false
-        var hidden = false
-        vm.onHide = { hidden = true }
+    func testSubmitActionInvocationRendersPromptAndForwardsBinding() {
+        let action = makeReviewAction()
+        let vm = PromptPanelViewModel(actions: [action])
+        var submitted: (String, ActionBindingPayload)?
+        vm.onSubmitAction = { prompt, binding, _ in submitted = (prompt, binding) }
 
-        let action = PromptAction(
-            id: "test",
-            title: "Test",
-            keywords: [],
-            defaultShortcut: nil,
-            perform: { performed = true }
-        )
-        vm.submitAction(action)
+        vm.draft = "r \"let x = 1\""
+        vm.submit()
 
-        XCTAssertTrue(performed)
-        XCTAssertTrue(hidden)
+        XCTAssertEqual(submitted?.0, "Review:\\nlet x = 1")
+        XCTAssertEqual(submitted?.1.pluginId, "review")
+        XCTAssertEqual(submitted?.1.promptName, "code_review")
+    }
+
+    @MainActor
+    func testSubmitActionInvocationKeepsDraftWhenRequiredArgumentMissing() {
+        let action = makeReviewAction()
+        let vm = PromptPanelViewModel(actions: [action])
+        var submitted = false
+        vm.onSubmitAction = { _, _, _ in submitted = true }
+
+        vm.draft = "r"
+        vm.submit()
+
+        XCTAssertFalse(submitted)
+        XCTAssertEqual(vm.draft, "r")
+    }
+
+    @MainActor
+    func testSelectActionWritesTriggerIntoDraft() {
+        let action = makeReviewAction()
+        let vm = PromptPanelViewModel(actions: [action])
+
+        vm.selectAction(action)
+
+        XCTAssertEqual(vm.draft, "r ")
     }
 
     @MainActor
@@ -175,22 +199,53 @@ final class PromptPanelViewModelTests: XCTestCase {
         XCTAssertTrue(didHide)
     }
 
-    private func makeTestActions() -> [PromptAction] {
+    private func makeTestActions() -> [ActionDefinition] {
         [
-            PromptAction(
+            ActionDefinition(
                 id: "open-settings",
+                pluginId: "settings",
+                promptName: "open",
+                trigger: "settings",
                 title: "打开设置",
-                keywords: ["settings", "preferences"],
-                defaultShortcut: .init(.comma, modifiers: [.command]),
-                perform: {}
+                description: "preferences",
+                template: "{{query}}",
+                arguments: [
+                    ActionArgumentDefinition(name: "query", description: nil, required: false)
+                ],
+                mcpServerIds: [],
+                icons: []
             ),
-            PromptAction(
+            ActionDefinition(
                 id: "new-session",
+                pluginId: "session",
+                promptName: "new",
+                trigger: "new",
                 title: "新建会话",
-                keywords: ["session", "new"],
-                defaultShortcut: nil,
-                perform: {}
+                description: "session",
+                template: "{{query}}",
+                arguments: [
+                    ActionArgumentDefinition(name: "query", description: nil, required: false)
+                ],
+                mcpServerIds: [],
+                icons: []
             )
         ]
+    }
+
+    private func makeReviewAction() -> ActionDefinition {
+        ActionDefinition(
+            id: "review/code_review",
+            pluginId: "review",
+            promptName: "code_review",
+            trigger: "r",
+            title: "Review",
+            description: nil,
+            template: "Review:\\n{{code}}",
+            arguments: [
+                ActionArgumentDefinition(name: "code", description: nil, required: true)
+            ],
+            mcpServerIds: ["github"],
+            icons: []
+        )
     }
 }

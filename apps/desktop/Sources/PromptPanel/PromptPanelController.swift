@@ -11,17 +11,21 @@ final class PromptPanelController {
     private let quickLookController = QuickLookPreviewController()
 
     var onSubmit: ((String, [PromptAttachmentResult]) -> Void)?
+    var onSubmitAction: ((String, ActionBindingPayload, [PromptAttachmentResult]) -> Void)?
     var onOpenSettings: (() -> Void)?
 
     func configure(viewModel: PromptPanelViewModel) {
         self.viewModel = viewModel
     }
 
-    func register(actions: [PromptAction]) {
+    func register(actions: [ActionDefinition]) {
         if viewModel == nil {
             let vm = PromptPanelViewModel(actions: actions)
             vm.onSubmit = { [weak self] draft, attachments in
                 self?.onSubmit?(draft, attachments)
+            }
+            vm.onSubmitAction = { [weak self] prompt, binding, attachments in
+                self?.onSubmitAction?(prompt, binding, attachments)
             }
             vm.onHide = { [weak self] in
                 self?.hide()

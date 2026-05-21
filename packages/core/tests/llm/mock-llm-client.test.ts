@@ -41,7 +41,6 @@ describe("MockLLMClient", () => {
       "[mock:symlink-escape]",
       "[mock:workspace-ask]",
       "[mock:permission-write]",
-      "[mock:plugin-echo]",
       "[mock:ocr-invalid]",
       "[mock:screen-display]",
       "[mock:screen-window]",
@@ -184,7 +183,7 @@ describe("MockLLMClient", () => {
     });
   });
 
-  it("returns deterministic platform and plugin QA tool calls", async () => {
+  it("returns deterministic platform QA tool calls", async () => {
     const client = new MockLLMClient();
 
     await expect(
@@ -213,18 +212,6 @@ describe("MockLLMClient", () => {
           id: "mock-screen-window-1",
           name: "screen.capture",
           arguments: { target: { kind: "window", windowId: 123 } },
-        },
-      ],
-    });
-
-    await expect(
-      client.complete([{ role: "user", content: "run [mock:plugin-echo]" }], []),
-    ).resolves.toMatchObject({
-      toolCalls: [
-        {
-          id: "mock-plugin-echo-1",
-          name: "plugin.echo",
-          arguments: { message: "hello from MockLLMClient" },
         },
       ],
     });

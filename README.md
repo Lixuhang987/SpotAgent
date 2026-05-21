@@ -1,16 +1,17 @@
 # HandAgent
 
-HandAgent 是一个 macOS 优先的桌面 Agent Runtime MVP。当前桌面壳使用 `AppKit + SwiftUI`，Agent Core 负责会话与工具编排，LLM 按需调用 context tools 和 action tools。
+HandAgent 是一个 macOS 优先的桌面 Agent Runtime MVP。当前桌面壳使用 `AppKit + SwiftUI`，Agent Core 负责会话与工具编排，LLM 按需调用 builtin tools；用户触发的本地 Action Plugin 可把 prompt 模板绑定到 session-scoped MCP tools。
 
 ## 当前能力
 
 - 全局热键唤起 `PromptPanel`
 - `PromptPanel` 右上角按钮和 `Command+,` 打开快捷键设置页
-- 设置页支持配置模型、全局热键、已注册 `PromptAction` 快捷键和 workspace
+- 设置页支持配置模型、全局热键、App 内快捷键和 workspace
+- PromptPanel 会读取 `~/.spotAgent/plugins/*/plugin.json` 中的 Action Plugin prompts，按 trigger 渲染 template 并创建新 session
 - 文本选区与区域截图可作为 PromptPanel attachment chip 附加到用户输入
 - 提交 prompt 后创建 `SessionWindow`
 - `SessionWindow` 展示 user / assistant / tool 消息、历史侧栏、连接状态、权限审批气泡和 workspace 选择气泡，并具备断线自动重连基础逻辑
-- `agent-server` 驱动 `AgentRuntime`、builtin tool 注册、workspace 沙箱文件工具、权限策略和会话持久化
+- `agent-server` 驱动 `AgentRuntime`、builtin tool 注册、workspace 沙箱文件工具、权限策略、会话持久化和 Action session 的 MCP tool 绑定
 - 状态气泡提供当前会话回跳入口
 
 ## 目录
@@ -48,10 +49,16 @@ bash ./scripts/swiftw run HandAgentDesktop
 - 如果未配置 `apiKey`，提交 prompt 后会返回明确错误：`Missing apiKey in ~/.spotAgent/settings.json. 请先在设置页完成模型配置。`
 - 如果对话里看到 `Could not connect to the server`，优先排查本地 `agent-server` 是否启动成功；这类错误发生在连接本地会话服务阶段，通常早于模型 API key 校验。
 
+## Action Plugin 与 MCP
+
+Action Plugin manifest 位于 `~/.spotAgent/plugins/<plugin-id>/plugin.json`，第一版只声明 `prompts[]`、`template`、参数和 `mcpServerIds`。Desktop 负责 trigger 解析、参数填充和 template 渲染；agent-server 只校验 `actionBinding`，并把 manifest 中的 `mcpServerIds` 持久化到新 session metadata。
+
+MCP server 配置位于 `~/.spotAgent/mcp.json`，支持 `stdio` 与 `streamableHttp`。Action session 运行前会把 builtin tools 与该 session 绑定的 MCP tools 组合到同一个 registry；普通 prompt session 不会暴露这些 MCP tools。
+
 ## 说明
 
 - 默认不会把屏幕、窗口、文件、剪贴板、App 状态等上下文预注入模型。
 - 这些上下文只能由 LLM 通过 tool 按需读取。
-- 图片附件当前会写入 BlobStore 并以 image STUB 进入 user message，尚未接入 vision / 多模态消息，因此 LLM 不能直接理解图片内容。
+- 图片附件会写入 BlobStore；进入 runtime 前 agent-server 会把 image STUB 展开为多模态 image part，是否可用取决于当前 provider capability。
 - 当前 assistant delta 已接入 LLM adapter 的真实 streaming；协议仍用 `assistant_message_start/delta/end` 向桌面端增量推送。
 - 当前桌面壳只负责任务入口、会话窗口和状态反馈，runtime 与平台抽象继续下沉在共享层。

@@ -30,6 +30,10 @@ export class ToolRegistry {
     return this.tools.get(name);
   }
 
+  all(): AgentTool[] {
+    return Array.from(this.tools.values());
+  }
+
   list(): RegisteredTool[] {
     return Array.from(this.tools.values()).map((tool) => ({
       name: tool.name,

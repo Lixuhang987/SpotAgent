@@ -18,7 +18,10 @@
 | `src/SessionPersistence.ts` | 会话持久化封装：唯一直接持有 `SessionStore` 的 agent-server 模块，负责 CRUD、标题生成、历史读取、messages / events 写入，并把 image attachment 交给 BlobStore |
 | `src/MessageTranslator.ts` | 纯函数：`AgentRuntimeEvent` ↔ `SessionMessage` / `SessionEvent` 翻译（`toSessionMessage` / `toAuditEvent` / `agentMessagesToConversation` / `agentMessagesToRuntimeMessages` / `composeUserContent` / `deriveTitle` / `toErrorMessage`）。`composeUserContent` 会把 image attachment 写入 BlobStore 并渲染 image STUB；`agentMessagesToRuntimeMessages` 在进入 runtime 前把 image STUB 转为多模态 image part；新增 tool_message 形态只改这里 |
 | `src/SettingsBackedLLMClient.ts` | 每次 `complete` / `stream` 先检查 `~/.spotAgent/settings.json` 的 `mtimeMs + size` stamp；stamp 未变复用已缓存的 provider client，stamp 变化后重读 settings，并只在 `provider / model / apiKey / baseUrl / api` 等有效 LLM 配置变化时经 core `LLMClientFactory` 重建 client；会把 options（例如 `blobStore`）透传给内部 client；可用 `purpose=summarizer` 读取 `summarizerModel`；注入 `FileNetworkLogger` 把 LLM 网络调用 JSONL 落盘 |
-| `src/SettingsBackedToolRegistry.ts` | 按 `~/.spotAgent/settings.json` 与 `~/.spotAgent/plugins/*/plugin.json` 的 stamp 热加载 builtin + 本地插件 tool，并原地刷新同一个 `ToolRegistry` 实例；`SessionRuntimeOrchestrator` 每次新一轮 user message 进入 runtime 前调用 `refresh()` |
+| `src/SettingsBackedToolRegistry.ts` | 按 `~/.spotAgent/settings.json` 的 stamp 热加载 builtin tools，并原地刷新同一个 `ToolRegistry` 实例；`SessionRuntimeOrchestrator` 每次新一轮 user message 进入 runtime 前调用 `refresh()` |
+| `src/ActionBindingResolver.ts` | 校验 `create_session_request.actionBinding`，并从本地 Plugin manifest 解析 session 绑定的 `mcpServerIds` |
+| `src/MCPServerRegistry.ts` | MCP client 缓存与 `tools/list` 适配；同一个 `serverId` 复用 client 与 adapted tools |
+| `src/SessionScopedToolRegistry.ts` | 按 session metadata 组合 builtin tools 与 MCP tools；MCP server 缺失或初始化失败时记录 skip 日志并保留 builtin tools |
 | `src/WebSocketPlatformBridge.ts` | 实现 core 的 `PlatformBridge` 接口；通过 `attach(send)` 接管来自 desktop 的 `channel: "platform"` 反向 socket 并返回 fencing token，按 `requestId + token` 关联 `platform_request` / `platform_response`，60s 超时 |
 | `src/SessionPermissionBridge.ts` | 实现 `FilePermissionPolicy` 的 `AskResolver`：把 `permission_request` 推到 desktop，按 `requestId + session binding token` 等回 `permission_response`，60s 超时视为 deny |
 | `src/SessionWorkspaceAskBridge.ts` | 实现 `workspace.askUser` 的 `WorkspaceAskResolver`：把 `workspace_ask_request` 推到 desktop，按 `requestId + session binding token` 等回 `workspace_ask_response`，同一 session 内多个 ask 串行展示，取消 / 超时 / 关闭返回 `{ cancelled: true }` |
@@ -34,16 +37,24 @@ sequenceDiagram
   Desktop->>Server: spawn node --experimental-transform-types server.ts
   Server->>Core: 动态 import runtime / tools / platform / workspace / permission / config / logging
   Server->>Server: 构造 FileSessionStore / FilesystemBlobStore / FileNetworkLogger / FileWorkspaceRegistry
+  Server->>Server: 读取 ~/.spotAgent/mcp.json，构造 MCPServerRegistry
   Server->>Server: 构造 WebSocketPlatformBridge + RemotePlatformAdapter + SessionWorkspaceAskBridge
   Server->>Server: SettingsBackedToolRegistry.refresh() → registerTools(...) → registry / disabled list
+  Server->>Server: SessionScopedToolRegistry 组合 builtin registry + session-bound MCP tools
   Server->>Server: SessionPermissionBridge + FilePermissionPolicy(askResolver)
   Server->>Server: resolveLLMMode() → SettingsBackedLLMClient 或 MockLLMClient
-  Server->>Server: AgentRuntime(LLMClient, registry, {policy, blobStore, turnSummarizer})
+  Server->>Server: AgentRuntime(LLMClient, sessionScopedRegistry, {policy, blobStore, turnSummarizer})
   Server->>Server: SessionPersistence(store, blobStore)
-  Server->>Server: SessionRuntimeOrchestrator(runtime, persistence)
-  Server->>Server: SessionRouter(orchestrator, persistence)
+  Server->>Server: SessionRuntimeOrchestrator(runtime, persistence, beforeRun refresh scoped tools)
+  Server->>Server: SessionRouter(orchestrator, persistence, ActionBindingResolver)
   Server->>Server: WebSocketServer.listen(4317)
 ```
+
+## Action Plugin / MCP 流程
+
+`create_session_request.payload.actionBinding` 只包含 `{ pluginId, promptName }`。agent-server 不信任 desktop 传来的 MCP server 列表，而是通过 `ActionBindingResolver` 重新读取 `~/.spotAgent/plugins/<plugin-id>/plugin.json`，校验 plugin id、prompt name 和 enabled 状态，再把 manifest 中的 `mcpServerIds` 写入 session metadata。
+
+每轮 user message 进入 runtime 前，`SessionRuntimeOrchestrator.beforeRun` 会先刷新 builtin tools，再读取该 session 的 `metadata.actionBinding`。`SessionScopedToolRegistry` 用 builtin registry 作为基底，只为绑定 session 添加 `mcp.<serverId>.<toolName>`；普通 session 不暴露 MCP tools。缺失的 MCP server 会被记录为 `[agent-server] skipped MCP server ...`，不会阻断 prompt runtime。
 
 ## 一条 socket 上的消息分派
 
@@ -72,7 +83,8 @@ socket 关闭时，若该 socket 持有 bridge token，会调用 `bridge.detach(
 | `~/.spotAgent/workspaces.json` | desktop（`WorkspaceSettingsViewModel`） + agent-server（`FileWorkspaceRegistry` 自播种 default） | 双侧 | workspace 注册表 |
 | `~/.spotAgent/permissions.json` | agent-server（`FilePermissionPolicy.remember`） | agent-server | 永久权限规则 |
 | `~/.spotAgent/log/<YYYY-MM-DD>/network-NNN.jsonl` | agent-server（`FileNetworkLogger`） | 人工排查 | LLM 请求 / 响应 body |
-| `~/.spotAgent/plugins/<plugin-id>/plugin.json` | 用户 / 本地安装流程 | agent-server | 本地插件 manifest；tool 执行入口、权限声明、启停状态与超时配置 |
+| `~/.spotAgent/plugins/<plugin-id>/plugin.json` | 用户 / 本地安装流程 | desktop / agent-server | Action Plugin manifest；desktop 渲染 prompt template，agent-server 校验 `actionBinding` 并解析 `mcpServerIds` |
+| `~/.spotAgent/mcp.json` | 用户 / 本地安装流程 | agent-server | MCP server 配置；缺失文件等价于 `{ "version": 1, "servers": [] }` |
 
 ## LLM 模式
 
@@ -112,6 +124,10 @@ open dist/HandAgentDesktop.app
 - [SessionWorkspaceAskBridge.ts](/Users/mu9/proj/handAgent/apps/agent-server/src/SessionWorkspaceAskBridge.ts)
 - [SettingsBackedLLMClient.ts](/Users/mu9/proj/handAgent/apps/agent-server/src/SettingsBackedLLMClient.ts)
 - [SettingsBackedToolRegistry.ts](/Users/mu9/proj/handAgent/apps/agent-server/src/SettingsBackedToolRegistry.ts)
+- [ActionBindingResolver.ts](/Users/mu9/proj/handAgent/apps/agent-server/src/ActionBindingResolver.ts)
+- [MCPServerRegistry.ts](/Users/mu9/proj/handAgent/apps/agent-server/src/MCPServerRegistry.ts)
+- [SessionScopedToolRegistry.ts](/Users/mu9/proj/handAgent/apps/agent-server/src/SessionScopedToolRegistry.ts)
 - [WebSocketPlatformBridge.ts](/Users/mu9/proj/handAgent/apps/agent-server/src/WebSocketPlatformBridge.ts)
 - 协议参考：[protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md)
+- MCP 模块：[mcp/mcp.md](/Users/mu9/proj/handAgent/packages/core/src/mcp/mcp.md)
 - 桌面侧反向 IPC：[PlatformBridge](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/PlatformBridge/platform-bridge.md)

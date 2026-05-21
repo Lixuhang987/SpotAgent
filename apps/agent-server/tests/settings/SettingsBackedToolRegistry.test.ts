@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chmod, mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { OfflinePlatformAdapter } from "@handagent/core/platform/OfflinePlatformAdapter.ts";
@@ -53,50 +53,21 @@ describe("SettingsBackedToolRegistry", () => {
     expect(loadCount).toBe(1);
   });
 
-  it("loads local plugins and applies denylist to plugin tools", async () => {
-    const root = await mkdtemp(join(tmpdir(), "settings-plugin-registry-"));
-    const pluginsDir = join(root, "plugins");
-    const pluginDir = join(pluginsDir, "echo");
-    await mkdir(pluginDir, { recursive: true });
-    const commandPath = join(pluginDir, "echo.js");
-    await writeFile(commandPath, "#!/usr/bin/env node\nprocess.stdout.write('{}');\n", "utf8");
-    await chmod(commandPath, 0o755);
-    await writeFile(
-      join(pluginDir, "plugin.json"),
-      JSON.stringify({
-        id: "echo",
-        name: "Echo",
-        version: "1.0.0",
-        tools: [
-          {
-            name: "plugin.echo",
-            description: "Echo",
-            inputSchema: { type: "object" },
-            command: "echo.js",
-          },
-        ],
-      }),
-      "utf8",
-    );
-
-    let denylist: string[] = [];
-    let stamp = "v1";
+  it("does not register legacy external tools", async () => {
+    const legacyToolName = "plugin" + ".echo";
     const manager = new SettingsBackedToolRegistry(
-      { platform: new OfflinePlatformAdapter(), pluginsDir },
+      { platform: new OfflinePlatformAdapter() },
       {
-        readSettingsStamp: () => stamp,
-        loadToolSettings: () => ({ allowlist: null, denylist }),
+        readSettingsStamp: () => "v1",
+        loadToolSettings: () => ({ allowlist: null, denylist: [] }),
         log: () => {},
       },
     );
 
     await manager.refresh();
-    expect(manager.registry.get("plugin.echo")).toBeDefined();
 
-    denylist = ["plugin.echo"];
-    stamp = "v2";
-    await manager.refresh();
-
-    expect(manager.registry.get("plugin.echo")).toBeUndefined();
+    expect(manager.registry.list().map((tool) => tool.name)).not.toContain(
+      legacyToolName,
+    );
   });
 });

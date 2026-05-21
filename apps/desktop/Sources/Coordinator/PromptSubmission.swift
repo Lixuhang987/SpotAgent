@@ -1,11 +1,21 @@
 import Foundation
 
+struct ActionBindingPayload: Encodable, Equatable {
+    let pluginId: String
+    let promptName: String
+}
+
 struct PromptSubmission {
     let composed: String
     let summary: String
     let socketAttachments: [UserMessageAttachmentPayload]
+    let actionBinding: ActionBindingPayload?
 
-    static func compose(draft: String, attachments: [PromptAttachmentResult]) -> PromptSubmission? {
+    static func compose(
+        draft: String,
+        attachments: [PromptAttachmentResult],
+        actionBinding: ActionBindingPayload? = nil
+    ) -> PromptSubmission? {
         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
@@ -33,7 +43,8 @@ struct PromptSubmission {
         return PromptSubmission(
             composed: composed,
             summary: summary,
-            socketAttachments: socketAttachments
+            socketAttachments: socketAttachments,
+            actionBinding: actionBinding
         )
     }
 }

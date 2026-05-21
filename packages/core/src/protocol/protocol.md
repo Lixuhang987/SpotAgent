@@ -13,7 +13,8 @@ desktop ↔ agent-server 的 WebSocket 协议。会话流量走 `SessionMessage`
 
 | 分类 | 类型 | 方向 |
 |------|------|------|
-| 会话生命周期 | `open_session` | desktop → server（首次连接 / 重连订阅） |
+| 会话生命周期 | `create_session_request` / `_response` | desktop ↔ server（创建新 session，可携带 initialText / attachments / actionBinding） |
+| | `open_session` | desktop → server（首次连接 / 重连订阅） |
 | | `user_message` | desktop → server |
 | | `assistant_message_start` / `_delta` / `_end` | server → desktop |
 | | `tool_message`（`MessageTranslator` 把 `tool_call` → `running`，`tool_result` → `completed`/`failed`） | server → desktop |
@@ -61,6 +62,12 @@ desktop ↔ agent-server 的 WebSocket 协议。会话流量走 `SessionMessage`
 - SessionWindow 首次连接和 socket 断线重连后都会发送 `open_session`。
 - agent-server 若在 store 中找到对应 `sessionId`，会返回 `session_snapshot`，用于恢复窗口内的消息列表和状态。
 - 如果 session 不存在，`open_session` 不创建新会话；首次用户输入仍由 `user_message` 创建并触发 runtime。
+
+## Action Binding
+
+Action prompt 创建新 session 时，desktop 在 `create_session_request.payload.actionBinding` 里只发送 `{ pluginId, promptName }`。agent-server 会重新读取本地 Plugin manifest，解析并持久化 session metadata 的 `actionBinding.mcpServerIds`，随后只在该 session 的 runtime 前组合对应 MCP tools。
+
+普通 `user_message` 不携带 action binding；一个 session 的 MCP scope 由创建时 metadata 决定，不随后续消息变化。
 
 ## 会话中断
 

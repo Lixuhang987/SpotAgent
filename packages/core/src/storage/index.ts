@@ -2,6 +2,7 @@ export type {
   SessionMetadata,
   SessionEvent,
   SessionEventType,
+  SessionActionBinding,
   PersistedSession,
 } from "./SessionRecord.ts";
 export type {

@@ -117,7 +117,7 @@ sequenceDiagram
 - 同一文件也支持 `tools.allowlist / tools.denylist`，Settings UI 的"工具"Tab 可切换 builtin tool；agent-server 每轮 user message 进入 runtime 前按文件戳刷新 tool registry。
 - 修改后下一次 LLM 请求即生效，无需重启。
 
-### `PromptAttachmentResult` / `PromptAction`（[PromptPanel](Sources/PromptPanel/prompt-panel.md)）
+### `PromptAttachmentResult` / Action Plugin（[PromptPanel](Sources/PromptPanel/prompt-panel.md)）
 
 `PromptAttachmentResult` 共有 5 个 case，对应不同附件采集结果：
 
@@ -127,7 +127,7 @@ sequenceDiagram
 - `.imageRegion(base64:mimeType:)`：用户区域截图（来自 `MacRegionCaptureProvider`，保留 `screencapture -i` 作为用户主动圈选入口）。
 - `.selectionError(message:)`：采集失败，UI 以禁用 chip + tooltip 反馈。
 
-`PromptAction(id, title, keywords, defaultShortcut, perform)`：命令面板可触发的动作；`shortcutName` 计算属性生成 `KeyboardShortcuts.Name("action.\(id)")`。Coordinator 会注入固定 action（设置 / 会话历史），历史入口会聚焦全局 SessionWindow。
+`ActionDefinition` 来自 `~/.spotAgent/plugins/*/plugin.json` 的 `prompts[]`，包含 `pluginId / promptName / trigger / template / arguments / mcpServerIds`。PromptPanel 只负责 trigger 匹配、参数编辑和 template 渲染；提交时发送渲染后的 prompt 与 `{ pluginId, promptName }`，由 agent-server 重新校验并持久化 session 绑定。`PromptAction` 仍保留给设置页中的 App 内快捷键，不再作为 PromptPanel row。
 
 ## 注意事项
 

@@ -6,6 +6,13 @@ export type SessionMetadata = {
   createdAt: string;
   updatedAt: string;
   messageCount: number;
+  actionBinding?: SessionActionBinding;
+};
+
+export type SessionActionBinding = {
+  pluginId: string;
+  promptName: string;
+  mcpServerIds: string[];
 };
 
 export type SessionEventType =

@@ -3,6 +3,7 @@ import type { BlobStore } from "@handagent/core/blob/BlobStore.ts";
 import { FilesystemBlobStore } from "@handagent/core/blob/FilesystemBlobStore.ts";
 import type {
   PersistedSession,
+  SessionActionBinding,
   SessionEvent,
   SessionStore,
   SessionSummary,
@@ -20,9 +21,12 @@ export class SessionPersistence {
     private readonly blobStore: BlobStore = new FilesystemBlobStore(),
   ) {}
 
-  async createSession(title?: string): Promise<PersistedSession> {
+  async createSession(
+    title?: string,
+    actionBinding?: SessionActionBinding,
+  ): Promise<PersistedSession> {
     const id = generateSessionId();
-    return this.store.create({ id, title, createdAt: this.now() });
+    return this.store.create({ id, title, createdAt: this.now(), actionBinding });
   }
 
   async deleteSession(sessionId: string): Promise<void> {

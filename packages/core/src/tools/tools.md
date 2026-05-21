@@ -1,6 +1,6 @@
 # tools
 
-`AgentTool` 协议、`ToolRegistry` 注册中心、当前 11 个 builtin tool，以及本地目录插件 tool。
+`AgentTool` 协议、`ToolRegistry` 注册中心、当前 11 个 builtin tool，以及 builtin tool 注册组合根。
 
 ## 文件
 
@@ -10,10 +10,9 @@
 | `defineTool.ts` | `defineTool({ name, description, inputSchema (zod), stubByDefault?, run })` 工厂：`zod` schema 自动转 JSON Schema 2019-09；`.create(deps)` 生成的 `call(input, context?)` 会先用同一个 schema 做运行时入参校验，再调用 `run` |
 | `ToolRegistry.ts` | Map 包装；`register / replaceAll / get / list`，单次注册重名抛错，`replaceAll()` 供 settings 热加载原地刷新；`list()` 返回 `RegisteredTool`（去掉 `call`），供 `LLMClient.stream` 使用 |
 | `registerBuiltins.ts` | 组合根：根据 `PlatformAdapter` + 可选 `WorkspaceRegistry` + `ToolSettings` 装配 candidates，过 allowlist/denylist 后注册 |
-| `registerTools.ts` | 插件感知组合根：先生成 builtin candidates，再合并插件 loader 结果；builtin 名称优先，重复 plugin tool 全部禁用，最后统一套 `allowlist / denylist` |
+| `registerTools.ts` | 当前等同于 builtin 注册组合根：按 `PlatformAdapter` / `WorkspaceRegistry` 生成 builtin candidates，再统一套 `allowlist / denylist` |
 | `builtins/*.ts` | 11 个 builtin tool 实现，全部用 `defineTool` 工厂表达 |
 | `builtins/workspace-path.ts` | `file.read` / `file.write` 共享的 workspace 路径校验工具：拒绝绝对路径与 `..` 越狱、`realpath` 后再次校验 |
-| `plugins/` | 本地目录插件 manifest 解析、加载与本地受信任子进程执行，见 [plugins/plugins.md](/Users/mu9/proj/handAgent/packages/core/src/tools/plugins/plugins.md) |
 
 ## 11 个 builtin tool
 
@@ -36,26 +35,24 @@
 ```mermaid
 flowchart LR
   A[startDefaultServer / before run refresh] --> B[SettingsBackedToolRegistry.refresh]
-  B --> C[loadToolSettings + plugin stamp]
+  B --> C[loadToolSettings]
   A --> W[FileWorkspaceRegistry]
   A --> D[RemotePlatformAdapter]
   C & W & D --> E[registerTools]
   E --> F[candidates = 7 platform tools + 4 workspace tools]
-  E --> P[loadLocalPluginTools 从 ~/.spotAgent/plugins 读取插件]
-  F & P --> R[冲突规则：builtin 优先，重复 plugin tool 禁用]
-  R --> G[filterToolNames（denylist 优先 > allowlist）]
+  F --> G[filterToolNames（denylist 优先 > allowlist）]
   G --> H[registry.replaceAll]
   H --> I[返回 {registry, registered, disabled}]
 ```
 
-`SettingsBackedToolRegistry` 在 agent-server 启动和每轮 user message 进入 runtime 前按 `settings.json` 与 `~/.spotAgent/plugins/*/plugin.json` 文件戳刷新；`disabled` 列表回流到 `console.log`，便于排错；当 `workspaceRegistry` 缺失时，三个 file/workspace tool 直接进 disabled；当缺少 `WorkspaceAskResolver` 时，`workspace.askUser` 单独进 disabled。
+`SettingsBackedToolRegistry` 在 agent-server 启动和每轮 user message 进入 runtime 前按 `settings.json` 文件戳刷新 builtin tool；`disabled` 列表回流到 `console.log`，便于排错；当 `workspaceRegistry` 缺失时，三个 file/workspace tool 直接进 disabled；当缺少 `WorkspaceAskResolver` 时，`workspace.askUser` 单独进 disabled。
 
-插件 tool 第一版只支持本地目录安装：`~/.spotAgent/plugins/<plugin-id>/plugin.json`。manifest 可用 `enabled: false` 禁用整插件；单个 tool 启停复用 `tools.allowlist / tools.denylist`。插件作为本地受信任子进程执行，JSON stdin/stdout；command 真实路径必须留在插件目录内，stdout / stderr 各有 1 MiB 上限；崩溃、非 JSON 输出、超时、输出超限都作为 tool error 返回，不影响 agent-server 进程。当前不提供 OS 级沙箱。
+本目录不再包含私有 `tools[] + command` 插件运行时。用户触发的本地 Action Plugin 只负责 prompt 模板与 `actionBinding`，绑定的外部能力通过标准 MCP tool 进入 session-scoped registry。
 
 ## 编辑此目录的约束
 
 - 新增 builtin tool 必须：实现 `AgentTool` → 在 `registerBuiltins.ts` 的 `candidates` 里挂上 → 同步更新 [README](/Users/mu9/proj/handAgent/README.md) 与本文件的"11 个 builtin tool"表。
-- 新增插件 manifest 字段或执行协议字段时，同步更新 [plugins/plugins.md](/Users/mu9/proj/handAgent/packages/core/src/tools/plugins/plugins.md)，并补 manifest 解析与执行失败路径测试。
+- 新增 Action Plugin 或 MCP 字段时，同步更新对应模块文档，并补 manifest / MCP 配置解析测试。
 - tool name 一律点号风格（`category.action`），描述要包含调用场景与边界条件，方便 LLM 自决策。
 - 不要在 tool 内部直接 `import "node:fs"` 与平台无关的 IO；platform 类 tool 必须经 `PlatformAdapter`，文件类 tool 必须经 `WorkspaceRegistry`。
 - 工具结果优先返回**可序列化对象**（runtime 自动 JSON.stringify）；返回字符串只用于人类阅读场景。
