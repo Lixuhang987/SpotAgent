@@ -327,7 +327,11 @@ final class MacPlatformProvider: PlatformProvider {
         case .window(let windowId):
             let app = try appForWindow(windowId: windowId)
             let appElement = AXUIElementCreateApplication(app.processIdentifier)
-            guard let window = accessibilityWindow(appElement: appElement, windowId: windowId) else {
+            guard let window = accessibilityWindow(
+                appElement: appElement,
+                windowId: windowId,
+                appProcessIdentifier: app.processIdentifier
+            ) else {
                 let message = windowId.map {
                     "No accessibility window found for windowId \($0)"
                 } ?? "No focused window found for accessibility.snapshot"
@@ -351,7 +355,11 @@ final class MacPlatformProvider: PlatformProvider {
         case .window(let windowId):
             let app = try appForWindow(windowId: windowId)
             let appElement = AXUIElementCreateApplication(app.processIdentifier)
-            guard let window = accessibilityWindow(appElement: appElement, windowId: windowId) else {
+            guard let window = accessibilityWindow(
+                appElement: appElement,
+                windowId: windowId,
+                appProcessIdentifier: app.processIdentifier
+            ) else {
                 let message = windowId.map {
                     "No accessibility window found for windowId \($0)"
                 } ?? "No focused window found for accessibility.action"
@@ -366,9 +374,8 @@ final class MacPlatformProvider: PlatformProvider {
 
     private func appForWindow(windowId: Int?) throws -> NSRunningApplication {
         if let windowId {
-            let windows = CGWindowListCopyWindowInfo([.optionIncludingWindow], CGWindowID(windowId)) as? [[String: Any]] ?? []
-            guard let ownerPid = windows.first?[kCGWindowOwnerPID as String] as? Int,
-                  let app = NSRunningApplication(processIdentifier: pid_t(ownerPid)) else {
+            guard let window = cgWindowMetadata(windowId: windowId),
+                  let app = NSRunningApplication(processIdentifier: pid_t(window.ownerPid)) else {
                 throw PlatformBridgeError(code: "not_found", message: "No app found for windowId \(windowId)")
             }
             return app
@@ -394,12 +401,20 @@ final class MacPlatformProvider: PlatformProvider {
         return current
     }
 
-    private func accessibilityWindow(appElement: AXUIElement, windowId: Int?) -> AXUIElement? {
+    private func accessibilityWindow(
+        appElement: AXUIElement,
+        windowId: Int?,
+        appProcessIdentifier: pid_t
+    ) -> AXUIElement? {
         selectAccessibilityWindow(
             windowId: windowId,
             focusedWindow: copyElementAttribute(appElement, kAXFocusedWindowAttribute),
             windows: copyElementArrayAttribute(appElement, kAXWindowsAttribute),
-            windowNumber: { copyIntAttribute($0, macPlatformAXWindowNumberAttribute) }
+            targetWindow: windowId.flatMap(cgWindowMetadata),
+            appProcessIdentifier: Int(appProcessIdentifier),
+            windowNumber: { copyIntAttribute($0, macPlatformAXWindowNumberAttribute) },
+            windowTitle: { copyStringAttribute($0, kAXTitleAttribute) },
+            windowFrame: { copyFrameRect($0) }
         )
     }
 
@@ -529,6 +544,16 @@ final class MacPlatformProvider: PlatformProvider {
     }
 
     private func copyFrame(_ element: AXUIElement) -> [String: Double]? {
+        guard let frame = copyFrameRect(element) else { return nil }
+        return [
+            "x": frame.origin.x,
+            "y": frame.origin.y,
+            "width": frame.width,
+            "height": frame.height,
+        ]
+    }
+
+    private func copyFrameRect(_ element: AXUIElement) -> CGRect? {
         var positionValue: CFTypeRef?
         var sizeValue: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &positionValue) == .success,
@@ -549,12 +574,7 @@ final class MacPlatformProvider: PlatformProvider {
               AXValueGetValue((sizeAX as! AXValue), .cgSize, &size) else {
             return nil
         }
-        return [
-            "x": point.x,
-            "y": point.y,
-            "width": size.width,
-            "height": size.height,
-        ]
+        return CGRect(origin: point, size: size)
     }
 }
 
@@ -816,16 +836,75 @@ private func elementId(pid: Int, path: [Int]) -> String {
     "pid:\(pid);path:\(path.map(String.init).joined(separator: "."))"
 }
 
+struct MacPlatformCGWindowMetadata: Equatable {
+    let windowId: Int
+    let ownerPid: Int
+    let title: String?
+    let bounds: CGRect?
+}
+
+private func cgWindowMetadata(windowId: Int) -> MacPlatformCGWindowMetadata? {
+    let windows = CGWindowListCopyWindowInfo([.optionIncludingWindow], CGWindowID(windowId)) as? [[String: Any]] ?? []
+    guard let info = windows.first,
+          let ownerPid = intValue(info[kCGWindowOwnerPID as String]) else {
+        return nil
+    }
+    return MacPlatformCGWindowMetadata(
+        windowId: intValue(info[kCGWindowNumber as String]) ?? windowId,
+        ownerPid: ownerPid,
+        title: info[kCGWindowName as String] as? String,
+        bounds: cgWindowBounds(info[kCGWindowBounds as String])
+    )
+}
+
 func selectAccessibilityWindow<Element>(
     windowId: Int?,
     focusedWindow: Element?,
     windows: [Element],
-    windowNumber: (Element) -> Int?
+    targetWindow: MacPlatformCGWindowMetadata? = nil,
+    appProcessIdentifier: Int? = nil,
+    windowNumber: (Element) -> Int?,
+    windowTitle: (Element) -> String? = { _ in nil },
+    windowFrame: (Element) -> CGRect? = { _ in nil }
 ) -> Element? {
     guard let windowId else {
         return focusedWindow
     }
-    return windows.first { windowNumber($0) == windowId }
+    if let directMatch = windows.first(where: { windowNumber($0) == windowId }) {
+        return directMatch
+    }
+    guard let targetWindow,
+          targetWindow.windowId == windowId,
+          targetWindow.ownerPid == appProcessIdentifier,
+          let targetTitle = normalizedNonEmptyTitle(targetWindow.title),
+          let targetBounds = targetWindow.bounds else {
+        return nil
+    }
+    let fallbackMatches = windows.filter { window in
+        guard normalizedNonEmptyTitle(windowTitle(window)) == targetTitle,
+              let frame = windowFrame(window) else {
+            return false
+        }
+        return frame.approximatelyEquals(targetBounds)
+    }
+    return fallbackMatches.count == 1 ? fallbackMatches[0] : nil
+}
+
+private func cgWindowBounds(_ value: Any?) -> CGRect? {
+    guard let bounds = value as? [String: Any],
+          let x = doubleValue(bounds["X"]),
+          let y = doubleValue(bounds["Y"]),
+          let width = doubleValue(bounds["Width"]),
+          let height = doubleValue(bounds["Height"]) else {
+        return nil
+    }
+    return CGRect(x: x, y: y, width: width, height: height)
+}
+
+private func normalizedNonEmptyTitle(_ title: String?) -> String? {
+    guard let title else { return nil }
+    let normalized = title.trimmingCharacters(in: .whitespacesAndNewlines)
+    return normalized.isEmpty ? nil : normalized
 }
 
 private func intValue(_ value: Any?) -> Int? {
@@ -833,8 +912,23 @@ private func intValue(_ value: Any?) -> Int? {
     return (value as? NSNumber)?.intValue
 }
 
+private func doubleValue(_ value: Any?) -> Double? {
+    if let double = value as? Double { return double }
+    if let int = value as? Int { return Double(int) }
+    return (value as? NSNumber)?.doubleValue
+}
+
 private func clampedInt(_ value: Any?, defaultValue: Int, minValue: Int, maxValue: Int) -> Int {
     min(max(intValue(value) ?? defaultValue, minValue), maxValue)
+}
+
+private extension CGRect {
+    func approximatelyEquals(_ other: CGRect, tolerance: CGFloat = 2) -> Bool {
+        abs(origin.x - other.origin.x) <= tolerance &&
+            abs(origin.y - other.origin.y) <= tolerance &&
+            abs(width - other.width) <= tolerance &&
+            abs(height - other.height) <= tolerance
+    }
 }
 
 private extension AXError {
