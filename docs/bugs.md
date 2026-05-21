@@ -30,3 +30,42 @@
 ---
 
 ## 当前 bug
+
+### 1. Accessibility window target 不能复用 window.list 返回的 TextEdit 窗口 id
+
+**严重级别**：P2
+
+**发现日期**：2026-05-21
+
+**复现步骤**：
+
+1. 在主仓库 `main` 执行基线：`bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`。
+2. 打包并启动非 mock App：`bash ./scripts/package-app.sh`、`open dist/HandAgentDesktop.app`。
+3. 打开 TextEdit 并置为前台。
+4. 通过真实 provider 会话要求 LLM 依次调用 `window.list`、选择 TextEdit 窗口 id，再调用 `accessibility.snapshot({ "kind": "window", "windowId": <TextEdit id> })` 和 `accessibility.snapshot({ "kind": "window", "windowId": 999999999 })`。
+
+**实际结果**：
+
+- `window.list` 返回 TextEdit 窗口 `未命名2.rtf`，`id: 52648`。
+- 随后对同一 id 调用 `accessibility.snapshot({ kind: "window", windowId: 52648 })` 失败，输出 `No accessibility window found for windowId 52648`。
+- 对不存在的 `windowId: 999999999` 失败，输出 `No app found for windowId 999999999`。
+
+**期望结果**：
+
+- `window.list` 返回的窗口 id 应可直接用于 `accessibility.snapshot({ kind: "window", windowId })`，并返回指定窗口的有限层级 AX 树。
+- 不存在或不匹配的 `windowId` 应稳定返回 `not_found`，且不会退回 focused window。
+
+**证据**：
+
+- session 文件：`/Users/mu9/.spotAgent/sessions/session-1779364564002-3wqf7g.json`。
+- session events 记录 `window.list` 成功返回 `{"title":"未命名2.rtf","id":52648,"appName":"文本编辑"}`，随后 `accessibility.snapshot` 对 `windowId: 52648` 的 `tool_result.status` 为 `error`，输出 `No accessibility window found for windowId 52648`。
+- 进程内 AX / CG 对照：TextEdit `AXWindows` 可枚举两个窗口，标题分别为 `未命名2.rtf`、`未命名.rtf`，但读取私有 `AXWindowNumber` 均返回 `-25205` / `nil`；CGWindowList 同时返回 `52648|未命名2.rtf` 与 `52518|未命名.rtf`。
+
+**初步调用链 / 根因边界**：
+
+- `LLM -> window.list`：已验证，返回 CGWindowList 的 TextEdit 窗口 id。
+- `window.list result -> LLM -> accessibility.snapshot window target`：已验证，LLM 把 `52648` 原样传入。
+- `PlatformBridgeService -> MacPlatformProvider.appForWindow`：已验证，同一 CG window id 能解析到 TextEdit pid。
+- `MacPlatformProvider.accessibilityWindow`：失败点在这里。当前只用 AX window 的 `AXWindowNumber` 匹配 CG window id；TextEdit 的 AX window 不暴露 `AXWindowNumber`，导致合法 CG window id 无法映射到 AX window。
+
+**状态**：待修复。
