@@ -59,6 +59,75 @@ final class MacPlatformProviderParsingTests: XCTestCase {
         XCTAssertTrue(error.message.contains("辅助功能"))
     }
 
+    func testScreenCapturePreflightDeniedErrorUsesReadablePermissionGuide() {
+        let error = MacPlatformScreenCapturePermission.deniedError()
+
+        XCTAssertEqual(error.code, "permission_denied")
+        XCTAssertTrue(error.message.contains("系统设置"))
+        XCTAssertTrue(error.message.contains("隐私与安全性"))
+        XCTAssertTrue(error.message.contains("屏幕录制"))
+    }
+
+    func testScreenCaptureAccessDoesNotRequestWhenPreflightAlreadyAllowed() throws {
+        var requestCount = 0
+
+        let isAllowed = try MacPlatformScreenCapturePermission.ensureAllowed(
+            preflight: { true },
+            request: {
+                requestCount += 1
+                return false
+            }
+        )
+
+        XCTAssertTrue(isAllowed)
+        XCTAssertEqual(requestCount, 0)
+    }
+
+    func testScreenCaptureAccessRequestsWhenPreflightDenied() throws {
+        var requestCount = 0
+
+        let isAllowed = try MacPlatformScreenCapturePermission.ensureAllowed(
+            preflight: { false },
+            request: {
+                requestCount += 1
+                return true
+            }
+        )
+
+        XCTAssertTrue(isAllowed)
+        XCTAssertEqual(requestCount, 1)
+    }
+
+    func testScreenCaptureAccessThrowsPermissionGuideWhenRequestDenied() {
+        XCTAssertThrowsError(try MacPlatformScreenCapturePermission.ensureAllowed(
+            preflight: { false },
+            request: { false }
+        )) { error in
+            let bridgeError = error as? PlatformBridgeError
+            XCTAssertEqual(bridgeError?.code, "permission_denied")
+            XCTAssertTrue(bridgeError?.message.contains("屏幕录制") ?? false)
+        }
+    }
+
+    func testScreenCaptureShareableContentErrorDoesNotReportPermissionDeniedWhenPreflightAllowsAccess() {
+        let underlying = NSError(
+            domain: "com.apple.ScreenCaptureKit.SCStreamErrorDomain",
+            code: -3801,
+            userInfo: [NSLocalizedDescriptionKey: "用户拒绝了应用程序、窗口、显示器捕捉的TCC"]
+        )
+
+        let error = MacPlatformScreenCapturePermission.shareableContentError(
+            underlying,
+            preflightAccess: true
+        )
+
+        XCTAssertEqual(error.code, "capture_failed")
+        XCTAssertTrue(error.message.contains("ScreenCaptureKit"))
+        XCTAssertTrue(error.message.contains("preflight=true"))
+        XCTAssertTrue(error.message.contains("com.apple.ScreenCaptureKit.SCStreamErrorDomain"))
+        XCTAssertTrue(error.message.contains("-3801"))
+    }
+
     func testAccessibilityWindowSelectionRequiresExplicitWindowMatch() {
         let selected = selectAccessibilityWindow(
             windowId: 42,

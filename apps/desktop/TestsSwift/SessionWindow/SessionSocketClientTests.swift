@@ -103,6 +103,44 @@ final class SessionSocketClientTests: XCTestCase {
         XCTAssertEqual(json, "{}")
     }
 
+    func testDecodesPermissionRequestWithToolCallId() {
+        let client = SessionSocketClient.noop
+        var received: SessionEvent?
+        client.onEvent = { received = $0 }
+
+        client.handleIncomingTextForTesting(
+            """
+            {
+              "type": "permission_request",
+              "sessionId": "session-1",
+              "messageId": "permission-1",
+              "timestamp": "2026-05-21T00:00:00.000Z",
+              "payload": {
+                "requestId": "session-1:req-1",
+                "toolName": "clipboard.read",
+                "toolCallId": "tool-1",
+                "arguments": { "format": "text" }
+              }
+            }
+            """,
+            currentSessionID: "session-1"
+        )
+
+        XCTAssertEqual(
+            received,
+            .permissionRequest(
+                requestId: "session-1:req-1",
+                toolName: "clipboard.read",
+                toolCallId: "tool-1",
+                argumentsJSON: """
+                {
+                  "format" : "text"
+                }
+                """
+            )
+        )
+    }
+
     func testDecodesSessionOpenFailed() {
         let client = SessionSocketClient.noop
         var received: SessionEvent?

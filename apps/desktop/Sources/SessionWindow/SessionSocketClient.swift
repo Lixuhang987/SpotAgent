@@ -27,7 +27,7 @@ enum SessionEvent: Equatable {
     case assistantMessageDelta(messageID: String, text: String, timestamp: String)
     case assistantMessageEnd(messageID: String, status: String, timestamp: String)
     case toolMessage(messageID: String, name: String, text: String, status: String, timestamp: String)
-    case permissionRequest(requestId: String, toolName: String, argumentsJSON: String)
+    case permissionRequest(requestId: String, toolName: String, toolCallId: String?, argumentsJSON: String)
     case workspaceAskRequest(requestId: String, prompt: String, candidates: [WorkspaceAskCandidate])
     case status(value: String)
     case error(messageID: String, message: String, timestamp: String)
@@ -52,8 +52,8 @@ enum SessionEvent: Equatable {
             return a1 == b1 && a2 == b2 && a3 == b3
         case let (.toolMessage(a1, a2, a3, a4, a5), .toolMessage(b1, b2, b3, b4, b5)):
             return a1 == b1 && a2 == b2 && a3 == b3 && a4 == b4 && a5 == b5
-        case let (.permissionRequest(a1, a2, a3), .permissionRequest(b1, b2, b3)):
-            return a1 == b1 && a2 == b2 && a3 == b3
+        case let (.permissionRequest(a1, a2, a3, a4), .permissionRequest(b1, b2, b3, b4)):
+            return a1 == b1 && a2 == b2 && a3 == b3 && a4 == b4
         case let (.workspaceAskRequest(a1, a2, a3), .workspaceAskRequest(b1, b2, b3)):
             return a1 == b1 && a2 == b2 && a3 == b3
         case let (.status(a), .status(b)):
@@ -400,6 +400,7 @@ final class SessionSocketClient: @unchecked Sendable {
             return .permissionRequest(
                 requestId: envelope.payload.requestId ?? envelope.messageId,
                 toolName: envelope.payload.toolName ?? "unknown",
+                toolCallId: envelope.payload.toolCallId,
                 argumentsJSON: Self.extractPermissionArgumentsJSON(from: data)
             )
         case "workspace_ask_request":
@@ -662,6 +663,7 @@ private struct IncomingPayload: Decodable {
     let messages: [IncomingSnapshotMessage]?
     let requestId: String?
     let toolName: String?
+    let toolCallId: String?
     let prompt: String?
     let candidates: [WorkspaceAskCandidate]?
     let sessions: [IncomingSessionListItem]?

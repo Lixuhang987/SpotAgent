@@ -406,3 +406,140 @@
   - 后续权限链路：提交 `[mock:screen-display] QA screen display 20260521` 后仍出现 `授权调用 screen.capture` 气泡。
   - 清理状态：验证结束后退出 `HandAgentDesktop`，`*:4317` 无 listener；`~/.spotAgent/permissions.json` 已从备份恢复。
 - **结论**：通过。关闭带有挂起权限请求的 SessionWindow 会立即中断该会话 run，不再等待超时后向已关闭 session 写入 permission/tool/assistant 消息；后续新会话权限审批仍可正常出现。
+
+## 单窗口多 Tab 会话历史（2026-05-21 实机验证）
+
+- **验证日期**：2026-05-21
+- **验证环境**：mock-llm / macOS / worktree `codex/manual-qa-audit` / `dist/HandAgentDesktop.app`
+- **验证过程**：
+  1. 使用原生事件 `System Events` 发送 `key code 49 using {command down, shift down}` 唤出 PromptPanel，连续提交两个 `[mock:assistant-ok]` prompt，确认同一个 SessionWindow 内复用窗口并创建多个完成态 tab。
+  2. 提交 `[mock:slow-focus] QA delete running regression fixed 20260521 target`，创建 10 分钟 running tab，SessionWindow 标题显示 `运行中 4 个已打开标签页`，左侧历史行显示 `已打开, 1 条消息, 运行中`。
+  3. 切回完成态 tab `[mock:assistant-ok] QA delete baseline completed fixed 20260521 B`，确认 active tab 变为 `空闲`，running tab 仍在后台保持运行标记。
+  4. 在左侧历史列表对 running session 右键选择「删除」，二次确认弹窗显示 `删除会话？ 删除后无法恢复本地历史文件。`。
+  5. 点击确认删除后，窗口回到完成态 tab，标题显示 `空闲 3 个已打开标签页`，顶部 slow-focus tab 消失，历史列表条数从 120 变为 119。
+  6. 检查持久化和 socket：目标 session 文件已删除，`lsof -nP -iTCP:4317` 中对应 running tab 的 WebSocket 连接消失，agent-server 仍保持监听。
+- **证据**：
+  - desktop / server 进程：`HandAgentDesktop` pid `47574`，agent-server pid `47575`，node 命令路径为 `/Users/mu9/proj/handAgent/.worktrees/manual-qa-audit/apps/agent-server/src/server.ts`。
+  - 完成态 session 文件：`~/.spotAgent/sessions/session-1779319776666-woatof.json` 与 `~/.spotAgent/sessions/session-1779319896180-i0gqm1.json`，均为 2 条消息。
+  - running 删除目标：`~/.spotAgent/sessions/session-1779320015436-9bdfno.json`，删除前 `messageCount: 1`，只包含 `[mock:slow-focus] QA delete running regression fixed 20260521 target`；删除后 `test -f` 返回 missing，按 prompt 搜索 `~/.spotAgent/sessions/` 无残留。
+  - UI：删除前 Computer Use 可见 `运行中 4 个已打开标签页` 与 running 历史行；删除后可见 `空闲 3 个已打开标签页`，顶部只剩 screen tab 与两个 `[mock:assistant-ok]` tab。
+  - socket：删除前 `lsof -nP -iTCP:4317` 有 desktop fd `17` / node fd `17` 的 session 连接；删除后该连接消失。
+- **结论**：通过。SessionWindow 可复用单窗口承载多个 session tab；PromptPanel 新提交不会打到当前 active tab；历史项可激活已有 tab；后台 running tab 标记可见；删除 running session 后 server 删除文件、历史刷新、对应 open tab 关闭并断开 socket。
+
+## 真实 provider 流式输出（2026-05-21 实机验证）
+
+- **验证日期**：2026-05-21
+- **验证环境**：real LLM / macOS / worktree `codex/manual-qa-audit` / 非 mock `dist/HandAgentDesktop.app`
+- **验证过程**：
+  1. 确认 `dist/HandAgentDesktop.app/Contents/Resources/HandAgentRuntimeMode.json` 不存在，启动非 mock App。
+  2. 确认桌面进程 `53098` 与 agent-server 进程 `53099` 运行，agent-server 命令路径为 `/Users/mu9/proj/handAgent/.worktrees/manual-qa-audit/apps/agent-server/src/server.ts`。
+  3. 通过原生事件 `System Events` 发送 `key code 49 using {command down, shift down}` 唤出 PromptPanel。
+  4. 提交 `QA real streaming ui evidence 20260521. Start with LIVE_STREAM_START. Then write 900 numbered lines exactly: Line N: visible streaming proof. Do not call tools. Do not summarize.`。
+  5. SessionWindow 进入 `运行中`，同一个 assistant 气泡先为空，再逐步显示 `LIVE_STREAM_START`、第 1-7 行、第 1-14 行，证明 UI 在运行中增量渲染，而不是响应结束后一次性出现。
+  6. 运行结束后 session 文件写入 2 条消息，assistant 内容包含 `LIVE_STREAM_START` 与 900 行输出。
+- **证据**：
+  - 网络日志：`~/.spotAgent/log/2026-05-21/network-005.jsonl` 第 13-14 行，`2026-05-21T00:07:31.103Z` 请求真实 `chat/completions`，`2026-05-21T00:07:33.759Z` 响应为 `[streaming response: text/event-stream]`。
+  - Session 文件：`~/.spotAgent/sessions/session-1779322051046-px8urh.json`，`messageCount: 2`，assistant 长度 `35801`，共 `901` 行，末尾为 `900. Line 900: visible streaming proof.`。
+  - 截图序列：`/tmp/handagent-qa/streaming/clean-real-ui-20260521/frame-05-w52241.png` 为空 assistant 气泡，`frame-07-w52241.png` 显示 `LIVE_STREAM_START`，`frame-08-w52241.png` 显示第 1-7 行并正在输出第 8 行，`frame-09-w52241.png` 显示第 1-14 行并正在输出第 15 行。
+  - 截图文件大小同一窗口从 `529187` bytes 增长到 `661084` bytes，随后稳定在约 `691KB`，与可见文本增长一致。
+- **结论**：通过。真实 provider 的 SSE 响应不会再被网络日志包装器阻塞；agent-server 可把真实 token delta 推送到桌面端，SessionWindow 在运行中逐段更新 assistant 气泡。
+
+## 协议拆分与多会话绑定（2026-05-21 实机验证）
+
+- **验证日期**：2026-05-21
+- **验证环境**：mock-llm / macOS / worktree `codex/manual-qa-audit` / `dist/HandAgentDesktop.app`
+- **验证过程**：
+  1. 清理重复 bundle-id 进程后，从当前 worktree 重新执行 `bash ./scripts/package-app.sh --mock-llm` 并启动 `dist/HandAgentDesktop.app`。
+  2. 确认桌面进程 `91223` 与 agent-server 进程 `91231` 运行，agent-server 命令路径为 `/Users/mu9/proj/handAgent/.worktrees/manual-qa-audit/apps/agent-server/src/server.ts`，`HandAgentRuntimeMode.json` 为 `{"llmMode":"mock"}`。
+  3. 使用原生事件 `System Events` 发送 `key code 49 using {command down, shift down}` 唤出 PromptPanel，创建 `[mock:clipboard-read] QA protocol binding pass A 20260521` tab；点击「仅本次」后，tool result 返回当前剪贴板 `HANDAGENT_MULTI_TAB_PASS_CLIPBOARD_20260521`。
+  4. 再次通过 PromptPanel 创建 `[mock:ocr-invalid] QA protocol binding pass B 20260521` tab；点击「仅本次」后，tool result 返回缺少 `imageBase64` 的明确 invalid input 错误。
+  5. 同一 SessionWindow 显示多个已打开 tab，A/B 两个 session 的 `permission_request`、`tool_call`、`tool_result` 分别写入各自 session 文件，未串到对方 tab。
+  6. 关闭 B tab 后自动切回 A tab，A tab 仍显示 `clipboard.read` 的成功结果与 final assistant，不受 B tab 关闭影响。
+- **证据**：
+  - 进程：`HandAgentDesktop` pid `91223`，agent-server pid `91231`，node 命令路径为当前 worktree 的 `apps/agent-server/src/server.ts`。
+  - socket：`lsof -nP -iTCP:4317` 显示桌面端和 node 通过多个 session socket 连接同一个 `*:4317` listener。
+  - A session：`~/.spotAgent/sessions/session-1779346917128-r4ih2m.json`，messages 为 user、`tool_call(clipboard.read)`、tool result、`Mock clipboard.read completed.`；events 记录 `permission_request(action: allow)`、`tool_call(clipboard.read)`、`tool_result(status: success)`，输出包含 `HANDAGENT_MULTI_TAB_PASS_CLIPBOARD_20260521`。
+  - B session：`~/.spotAgent/sessions/session-1779346994265-fetghw.json`，messages 为 user、`tool_call(ocr.read)`、tool result、`Mock ocr invalid scenario finished.`；events 记录 `permission_request(action: allow)`、`tool_call(ocr.read)`、`tool_result(status: error)`，输出为 `Invalid input for tool "ocr.read": imageBase64: Invalid input: expected string, received undefined`。
+  - UI：关闭 B tab 后 Computer Use 可见 active tab 回到 `[mock:clipboard-read] QA protocol binding pass A 20260521`，仍显示 `clipboard.read` 成功结果。
+- **结论**：通过。SessionWindow 内多个 session tab 通过各自 socket/session id 隔离 platform tool 请求；不同 tool result 不串 tab，关闭一个已完成 tab 不影响另一个已打开 session 的结果与可激活状态。
+
+## 用户自定义 tool / 本地插件系统后续边界（2026-05-21 实机验证）
+
+- **验证日期**：2026-05-21
+- **验证环境**：mock-llm / macOS / worktree `codex/manual-qa-audit` / `dist/HandAgentDesktop.app`
+- **验证过程**：
+  1. 将用户现有插件目录备份到 `~/.spotAgent/qa-backup-plugins-20260521-152503`，随后在 `~/.spotAgent/plugins` 准备冲突、重复、错误输出、超时、输出超限、命令 symlink 越界与 workspace 权限边界插件。
+  2. 创建声明 builtin 同名 tool `file.read` 的插件，以及两个同名 `plugin.echo` 插件；触发插件注册刷新后，agent-server 记录 `disabled tool file.read: plugin tool conflicts with builtin` 与 `disabled tool plugin.echo: duplicate plugin tool name`。
+  3. 提交 `[mock:plugin-echo] QA plugin duplicate disabled 20260521`，确认重复插件 tool 被禁用后会话返回 `Unknown tool: plugin.echo`。
+  4. 提交 `[mock:file-read] QA plugin builtin conflict file.read fast 20260521`，确认 `file.read` 仍执行 builtin 文件读取，返回 `BUILTIN_FILE_READ_CONTENT_20260521`，没有执行插件侧 `PLUGIN_SHOULD_NOT_RUN`。
+  5. 分别触发非 0 exit、输出非 JSON、超时、输出超过 1 MiB 与 command symlink 越界插件，确认错误作为 tool result 返回，agent-server 未崩溃。
+  6. 补充 mock 触发器 `[mock:plugin-workspace-read]`、`[mock:plugin-workspace-write]`、`[mock:plugin-workspace-escape]`、`[mock:plugin-workspace-symlink]`，验证插件 workspace 参数会收到校验后的 `workspaceRoot/absolutePath`，`../../` 与 symlink 越界会被拦截。
+  7. 检查 symlink 外部目标 `/tmp/handagent-plugin-workspace-outside-20260521`，未生成 `plugin.txt`。
+- **证据**：
+  - 进程：`HandAgentDesktop` pid `99472`，agent-server pid `99480`，node 命令路径为当前 worktree 的 `apps/agent-server/src/server.ts`；`HandAgentRuntimeMode.json` 为 `{"llmMode":"mock"}`。
+  - 注册冲突日志：agent-server 输出 `disabled tool file.read: plugin tool conflicts with builtin` 与 `disabled tool plugin.echo: duplicate plugin tool name`。
+  - 重复插件禁用：`~/.spotAgent/sessions/session-1779348520355-bz0a94.json` 返回 `Unknown tool: plugin.echo`。
+  - builtin 未被覆盖：`~/.spotAgent/sessions/session-1779348772751-h0q238.json` 返回 `BUILTIN_FILE_READ_CONTENT_20260521`，不包含 `PLUGIN_SHOULD_NOT_RUN`。
+  - 非 0 exit：`~/.spotAgent/sessions/session-1779348933225-zlixfd.json` 返回 `plugin tool plugin.echo exited with code 7: QA_NONZERO_STDERR_20260521`。
+  - 非 JSON 输出：`~/.spotAgent/sessions/session-1779348935385-f1m4yk.json` 返回 `plugin tool plugin.echo returned invalid JSON`。
+  - 超时：`~/.spotAgent/sessions/session-1779348854386-2yopnf.json` 返回 `plugin tool plugin.echo timed out after 50ms`。
+  - 输出超限：`~/.spotAgent/sessions/session-1779348856792-u1z96d.json` 返回 `plugin tool plugin.echo exceeded output limit (1048576 bytes)`。
+  - command symlink 越界：`~/.spotAgent/sessions/session-1779348859235-rgx7qm.json` 返回 `plugin command escapes plugin directory: outside-link`。
+  - workspace 合法读取：`~/.spotAgent/sessions/session-1779349419779-mom3om.json` 返回 `workspaceRoot: /Users/mu9/.spotAgent/qa-workspace`、`absolutePath: /Users/mu9/.spotAgent/qa-workspace/plugin-input.txt`、`access: read`。
+  - workspace 合法写入：`~/.spotAgent/sessions/session-1779349514445-gu1s7x.json` 返回 `relativePath: plugin-output.txt`、`absolutePath: /Users/mu9/.spotAgent/qa-workspace/plugin-output.txt`、`access: write`。
+  - workspace `../../` 越界：`~/.spotAgent/sessions/session-1779349517050-fd23yu.json` 返回 `Path escapes workspace root: ../../etc/passwd`。
+  - workspace symlink 越界：`~/.spotAgent/sessions/session-1779349519661-c5bdhw.json` 返回 `Path escapes workspace root: outside-link/plugin.txt`；`find /tmp/handagent-plugin-workspace-outside-20260521 -maxdepth 2 -type f -print` 无输出。
+- **结论**：通过。本地插件系统会禁用 builtin 冲突与重复 tool name；插件进程非 0 exit、非 JSON、超时、输出超限和 command 越界均以明确 tool result 暴露；插件 workspace 参数会做 root、`../../` 与 symlink 越界校验。该验证只覆盖传给插件的路径边界，不代表插件进程拥有 OS 级沙箱。
+
+## OCR 平台能力（2026-05-21 实机验证）
+
+- **验证日期**：2026-05-21
+- **验证环境**：mock-llm / macOS / worktree `codex/manual-qa-audit` / `dist/HandAgentDesktop.app`
+- **验证过程**：
+  1. 新增并验证 mock 触发器 `[mock:ocr-sample]`，让 LLM 调用 `ocr.read`，参数为显式传入的 PNG `imageBase64`、`mimeType: "image/png"`、`language: "en-US"`。
+  2. 用原生事件 `System Events` 发送 `key code 49 using {command down, shift down}` 唤出 PromptPanel，提交包含 `OCR PASS 20260521` 的 PNG base64 prompt。
+  3. SessionWindow 出现 `ocr.read` 权限气泡后选择「仅本次」，tool 经真实 PlatformBridge 进入桌面 Vision OCR provider。
+  4. 复用协议拆分与多会话绑定 QA 中的 `[mock:ocr-invalid]` 会话，确认缺少 `imageBase64` 时返回明确输入校验错误，不会隐式读取屏幕、剪贴板或文件。
+- **证据**：
+  - 进程：`HandAgentDesktop` pid `7656`，agent-server pid `7660`，node 命令路径为 `/Users/mu9/proj/handAgent/.worktrees/manual-qa-audit/apps/agent-server/src/server.ts`。
+  - 正向 OCR session：`~/.spotAgent/sessions/session-1779352440918-172nal.json`，events 记录 `permission_request(action: allow)`、`tool_call(ocr.read)`、`tool_result(status: success)`；tool output 为 `{"lines":[{"confidence":1,"text":"OCR PASS 20260521"}],"resolution":"best_effort","text":"OCR PASS 20260521"}`。
+  - 缺参错误 session：`~/.spotAgent/sessions/session-1779346994265-fetghw.json`，events 记录 `tool_result(status: error)`，输出为 `Invalid input for tool "ocr.read": imageBase64: Invalid input: expected string, received undefined`。
+  - UI：Computer Use 可见 OCR session 完成后 SessionWindow 回到 `空闲`，历史中该 session 为已完成会话。
+- **结论**：通过。`ocr.read` 只消费显式传入的图片参数，能返回识别文本与 `lines[].confidence`；缺少 `imageBase64` 时返回明确校验错误，不会默认抓取额外上下文。
+
+## OpenAI 兼容 provider completion 降级边界（2026-05-21 实机验证）
+
+- **验证日期**：2026-05-21
+- **验证环境**：real LLM / macOS / worktree `codex/manual-qa-audit` / 非 mock `dist/HandAgentDesktop.app`
+- **验证过程**：
+  1. 退出 mock App，执行 `bash ./scripts/package-app.sh` 重新打包非 mock App，确认 `dist/HandAgentDesktop.app/Contents/Resources/HandAgentRuntimeMode.json` 不存在。
+  2. 启动非 mock App，确认桌面进程 `12225` 与 agent-server 进程 `12235` 运行，agent-server 命令路径为 `/Users/mu9/proj/handAgent/.worktrees/manual-qa-audit/apps/agent-server/src/server.ts`。
+  3. 备份 `~/.spotAgent/settings.json` 到 `~/.spotAgent/settings.json.qa-completion-20260521.bak`，临时将 `llm.provider` 设为 `openai-compatible`、`llm.api` 设为 `completion`，保留原 model、baseUrl 与 apiKey。
+  4. 通过 agent-server WebSocket 创建带 PNG 图片附件的会话 `QA completion multimodal reject 20260521...`，确认本地能力层在请求 provider 前拒绝多模态。
+  5. 再创建会话 `QA completion tool downgrade 20260521... Use file.read...`，让真实 provider 走 `/v1/completions`；该会话确认未暴露工具列表，同时发现 provider 404 被静默保存为空 assistant 的错误传播缺陷。
+  6. 修复 `VercelClient` 错误传播后，再用 WebSocket 与 PromptPanel UI 各回归一次同类 prompt，确认 provider 404 会进入 session `error` event 和 UI 失败态，不再保存空 assistant。
+- **证据**：
+  - 设置恢复后检查：`~/.spotAgent/settings.json` 已回到 `provider: "openai-compatible"`、`api: "chat"`、`model: "gpt-5.3-codex"`、`baseUrl: "https://lpgpt.us/v1"`，API key 未输出。
+  - 多模态拒绝 session：`~/.spotAgent/sessions/session-1779353652009-cgajcz.json`，events 记录 `error`，message 为 `LLM provider 'openai-compatible' does not support multimodal for this request.`；该 session 只持久化用户消息和 image STUB，没有发起 provider 网络请求。
+  - tool 降级原始 session：`~/.spotAgent/sessions/session-1779353692180-irv7zb.json`，messages 为 user 与空 assistant，events 为空；没有任何 `tool_call` 或 `tool_result`，说明 runtime 未向模型提供可执行 tool 结果链路。该 session 同时暴露了 provider 404 静默完成缺陷，已修复并记录在 [bugs.md](./bugs.md)。
+  - 网络日志：`~/.spotAgent/log/2026-05-21/network-005.jsonl` 最后两条新增记录中，`2026-05-21T08:54:52.214Z` 请求 URL 为 `https://lpgpt.us/v1/completions`，body 仅包含 `model`、`prompt`、`stop`、`stream`、`stream_options`，不包含 `tools`、`tool_choice` 或点号风格 tool name；`2026-05-21T08:54:54.535Z` 响应为 provider 404。
+  - 修复后 WebSocket 回归：`~/.spotAgent/sessions/session-1779354423036-68vu3t.json` 只保留 user message，events 记录 `error`，message 为 `openai_error`，不再持久化空 assistant。
+  - 修复后 UI 回归：`~/.spotAgent/sessions/session-1779354494947-a0uwtr.json` 只保留 user message，events 记录 `error: openai_error`；Computer Use 可见 SessionWindow 标题进入 `失败` 并显示 `openai_error`。
+- **结论**：通过。`openai-compatible + completion` 会在多模态输入上返回明确不支持错误；需要 tool 的 prompt 会降级成纯文本 completions 请求，不向 provider 暴露 tool 列表。当前 `lpgpt.us` 对该 model 的 `/v1/completions` 返回 404，属于当前 provider/model 配置限制；修复后该 404 会作为用户可见错误传播，不再静默保存空 assistant。
+
+## 多模态图片附件与区域截图入口（2026-05-21 实机验证）
+
+- **验证日期**：2026-05-21
+- **验证环境**：real LLM / macOS / worktree `codex/manual-qa-audit` / 非 mock `dist/HandAgentDesktop.app`
+- **验证过程**：
+  1. 通过 agent-server WebSocket 直接创建带 PNG image STUB 的真实 provider 会话，确认进入 provider 前会把本地 image STUB 展开成多模态 `image_url` 请求。
+  2. provider 返回文本准确读出图片中的 `VISION_PASS_20260521`，证明真实 `openai-compatible` chat provider 能理解图片内容。
+  3. 复核既有 PromptPanel 区域截图附件实机记录：`captureRegion` 快捷键会触发用户主动圈选，成功后 PromptPanel 显示 `区域截图` image chip，提交后 SessionWindow 显示 `附件 ×1 · image`，session 文件持久化 image STUB。
+  4. 2026-05-21 后续自动化重试中，PromptPanel UI 会话 `session-1779355056379-ss0d3g.json`、`session-1779355342676-03v1x6.json`、`session-1779355661086-flo5nm.json` 均证明 UI 提交会持久化 image STUB 并发起真实多模态 provider 请求；其中自动化圈选坐标未命中 TextEdit 文本，blob 实际是桌面壁纸区域，因此不作为 vision 识别失败证据。
+  5. 用户同日手动确认当前机器上重新授予权限后，区域圈选路径可正常工作；重打包后权限不通用的问题已单独记录到 [bugs.md](./bugs.md) 当前 bug。
+- **证据**：
+  - 真实 vision 成功 session：`~/.spotAgent/sessions/session-1779350388296-2gmta1.json`，assistant 回复包含 `VISION_PASS_20260521`。
+  - 网络日志：`~/.spotAgent/log/2026-05-21/network-005.jsonl` 中对应真实 `chat/completions` request 包含脱敏后的 `image_url`，response 为 `text/event-stream`。
+  - 区域截图附件历史实机记录：2026-05-19 `PromptPanel 区域截图附件` 归档，session `~/.spotAgent/sessions/179F2D7B-B509-42EB-B056-C51ECCB298B1.json` 与 blob `~/.spotAgent/blobs/2026-05-19/8b127e30-a551-4969-ae85-9f80c567de32.png`。
+  - UI 多模态提交记录：`~/.spotAgent/sessions/session-1779355056379-ss0d3g.json`、`~/.spotAgent/sessions/session-1779355342676-03v1x6.json`、`~/.spotAgent/sessions/session-1779355661086-flo5nm.json` 均有 `附件 ×1 · image` 对应的 image STUB。
+- **结论**：通过。多模态图片附件从 PromptPanel 到 session 持久化、image STUB 展开、真实 provider vision 理解的关键链路已验证；区域圈选是否拿到前台窗口内容取决于当前 packaged app 的 macOS 屏幕录制权限状态，权限身份问题不再放在本条 manual QA 中重复追踪。

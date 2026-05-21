@@ -198,4 +198,40 @@ final class SessionTabViewModelTests: XCTestCase {
 
         XCTAssertEqual(copiedTexts, ["second\nmessage"])
     }
+
+    @MainActor
+    func testTerminalToolMessageClearsMatchingPendingPermissionRequest() {
+        let tab = SessionTabViewModel(
+            tabID: "tab-1",
+            sessionID: "session-1",
+            socketClient: .noop
+        )
+
+        tab.handle(.permissionRequest(
+            requestId: "session-1:req-1",
+            toolName: "clipboard.read",
+            toolCallId: "tool-1",
+            argumentsJSON: "{}"
+        ))
+        tab.handle(.toolMessage(
+            messageID: "session-1-tool-1",
+            name: "clipboard.read",
+            text: "{}",
+            status: "running",
+            timestamp: "2026-05-21T00:00:00.000Z"
+        ))
+
+        XCTAssertEqual(tab.pendingPermissionRequests.map(\.id), ["session-1:req-1"])
+
+        tab.handle(.toolMessage(
+            messageID: "session-1-tool-1",
+            name: "clipboard.read",
+            text: "用户拒绝执行该 tool",
+            status: "failed",
+            timestamp: "2026-05-21T00:01:00.000Z"
+        ))
+
+        XCTAssertTrue(tab.pendingPermissionRequests.isEmpty)
+        XCTAssertEqual(tab.messages.last?.text, "clipboard.read: 用户拒绝执行该 tool")
+    }
 }

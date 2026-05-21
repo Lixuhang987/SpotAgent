@@ -113,7 +113,13 @@ export class VercelClient implements LLMClient {
           };
           break;
         }
+        case "error":
+          throw toError(part.error);
       }
+    }
+
+    if (!content && toolCalls.length === 0) {
+      throw new Error("AI SDK stream finished without assistant content or tool calls.");
     }
 
     yield {
@@ -125,6 +131,12 @@ export class VercelClient implements LLMClient {
       toolCalls,
     };
   }
+}
+
+function toError(error: unknown): Error {
+  if (error instanceof Error) return error;
+  if (typeof error === "string") return new Error(error);
+  return new Error(JSON.stringify(error));
 }
 
 function selectLanguageModel(provider: OpenAIProvider, api: OpenAIApiType, model: string) {

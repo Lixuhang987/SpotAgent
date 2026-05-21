@@ -146,7 +146,11 @@ final class SessionWindowViewModel {
                 activeTab?.sendPrompt(pendingPrompt.text, attachments: pendingPrompt.attachments)
             }
             refreshHistory()
-        case .deleteSessionResponse:
+        case .deleteSessionResponse(let targetSessionID, let status):
+            if status == "deleted",
+               let tab = tabs.first(where: { $0.sessionID == targetSessionID }) {
+                closeTab(tab.tabID)
+            }
             refreshHistory()
         default:
             break

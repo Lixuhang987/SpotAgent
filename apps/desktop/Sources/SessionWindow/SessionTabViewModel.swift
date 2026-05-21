@@ -126,13 +126,18 @@ final class SessionTabViewModel: Identifiable {
         case .assistantMessageEnd(_, let status, _):
             self.status = .fromProtocolStatus(status)
             shouldNotifyStateChanged = true
-        case .toolMessage(let messageID, let name, let text, _, _):
+        case .toolMessage(let messageID, let name, let text, let status, _):
             let displayText = "\(name): \(text)"
             if let index = messages.firstIndex(where: { $0.id == messageID && $0.role == "tool" }) {
                 messages[index].text = displayText
             } else {
                 messages.append(SessionBubble(id: messageID, role: "tool", text: displayText))
             }
+            clearPendingPermissionIfTerminalToolMessage(
+                messageID: messageID,
+                toolName: name,
+                status: status
+            )
             shouldNotifyStateChanged = true
         case .status(let value):
             status = .fromProtocolStatus(value)
@@ -155,9 +160,14 @@ final class SessionTabViewModel: Identifiable {
             status = .failed
             error = message
             shouldNotifyStateChanged = true
-        case .permissionRequest(let requestId, let toolName, let argumentsJSON):
+        case .permissionRequest(let requestId, let toolName, let toolCallId, let argumentsJSON):
             pendingPermissionRequests.append(
-                SessionPermissionRequest(id: requestId, toolName: toolName, argumentsJSON: argumentsJSON)
+                SessionPermissionRequest(
+                    id: requestId,
+                    toolName: toolName,
+                    toolCallId: toolCallId,
+                    argumentsJSON: argumentsJSON
+                )
             )
         case .workspaceAskRequest(let requestId, let prompt, let candidates):
             pendingWorkspaceAskRequests.append(
@@ -196,6 +206,26 @@ final class SessionTabViewModel: Identifiable {
 
     private static func timestamp() -> String {
         ISO8601DateFormatter().string(from: Date())
+    }
+
+    private func clearPendingPermissionIfTerminalToolMessage(
+        messageID: String,
+        toolName: String,
+        status: String
+    ) {
+        guard status == "completed" || status == "failed",
+              let toolCallId = toolCallId(fromToolMessageID: messageID) else {
+            return
+        }
+        pendingPermissionRequests.removeAll {
+            $0.toolName == toolName && $0.toolCallId == toolCallId
+        }
+    }
+
+    private func toolCallId(fromToolMessageID messageID: String) -> String? {
+        let prefix = "\(sessionID)-"
+        guard messageID.hasPrefix(prefix) else { return nil }
+        return String(messageID.dropFirst(prefix.count))
     }
 
     private func applySessionSnapshot(messages: [SessionBubble], status: String) {
