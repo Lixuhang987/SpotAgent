@@ -65,6 +65,7 @@ Coordinator.handleSubmitPrompt
 - `sessionOpenFailed / userMessageFailed` 由 tab 标记为 invalid；窗口会 prune invalid tab，并把失败原因显示为空态提示。
 - `userMessage / assistantMessageStart / assistantMessageDelta / assistantMessageEnd / toolMessage / status / error / sessionSnapshot / permissionRequest / workspaceAskRequest / connectionState` 由对应 tab 消费，互不影响其他 tab。
 - `assistantMessageEnd(status: "completed")` 在 UI 内归一化为 `SessionRunStatus.idle`；未知协议状态按 `idle` 处理，避免 UI 继续散落字符串比较。
+- `assistantMessageEnd(status: "completed")` 只代表当前 assistant 消息片段结束，不代表整轮 LLM/tool run 结束。若随后收到 `permissionRequest`、`workspaceAskRequest` 或 `toolMessage(status: "running")`，tab 必须恢复 / 保持 `running`，让 composer 显示 Stop，并让 `SessionRegistry` / StatusBubble 继续把该会话视为运行中；最终状态仍由后续 tool result、assistant end、error、interrupt 或 snapshot 决定。
 
 ## 历史入口
 

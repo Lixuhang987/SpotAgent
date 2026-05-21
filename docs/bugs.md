@@ -31,21 +31,4 @@
 
 ## 当前 bug
 
-### 权限审批等待期间 SessionWindow 提前退出 running 状态
-
-- **严重级别**：P2
-- **发现日期**：2026-05-22
-- **发现方式**：mock LLM 主链路 live QA + 调用链代码审计。
-- **复现步骤**：
-  1. 在 main 分支通过 `bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build` 基线。
-  2. 使用 `bash ./scripts/package-app.sh --mock-llm` 打包并启动 `dist/HandAgentDesktop.app`。
-  3. 通过原生全局快捷键打开 PromptPanel，提交 `[mock:workspace-ask] QA_WORKSPACE_ASK_STATUS_20260522_055945`。
-  4. 等 SessionWindow 出现 `授权调用 workspace.askUser` 权限审批面板。
-- **实际结果**：SessionWindow 正在等待权限审批时，底部 composer 显示普通发送箭头且发送按钮禁用，没有显示 Stop 按钮；用户看不到该会话仍在等待中的运行态，也无法从 UI 中断本轮运行。未处理权限请求约 60 秒后，session 文件自动记录 deny / timeout，并继续走 tool error 结果。
-- **期望结果**：权限审批、workspace 选择或其他 tool 等待期间，当前 tab 应继续保持 running 用户反馈；底部 composer 应显示 Stop，状态聚合也应能把该会话视为运行中，直到用户决策、tool result、错误或中断事件结束本轮。
-- **证据**：
-  - Computer Use UI：会话窗口可见 `授权调用 workspace.askUser`，参数包含 `candidateIds: ["qa-workspace", "tmp"]` 与 prompt `请选择 QA 要写入的 workspace`；同一时刻底部控件是 disabled `arrow.up` 发送按钮，不是 `stop.fill` 停止按钮。
-  - 会话文件 `/Users/mu9/.spotAgent/sessions/session-1779400878497-b745wh.json`：约 60 秒后写入 `{ type: "permission_request", toolName: "workspace.askUser", action: "deny", granted: false }` 与 `{ type: "tool_result", status: "error", output: "用户拒绝执行该 tool" }`，说明该轮确实停在权限请求等待边界后超时。
-  - 代码边界：`AgentRuntime.completeTurn` 在收集到 tool call 后发送 `assistant_message_end` 且 payload status 为 `completed`；`SessionTabViewModel.handle(.assistantMessageEnd)` 直接把 status 归一化为 idle；后续 `.permissionRequest` 只追加请求面板，没有把 tab 状态保持或恢复为 running。
-- **初步调用链 / 根因边界**：PromptPanel → SessionWindow → agent-server → `MockLLMClient` 返回 `workspace.askUser` tool call → `AgentRuntime.completeTurn` 先推 `assistant_message_end(completed)` → Swift `SessionTabViewModel` 把 tab 状态置为 idle → `SessionPermissionBridge` 推 `permission_request` → UI 展示审批面板但 composer 不再显示 Stop → 请求 60 秒超时后落 deny / tool_result。
-- **QA 清理状态**：发现缺陷后停止继续 QA，准备退出 mock App 并在独立 worktree 中修复。
+暂无已记录未修复 bug。

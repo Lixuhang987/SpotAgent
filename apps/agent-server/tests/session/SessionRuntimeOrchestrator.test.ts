@@ -381,6 +381,145 @@ describe("SessionRuntimeOrchestrator", () => {
     ]);
   });
 
+  it("keeps assistant turn completion separate from later tool running frames", async () => {
+    const pushed: SessionMessage[] = [];
+    const store = new InMemorySessionStore();
+    const persistence = new SessionPersistence(
+      store,
+      () => "2026-05-22T00:00:00.000Z",
+    );
+    const orchestrator = new SessionRuntimeOrchestrator(
+      {
+        async runWithMessages(messages: AgentMessage[], onEvent) {
+          onEvent({
+            type: "assistant_message_start",
+            messageId: "assistant-1",
+            payload: { role: "assistant" },
+          });
+          onEvent({
+            type: "assistant_message_end",
+            messageId: "assistant-1",
+            payload: { status: "completed" },
+          });
+          onEvent({
+            type: "tool_call",
+            toolCallId: "tc-1",
+            toolName: "workspace.list",
+            input: {},
+          });
+          onEvent({
+            type: "tool_result",
+            toolCallId: "tc-1",
+            toolName: "workspace.list",
+            status: "success",
+            output: "[]",
+            durationMs: 12,
+          });
+          onEvent({
+            type: "assistant_message_start",
+            messageId: "assistant-2",
+            payload: { role: "assistant" },
+          });
+          onEvent({
+            type: "assistant_message_delta",
+            messageId: "assistant-2",
+            payload: { text: "done" },
+          });
+          onEvent({
+            type: "assistant_message_end",
+            messageId: "assistant-2",
+            payload: { status: "completed" },
+          });
+
+          return {
+            messages: [
+              ...messages,
+              {
+                role: "assistant" as const,
+                content: "",
+                toolCalls: [
+                  { id: "tc-1", name: "workspace.list", arguments: {} },
+                ],
+              },
+              {
+                role: "tool" as const,
+                toolCallId: "tc-1",
+                name: "workspace.list",
+                content: "[]",
+              },
+              {
+                role: "assistant" as const,
+                content: "done",
+              },
+            ],
+            bubbles: [],
+          };
+        },
+      },
+      persistence,
+      () => "2026-05-22T00:00:00.000Z",
+    );
+
+    await persistence.ensureSession("session-tool-running");
+    await orchestrator.handleUserMessage(
+      createUserMessage("session-tool-running", "列出工作区", "user-1"),
+      (message) => pushed.push(message),
+    );
+
+    expect(pushed).toEqual([
+      {
+        type: "assistant_message_start",
+        sessionId: "session-tool-running",
+        messageId: "session-tool-running-assistant-1",
+        timestamp: "2026-05-22T00:00:00.000Z",
+        payload: { role: "assistant" },
+      },
+      {
+        type: "assistant_message_end",
+        sessionId: "session-tool-running",
+        messageId: "session-tool-running-assistant-1",
+        timestamp: "2026-05-22T00:00:00.000Z",
+        payload: { status: "completed" },
+      },
+      {
+        type: "tool_message",
+        sessionId: "session-tool-running",
+        messageId: "session-tool-running-tc-1",
+        timestamp: "2026-05-22T00:00:00.000Z",
+        payload: { name: "workspace.list", text: "{}", status: "running" },
+      },
+      {
+        type: "tool_message",
+        sessionId: "session-tool-running",
+        messageId: "session-tool-running-tc-1",
+        timestamp: "2026-05-22T00:00:00.000Z",
+        payload: { name: "workspace.list", text: "[]", status: "completed" },
+      },
+      {
+        type: "assistant_message_start",
+        sessionId: "session-tool-running",
+        messageId: "session-tool-running-assistant-2",
+        timestamp: "2026-05-22T00:00:00.000Z",
+        payload: { role: "assistant" },
+      },
+      {
+        type: "assistant_message_delta",
+        sessionId: "session-tool-running",
+        messageId: "session-tool-running-assistant-2",
+        timestamp: "2026-05-22T00:00:00.000Z",
+        payload: { text: "done" },
+      },
+      {
+        type: "assistant_message_end",
+        sessionId: "session-tool-running",
+        messageId: "session-tool-running-assistant-2",
+        timestamp: "2026-05-22T00:00:00.000Z",
+        payload: { status: "completed" },
+      },
+    ]);
+    expect(pushed.some((message) => message.type === "status")).toBe(false);
+  });
+
   it("aborts the active run and ignores later assistant/tool output", async () => {
     const pushed: SessionMessage[] = [];
     const store = new InMemorySessionStore();
