@@ -685,3 +685,11 @@
 - **验证过程**：在 main 分支先通过 `bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build` 基线；随后用 `bash ./scripts/package-app.sh --mock-llm` 打包并启动 App。通过原生 `⌘⇧Space` 唤起 PromptPanel，提交 `[mock:workspace-list] QA_MAIN_CHAIN_TOOL_20260522_0330`，SessionWindow 打开并展示用户消息、`workspace.list` tool 输出和最终 `Mock workspace.list completed.`。再次从已有 SessionWindow 前台唤起 PromptPanel，提交 `[mock:assistant-ok] QA_MAIN_CHAIN_ASSISTANT_20260522_0332`，新 tab 展示普通 assistant 回复。最后提交 `[mock:slow-focus] QA_MAIN_CHAIN_STATUS_20260522_0335`，观察 Stop 按钮进入运行态，点击 Stop 后 UI 回到可发送状态。
 - **证据**：agent-server 进程为桌面 App 派生的 `/opt/homebrew/bin/node --experimental-transform-types .../apps/agent-server/src/server.ts`，监听 `*:4317`。tool 链路 session `/Users/mu9/.spotAgent/sessions/session-1779391773599-hlq8vg.json` 中 `messageCount: 4`，包含 user、空 assistant、tool、最终 assistant，并记录 `tool_call workspace.list` 与 `tool_result status=success`。普通回复 session `/Users/mu9/.spotAgent/sessions/session-1779391865618-ubhjul.json` 中 `messageCount: 2`，assistant 内容为 `Mock assistant response: main chain is reachable.`。中断 session `/Users/mu9/.spotAgent/sessions/session-1779392104136-ttdxp6.json` 中 `messageCount: 1`，未落入慢响应 assistant 消息。
 - **结论**：通过。PromptPanel → SessionWindow → agent-server → MockLLMClient → builtin tool 调用 → session 持久化 → UI 状态反馈主链路在本轮回归中可用。
+
+### 侧边栏 Workspace 分组
+
+- **验证日期**：2026-05-22
+- **验证环境**：mock-llm / macOS 15+ / `/Users/mu9/proj/handAgent` main / `dist/HandAgentDesktop.app`
+- **验证过程**：在 `~/.spotAgent/workspaces.json` 包含 `tmp`、`qa-workspace`、`handagent-test` 三个非默认 workspace 时打开 SessionWindow，左侧侧边栏显示 workspace 折叠列表和下方“默认”分隔线；点击 `qa-workspace` 行后箭头展开，展开状态下点击行右侧 `+` 创建空会话且未触发折叠；在搜索框输入 `QA_MAIN_CHAIN` 后侧边栏平铺展示 3 条匹配会话且不显示 workspace 分组。随后临时把 `workspaces.json` 缩减为仅 default，重启 mock App 并提交 `[mock:assistant-ok] QA_SIDEBAR_DEFAULT_ONLY_20260522_0344`，侧边栏退化为平铺历史列表且不显示“默认”分隔线，验证后恢复原 workspace 配置。
+- **证据**：`qa-workspace` 加号创建的 session `/Users/mu9/.spotAgent/sessions/session-1779392370625-pj79kd.json` 中 `metadata.workspaceId` 为 `qa-workspace`、`messageCount: 0`。default-only 回归 session `/Users/mu9/.spotAgent/sessions/session-1779392614813-khh13t.json` 展示普通 assistant 回复；验证后 `~/.spotAgent/workspaces.json` 已恢复为 4 个 workspace：`default`、`tmp`、`qa-workspace`、`handagent-test`。
+- **结论**：通过。侧边栏 workspace 分组、折叠展开、workspace 内新建、默认旧会话分隔、搜索平铺和 default-only 退化均符合预期。
