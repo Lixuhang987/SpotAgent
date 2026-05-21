@@ -169,10 +169,14 @@ final class SessionTabViewModel: Identifiable {
                     argumentsJSON: argumentsJSON
                 )
             )
+            status = .running
+            shouldNotifyStateChanged = true
         case .workspaceAskRequest(let requestId, let prompt, let candidates):
             pendingWorkspaceAskRequests.append(
                 SessionWorkspaceAskRequest(id: requestId, prompt: prompt, candidates: candidates)
             )
+            status = .running
+            shouldNotifyStateChanged = true
         case .connectionState(let state):
             connectionState = state
             switch state {

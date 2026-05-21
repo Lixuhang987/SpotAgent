@@ -258,4 +258,75 @@ final class SessionTabViewModelTests: XCTestCase {
         XCTAssertTrue(tab.pendingPermissionRequests.isEmpty)
         XCTAssertEqual(tab.messages.last?.text, "clipboard.read: 用户拒绝执行该 tool")
     }
+
+    @MainActor
+    func testPermissionRequestKeepsTabRunningAfterAssistantEndCompleted() {
+        var stateChangeStatuses: [SessionRunStatus] = []
+        let tab = SessionTabViewModel(
+            tabID: "tab-1",
+            sessionID: "session-1",
+            socketClient: .noop,
+            onStateChanged: { stateChangeStatuses.append($0.status) }
+        )
+
+        tab.handle(.assistantMessageStart(
+            messageID: "assistant-1",
+            timestamp: "2026-05-22T00:00:00.000Z"
+        ))
+        tab.handle(.assistantMessageEnd(
+            messageID: "assistant-1",
+            status: "completed",
+            timestamp: "2026-05-22T00:00:00.100Z"
+        ))
+        tab.handle(.permissionRequest(
+            requestId: "session-1:req-1",
+            toolName: "workspace.askUser",
+            toolCallId: "tool-1",
+            argumentsJSON: "{}"
+        ))
+
+        XCTAssertEqual(tab.status, .running)
+        XCTAssertEqual(tab.pendingPermissionRequests.map(\.id), ["session-1:req-1"])
+        XCTAssertEqual(stateChangeStatuses.last, .running)
+
+        tab.resolvePermission(requestId: "session-1:req-1", decision: "allow", scope: "once")
+
+        XCTAssertEqual(tab.status, .running)
+    }
+
+    @MainActor
+    func testWorkspaceAskRequestKeepsTabRunningAfterAssistantEndCompleted() {
+        var stateChangeStatuses: [SessionRunStatus] = []
+        let tab = SessionTabViewModel(
+            tabID: "tab-1",
+            sessionID: "session-1",
+            socketClient: .noop,
+            onStateChanged: { stateChangeStatuses.append($0.status) }
+        )
+
+        tab.handle(.assistantMessageStart(
+            messageID: "assistant-1",
+            timestamp: "2026-05-22T00:00:00.000Z"
+        ))
+        tab.handle(.assistantMessageEnd(
+            messageID: "assistant-1",
+            status: "completed",
+            timestamp: "2026-05-22T00:00:00.100Z"
+        ))
+        tab.handle(.workspaceAskRequest(
+            requestId: "ask-1",
+            prompt: "选择工作区",
+            candidates: [
+                WorkspaceAskCandidate(id: "docs", name: "文档", description: "产品文档", isDefault: false),
+            ]
+        ))
+
+        XCTAssertEqual(tab.status, .running)
+        XCTAssertEqual(tab.pendingWorkspaceAskRequests.map(\.id), ["ask-1"])
+        XCTAssertEqual(stateChangeStatuses.last, .running)
+
+        tab.resolveWorkspaceAsk(requestId: "ask-1", workspaceId: "docs")
+
+        XCTAssertEqual(tab.status, .running)
+    }
 }

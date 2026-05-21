@@ -261,6 +261,75 @@ final class SessionViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testPermissionRequestKeepsSessionRunningAfterAssistantEndCompleted() {
+        var stateChangeStatuses: [SessionRunStatus] = []
+        let model = SessionViewModel(
+            sessionID: "session-1",
+            socketClient: .noop,
+            onStateChanged: { stateChangeStatuses.append($0.status) }
+        )
+
+        model.handle(.assistantMessageStart(
+            messageID: "assistant-1",
+            timestamp: "2026-05-22T00:00:00.000Z"
+        ))
+        model.handle(.assistantMessageEnd(
+            messageID: "assistant-1",
+            status: "completed",
+            timestamp: "2026-05-22T00:00:00.100Z"
+        ))
+        model.handle(.permissionRequest(
+            requestId: "session-1:req-1",
+            toolName: "workspace.askUser",
+            toolCallId: "tool-1",
+            argumentsJSON: "{}"
+        ))
+
+        XCTAssertEqual(model.status, .running)
+        XCTAssertEqual(model.pendingPermissionRequests.map(\.id), ["session-1:req-1"])
+        XCTAssertEqual(stateChangeStatuses.last, .running)
+
+        model.resolvePermission(requestId: "session-1:req-1", decision: "allow", scope: "once")
+
+        XCTAssertEqual(model.status, .running)
+    }
+
+    @MainActor
+    func testWorkspaceAskRequestKeepsSessionRunningAfterAssistantEndCompleted() {
+        var stateChangeStatuses: [SessionRunStatus] = []
+        let model = SessionViewModel(
+            sessionID: "session-1",
+            socketClient: .noop,
+            onStateChanged: { stateChangeStatuses.append($0.status) }
+        )
+
+        model.handle(.assistantMessageStart(
+            messageID: "assistant-1",
+            timestamp: "2026-05-22T00:00:00.000Z"
+        ))
+        model.handle(.assistantMessageEnd(
+            messageID: "assistant-1",
+            status: "completed",
+            timestamp: "2026-05-22T00:00:00.100Z"
+        ))
+        model.handle(.workspaceAskRequest(
+            requestId: "ask-1",
+            prompt: "选择工作区",
+            candidates: [
+                WorkspaceAskCandidate(id: "docs", name: "文档", description: "产品文档", isDefault: false),
+            ]
+        ))
+
+        XCTAssertEqual(model.status, .running)
+        XCTAssertEqual(model.pendingWorkspaceAskRequests.map(\.id), ["ask-1"])
+        XCTAssertEqual(stateChangeStatuses.last, .running)
+
+        model.resolveWorkspaceAsk(requestId: "ask-1", workspaceId: "docs")
+
+        XCTAssertEqual(model.status, .running)
+    }
+
+    @MainActor
     func testWorkspaceAskRequestsAreQueuedAndResolvedInOrder() {
         let model = SessionViewModel(sessionID: "session-1", socketClient: .noop)
 
