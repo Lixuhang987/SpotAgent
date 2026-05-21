@@ -12,7 +12,7 @@ struct SessionWindowView: View {
                 activeSessionID: viewModel.activeTab?.sessionID,
                 onSelect: viewModel.openHistorySession,
                 onRequestDelete: viewModel.requestDeleteSession,
-                onNewSession: viewModel.createNewSession
+                onNewSession: { viewModel.createNewSession() }
             )
             .frame(width: 240)
 
@@ -23,7 +23,7 @@ struct SessionWindowView: View {
                 draft: $draft,
                 onActivateTab: viewModel.activateTab,
                 onCloseTab: viewModel.closeTab,
-                onNewTab: viewModel.createNewSession,
+                onNewTab: { viewModel.createNewSession() },
                 onStopActiveTab: viewModel.stopActiveTab,
                 onSendPrompt: { text in viewModel.sendPrompt(text) }
             )
