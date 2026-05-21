@@ -304,7 +304,8 @@ final class SessionViewModelTests: XCTestCase {
                         id: "history-1",
                         title: "历史会话",
                         updatedAt: "2026-05-19T00:00:00.000Z",
-                        messageCount: 2
+                        messageCount: 2,
+                        workspaceId: nil
                     )
                 ]
             )

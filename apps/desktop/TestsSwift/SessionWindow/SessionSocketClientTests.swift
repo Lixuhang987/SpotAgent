@@ -203,6 +203,41 @@ final class SessionSocketClientTests: XCTestCase {
         XCTAssertEqual(binding?["promptName"] as? String, "code_review")
     }
 
+    func testSessionListResponseDecodesWorkspaceId() {
+        let transport = RecordingSessionSocketTransport()
+        let client = SessionSocketClient(
+            serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
+            transport: transport,
+            reconnectDelay: 0
+        )
+        var receivedItems: [SessionListItem] = []
+        client.onEvent = { event in
+            if case .sessionList(let sessions) = event {
+                receivedItems = sessions
+            }
+        }
+
+        let json = """
+        {
+          "type": "list_sessions_response",
+          "sessionId": "",
+          "messageId": "m1",
+          "timestamp": "2026-05-22T00:00:00.000Z",
+          "payload": {
+            "sessions": [
+              {"id": "s1", "title": "hello", "updatedAt": "2026-05-22T00:00:00.000Z", "messageCount": 2, "workspaceId": "ws-123"},
+              {"id": "s2", "title": "world", "updatedAt": "2026-05-22T00:00:00.000Z", "messageCount": 1, "workspaceId": null}
+            ]
+          }
+        }
+        """
+        client.handleIncomingTextForTesting(json, currentSessionID: "")
+
+        XCTAssertEqual(receivedItems.count, 2)
+        XCTAssertEqual(receivedItems[0].workspaceId, "ws-123")
+        XCTAssertNil(receivedItems[1].workspaceId)
+    }
+
     func testDecodesWorkspaceAskRequest() {
         let transport = RecordingSessionSocketTransport()
         let client = SessionSocketClient(

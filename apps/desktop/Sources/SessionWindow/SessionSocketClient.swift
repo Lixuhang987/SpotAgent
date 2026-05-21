@@ -12,6 +12,7 @@ struct SessionListItem: Equatable, Identifiable {
     let title: String?
     let updatedAt: String
     let messageCount: Int
+    let workspaceId: String?
 }
 
 struct WorkspaceAskCandidate: Equatable, Identifiable, Decodable {
@@ -212,12 +213,14 @@ final class SessionSocketClient: @unchecked Sendable {
     func sendCreateSession(
         initialText: String? = nil,
         attachments: [UserMessageAttachmentPayload] = [],
-        actionBinding: ActionBindingPayload? = nil
+        actionBinding: ActionBindingPayload? = nil,
+        workspaceId: String? = nil
     ) {
         let payload: [String: Any?] = [
             "initialText": initialText,
             "attachments": attachments.isEmpty ? nil : attachments.map(\.jsonObject),
             "actionBinding": actionBinding?.jsonObject,
+            "workspaceId": workspaceId,
         ]
         sendJSON([
             "type": "create_session_request",
@@ -415,7 +418,8 @@ final class SessionSocketClient: @unchecked Sendable {
                     id: $0.id,
                     title: $0.title,
                     updatedAt: $0.updatedAt ?? "",
-                    messageCount: $0.messageCount ?? 0
+                    messageCount: $0.messageCount ?? 0,
+                    workspaceId: $0.workspaceId
                 )
             } ?? []
             return .sessionList(sessions: items)
@@ -682,4 +686,5 @@ private struct IncomingSessionListItem: Decodable {
     let title: String?
     let updatedAt: String?
     let messageCount: Int?
+    let workspaceId: String?
 }
