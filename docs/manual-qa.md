@@ -15,12 +15,7 @@
 - 已通过 `bash ./scripts/swiftw test`。
 - 已通过 `bash ./scripts/swiftw build`。
 
-## 标准 MCP 接入（P1）
-
-1. 在 `~/.spotAgent/mcp.json` 中配置一个 stdio 类型的 MCP server（如 `@modelcontextprotocol/server-filesystem`），启动 agent-server，确认 server 进程被拉起且 `initialize` 握手完成（日志无 `skipped MCP server` 报错）。
-2. 新建普通 session（无 plugin binding），提交一个会触发 MCP tool 的 prompt（如"列出 /tmp 目录下的文件"），确认 `mcp.<serverId>.<toolName>` 出现在 LLM 可用 tool 列表中，且 tool call 结果正确回灌。
-3. 验证 `prompts/list` 与 `resources/list` 可通过 `MCPServerRegistry` 正常返回（可通过单元测试或手动调用确认）。
-4. 配置一个不存在的 MCP server id，确认 session 仍可正常使用 builtin tools，日志中出现 `[agent-server] skipped MCP server ...`。
+## Anthropic Provider 真实调用（P1）
 
 1. 配置可用 Anthropic API key 与模型后提交普通文本 prompt，确认 assistant 回复可见且逐段 streaming。
 1. 在 Anthropic provider 下触发一个会调用 tool 的 prompt，确认 tool name 经适配后仍能回到点号风格（如 `file.read`），tool result 可回灌给 LLM。
