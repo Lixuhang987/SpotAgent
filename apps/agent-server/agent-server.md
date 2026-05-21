@@ -12,7 +12,7 @@
 
 | 文件 | 职责 |
 |------|------|
-| `src/server.ts` | 启动入口；`startServer` 注入式构造，`attachSessionSocketHandlers` 维护单 socket 的 bridge token 与会话绑定状态，`startDefaultServer` 是组合根（拉起 store / blobStore / bridge / registry / policy / runtime / SessionPersistence / SessionRuntimeOrchestrator / SessionRouter） |
+| `src/server.ts` | 启动入口；`startServer` 注入式构造，`attachSessionSocketHandlers` 维护单 socket 的 bridge token 与会话绑定状态，`startDefaultServer` 是组合根（拉起 store / blobStore / bridge / registry / policy / runtime / SessionPersistence / SessionRuntimeOrchestrator / SessionRouter），`resolveServerPaths()` 集中管理 `~/.spotAgent/` 下所有文件路径 |
 | `src/SessionRouter.ts` | 协议路由层：处理 `open_session` / `list_sessions_request` / `load_session_request` / `delete_session_request`；`open_session` 回 `session_snapshot` 用于桌面端重连续联，并把 `user_message` 委托给 runtime 编排层 |
 | `src/SessionRuntimeOrchestrator.ts` | 一轮用户消息编排：确保 session、持久化 user message、等待 pending summary、把 image STUB 展开为 runtime 多模态 content、跑 `AgentRuntime`、翻译 runtime event、落库最终 messages / audit events |
 | `src/SessionPersistence.ts` | 会话持久化封装：唯一直接持有 `SessionStore` 的 agent-server 模块，负责 CRUD、标题生成、历史读取、messages / events 写入，并把 image attachment 交给 BlobStore |

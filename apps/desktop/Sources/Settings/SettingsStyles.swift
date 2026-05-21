@@ -62,13 +62,10 @@ struct SettingsTabBar: View {
             }
             .foregroundStyle(isSelected ? theme.colors.textPrimary : theme.colors.textSecondary)
             .frame(width: 72, height: 56)
-            .background(
-                RoundedRectangle(cornerRadius: theme.radius.md)
-                    .fill(isSelected ? theme.colors.surface : Color.clear)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: theme.radius.md)
-                    .strokeBorder(isSelected ? theme.colors.border : Color.clear, lineWidth: 0.5)
+            .borderedCard(
+                fill: isSelected ? theme.colors.surface : Color.clear,
+                border: isSelected ? theme.colors.border : Color.clear,
+                cornerRadius: theme.radius.md
             )
             .contentShape(RoundedRectangle(cornerRadius: theme.radius.md))
         }
@@ -179,7 +176,7 @@ struct SettingsFieldStyle: TextFieldStyle {
             .frame(maxWidth: 340)
             .background(
                 RoundedRectangle(cornerRadius: theme.radius.sm)
-                    .fill(Color.black.opacity(0.3))
+                    .fill(theme.colors.surface)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: theme.radius.sm)

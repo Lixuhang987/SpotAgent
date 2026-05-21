@@ -193,8 +193,7 @@ struct SessionHistoryRowView: View {
     }
 
     private var rowBackground: Color {
-        if isActive { return theme.colors.surfaceHover }
-        if isHovering { return theme.colors.surfaceHover }
-        return theme.colors.surfaceHover.opacity(0.001)
+        if isActive || isHovering { return theme.colors.surfaceHover }
+        return .clear
     }
 }

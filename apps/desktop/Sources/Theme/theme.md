@@ -8,6 +8,7 @@
 |------|------|
 | `AppTheme.swift` | 定义 `AppTheme` 聚合 + `ThemeColors` / `ThemeTypography` / `ThemeSpacing` / `ThemeRadius` / `ThemeAnimation` |
 | `ThemeEnvironment.swift` | 基于 SwiftUI `@Entry` 的 `EnvironmentValues.appTheme` 扩展 |
+| `ThemeModifiers.swift` | 跨模块复用的通用 ViewModifier（`borderedCard` 等），消除各模块重复的 `RoundedRectangle + fill + strokeBorder` 样板 |
 
 ## Token 分类
 

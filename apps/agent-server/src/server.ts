@@ -207,18 +207,16 @@ export async function startDefaultServer(port = 4317) {
     import("@handagent/core/llm/MockLLMClient.ts"),
   ]);
 
-  const spotDir = join(homedir(), ".spotAgent");
-  const sessionsDir = join(spotDir, "sessions");
-  const store = new FileSessionStore(sessionsDir);
-  const networkLogger = new FileNetworkLogger({ baseDir: join(spotDir, "log") });
-  const blobStore = new FilesystemBlobStore({ rootPath: join(spotDir, "blobs") });
-  const pluginsDir = join(spotDir, "plugins");
-  const mcpConfig = await readMCPConfig(join(spotDir, "mcp.json"));
+  const paths = resolveServerPaths();
+  const store = new FileSessionStore(paths.sessionsDir);
+  const networkLogger = new FileNetworkLogger({ baseDir: paths.logDir });
+  const blobStore = new FilesystemBlobStore({ rootPath: paths.blobsDir });
+  const mcpConfig = await readMCPConfig(paths.mcpConfigPath);
   const mcpServers = new Map(mcpConfig.servers.map((server) => [server.id, server]));
 
   const workspaceRegistry = new FileWorkspaceRegistry({
-    filePath: join(spotDir, "workspaces.json"),
-    defaultRootPath: join(spotDir, "workspace"),
+    filePath: paths.workspacesPath,
+    defaultRootPath: paths.defaultWorkspaceDir,
   });
   await workspaceRegistry.getDefault();
 
@@ -231,6 +229,7 @@ export async function startDefaultServer(port = 4317) {
     workspaceAskResolver: workspaceAskBridge.ask,
   });
   await toolRegistry.refresh();
+
   const mcpRegistry = new MCPServerRegistry({
     createClient: (serverId: string) => {
       const config = mcpServers.get(serverId);
@@ -255,7 +254,7 @@ export async function startDefaultServer(port = 4317) {
 
   const permissionBridge = new SessionPermissionBridge();
   const permissionPolicy = new FilePermissionPolicy({
-    filePath: join(spotDir, "permissions.json"),
+    filePath: paths.permissionsPath,
     askResolver: permissionBridge.ask,
   });
 
@@ -294,7 +293,7 @@ export async function startDefaultServer(port = 4317) {
     orchestrator,
     persistence,
     undefined,
-    new ActionBindingResolver({ pluginsDir }),
+    new ActionBindingResolver({ pluginsDir: paths.pluginsDir }),
   );
 
   return startServer({
@@ -305,6 +304,33 @@ export async function startDefaultServer(port = 4317) {
     workspaceAskBridge,
     port,
   });
+}
+
+interface ServerPaths {
+  spotDir: string;
+  sessionsDir: string;
+  logDir: string;
+  blobsDir: string;
+  pluginsDir: string;
+  workspacesPath: string;
+  defaultWorkspaceDir: string;
+  mcpConfigPath: string;
+  permissionsPath: string;
+}
+
+function resolveServerPaths(): ServerPaths {
+  const spotDir = join(homedir(), ".spotAgent");
+  return {
+    spotDir,
+    sessionsDir: join(spotDir, "sessions"),
+    logDir: join(spotDir, "log"),
+    blobsDir: join(spotDir, "blobs"),
+    pluginsDir: join(spotDir, "plugins"),
+    workspacesPath: join(spotDir, "workspaces.json"),
+    defaultWorkspaceDir: join(spotDir, "workspace"),
+    mcpConfigPath: join(spotDir, "mcp.json"),
+    permissionsPath: join(spotDir, "permissions.json"),
+  };
 }
 
 export type LLMMode = "settings" | "mock";
