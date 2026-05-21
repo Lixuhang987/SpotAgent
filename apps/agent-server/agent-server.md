@@ -21,6 +21,7 @@
 | `src/SettingsBackedToolRegistry.ts` | 按 `~/.spotAgent/settings.json` 的 stamp 热加载 builtin tools，并原地刷新同一个 `ToolRegistry` 实例；`SessionRuntimeOrchestrator` 每次新一轮 user message 进入 runtime 前调用 `refresh()` |
 | `src/ActionBindingResolver.ts` | 校验 `create_session_request.actionBinding`，并从本地 Plugin manifest 解析 session 绑定的 `mcpServerIds` |
 | `src/MCPServerRegistry.ts` | MCP client 缓存与协议适配；同一个 `serverId` 复用 client 与 adapted tools；除 `tools/*` 外还代理 `prompts/list` / `prompts/get` / `resources/list` / `resources/read` 给上层使用 |
+| `src/ComputerUseMCPClient.ts` | HandAgent 原生 Computer Use MCP 兼容层；当 MCP server id 为 `computer_use` / `computer-use` 时，暴露 `list_apps` 与 `get_app_state`，底层走 `RemotePlatformAdapter`，不再直接依赖 Codex 私有 Computer Use 子进程的 `tools/call` |
 | `src/SessionScopedToolRegistry.ts` | 按 session metadata 组合 builtin tools 与 MCP tools；`mcp.json` 中的 server 默认全局注入所有 session（`globalMcpServerIds`），plugin `actionBinding.mcpServerIds` 在此基础上叠加去重；MCP server 缺失或初始化失败时记录 skip 日志并保留 builtin tools |
 | `src/WebSocketPlatformBridge.ts` | 实现 core 的 `PlatformBridge` 接口；通过 `attach(send)` 接管来自 desktop 的 `channel: "platform"` 反向 socket 并返回 fencing token，按 `requestId + token` 关联 `platform_request` / `platform_response`，60s 超时 |
 | `src/SessionPermissionBridge.ts` | 实现 `FilePermissionPolicy` 的 `AskResolver`：把 `permission_request` 推到 desktop，按 `requestId + session binding token` 等回 `permission_response`，60s 超时视为 deny |
@@ -54,7 +55,7 @@ sequenceDiagram
 
 MCP server 与 Action Plugin 是两条相互独立的注入通道，作用时机也不同：
 
-1. **全局 MCP**：`~/.spotAgent/mcp.json` 中配置的所有 server 默认对所有 session 可用。`startDefaultServer` 启动时把这些 server id 作为 `globalMcpServerIds` 传给 `SessionScopedToolRegistry`，每轮 user message 前都会自动 `tools/list` 并注入为 `mcp.<serverId>.<toolName>`。client 复用，按 server id 缓存。除了 tools，`MCPServerRegistry` 还代理 `prompts/list` / `prompts/get` / `resources/list` / `resources/read`，供未来的 prompt picker 或 resource UI 调用。
+1. **全局 MCP**：`~/.spotAgent/mcp.json` 中配置的所有 server 默认对所有 session 可用。`startDefaultServer` 启动时把这些 server id 作为 `globalMcpServerIds` 传给 `SessionScopedToolRegistry`，每轮 user message 前都会自动 `tools/list` 并注入为 `mcp.<serverId>.<toolName>`。client 复用，按 server id 缓存。除了 tools，`MCPServerRegistry` 还代理 `prompts/list` / `prompts/get` / `resources/list` / `resources/read`，供未来的 prompt picker 或 resource UI 调用。`computer_use` / `computer-use` 是兼容例外：仍按 `mcp.<serverId>.*` 注入，但 client 由 `ComputerUseMCPClient` 接管，避免 Codex 私有 Computer Use MCP 在非 Codex app-server 父链路下 `tools/call` 挂起。
 2. **Plugin 触发的 MCP**：`create_session_request.payload.actionBinding` 只包含 `{ pluginId, promptName }`。agent-server 不信任 desktop 传来的 MCP server 列表，而是通过 `ActionBindingResolver` 重新读取 `~/.spotAgent/plugins/<plugin-id>/plugin.json`，校验 plugin id、prompt name 和 enabled 状态，再把 manifest 中的 `mcpServerIds` 写入 session metadata，作为该 session 在全局集合之外的额外注入。
 
 `SessionScopedToolRegistry.refreshForSession` 把全局集合与 plugin binding 集合做并集去重，按 tool name 第一次出现的实例为准。缺失的 MCP server 会被记录为 `[agent-server] skipped MCP server ...`，不会阻断 prompt runtime。
@@ -129,6 +130,7 @@ open dist/HandAgentDesktop.app
 - [SettingsBackedToolRegistry.ts](/Users/mu9/proj/handAgent/apps/agent-server/src/SettingsBackedToolRegistry.ts)
 - [ActionBindingResolver.ts](/Users/mu9/proj/handAgent/apps/agent-server/src/ActionBindingResolver.ts)
 - [MCPServerRegistry.ts](/Users/mu9/proj/handAgent/apps/agent-server/src/MCPServerRegistry.ts)
+- [ComputerUseMCPClient.ts](/Users/mu9/proj/handAgent/apps/agent-server/src/ComputerUseMCPClient.ts)
 - [SessionScopedToolRegistry.ts](/Users/mu9/proj/handAgent/apps/agent-server/src/SessionScopedToolRegistry.ts)
 - [WebSocketPlatformBridge.ts](/Users/mu9/proj/handAgent/apps/agent-server/src/WebSocketPlatformBridge.ts)
 - 协议参考：[protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md)

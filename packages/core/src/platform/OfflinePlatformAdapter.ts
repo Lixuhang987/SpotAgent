@@ -3,6 +3,7 @@ import type {
   AccessibilityActionResult,
   AccessibilityNodeSnapshot,
   AccessibilitySnapshotTarget,
+  AppInfo,
   FrontmostAppInfo,
   OCRRequest,
   OCRResult,
@@ -21,6 +22,10 @@ export class OfflinePlatformAdapter implements PlatformAdapter {
 
   constructor(options: OfflinePlatformAdapterOptions = {}) {
     this.reason = options.reason ?? "Platform bridge is not connected";
+  }
+
+  async listApps(): Promise<AppInfo[]> {
+    throw this.error("app.list");
   }
 
   async currentClipboardText(): Promise<string | null> {

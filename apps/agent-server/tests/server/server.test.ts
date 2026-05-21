@@ -5,6 +5,7 @@ import type { AgentRuntimeEvent } from "@handagent/core/runtime/AgentRuntime.ts"
 import type { SessionMessage } from "@handagent/core/protocol/SessionMessage.ts";
 import type { PlatformBridgeMessage } from "@handagent/core/protocol/PlatformBridgeMessage.ts";
 import type { FilePermissionPolicy } from "@handagent/core/permission/FilePermissionPolicy.ts";
+import type { MCPClient } from "@handagent/core/mcp/MCPClient.ts";
 import { InMemorySessionStore } from "@handagent/core/storage/index.ts";
 import type { SessionRouter } from "../../src/SessionRouter.ts";
 import { SessionRouter as RealSessionRouter } from "../../src/SessionRouter.ts";
@@ -12,7 +13,11 @@ import { SessionPersistence } from "../../src/SessionPersistence.ts";
 import { SessionPermissionBridge } from "../../src/SessionPermissionBridge.ts";
 import { SessionRuntimeOrchestrator } from "../../src/SessionRuntimeOrchestrator.ts";
 import { SessionWorkspaceAskBridge } from "../../src/SessionWorkspaceAskBridge.ts";
-import { attachSessionSocketHandlers, resolveLLMMode } from "../../src/server.ts";
+import {
+  attachSessionSocketHandlers,
+  createMCPClientFromConfig,
+  resolveLLMMode,
+} from "../../src/server.ts";
 
 class FakeSocket extends EventEmitter {
   sent: string[] = [];
@@ -395,3 +400,73 @@ describe("resolveLLMMode", () => {
     expect(resolveLLMMode({ HANDAGENT_LLM_MODE: "mock" })).toBe("mock");
   });
 });
+
+describe("createMCPClientFromConfig", () => {
+  it("routes bundled Computer Use MCP config to the HandAgent native client", () => {
+    const StdioMCPClient = vi.fn(() => makeNoopMCPClient("stdio"));
+    const StreamableHttpMCPClient = vi.fn(() => makeNoopMCPClient("http"));
+    const ComputerUseMCPClient = vi.fn(() => makeNoopMCPClient("computer-use"));
+
+    const client = createMCPClientFromConfig(
+      {
+        id: "computer_use",
+        title: "Computer Use",
+        transport: "stdio",
+        command: "./Codex Computer Use.app/Contents/SharedSupport/SkyComputerUseClient.app/Contents/MacOS/SkyComputerUseClient",
+        args: ["mcp"],
+      },
+      {
+        StdioMCPClient: StdioMCPClient as never,
+        StreamableHttpMCPClient: StreamableHttpMCPClient as never,
+        ComputerUseMCPClient: ComputerUseMCPClient as never,
+      },
+      {
+        platform: {} as never,
+      },
+    );
+
+    expect(client.serverInfo()?.name).toBe("computer-use");
+    expect(ComputerUseMCPClient).toHaveBeenCalledWith({
+      serverId: "computer_use",
+      platform: {},
+    });
+    expect(StdioMCPClient).not.toHaveBeenCalled();
+    expect(StreamableHttpMCPClient).not.toHaveBeenCalled();
+  });
+});
+
+function makeNoopMCPClient(name: string): MCPClient {
+  const info = {
+    name,
+    version: "test",
+    protocolVersion: "2025-11-25",
+    capabilities: {},
+  };
+  return {
+    async initialize() {
+      return info;
+    },
+    serverInfo() {
+      return info;
+    },
+    async listTools() {
+      return [];
+    },
+    async callTool() {
+      return { content: [] };
+    },
+    async listPrompts() {
+      return [];
+    },
+    async getPrompt() {
+      return { messages: [] };
+    },
+    async listResources() {
+      return [];
+    },
+    async readResource() {
+      return { contents: [] };
+    },
+    async close() {},
+  };
+}

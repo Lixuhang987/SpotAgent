@@ -1,5 +1,6 @@
 export type PlatformBridgeMethod =
   | "clipboard.read"
+  | "app.list"
   | "app.frontmost"
   | "window.list"
   | "screen.capture"

@@ -4,6 +4,7 @@ import type {
   AccessibilityActionResult,
   AccessibilityNodeSnapshot,
   AccessibilitySnapshotTarget,
+  AppInfo,
   OCRRequest,
   OCRResult,
   PlatformAdapter,
@@ -17,6 +18,18 @@ import { ScreenCaptureTool } from "../../../src/tools/builtins/ScreenCaptureTool
 import { ToolRegistry } from "../../../src/tools/ToolRegistry";
 
 class FakePlatformAdapter implements PlatformAdapter {
+  async listApps(): Promise<AppInfo[]> {
+    return [
+      {
+        name: "Preview",
+        bundleId: "com.apple.Preview",
+        pid: 123,
+        isActive: true,
+        resolution: "best_effort",
+      },
+    ];
+  }
+
   async currentClipboardText(): Promise<string | null> {
     return null;
   }

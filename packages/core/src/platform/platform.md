@@ -6,9 +6,9 @@
 
 | 文件 | 职责 |
 |------|------|
-| `PlatformAdapter.ts` | 平台能力的统一接口 + 全部入参 / 出参 DTO（FrontmostAppInfo / WindowInfo / ScreenCapture* / OCR* / Accessibility*）；所有出参都带 `resolution: "best_effort"` 标记 |
+| `PlatformAdapter.ts` | 平台能力的统一接口 + 全部入参 / 出参 DTO（AppInfo / FrontmostAppInfo / WindowInfo / ScreenCapture* / OCR* / Accessibility*）；所有出参都带 `resolution: "best_effort"` 标记 |
 | `PlatformBridge.ts` | 跨进程 RPC 接口：`call<T>(method, args, timeoutMs?)`；定义 `PlatformBridgeOfflineError` / `PlatformBridgeTimeoutError` / `PlatformBridgeRemoteError` 三个类型化错误 |
-| `RemotePlatformAdapter.ts` | 实现 `PlatformAdapter`，每个方法转发为 `bridge.call("clipboard.read", args)`；默认 15s 超时 |
+| `RemotePlatformAdapter.ts` | 实现 `PlatformAdapter`，每个方法转发为对应 `bridge.call(method, args)`；默认 15s 超时 |
 | `OfflinePlatformAdapter.ts` | Null object，所有方法直接抛 `not_implemented`，给测试 / 无桌面环境用 |
 
 ## 数据流
@@ -29,7 +29,7 @@ agent-server 内 tool.call(input)
 
 ## 关键约定
 
-- **方法名稳定**：`PlatformBridgeMethod` 是字面量联合（`clipboard.read | app.frontmost | window.list | screen.capture | ocr.read | accessibility.snapshot | accessibility.action`），增删字段需要 desktop / agent-server / 协议三处同步。
+- **方法名稳定**：`PlatformBridgeMethod` 是字面量联合（`clipboard.read | app.list | app.frontmost | window.list | screen.capture | ocr.read | accessibility.snapshot | accessibility.action`），增删字段需要 desktop / agent-server / 协议三处同步。
 - **错误三态**：
   - `Offline`：bridge 未 attach（desktop 还没 hello），立即抛，不等待。
   - `Timeout`：默认 15s 超时；区域截图等耗时方法可调高。

@@ -6,6 +6,7 @@ import type { SessionMessage } from "@handagent/core/protocol/SessionMessage.ts"
 import type { PlatformBridgeMessage } from "@handagent/core/protocol/PlatformBridgeMessage.ts";
 import type { MCPClient } from "@handagent/core/mcp/MCPClient.ts";
 import type { MCPServerConfig } from "@handagent/core/mcp/MCPConfig.ts";
+import type { PlatformAdapter } from "@handagent/core/platform/PlatformAdapter.ts";
 import { parseMCPConfig } from "@handagent/core/mcp/MCPConfig.ts";
 import { SessionPersistence } from "./SessionPersistence.ts";
 import { SessionRouter } from "./SessionRouter.ts";
@@ -185,6 +186,7 @@ export async function startDefaultServer(port = 4317) {
     { MCPServerRegistry },
     { StdioMCPClient },
     { StreamableHttpMCPClient },
+    { ComputerUseMCPClient },
     { FileNetworkLogger },
     { FilesystemBlobStore },
     { TurnSummarizer },
@@ -201,6 +203,7 @@ export async function startDefaultServer(port = 4317) {
     import("./MCPServerRegistry.ts"),
     import("@handagent/core/mcp/StdioMCPClient.ts"),
     import("@handagent/core/mcp/StreamableHttpMCPClient.ts"),
+    import("./ComputerUseMCPClient.ts"),
     import("@handagent/core/logging/FileNetworkLogger.ts"),
     import("@handagent/core/blob/FilesystemBlobStore.ts"),
     import("@handagent/core/runtime/TurnSummarizer.ts"),
@@ -239,6 +242,9 @@ export async function startDefaultServer(port = 4317) {
       return createMCPClientFromConfig(config, {
         StdioMCPClient,
         StreamableHttpMCPClient,
+        ComputerUseMCPClient,
+      }, {
+        platform,
       });
     },
   });
@@ -355,11 +361,33 @@ export function createMCPClientFromConfig(
     StreamableHttpMCPClient: new (
       config: Extract<MCPServerConfig, { transport: "streamableHttp" }>,
     ) => MCPClient;
+    ComputerUseMCPClient?: new (options: {
+      serverId: string;
+      platform: PlatformAdapter;
+    }) => MCPClient;
+  },
+  dependencies?: {
+    platform?: PlatformAdapter;
   },
 ): MCPClient {
+  if (
+    isComputerUseServer(config) &&
+    clients.ComputerUseMCPClient &&
+    dependencies?.platform
+  ) {
+    return new clients.ComputerUseMCPClient({
+      serverId: config.id,
+      platform: dependencies.platform,
+    });
+  }
+
   return config.transport === "stdio"
     ? new clients.StdioMCPClient(config)
     : new clients.StreamableHttpMCPClient(config);
+}
+
+function isComputerUseServer(config: MCPServerConfig): boolean {
+  return config.id === "computer_use" || config.id === "computer-use";
 }
 
 export function resolveLLMMode(env: Record<string, string | undefined> = process.env): LLMMode {

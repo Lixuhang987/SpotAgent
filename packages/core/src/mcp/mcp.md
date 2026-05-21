@@ -52,6 +52,7 @@
 
 - `mcp.json` 中配置的所有 server 默认作为**全局** MCP server，会被注入每个 session 的 tool registry，无需依赖 plugin 触发；plugin 的 `mcpServerIds` 与全局列表合并并去重。
 - MCP exposed tool name 统一为 `mcp.<serverId>.<toolName>`，避免与 builtin tool 冲突。
+- `computer_use` / `computer-use` server id 是兼容例外：agent-server 保留 `mcp.<serverId>.*` 的注入形态，但 client 由 HandAgent 原生 `ComputerUseMCPClient` 接管，底层通过 PlatformBridge 调用本机能力。这样可以兼容 Codex bundled Computer Use 的配置，同时避免直接 spawn Codex 私有 Computer Use MCP 后在 `tools/call` 阶段挂起。
 - stdio server 可配置 `cwd`，用于兼容插件原始配置中的相对 command 路径；也可配置 `requestTimeoutMs`，默认 60s，避免外部 server 卡死时拖挂整个会话。
 - stdio server 可配置 `elicitation.autoAcceptEmptyForm: true`。该选项只自动接受 `requestedSchema` 为空对象且无必填字段的 form-mode `elicitation/create`，用于 Computer Use 这类本地 App 授权握手；带字段表单或 URL mode 仍返回 decline，不代替用户填写敏感信息或打开外部 URL。
 - `MCPConfig.ts` 只解析配置；client 生命周期、capability 缓存与 prompt/resource 调用由 agent-server 的 `MCPServerRegistry` 管理。

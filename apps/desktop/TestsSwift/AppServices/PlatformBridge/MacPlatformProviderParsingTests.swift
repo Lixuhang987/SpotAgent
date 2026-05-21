@@ -3,6 +3,19 @@ import XCTest
 @testable import HandAgentDesktop
 
 final class MacPlatformProviderParsingTests: XCTestCase {
+    @MainActor
+    func testAppListReturnsSerializableRunningApplications() async throws {
+        let provider = MacPlatformProvider()
+
+        let result = try await provider.handle(method: "app.list", args: [:] as [String: Any])
+        let apps = try XCTUnwrap(result as? [[String: Any?]])
+        XCTAssertFalse(apps.isEmpty)
+
+        let first = try XCTUnwrap(apps.first)
+        XCTAssertEqual(first["resolution"] as? String, "best_effort")
+        XCTAssertNotNil(first["pid"] as? Int)
+    }
+
     func testOCRRequestRejectsMissingImageBase64() {
         XCTAssertThrowsError(try MacPlatformOCRRequest.parse(args: [:] as [String: Any])) { error in
             let bridgeError = error as? PlatformBridgeError

@@ -25,6 +25,8 @@ final class MacPlatformProvider: PlatformProvider {
         switch method {
         case "clipboard.read":
             return readClipboard()
+        case "app.list":
+            return appList()
         case "app.frontmost":
             return frontmostApp()
         case "window.list":
@@ -49,6 +51,24 @@ final class MacPlatformProvider: PlatformProvider {
         let pasteboard = NSPasteboard.general
         let text = pasteboard.string(forType: .string)
         return ["text": text as Any?]
+    }
+
+    private func appList() -> [[String: Any?]] {
+        NSWorkspace.shared.runningApplications
+            .sorted { lhs, rhs in
+                (lhs.localizedName ?? lhs.bundleIdentifier ?? "") <
+                    (rhs.localizedName ?? rhs.bundleIdentifier ?? "")
+            }
+            .map { app in
+                [
+                    "name": app.localizedName as Any?,
+                    "bundleId": app.bundleIdentifier as Any?,
+                    "pid": Int(app.processIdentifier),
+                    "isActive": app.isActive,
+                    "activationPolicy": app.activationPolicy.readableName,
+                    "resolution": "best_effort",
+                ]
+            }
     }
 
     private func frontmostApp() -> [String: Any?] {
@@ -928,6 +948,17 @@ private extension CGRect {
             abs(origin.y - other.origin.y) <= tolerance &&
             abs(width - other.width) <= tolerance &&
             abs(height - other.height) <= tolerance
+    }
+}
+
+private extension NSApplication.ActivationPolicy {
+    var readableName: String {
+        switch self {
+        case .regular: return "regular"
+        case .accessory: return "accessory"
+        case .prohibited: return "prohibited"
+        @unknown default: return "unknown"
+        }
     }
 }
 

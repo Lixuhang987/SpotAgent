@@ -3,6 +3,7 @@ import type {
   AccessibilityActionResult,
   AccessibilityNodeSnapshot,
   AccessibilitySnapshotTarget,
+  AppInfo,
   FrontmostAppInfo,
   OCRRequest,
   OCRResult,
@@ -25,6 +26,10 @@ export class RemotePlatformAdapter implements PlatformAdapter {
   constructor(options: RemotePlatformAdapterOptions) {
     this.bridge = options.bridge;
     this.defaultTimeoutMs = options.defaultTimeoutMs ?? 15_000;
+  }
+
+  listApps(): Promise<AppInfo[]> {
+    return this.bridge.call("app.list", {}, this.defaultTimeoutMs);
   }
 
   currentClipboardText(): Promise<string | null> {

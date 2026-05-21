@@ -5,6 +5,15 @@ export type FrontmostAppInfo = {
   resolution: "best_effort";
 };
 
+export type AppInfo = {
+  name: string | null;
+  bundleId?: string;
+  pid?: number;
+  isActive?: boolean;
+  activationPolicy?: string;
+  resolution: "best_effort";
+};
+
 export type WindowInfo = {
   id?: number;
   title: string | null;
@@ -126,6 +135,7 @@ export type AccessibilityActionResult = {
 };
 
 export interface PlatformAdapter {
+  listApps(): Promise<AppInfo[]>;
   currentClipboardText(): Promise<string | null>;
   frontmostAppInfo(): Promise<FrontmostAppInfo>;
   frontmostWindowList(): Promise<WindowInfo[]>;
