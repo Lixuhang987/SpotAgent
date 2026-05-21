@@ -13,7 +13,7 @@ struct SessionWindowView: View {
                 connectionState: viewModel.activeTab?.connectionState ?? .disconnected,
                 onSelect: viewModel.openHistorySession,
                 onRequestDelete: viewModel.requestDeleteSession,
-                onNewSession: { viewModel.sendPrompt("") }
+                onNewSession: viewModel.createNewSession
             )
             .frame(width: 240)
 
@@ -24,7 +24,7 @@ struct SessionWindowView: View {
                 draft: $draft,
                 onActivateTab: viewModel.activateTab,
                 onCloseTab: viewModel.closeTab,
-                onNewTab: { viewModel.sendPrompt("") },
+                onNewTab: viewModel.createNewSession,
                 onStopActiveTab: viewModel.stopActiveTab,
                 onSendPrompt: { text in viewModel.sendPrompt(text) }
             )

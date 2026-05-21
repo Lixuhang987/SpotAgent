@@ -96,6 +96,10 @@ final class SessionWindowViewModel {
         historySocketClient.sendCreateSession(actionBinding: actionBinding)
     }
 
+    func createNewSession() {
+        historySocketClient.sendCreateSession()
+    }
+
     func stopActiveTab() {
         activeTab?.stop()
     }
