@@ -25,6 +25,14 @@
 
 说明：不响应 abort 的 runtime 强制清理边界已由 `SessionRuntimeOrchestrator` 与 `SessionRouter` 自动化测试覆盖；本条实机 QA 只验证桌面删除 running session 的用户可见链路。
 
+## FileSessionStore 同 session 并发写回归（P1）
+
+1. 执行 `pnpm exec vitest run packages/core/tests/storage/file-session-store.test.ts`。
+1. 确认 `preserves concurrent appends to the same session` 与 `preserves concurrent event appends to the same session` 均通过。
+1. 确认该命令输出中 `14 tests` 全部通过。
+
+说明：该问题是文件持久化层的并发 read-modify-write 覆盖风险，无独立桌面 UI 操作入口；本条以命令行回归验证为准。
+
 ## Anthropic Provider 真实调用（P1）
 
 1. 配置可用 Anthropic API key 与模型后提交普通文本 prompt，确认 assistant 回复可见且逐段 streaming。

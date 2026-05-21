@@ -31,17 +31,4 @@
 
 ## 当前 bug
 
-### FileSessionStore 同一 session 并发写入可能丢失 messages 或 events
-
-- **严重级别**：P1
-- **发现日期**：2026-05-22
-- **发现方式**：主链路可靠性代码审计。
-- **复现步骤**：
-  1. 使用 `FileSessionStore` 创建同一个 session。
-  2. 并发触发两次同 session 的写操作，例如两个 `appendMessages`，或 `appendEvents` 与 `setMessages` 交错。
-  3. 让两个写操作都基于同一份旧 JSON 快照完成 read-modify-write。
-- **实际结果**：`FileSessionStore.appendMessages`、`setMessages`、`appendEvents` 都是无锁 read-modify-write，最后通过整文件覆盖写回。并发写同一 session 文件时，后写者可能覆盖先写者，导致 user message、assistant/tool message、tool audit event 或 error event 丢失。
-- **期望结果**：同一 session 的文件写入应串行化，至少保证同 session 的 `create / delete / updateTitle / appendMessages / setMessages / appendEvents` 不会互相覆盖；不同 session 不应被全局锁无谓阻塞。
-- **证据**：`packages/core/src/storage/FileSessionStore.ts` 的 `appendMessages`、`setMessages`、`appendEvents` 均先 `get()` 再修改内存对象，最后 `write()` 整文件。agent-server 的 WebSocket message handler 没有 per-session 队列；同一 session 多个 `user_message` 可并发进入 `SessionRuntimeOrchestrator.handleUserMessage`，每轮开始会调用 `SessionPersistence.persistUserMessage`，完成时还会 `persistRunResult` 写 messages/events。
-- **初步调用链 / 根因边界**：PromptPanel/SessionWindow 快速发送或重连恢复 → agent-server 并发处理同 session 消息 → `SessionPersistence` 调 `FileSessionStore` 多个 RMW 写操作 → 后写覆盖先写 → 持久化历史与 tool 审计不可信。
-- **清理状态**：发现时未启动 HandAgentDesktop；`pgrep -fl HandAgentDesktop` 与 `lsof -nP -iTCP:4317 -sTCP:LISTEN` 均无输出。
+暂无。

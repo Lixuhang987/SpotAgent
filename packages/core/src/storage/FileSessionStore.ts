@@ -9,27 +9,31 @@ import type {
 } from "./SessionStore.ts";
 
 export class FileSessionStore implements SessionStore {
+  private readonly sessionWriteQueues = new Map<string, Promise<void>>();
+
   constructor(private readonly dir: string) {}
 
   async create(input: CreateSessionInput): Promise<PersistedSession> {
-    await this.ensureDir();
-    const now = input.createdAt ?? new Date().toISOString();
-    const session: PersistedSession = {
-      version: 1,
-      metadata: {
-        id: input.id,
-        title: input.title ?? null,
-        createdAt: now,
-        updatedAt: now,
-        messageCount: 0,
-        workspaceId: input.workspaceId ?? null,
-        actionBinding: input.actionBinding,
-      },
-      messages: [],
-      events: [],
-    };
-    await this.write(input.id, session);
-    return session;
+    return this.withSessionWriteQueue(input.id, async () => {
+      await this.ensureDir();
+      const now = input.createdAt ?? new Date().toISOString();
+      const session: PersistedSession = {
+        version: 1,
+        metadata: {
+          id: input.id,
+          title: input.title ?? null,
+          createdAt: now,
+          updatedAt: now,
+          messageCount: 0,
+          workspaceId: input.workspaceId ?? null,
+          actionBinding: input.actionBinding,
+        },
+        messages: [],
+        events: [],
+      };
+      await this.write(input.id, session);
+      return session;
+    });
   }
 
   async get(sessionId: string): Promise<PersistedSession | null> {
@@ -42,11 +46,13 @@ export class FileSessionStore implements SessionStore {
   }
 
   async delete(sessionId: string): Promise<void> {
-    try {
-      await unlink(this.path(sessionId));
-    } catch {
-      // already gone
-    }
+    return this.withSessionWriteQueue(sessionId, async () => {
+      try {
+        await unlink(this.path(sessionId));
+      } catch {
+        // already gone
+      }
+    });
   }
 
   async list(): Promise<SessionSummary[]> {
@@ -69,10 +75,12 @@ export class FileSessionStore implements SessionStore {
   }
 
   async updateTitle(sessionId: string, title: string): Promise<void> {
-    const session = await this.get(sessionId);
-    if (!session) return;
-    session.metadata.title = title;
-    await this.write(sessionId, session);
+    return this.withSessionWriteQueue(sessionId, async () => {
+      const session = await this.get(sessionId);
+      if (!session) return;
+      session.metadata.title = title;
+      await this.write(sessionId, session);
+    });
   }
 
   async appendMessages(
@@ -80,12 +88,14 @@ export class FileSessionStore implements SessionStore {
     messages: AgentMessage[],
     updatedAt: string,
   ): Promise<void> {
-    const session = await this.get(sessionId);
-    if (!session) return;
-    session.messages.push(...messages);
-    session.metadata.messageCount = session.messages.length;
-    session.metadata.updatedAt = updatedAt;
-    await this.write(sessionId, session);
+    return this.withSessionWriteQueue(sessionId, async () => {
+      const session = await this.get(sessionId);
+      if (!session) return;
+      session.messages.push(...messages);
+      session.metadata.messageCount = session.messages.length;
+      session.metadata.updatedAt = updatedAt;
+      await this.write(sessionId, session);
+    });
   }
 
   async setMessages(
@@ -93,22 +103,49 @@ export class FileSessionStore implements SessionStore {
     messages: AgentMessage[],
     updatedAt: string,
   ): Promise<void> {
-    const session = await this.get(sessionId);
-    if (!session) return;
-    session.messages = messages;
-    session.metadata.messageCount = messages.length;
-    session.metadata.updatedAt = updatedAt;
-    await this.write(sessionId, session);
+    return this.withSessionWriteQueue(sessionId, async () => {
+      const session = await this.get(sessionId);
+      if (!session) return;
+      session.messages = messages;
+      session.metadata.messageCount = messages.length;
+      session.metadata.updatedAt = updatedAt;
+      await this.write(sessionId, session);
+    });
   }
 
   async appendEvents(
     sessionId: string,
     events: SessionEvent[],
   ): Promise<void> {
-    const session = await this.get(sessionId);
-    if (!session) return;
-    session.events.push(...events);
-    await this.write(sessionId, session);
+    return this.withSessionWriteQueue(sessionId, async () => {
+      const session = await this.get(sessionId);
+      if (!session) return;
+      session.events.push(...events);
+      await this.write(sessionId, session);
+    });
+  }
+
+  private async withSessionWriteQueue<T>(
+    sessionId: string,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const previous = this.sessionWriteQueues.get(sessionId) ?? Promise.resolve();
+    let release = () => {};
+    const current = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const queued = previous.catch(() => {}).then(() => current);
+    this.sessionWriteQueues.set(sessionId, queued);
+
+    await previous.catch(() => {});
+    try {
+      return await operation();
+    } finally {
+      release();
+      if (this.sessionWriteQueues.get(sessionId) === queued) {
+        this.sessionWriteQueues.delete(sessionId);
+      }
+    }
   }
 
   private path(sessionId: string): string {

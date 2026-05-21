@@ -9,7 +9,7 @@
 | `SessionRecord.ts` | `SessionMetadata` / `SessionEvent`（4 种：tool_call / tool_result / permission_request / error）/ `PersistedSession` |
 | `SessionStore.ts` | `SessionStore` 接口：`create / get / delete / list / updateTitle / appendMessages / setMessages / appendEvents`；`SessionSummary` 是元数据精简视图 |
 | `InMemorySessionStore.ts` | 内存 Map 实现，主要给测试用 |
-| `FileSessionStore.ts` | 每会话一份 JSON 文件，落到 `~/.spotAgent/sessions/<id>.json`；读 / 写整文件 |
+| `FileSessionStore.ts` | 每会话一份 JSON 文件，落到 `~/.spotAgent/sessions/<id>.json`；读 / 写整文件；同一 session 的写操作通过内存队列串行化 |
 | `index.ts` | 桶导出，agent-server 通过它消费 |
 
 ## 文件结构
@@ -39,7 +39,7 @@
 
 ## 当前限制
 
-- `FileSessionStore.appendMessages` 每次都重写整个文件；高频 tool 调用场景会放大写入。
+- `FileSessionStore.appendMessages` 每次都重写整个文件；高频 tool 调用场景会放大写入。当前只保证同一进程内同一 session 的写操作串行化，不提供跨进程文件锁。
 - `FileSessionStore.list` 需要遍历目录、读每个文件解析 metadata，O(N × file size)；超过几百会话会变慢。
 - `FileSessionStore.get` / `list` 对解析失败 / 缺字段静默吞错（返回 null / 跳过），不利于排查。
 - 两种实现均把内部数组直接交给调用方（无 deep clone），调用方误改会污染状态。
