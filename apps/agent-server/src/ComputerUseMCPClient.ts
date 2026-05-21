@@ -200,6 +200,12 @@ function resolveApp(apps: AppInfo[], query: string): AppInfo | undefined {
   const byName = apps.find((app) => normalize(app.name) === normalizedQuery);
   if (byName) return byName;
 
+  const aliasBundleId = macOSAppAliases.get(normalizedQuery);
+  if (aliasBundleId) {
+    const byAlias = apps.find((app) => normalize(app.bundleId) === aliasBundleId);
+    if (byAlias) return byAlias;
+  }
+
   return apps.find((app) => {
     const name = normalize(app.name);
     const bundleId = normalize(app.bundleId);
@@ -218,3 +224,7 @@ function resolveWindow(windows: WindowInfo[], app: AppInfo): WindowInfo | undefi
 function normalize(value: string | null | undefined): string {
   return (value ?? "").trim().toLowerCase();
 }
+
+const macOSAppAliases = new Map<string, string>([
+  ["finder", "com.apple.finder"],
+]);

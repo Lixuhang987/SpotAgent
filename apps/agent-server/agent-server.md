@@ -21,7 +21,7 @@
 | `src/SettingsBackedToolRegistry.ts` | 按 `~/.spotAgent/settings.json` 的 stamp 热加载 builtin tools，并原地刷新同一个 `ToolRegistry` 实例；`SessionRuntimeOrchestrator` 每次新一轮 user message 进入 runtime 前调用 `refresh()` |
 | `src/ActionBindingResolver.ts` | 校验 `create_session_request.actionBinding`，并从本地 Plugin manifest 解析 session 绑定的 `mcpServerIds` |
 | `src/MCPServerRegistry.ts` | MCP client 缓存与协议适配；同一个 `serverId` 复用 client 与 adapted tools；除 `tools/*` 外还代理 `prompts/list` / `prompts/get` / `resources/list` / `resources/read` 给上层使用 |
-| `src/ComputerUseMCPClient.ts` | HandAgent 原生 Computer Use MCP 兼容层；当 MCP server id 为 `computer_use` / `computer-use` 时，暴露 `list_apps` 与 `get_app_state`，底层走 `RemotePlatformAdapter`，不再直接依赖 Codex 私有 Computer Use 子进程的 `tools/call` |
+| `src/ComputerUseMCPClient.ts` | HandAgent 原生 Computer Use MCP 兼容层；当 MCP server id 为 `computer_use` / `computer-use` 时，暴露 `list_apps` 与 `get_app_state`，底层走 `RemotePlatformAdapter`，不再直接依赖 Codex 私有 Computer Use 子进程的 `tools/call`；`get_app_state` 解析 App 时先走精确 bundle/name，再处理系统别名（如 `Finder` → `com.apple.finder`），最后才做模糊子串匹配 |
 | `src/SessionScopedToolRegistry.ts` | 按 session metadata 组合 builtin tools 与 MCP tools；`mcp.json` 中的 server 默认全局注入所有 session（`globalMcpServerIds`），plugin `actionBinding.mcpServerIds` 在此基础上叠加去重；MCP server 缺失或初始化失败时记录 skip 日志并保留 builtin tools |
 | `src/WebSocketPlatformBridge.ts` | 实现 core 的 `PlatformBridge` 接口；通过 `attach(send)` 接管来自 desktop 的 `channel: "platform"` 反向 socket 并返回 fencing token，按 `requestId + token` 关联 `platform_request` / `platform_response`，60s 超时 |
 | `src/SessionPermissionBridge.ts` | 实现 `FilePermissionPolicy` 的 `AskResolver`：把 `permission_request` 推到 desktop，按 `requestId + session binding token` 等回 `permission_response`，60s 超时视为 deny |

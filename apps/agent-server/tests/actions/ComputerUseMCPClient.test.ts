@@ -108,6 +108,41 @@ class FakePlatformAdapter implements PlatformAdapter {
   }
 }
 
+class LocalizedFinderPlatformAdapter extends FakePlatformAdapter {
+  override async listApps(): Promise<AppInfo[]> {
+    return [
+      {
+        name: "Keka Finder Integration",
+        bundleId: "com.aone.keka.KekaFinderIntegration",
+        pid: 301,
+        isActive: false,
+        activationPolicy: "prohibited",
+        resolution: "best_effort",
+      },
+      {
+        name: "访达",
+        bundleId: "com.apple.finder",
+        pid: 101,
+        isActive: false,
+        activationPolicy: "regular",
+        resolution: "best_effort",
+      },
+    ];
+  }
+
+  override async accessibilitySnapshot(
+    target: AccessibilitySnapshotTarget,
+  ): Promise<AccessibilityNodeSnapshot> {
+    return {
+      role: "application",
+      label: target.bundleId ?? null,
+      target,
+      children: [],
+      resolution: "best_effort",
+    };
+  }
+}
+
 describe("ComputerUseMCPClient", () => {
   it("exposes list_apps through the HandAgent platform bridge", async () => {
     const client = new ComputerUseMCPClient({
@@ -161,6 +196,23 @@ describe("ComputerUseMCPClient", () => {
         role: "application",
         label: "Finder",
         children: [{ role: "window", label: "Downloads" }],
+      },
+    });
+  });
+
+  it("prefers Finder bundle id over helper apps whose names contain Finder", async () => {
+    const client = new ComputerUseMCPClient({
+      serverId: "computer_use",
+      platform: new LocalizedFinderPlatformAdapter(),
+    });
+
+    const result = await client.callTool("get_app_state", { app: "Finder" });
+
+    expect(result.isError).toBe(false);
+    expect(result.structuredContent).toMatchObject({
+      app: { name: "访达", bundleId: "com.apple.finder", pid: 101 },
+      accessibilityTree: {
+        target: { bundleId: "com.apple.finder", pid: 101 },
       },
     });
   });
