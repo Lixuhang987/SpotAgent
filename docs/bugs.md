@@ -30,3 +30,20 @@
 ---
 
 ## 当前 bug
+
+### 运行中的会话遇到 agent-server 子进程退出后，UI 显示连接错误且持久化没有中断记录
+
+- **严重级别**：P1
+- **发现日期**：2026-05-22
+- **复现步骤**：
+  1. 在 `/Users/mu9/proj/handAgent` 的 `main` 分支运行基线：`bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`，均通过。
+  2. 使用 `bash ./scripts/package-app.sh --mock-llm` 打包并 `open dist/HandAgentDesktop.app` 启动 mock App。
+  3. 通过原生 `⌘⇧Space` 唤起 PromptPanel，提交 `[mock:slow-focus] QA_RUNNING_SERVER_CRASH_20260522_0355`。
+  4. Computer Use 确认 SessionWindow 当前 tab 进入运行态，composer 右侧显示 `停止` 按钮。
+  5. 查询 4317 监听进程为 `node 77697`，执行 `kill -TERM 77697`，保留 HandAgentDesktop 运行。
+  6. 等待约 2 秒后确认 agent-server 自动重启为 `node 79272`，父进程仍是 HandAgentDesktop。
+- **实际结果**：当前 tab 显示用户 prompt 后追加 `Could not connect to the server.`，底部错误条同样显示 `Could not connect to the server.`；composer 回到可发送状态。对应 session 文件 `/Users/mu9/.spotAgent/sessions/session-1779393340152-tycszb.json` 只有 1 条 user message，`events` 为空，没有 `interrupted`、`error` 或可恢复提示的持久化记录。
+- **期望结果**：运行中的会话因 agent-server 子进程退出而丢失当前 run 时，UI 应明确进入可理解的中断/失败状态，文案应说明本轮运行因 agent-server 重启中断；持久化中应记录 error 或 interrupted 事件，避免历史恢复时只剩用户消息且丢失失败原因。
+- **证据**：重启后 `lsof -nP -iTCP:4317 -sTCP:LISTEN` 显示 `node 79272` 监听；`ps -o pid,ppid,command -p 79272` 显示父进程为 `77112 /Users/mu9/proj/handAgent/dist/HandAgentDesktop.app/Contents/MacOS/HandAgentDesktop`。Computer Use 观察到消息区与错误条文本均为 `Could not connect to the server.`。session 文件 `session-1779393340152-tycszb.json` 的 `metadata.messageCount` 为 `1`，`messages[0].content` 为 `[mock:slow-focus] QA_RUNNING_SERVER_CRASH_20260522_0355`，`events` 为 `[]`。
+- **初步调用链 / 根因边界**：PromptPanel 提交和运行态 UI 已验证；agent-server 子进程退出后桌面进程自动重启也已验证。失败边界在运行中 socket 断开到 tab 恢复之间：旧 socket close 会中断 server 内存中的 active run，但子进程退出导致该中断状态无法落盘；新 server 只能从 session 文件返回 snapshot，当前 UI 最终保留通用连接错误，未把“运行因 server 重启中断”转成一致的 UI 与持久化状态。
+- **清理状态**：本轮 live QA 结束后已正常退出 HandAgentDesktop；`pgrep -fl HandAgentDesktop` 与 `lsof -nP -iTCP:4317 -sTCP:LISTEN` 均无输出。
