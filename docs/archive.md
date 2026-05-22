@@ -741,3 +741,11 @@
 - **验证过程**：重新确认主仓库在 `main`，清空运行进程但不删除任何 `~/.spotAgent/sessions/` 文件；通过 `bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build` 后重新打包并启动 mock App。使用真实 `⌘⇧Space` 唤起 PromptPanel，通过 AX 写入并提交 `[mock:slow-focus] QA_STOP_RUNNING_SESSION_STATUS_20260523_0006`，确认 SessionWindow 创建新会话后，对底部 `help=停止` 按钮执行 `AXPress`。
 - **证据**：App PID `70498`，agent-server PID `70499`，`node` 监听 `*:4317`；会话文件 `/Users/mu9/.spotAgent/sessions/session-1779466152190-n3343e.json` 包含用户消息和事件 `{ "type": "error", "code": "run_interrupted", "message": "本轮运行已中断。" }`；中断后 SessionWindow 底部按钮 help 列表从 `停止` 恢复为 `发送消息`；截图 `/private/tmp/handagent-stop-before.png` 与 `/private/tmp/handagent-stop-after.png` 已保存。
 - **结论**：PromptPanel → SessionWindow → agent-server → mock LLM slow-focus → interrupt → 持久化 → SessionWindow 可发送态反馈链路通过。状态气泡 AX 仅暴露 `help=打开最近会话或输入面板`，本次不把气泡可读文本作为强证据。
+
+### workspace.list mock tool 主链路
+
+- **验证日期**：2026-05-23
+- **验证环境**：mock-llm / main / `dist/HandAgentDesktop.app` / App PID `70498` / agent-server PID `70499` / `node` 监听 `*:4317`。
+- **验证过程**：在同一个 mock App 中使用真实 `⌘⇧Space` 唤起 PromptPanel，通过 AX 确认 `window 1` 存在 `text field 1`，写入并提交 `[mock:workspace-list] QA_TOOL_WORKSPACE_LIST_20260523_0015`。提交后等待 SessionWindow 完成运行，再核对底部按钮和 session 持久化内容。
+- **证据**：会话文件 `/Users/mu9/.spotAgent/sessions/session-1779466633012-tii05w.json` 的 `messages` 包含 user prompt、assistant `toolCalls[0].name = "workspace.list"`、tool message `name = "workspace.list"`、最终 assistant `Mock workspace.list completed.`；`events` 包含 `tool_call workspace.list` 与 `tool_result success`，`durationMs = 2`；SessionWindow 底部按钮 help 列表为 `新会话, 搜索会话, 新标签页, 添加附件, 语音输入（即将推出）, 发送消息, 设置`。
+- **结论**：PromptPanel → SessionWindow → agent-server → mock LLM → `workspace.list` tool 调用 → tool result 回灌 → 持久化 → UI 可发送态反馈链路通过。状态气泡 AX 仍只暴露 `help=打开最近会话或输入面板`，不能作为运行/空闲文本状态的强证据。
