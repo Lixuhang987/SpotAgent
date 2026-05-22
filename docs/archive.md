@@ -733,3 +733,11 @@
 - **验证过程**：通过 PromptPanel 提交 `[mock:workspace-ask] QA_PERMISSION_RUNNING_STATUS_20260522_063515`。权限审批面板 `授权调用 workspace.askUser` 可见时，SessionWindow 底部 composer 显示 `stop.fill` Stop 按钮，状态气泡显示 `Running`。点击 `仅本次` 后，workspace 选择面板可见时 composer 仍显示 Stop，状态气泡仍显示 `Running`。选择 `qa-workspace` 后最终显示 `Mock workspace.askUser completed.`，composer 恢复 disabled `arrow.up`。
 - **证据**：session 文件 `/Users/mu9/.spotAgent/sessions/session-1779402948136-rnhamm.json` 包含 `workspace.askUser` tool call、tool result `{\"workspaceId\":\"qa-workspace\"}`、最终 assistant 消息 `Mock workspace.askUser completed.`，events 包含 `permission_request allow`、`tool_call workspace.askUser`、`tool_result success`。权限审批阶段截图：`/var/folders/m7/6b3swwk92mb0zthbzy5pfjvc0000gn/T/codex-shot-2026-05-22_06-36-07.png`；workspace 选择阶段截图：`/var/folders/m7/6b3swwk92mb0zthbzy5pfjvc0000gn/T/codex-shot-2026-05-22_06-36-55.png`。
 - **结论**：通过。`assistant_message_end(completed)` 后续权限等待态和 workspace 选择等待态均保持 running，SessionWindow 与 StatusBubble 状态一致。
+
+### Stop 中断 running mock session 状态反馈
+
+- **验证日期**：2026-05-23
+- **验证环境**：mock-llm / main / `dist/HandAgentDesktop.app` / `HandAgentRuntimeMode.json` 为 `{"llmMode":"mock"}`。
+- **验证过程**：重新确认主仓库在 `main`，清空运行进程但不删除任何 `~/.spotAgent/sessions/` 文件；通过 `bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build` 后重新打包并启动 mock App。使用真实 `⌘⇧Space` 唤起 PromptPanel，通过 AX 写入并提交 `[mock:slow-focus] QA_STOP_RUNNING_SESSION_STATUS_20260523_0006`，确认 SessionWindow 创建新会话后，对底部 `help=停止` 按钮执行 `AXPress`。
+- **证据**：App PID `70498`，agent-server PID `70499`，`node` 监听 `*:4317`；会话文件 `/Users/mu9/.spotAgent/sessions/session-1779466152190-n3343e.json` 包含用户消息和事件 `{ "type": "error", "code": "run_interrupted", "message": "本轮运行已中断。" }`；中断后 SessionWindow 底部按钮 help 列表从 `停止` 恢复为 `发送消息`；截图 `/private/tmp/handagent-stop-before.png` 与 `/private/tmp/handagent-stop-after.png` 已保存。
+- **结论**：PromptPanel → SessionWindow → agent-server → mock LLM slow-focus → interrupt → 持久化 → SessionWindow 可发送态反馈链路通过。状态气泡 AX 仅暴露 `help=打开最近会话或输入面板`，本次不把气泡可读文本作为强证据。
