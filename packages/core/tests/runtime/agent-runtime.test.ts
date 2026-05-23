@@ -7,6 +7,8 @@ import type { LLMClient, LLMStreamEvent } from "../../src/llm/LLMClient";
 import type { BlobRecord } from "../../src/blob/BlobRecord";
 import type { BlobStore } from "../../src/blob/BlobStore";
 import type { TurnSummarizerLike } from "../../src/runtime/TurnSummarizer";
+import { MetaToolUseTool, META_TOOL_NAME, META_TOOL_ALREADY_ACTIVE_RESULT } from "../../src/tools/MetaToolUseTool";
+import type { PermissionPolicy, PermissionRequest, PermissionResolution } from "../../src/permission/PermissionPolicy";
 
 class FakeTool implements AgentTool {
   name = "echo";
@@ -858,5 +860,142 @@ describe("AgentRuntime", () => {
     ).rejects.toMatchObject({ name: "AbortError" });
 
     expect(events).toEqual(["completed", "tool_call"]);
+  });
+
+  it("invokes onMetaToolActivate the first time use_tools is called and returns the activation result", async () => {
+    const activations: string[] = [];
+    const events: unknown[] = [];
+
+    // LLM: first turn returns use_tools call, second turn returns text
+    const client = {
+      async complete(messages: AgentMessage[]) {
+        const last = messages[messages.length - 1];
+        if (last.role === "user") {
+          return {
+            message: { role: "assistant" as const, content: "activating tools" },
+            toolCalls: [{ id: "meta-1", name: META_TOOL_NAME, arguments: {} }],
+          };
+        }
+        return {
+          message: { role: "assistant" as const, content: "tools are ready" },
+          toolCalls: [],
+        };
+      },
+    };
+
+    const registry = new ToolRegistry([MetaToolUseTool.create(undefined)]);
+    const runtime = new AgentRuntime(client, registry, {
+      onMetaToolActivate: async (sessionId: string) => {
+        activations.push(sessionId);
+      },
+      isSessionActivated: () => false,
+    });
+
+    const result = await runtime.runWithMessages(
+      [{ role: "user", content: "do something" }],
+      (event) => events.push(event),
+      { sessionId: "session-A" },
+    );
+
+    expect(activations).toEqual(["session-A"]);
+
+    const toolResultEvent = events.find(
+      (e) => (e as { type: string }).type === "tool_result" &&
+        (e as { toolName: string }).toolName === META_TOOL_NAME,
+    ) as { output: string } | undefined;
+    expect(toolResultEvent?.output).toContain("Tools activated");
+
+    expect(result.messages.at(-1)).toEqual({
+      role: "assistant",
+      content: "tools are ready",
+    });
+  });
+
+  it("skips activation callback and returns the already-active result on repeat calls", async () => {
+    const activations: string[] = [];
+    const events: unknown[] = [];
+
+    const client = {
+      async complete(messages: AgentMessage[]) {
+        const last = messages[messages.length - 1];
+        if (last.role === "user") {
+          return {
+            message: { role: "assistant" as const, content: "activating tools" },
+            toolCalls: [{ id: "meta-2", name: META_TOOL_NAME, arguments: {} }],
+          };
+        }
+        return {
+          message: { role: "assistant" as const, content: "done" },
+          toolCalls: [],
+        };
+      },
+    };
+
+    const registry = new ToolRegistry([MetaToolUseTool.create(undefined)]);
+    const runtime = new AgentRuntime(client, registry, {
+      onMetaToolActivate: async (sessionId: string) => {
+        activations.push(sessionId);
+      },
+      isSessionActivated: () => true, // already activated
+    });
+
+    await runtime.runWithMessages(
+      [{ role: "user", content: "do something" }],
+      (event) => events.push(event),
+      { sessionId: "session-B" },
+    );
+
+    expect(activations).toHaveLength(0);
+
+    const toolResultEvent = events.find(
+      (e) => (e as { type: string }).type === "tool_result" &&
+        (e as { toolName: string }).toolName === META_TOOL_NAME,
+    ) as { output: string } | undefined;
+    expect(toolResultEvent?.output).toBe(META_TOOL_ALREADY_ACTIVE_RESULT);
+  });
+
+  it("skips permission policy entirely for meta-tool calls", async () => {
+    let permissionChecks = 0;
+
+    const countingPolicy: PermissionPolicy = {
+      async check(_request: PermissionRequest) {
+        permissionChecks += 1;
+        return "allow" as const;
+      },
+      async resolveAsk(_request: PermissionRequest): Promise<PermissionResolution> {
+        return { decision: "allow" };
+      },
+      async remember(): Promise<void> {},
+    };
+
+    const client = {
+      async complete(messages: AgentMessage[]) {
+        const last = messages[messages.length - 1];
+        if (last.role === "user") {
+          return {
+            message: { role: "assistant" as const, content: "activating" },
+            toolCalls: [{ id: "meta-3", name: META_TOOL_NAME, arguments: {} }],
+          };
+        }
+        return {
+          message: { role: "assistant" as const, content: "done" },
+          toolCalls: [],
+        };
+      },
+    };
+
+    const registry = new ToolRegistry([MetaToolUseTool.create(undefined)]);
+    const runtime = new AgentRuntime(client, registry, {
+      permissionPolicy: countingPolicy,
+      isSessionActivated: () => false,
+    });
+
+    await runtime.runWithMessages(
+      [{ role: "user", content: "activate" }],
+      () => {},
+      { sessionId: "session-C" },
+    );
+
+    expect(permissionChecks).toBe(0);
   });
 });
