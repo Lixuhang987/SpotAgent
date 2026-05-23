@@ -27,6 +27,8 @@
 1. 重启桌面 App 后提交需要 MCP filesystem 的 prompt，确认 agent-server 能读取新 `mcp.json`，并在权限气泡中出现 `mcp.filesystem.*` tool。
 1. 在三个页面分别尝试保存缺少 Trigger / Template / Command / URL 的表单，确认 UI 保留表单并显示错误，不写出不可解析 JSON。
 
+最近阻塞记录：2026-05-24 使用 `bash ./scripts/package-app.sh --mock-llm` 启动 `dist/HandAgentDesktop.app`，`bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build` 基线均已通过。Settings 顶部八个 tab 可见且不重叠；Plugin 页 `Example Review` 示例、启停写回 `enabled`、`mcpServerIds: ["filesystem"]` 已验证；追加页 `Explain Code` / `Summarize Text` 示例已验证，提交 `explain [code: let x = 1]` 生成普通 session `~/.spotAgent/sessions/session-1779565670291-o3gl1x.json`，metadata 无 `actionBinding`；MCP 页“添加示例”后 `~/.spotAgent/mcp.json` 可解析，包含 `filesystem` 与 `computer_use` 两个 `transport: "stdio"` server，且 `computer_use.elicitation.autoAcceptEmptyForm: true`。错误表单路径已实机验证：Plugin 缺少 Trigger 显示“标题、Trigger 和 Template 不能为空”，追加页缺少 Template 显示同一错误，MCP stdio 缺少 Command 显示“标题和 Command 不能为空”，MCP HTTP 缺少 URL 显示“标题和 URL 不能为空”；上述失败均保留表单，且 `~/.spotAgent/plugins/example-review/plugin.json`、`~/.spotAgent/plugins/append-prompts/plugin.json`、`~/.spotAgent/mcp.json` 仍可 JSON 解析，没有写入 `qa-plugin-missing-trigger`、`qa-append-missing-template`、`qa-mcp-missing-command`、`qa-mcp-missing-url` 临时项。阻塞点仍在“重启后提交需要 MCP filesystem 的 prompt 并出现 `mcp.filesystem.*` 权限气泡”：当前 `MockLLMClient` 只有 `[mock:mcp-echo]`、`[mock:computer-use-list-apps]`、`[mock:computer-use-get-finder]` 等固定 MCP 触发器，没有能生成 `mcp.filesystem.*` tool call 的 mock 场景；`example-review` 只渲染普通 prompt，在 mock LLM 下会因缺少 mock trigger 报错，不能作为 filesystem 权限气泡证据。本条不能归档为通过；需要先补充确定性的 mock filesystem 场景，或改用可控真实 LLM 配置完成第 8 步。
+
 ## 删除 running session 回归（P1）
 
 1. 使用 mock LLM 打包并启动桌面 App：`bash ./scripts/package-app.sh --mock-llm`，再打开 `dist/HandAgentDesktop.app`。
