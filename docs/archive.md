@@ -767,3 +767,11 @@
 - **自动化验证**：`pnpm exec vitest run apps/agent-server/tests/session/SessionScopedToolRegistry.test.ts` 通过并覆盖 `[mock:file-write]` 跑通及 global MCP 不提前加载；`bash ./scripts/test.sh` 通过，50 个测试文件通过、1 个 integration 跳过；`bash ./scripts/swiftw test` 与 `bash ./scripts/swiftw build` 均通过。
 - **实机回归证据**：`~/.spotAgent/sessions/session-1779563829474-y58j9v.json` 中 `file.write` tool result 为 `{\"workspaceId\":\"qa-workspace\",\"relativePath\":\"hello.txt\",\"bytesWritten\":24}`，最终 assistant 为 `Mock file.write completed for hello.txt.`；UI 未再出现 `Unknown tool: file.write`。
 - **结论**：已修复并通过 mock App 实机回归。
+
+### ActionDefinition 统一模型回归
+
+- **验证日期**：2026-05-24
+- **验证环境**：mock-llm / macOS 15+ / `dist/HandAgentDesktop.app` / `HandAgentDesktop` pid `19378` / `agent-server` pid `19380` 监听 `*:4317`
+- **验证过程**：在 `~/.spotAgent/plugins/qa-action-definition/plugin.json` 写入 `kind: \"skill\"` 的 `weather` action 和 `kind: \"plugin\"` 的 `r` action。打开 PromptPanel 后可见 `Weather, weather` 与 `Review, r` 两个 Action rows。提交 `weather` 后创建 `查询当前天气` session；提交 `r [code: let x = 1] [focus: race conditions]` 后创建 `Review code:` session；提交 `r foo bar` 后 PromptPanel 保留草稿并显示 `缺少必填参数：code`。在 UserDefaults 中为 `weather` 写入 F13、为 `r` 写入 F14 后重启 App，Settings → 快捷键 → Action 快捷键显示 `Weather F13` 与 `Review F14`；F13 直接创建普通 prompt session，F14 打开 PromptPanel 并预填 `r [code: ] [focus: ]`，未提交空参数。
+- **证据**：`~/.spotAgent/sessions/session-1779564440188-byk5de.json` 的 metadata 无 `actionBinding`，user content 为 `查询当前天气`；`~/.spotAgent/sessions/session-1779564547557-g3jq93.json` 的 metadata 写入 `{ \"pluginId\": \"qa-action-definition\", \"promptName\": \"review\", \"mcpServerIds\": [\"qa_missing_mcp\"] }`；F13 触发后新增 `~/.spotAgent/sessions/session-1779564925160-xnvgo6.json`，metadata 无 `actionBinding`；F14 触发前后最新 session 文件未变化，Computer Use 观察到 PromptPanel 输入框值为 `r [code: ] [focus: ]`。
+- **结论**：通过。ActionDefinition 的 skill/plugin 统一模型、命名参数解析、缺参拦截、session metadata 写入和 Action 全局快捷键行为符合预期。
