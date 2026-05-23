@@ -232,7 +232,7 @@ export const mockLLMScenarios: MockLLMScenario[] = [
   toolScenario({
     id: "mcp-echo",
     trigger: "[mock:mcp-echo]",
-    description: "调用 mcp.qa_echo.echo，用于验证 Action Plugin 绑定的 MCP tool 作用域。",
+    description: "调用 mcp.qa_echo.echo，用于验证 plugin action 绑定的 MCP tool 作用域。",
     toolCall: {
       id: "mock-mcp-echo-1",
       name: "mcp.qa_echo.echo",

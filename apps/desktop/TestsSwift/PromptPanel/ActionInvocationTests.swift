@@ -7,27 +7,54 @@ final class ActionInvocationTests: XCTestCase {
         XCTAssertEqual(ActionInvocation.parse(draft: "hello world", actions: [action]), .plain("hello world"))
     }
 
-    func testParsesPositionalArgumentsAfterTrigger() throws {
+    func testParsesBracketArgumentsAfterTrigger() throws {
+        let action = makeAction(trigger: "r")
+        let result = ActionInvocation.parse(
+            draft: "r [code: let x = 1] [focus: race conditions]",
+            actions: [action]
+        )
+
+        guard case .action(let invocation) = result else {
+            return XCTFail("expected action")
+        }
+        XCTAssertEqual(invocation.action.id, action.id)
+        XCTAssertEqual(invocation.values["code"], "let x = 1")
+        XCTAssertEqual(invocation.values["focus"], "race conditions")
+    }
+
+    func testParsesEmptyBracketArgument() throws {
+        let action = makeAction(trigger: "r")
+        let result = ActionInvocation.parse(
+            draft: "r [code: ] [focus: risk]",
+            actions: [action]
+        )
+
+        guard case .action(let invocation) = result else {
+            return XCTFail("expected action")
+        }
+        XCTAssertEqual(invocation.values["code"], "")
+        XCTAssertEqual(invocation.values["focus"], "risk")
+    }
+
+    func testIgnoresPositionalArguments() throws {
         let action = makeAction(trigger: "r")
         let result = ActionInvocation.parse(draft: "r foo bar", actions: [action])
 
         guard case .action(let invocation) = result else {
             return XCTFail("expected action")
         }
-        XCTAssertEqual(invocation.action.id, action.id)
-        XCTAssertEqual(invocation.values["code"], "foo")
-        XCTAssertEqual(invocation.values["focus"], "bar")
+        XCTAssertEqual(invocation.values, [:])
     }
 
-    func testParsesQuotedArguments() throws {
-        let action = makeAction(trigger: "r")
-        let result = ActionInvocation.parse(draft: #"r "hello world" "race conditions""#, actions: [action])
+    func testTriggerWithoutArgumentsSubmitsActionWithEmptyValues() throws {
+        let action = makeWeatherAction()
+        let result = ActionInvocation.parse(draft: "weather", actions: [action])
 
         guard case .action(let invocation) = result else {
             return XCTFail("expected action")
         }
-        XCTAssertEqual(invocation.values["code"], "hello world")
-        XCTAssertEqual(invocation.values["focus"], "race conditions")
+        XCTAssertEqual(invocation.action.id, action.id)
+        XCTAssertEqual(invocation.values, [:])
     }
 
     func testRenderingFailsWhenRequiredArgumentIsEmpty() {
@@ -51,10 +78,8 @@ final class ActionInvocationTests: XCTestCase {
 }
 
 private func makeAction(trigger: String) -> ActionDefinition {
-    ActionDefinition(
+    ActionDefinition.plugin(
         id: "review/code_review",
-        pluginId: "review",
-        promptName: "code_review",
         trigger: trigger,
         title: "Review",
         description: nil,
@@ -63,7 +88,24 @@ private func makeAction(trigger: String) -> ActionDefinition {
             ActionArgumentDefinition(name: "code", description: nil, required: true),
             ActionArgumentDefinition(name: "focus", description: nil, required: false),
         ],
-        mcpServerIds: ["github"],
-        icons: []
+        icons: [],
+        defaultShortcut: nil,
+        binding: ActionPluginBinding(
+            pluginId: "review",
+            promptName: "code_review",
+            mcpServerIds: ["github"]
+        )
+    )
+}
+
+private func makeWeatherAction() -> ActionDefinition {
+    ActionDefinition.skill(
+        id: "weather/current",
+        trigger: "weather",
+        title: "天气",
+        description: nil,
+        template: "查询当前天气",
+        arguments: [],
+        defaultShortcut: nil
     )
 }

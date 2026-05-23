@@ -28,6 +28,11 @@ final class NamedHotkeyRegistrar {
         backend.bindKeyUp(for: name, handler: handler)
     }
 
+    func unregister(name: KeyboardShortcuts.Name) {
+        handlers[name] = nil
+        backend.removeHandler(for: name)
+    }
+
     private func rebindIfRegistered(_ name: KeyboardShortcuts.Name) {
         guard let handler = handlers[name] else { return }
         backend.removeHandler(for: name)

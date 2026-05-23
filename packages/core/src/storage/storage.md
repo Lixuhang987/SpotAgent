@@ -52,7 +52,7 @@
 - `SessionEvent` 是审计而非 UI 渲染源；UI 走 `ConversationMessage`，详见 [conversation](/Users/mu9/proj/handAgent/packages/core/src/conversation/conversation.md)。
 - 不要把 LLM 内部状态（如重试计数）写到 `metadata`，那不是持久化职责。
 - 新增字段时务必给 reasonable default，让旧文件可以无损读出。
-- `metadata.actionBinding` 只表示创建 session 时绑定的 Action Plugin 和 MCP server ids；不要在消息级别重复写入同一绑定。
+- `metadata.actionBinding` 只表示创建 session 时绑定的 plugin action 和 MCP server ids；skill action 不写入此字段。不要在消息级别重复写入同一绑定。
 
 ## 相关文档
 

@@ -41,15 +41,31 @@ describe("ActionBindingResolver", () => {
       resolver.resolve({ pluginId: "wrong", promptName: "p" }),
     ).rejects.toThrow("plugin id must match directory name");
   });
+
+  it("rejects skill prompts because they do not activate plugin tools", async () => {
+    const pluginsDir = await makePlugin({
+      id: "weather",
+      promptName: "current",
+      promptKind: "skill",
+      mcpServerIds: ["weather-tools"],
+    });
+    const resolver = new ActionBindingResolver({ pluginsDir });
+
+    await expect(
+      resolver.resolve({ pluginId: "weather", promptName: "current" }),
+    ).rejects.toThrow("Plugin prompt is not bindable: current");
+  });
 });
 
 async function makePlugin({
   id,
   promptName,
+  promptKind,
   mcpServerIds,
 }: {
   id: string;
   promptName: string;
+  promptKind?: "plugin" | "skill";
   mcpServerIds: string[];
 }): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "action-binding-"));
@@ -64,7 +80,15 @@ async function makePlugin({
       title: id,
       enabled: true,
       mcpServerIds,
-      prompts: [{ name: promptName, trigger: "r", title: "Review", template: "{{code}}" }],
+      prompts: [
+        {
+          name: promptName,
+          kind: promptKind,
+          trigger: "r",
+          title: "Review",
+          template: "{{code}}",
+        },
+      ],
     }),
   );
   return pluginsDir;

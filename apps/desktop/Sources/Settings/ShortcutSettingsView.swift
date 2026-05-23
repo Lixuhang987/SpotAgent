@@ -2,7 +2,7 @@ import KeyboardShortcuts
 import SwiftUI
 
 struct ShortcutSettingsView: View {
-    let actions: [PromptAction]
+    let actions: [ActionDefinition]
     @Environment(\.appTheme) private var theme
 
     var body: some View {
@@ -25,20 +25,18 @@ struct ShortcutSettingsView: View {
 
                 SettingsSectionSeparator()
 
-                SettingsSectionHeader("App 内快捷键")
+                SettingsSectionHeader("Action 快捷键")
                 SettingsSection {
                     if actions.isEmpty {
                         SettingsRow("快捷键") {
-                            Text("当前没有可配置的 App 内快捷键")
+                            Text("当前没有可配置的 Action 快捷键")
                                 .font(theme.typography.captionFont)
                                 .foregroundStyle(theme.colors.textSecondary)
                         }
                     } else {
                         SettingsListSection(items: actions) { action in
                             SettingsRow(action.title) {
-                                KeyboardShortcuts.Recorder("", name: action.shortcutName) { _ in
-                                    KeyboardShortcuts.disable(action.shortcutName)
-                                }
+                                KeyboardShortcuts.Recorder("", name: action.shortcutName)
                             }
                         }
                     }
@@ -46,9 +44,6 @@ struct ShortcutSettingsView: View {
 
                 Spacer(minLength: 0)
             }
-        }
-        .onAppear {
-            AppScopeShortcutDefaults.disableGlobalRegistration(for: actions.map(\.shortcutName))
         }
     }
 }

@@ -5,7 +5,7 @@ struct SettingsView: View {
     @Bindable var toolSettingsViewModel: ToolSettingsViewModel
     @Bindable var permissionRulesViewModel: PermissionRulesViewModel
     @Bindable var workspaceViewModel: WorkspaceSettingsViewModel
-    let shortcutActions: [PromptAction]
+    let shortcutActions: [ActionDefinition]
     @Environment(\.appTheme) private var theme
     @State private var selectedTab = SettingsTab.model
 

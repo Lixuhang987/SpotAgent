@@ -33,6 +33,29 @@ final class PromptPanelControllerTests: XCTestCase {
         XCTAssertEqual(viewModel.attachments.count, 1)
         XCTAssertEqual(viewModel.attachments.first?.displayLabel, "active selection")
     }
+
+    func testSelectActionAndShowPrefillsArgumentTemplate() async throws {
+        let controller = PromptPanelController()
+        let action = ActionDefinition.skill(
+            id: "review/code",
+            trigger: "r",
+            title: "Review",
+            description: nil,
+            template: "{{code}}",
+            arguments: [
+                ActionArgumentDefinition(name: "code", description: nil, required: true)
+            ],
+            defaultShortcut: nil
+        )
+        let viewModel = PromptPanelViewModel(actions: [action])
+        controller.configure(viewModel: viewModel)
+        defer { controller.hide() }
+
+        controller.selectActionAndShow(action)
+        try await Task.sleep(for: .milliseconds(20))
+
+        XCTAssertEqual(viewModel.draft, "r [code: ]")
+    }
 }
 
 private final class FakeSelectionCaptureProvider: SelectionCaptureProvider, @unchecked Sendable {

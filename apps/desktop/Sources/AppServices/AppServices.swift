@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import KeyboardShortcuts
 import SwiftUI
 
 @MainActor
@@ -17,7 +18,7 @@ protocol SettingsWindowPresenting {
         toolSettingsViewModel: ToolSettingsViewModel,
         permissionRulesViewModel: PermissionRulesViewModel,
         workspaceViewModel: WorkspaceSettingsViewModel,
-        shortcutActions: [PromptAction],
+        shortcutActions: [ActionDefinition],
         onClose: @escaping () -> Void
     ) -> NSWindow?
 }
@@ -27,6 +28,12 @@ protocol HotkeyRegistering {
     func registerShowPromptPanel(handler: @escaping () -> Void)
     func registerCaptureSelection(handler: @escaping () -> Void)
     func registerCaptureRegion(handler: @escaping () -> Void)
+    func registerActionShortcut(
+        name: KeyboardShortcuts.Name,
+        defaultShortcut: KeyboardShortcuts.Shortcut?,
+        handler: @escaping () -> Void
+    )
+    func unregisterActionShortcut(name: KeyboardShortcuts.Name)
 }
 
 @MainActor
@@ -122,6 +129,12 @@ final class NopHotkeyRegistrar: HotkeyRegistering {
     func registerShowPromptPanel(handler: @escaping () -> Void) {}
     func registerCaptureSelection(handler: @escaping () -> Void) {}
     func registerCaptureRegion(handler: @escaping () -> Void) {}
+    func registerActionShortcut(
+        name: KeyboardShortcuts.Name,
+        defaultShortcut: KeyboardShortcuts.Shortcut?,
+        handler: @escaping () -> Void
+    ) {}
+    func unregisterActionShortcut(name: KeyboardShortcuts.Name) {}
 }
 
 @MainActor
@@ -141,7 +154,7 @@ final class NopSettingsWindowPresenter: SettingsWindowPresenting {
         toolSettingsViewModel: ToolSettingsViewModel,
         permissionRulesViewModel: PermissionRulesViewModel,
         workspaceViewModel: WorkspaceSettingsViewModel,
-        shortcutActions: [PromptAction],
+        shortcutActions: [ActionDefinition],
         onClose: @escaping () -> Void
     ) -> NSWindow? {
         nil

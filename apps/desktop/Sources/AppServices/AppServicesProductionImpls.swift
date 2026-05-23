@@ -17,6 +17,21 @@ final class ProductionHotkeyRegistrar: HotkeyRegistering {
     func registerCaptureRegion(handler: @escaping () -> Void) {
         registrar.register(name: .captureRegion, handler: handler)
     }
+
+    func registerActionShortcut(
+        name: KeyboardShortcuts.Name,
+        defaultShortcut: KeyboardShortcuts.Shortcut?,
+        handler: @escaping () -> Void
+    ) {
+        if let defaultShortcut {
+            ActionShortcutDefaults.ensureDefault(defaultShortcut, for: name)
+        }
+        registrar.register(name: name, handler: handler)
+    }
+
+    func unregisterActionShortcut(name: KeyboardShortcuts.Name) {
+        registrar.unregister(name: name)
+    }
 }
 
 @MainActor
@@ -61,7 +76,7 @@ final class ProductionSettingsWindowPresenter: SettingsWindowPresenting {
         toolSettingsViewModel: ToolSettingsViewModel,
         permissionRulesViewModel: PermissionRulesViewModel,
         workspaceViewModel: WorkspaceSettingsViewModel,
-        shortcutActions: [PromptAction],
+        shortcutActions: [ActionDefinition],
         onClose: @escaping () -> Void
     ) -> NSWindow? {
         let hosting = NSHostingController(

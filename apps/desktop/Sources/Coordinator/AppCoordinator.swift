@@ -1,4 +1,5 @@
 import Foundation
+import KeyboardShortcuts
 import SwiftUI
 
 @Observable
@@ -26,7 +27,7 @@ final class AppCoordinator {
     @ObservationIgnored private let settingsLifecycle: SettingsLifecycle
     @ObservationIgnored private let activationPolicy = AppActivationPolicyCoordinator()
     @ObservationIgnored private var platformBridgeService: (any PlatformBridgeRunning)?
-    @ObservationIgnored private let appScopeShortcutDispatcher = AppScopeShortcutDispatcher()
+    @ObservationIgnored private var registeredActionShortcutNames: Set<KeyboardShortcuts.Name> = []
     @ObservationIgnored private lazy var promptPanelController = PromptPanelController()
     @ObservationIgnored private lazy var statusBubbleController: StatusBubbleController = {
         StatusBubbleController(registry: services.sessionRegistry)
@@ -36,20 +37,24 @@ final class AppCoordinator {
         selectionProvider: MacSelectionCaptureProvider(),
         regionProvider: MacRegionCaptureProvider()
     )
-    @ObservationIgnored private lazy var basePromptActions: [PromptAction] = [
-        PromptAction(
+    @ObservationIgnored private lazy var builtInActions: [ActionDefinition] = [
+        ActionDefinition.command(
             id: "open-settings",
+            trigger: "settings",
             title: "打开设置",
+            description: "打开设置窗口",
             keywords: ["settings", "preferences", "shortcut", "hotkey"],
-            defaultShortcut: .init(.comma, modifiers: [.command]),
-            perform: { [weak self] in self?.send(.openSettings) }
+            defaultShortcut: nil,
+            command: .openSettings
         ),
-        PromptAction(
+        ActionDefinition.command(
             id: "open-history",
+            trigger: "history",
             title: "会话历史",
+            description: "打开会话历史",
             keywords: ["history", "recent", "session"],
             defaultShortcut: nil,
-            perform: { [weak self] in self?.send(.openHistory) }
+            command: .openHistory
         )
     ]
 
@@ -80,7 +85,6 @@ final class AppCoordinator {
     func bootstrap() {
         setupPromptPanel()
         setupHotkey()
-        setupAppScopeShortcuts()
         setupStatusBubble()
         setupAgentServerHealth()
         agentServerHealth.start()
@@ -91,7 +95,7 @@ final class AppCoordinator {
     func shutdown() {
         platformBridgeService?.stop()
         platformBridgeService = nil
-        appScopeShortcutDispatcher.stop()
+        unregisterActionShortcuts()
         agentServerHealth.stop()
         settingsLifecycle.close()
         sessionWindowLifecycle.close()
@@ -100,12 +104,12 @@ final class AppCoordinator {
     func send(_ action: Action) {
         switch action {
         case .showPromptPanel:
-            refreshPromptActions()
+            refreshActionDefinitions()
             promptPanelController.show()
         case .hidePromptPanel:
             promptPanelController.hide()
         case .togglePromptPanel:
-            refreshPromptActions()
+            refreshActionDefinitions()
             promptPanelController.toggle()
         case .submitPrompt(let draft, let attachments):
             handleSubmitPrompt(draft, attachments: attachments)
@@ -136,15 +140,18 @@ final class AppCoordinator {
         PermissionRulesViewModel()
     }
 
-    func makeShortcutActions() -> [PromptAction] { basePromptActions }
+    func makeShortcutActionDefinitions() -> [ActionDefinition] { buildActionDefinitions() }
 
     private func setupPromptPanel() {
-        refreshPromptActions()
+        refreshActionDefinitions()
         promptPanelController.onSubmit = { [weak self] draft, attachments in
             self?.send(.submitPrompt(draft, attachments: attachments))
         }
         promptPanelController.onSubmitAction = { [weak self] prompt, binding, attachments in
             self?.send(.submitActionPrompt(prompt, actionBinding: binding, attachments: attachments))
+        }
+        promptPanelController.onPerformCommand = { [weak self] command in
+            self?.handleActionCommand(command)
         }
         promptPanelController.onOpenSettings = { [weak self] in
             self?.send(.openSettings)
@@ -168,10 +175,6 @@ final class AppCoordinator {
         services.hotkeyRegistrar.registerCaptureRegion { [weak self] in
             Task { @MainActor in await self?.captureCoordinator.captureRegionAndShow() }
         }
-    }
-
-    private func setupAppScopeShortcuts() {
-        appScopeShortcutDispatcher.start(actions: basePromptActions)
     }
 
     private func setupStatusBubble() {
@@ -209,12 +212,14 @@ final class AppCoordinator {
     }
 
     private func handleOpenSettings() {
+        let actions = buildActionDefinitions()
+        registerActionShortcuts(actions)
         settingsLifecycle.openOrFocus(
             settingsViewModel: makeSettingsViewModel(),
             toolSettingsViewModel: makeToolSettingsViewModel(),
             permissionRulesViewModel: makePermissionRulesViewModel(),
             workspaceViewModel: WorkspaceSettingsViewModel(),
-            shortcutActions: makeShortcutActions(),
+            shortcutActions: actions,
             onClosed: { [weak self] in self?.send(.settingsWindowClosed) }
         )
     }
@@ -230,11 +235,88 @@ final class AppCoordinator {
         promptPanelController.show()
     }
 
-    private func refreshPromptActions() {
-        promptPanelController.register(actions: buildPromptActions())
+    private func refreshActionDefinitions() {
+        let actions = buildActionDefinitions()
+        promptPanelController.register(actions: actions)
+        registerActionShortcuts(actions)
     }
 
-    private func buildPromptActions() -> [ActionDefinition] {
-        services.actionManifestStore.load().actions
+    private func buildActionDefinitions() -> [ActionDefinition] {
+        uniqueActionsByTrigger(builtInActions + services.actionManifestStore.load().actions)
+    }
+
+    private func uniqueActionsByTrigger(_ actions: [ActionDefinition]) -> [ActionDefinition] {
+        var seen: Set<String> = []
+        var result: [ActionDefinition] = []
+        for action in actions {
+            let trigger = action.trigger.lowercased()
+            guard !seen.contains(trigger) else { continue }
+            seen.insert(trigger)
+            result.append(action)
+        }
+        return result
+    }
+
+    private func registerActionShortcuts(_ actions: [ActionDefinition]) {
+        let names = Set(actions.map(\.shortcutName))
+        for staleName in registeredActionShortcutNames.subtracting(names) {
+            services.hotkeyRegistrar.unregisterActionShortcut(name: staleName)
+        }
+        registeredActionShortcutNames = names
+
+        for action in actions {
+            services.hotkeyRegistrar.registerActionShortcut(
+                name: action.shortcutName,
+                defaultShortcut: action.defaultShortcut
+            ) { [weak self] in
+                Task { @MainActor in self?.performActionShortcut(action) }
+            }
+        }
+    }
+
+    private func unregisterActionShortcuts() {
+        for name in registeredActionShortcutNames {
+            services.hotkeyRegistrar.unregisterActionShortcut(name: name)
+        }
+        registeredActionShortcutNames = []
+    }
+
+    private func performActionShortcut(_ action: ActionDefinition) {
+        switch action.submission {
+        case .command(let command):
+            handleActionCommand(command)
+        case .appendPrompt, .plugin:
+            if action.requiresArguments {
+                promptPanelController.selectActionAndShow(action)
+                return
+            }
+            do {
+                let parsed = ParsedActionInvocation(action: action, values: [:])
+                let prompt = try parsed.renderedPrompt()
+                switch action.submission {
+                case .appendPrompt:
+                    handleSubmitPrompt(prompt, attachments: [])
+                case .plugin(let binding):
+                    handleSubmitPrompt(
+                        prompt,
+                        attachments: [],
+                        actionBinding: ActionBindingPayload(pluginId: binding.pluginId, promptName: binding.promptName)
+                    )
+                case .command:
+                    break
+                }
+            } catch {
+                promptPanelController.show()
+            }
+        }
+    }
+
+    private func handleActionCommand(_ command: ActionCommand) {
+        switch command {
+        case .openSettings:
+            send(.openSettings)
+        case .openHistory:
+            send(.openHistory)
+        }
     }
 }

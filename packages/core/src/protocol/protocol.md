@@ -65,7 +65,7 @@ desktop ↔ agent-server 的 WebSocket 协议。会话流量走 `SessionMessage`
 
 ## Action Binding
 
-Action prompt 创建新 session 时，desktop 在 `create_session_request.payload.actionBinding` 里只发送 `{ pluginId, promptName }`。agent-server 会重新读取本地 Plugin manifest，解析并持久化 session metadata 的 `actionBinding.mcpServerIds`，随后只在该 session 的 runtime 前组合对应 MCP tools。
+Plugin action 创建新 session 时，desktop 在 `create_session_request.payload.actionBinding` 里只发送 `{ pluginId, promptName }`。agent-server 会重新读取本地 manifest，确认该 prompt 是可绑定的 plugin action，解析并持久化 session metadata 的 `actionBinding.mcpServerIds`，随后只在该 session 的 runtime 前组合对应 MCP tools。`kind: "skill"` 的 action 只提交渲染后的普通 prompt，不携带 action binding。
 
 普通 `user_message` 不携带 action binding；一个 session 的 MCP scope 由创建时 metadata 决定，不随后续消息变化。
 

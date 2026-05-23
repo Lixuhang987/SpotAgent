@@ -2,7 +2,6 @@ import Foundation
 
 enum ActionInvocationParseResult: Equatable {
     case plain(String)
-    case partial(ActionDefinition)
     case action(ParsedActionInvocation)
 }
 
@@ -54,15 +53,8 @@ enum ActionInvocation {
             return .plain(trimmed)
         }
 
-        guard let tail = split.tail?.trimmingCharacters(in: .whitespacesAndNewlines), !tail.isEmpty else {
-            return .partial(action)
-        }
-
-        let tokens = tokenize(tail)
-        var values: [String: String] = [:]
-        for (index, argument) in action.arguments.enumerated() where index < tokens.count {
-            values[argument.name] = tokens[index]
-        }
+        let tail = split.tail?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let values = parseBracketArguments(tail)
         return .action(ParsedActionInvocation(action: action, values: values))
     }
 
@@ -79,49 +71,22 @@ enum ActionInvocation {
         return (trigger, String(text[tailStart...]))
     }
 
-    static func tokenize(_ text: String) -> [String] {
-        var tokens: [String] = []
-        var current = ""
-        var inQuotes = false
-        var escaping = false
-        var tokenStarted = false
+    static func parseBracketArguments(_ text: String) -> [String: String] {
+        let pattern = #"\[\s*([A-Za-z_][A-Za-z0-9_]*)\s*:\s*([^\]]*)\]"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [:] }
+        let nsRange = NSRange(text.startIndex..<text.endIndex, in: text)
+        var values: [String: String] = [:]
 
-        for character in text {
-            if escaping {
-                current.append(character)
-                tokenStarted = true
-                escaping = false
-                continue
-            }
+        for match in regex.matches(in: text, range: nsRange) {
+            guard
+                let nameRange = Range(match.range(at: 1), in: text),
+                let valueRange = Range(match.range(at: 2), in: text)
+            else { continue }
 
-            if inQuotes && character == "\\" {
-                escaping = true
-                continue
-            }
-
-            if character == "\"" {
-                inQuotes.toggle()
-                tokenStarted = true
-                continue
-            }
-
-            if character.isWhitespace && !inQuotes {
-                if tokenStarted {
-                    tokens.append(current)
-                    current = ""
-                    tokenStarted = false
-                }
-                continue
-            }
-
-            current.append(character)
-            tokenStarted = true
+            values[String(text[nameRange])] = String(text[valueRange])
+                .trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
-        if tokenStarted {
-            tokens.append(current)
-        }
-
-        return tokens
+        return values
     }
 }

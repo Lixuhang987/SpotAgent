@@ -12,6 +12,7 @@ final class PromptPanelController {
 
     var onSubmit: ((String, [PromptAttachmentResult]) -> Void)?
     var onSubmitAction: ((String, ActionBindingPayload, [PromptAttachmentResult]) -> Void)?
+    var onPerformCommand: ((ActionCommand) -> Void)?
     var onOpenSettings: (() -> Void)?
 
     func configure(viewModel: PromptPanelViewModel) {
@@ -26,6 +27,9 @@ final class PromptPanelController {
             }
             vm.onSubmitAction = { [weak self] prompt, binding, attachments in
                 self?.onSubmitAction?(prompt, binding, attachments)
+            }
+            vm.onPerformCommand = { [weak self] command in
+                self?.onPerformCommand?(command)
             }
             vm.onHide = { [weak self] in
                 self?.hide()
@@ -53,6 +57,11 @@ final class PromptPanelController {
 
     func appendAttachment(_ attachment: PromptAttachmentResult) {
         viewModel?.appendAttachment(attachment)
+    }
+
+    func selectActionAndShow(_ action: ActionDefinition) {
+        viewModel?.selectAction(action)
+        show()
     }
 
     func setSubmissionEnabled(_ enabled: Bool, message: String?) {

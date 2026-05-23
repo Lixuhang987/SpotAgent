@@ -19,7 +19,7 @@ final class ActionManifestStoreTests: XCTestCase {
         let store = ActionManifestStore(pluginsDirectoryURL: plugins)
         let result = store.load()
 
-        XCTAssertEqual(result.actions.map(\.pluginId), ["alpha", "beta"])
+        XCTAssertEqual(result.actions.map { $0.pluginBinding?.pluginId }, ["alpha", "beta"])
         XCTAssertEqual(result.disabled, [])
     }
 
