@@ -62,6 +62,22 @@
 1. 在 SessionWindow 中打开同一 session，发送新的 user message（例如"再截一次屏"）。
 1. 打开 `~/.spotAgent/log/` 中本轮对应的网络日志条目，确认请求体 `tools` 数组直接是完整工具集，不出现新的 `use_tools` 调用（验证 agent-server 通过历史 tool message 正确推断了激活状态）。
 
+## 示例 Action Plugin 与 MCP tool（P1）
+
+1. 从仓库根目录安装示例配置：
+
+```bash
+mkdir -p ~/.spotAgent/plugins
+cp -R examples/plugins/* ~/.spotAgent/plugins/
+cp examples/mcp/mcp.example.json ~/.spotAgent/mcp.json
+```
+
+2. 使用真实 LLM 设置启动桌面 App：`bash ./scripts/swiftw run HandAgentDesktop`。
+3. 打开 PromptPanel，确认能看到 `Code Review`、`Meeting Notes`、`Release Notes` 对应 action。
+4. 使用 `review` trigger 提交一段小 diff，确认新 session metadata 中包含 `actionBinding.pluginId: "code-review"` 与 `mcpServerIds: ["handagent_demo"]`。
+5. 在同一 session 让模型生成 checklist，确认工具列表里出现 `mcp.handagent_demo.make_checklist`，调用完成后 SessionWindow 有对应 tool message，最终 assistant 回复引用了 checklist 内容。
+6. 删除或恢复 QA 前的 `~/.spotAgent/mcp.json` 与 `~/.spotAgent/plugins/` 示例目录，避免影响后续手工测试。
+
 
 
 - 本文件中对应条目的用户可见行为、持久化记录、错误文案和隔离边界均符合预期。

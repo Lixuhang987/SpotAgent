@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "id": "meeting-notes",
+  "title": "Meeting Notes",
+  "description": "Turn rough notes into decisions, action items, and follow-up questions.",
+  "enabled": true,
+  "mcpServerIds": ["handagent_demo"],
+  "prompts": [
+    {
+      "name": "summarize_meeting",
+      "trigger": "meeting",
+      "title": "Summarize Meeting",
+      "description": "Extract decisions and tasks from pasted meeting notes.",
+      "template": "请整理下面的会议记录。输出：结论、待办、风险、需要追问的问题。若文本里包含待办语句，可以调用 demo MCP tool 提取任务。\n\n{{notes}}",
+      "arguments": [
+        {
+          "name": "notes",
+          "description": "会议记录或语音转写文本。",
+          "required": true
+        }
+      ]
+    }
+  ]
+}

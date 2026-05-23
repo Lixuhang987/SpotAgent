@@ -72,6 +72,7 @@ bash ./scripts/swiftw build
 - 文本链路：热键唤起 -> PromptPanel 输入 prompt -> 新建 SessionWindow -> bubble 输出结果。
 - 状态链路：状态气泡展示 -> 点击后回到 running session 或最近活跃窗口。
 - 工具链路：先通过 `packages/core/tests/*` 里对应测试验证，再考虑接到 SessionWindow。
+- 示例 plugin / MCP 链路：复制 `examples/plugins/*` 到 `~/.spotAgent/plugins/`，复制 `examples/mcp/mcp.example.json` 到 `~/.spotAgent/mcp.json`，再从仓库根目录启动 App。
 
 ### 打包与系统权限
 

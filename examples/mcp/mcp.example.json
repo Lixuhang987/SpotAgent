@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "servers": [
+    {
+      "id": "handagent_demo",
+      "title": "HandAgent Demo Tools",
+      "transport": "stdio",
+      "command": "node",
+      "args": ["examples/mcp/handagent-demo/server.mjs"],
+      "cwd": ".",
+      "requestTimeoutMs": 5000
+    }
+  ]
+}

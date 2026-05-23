@@ -8,6 +8,7 @@
 
 - [apps/apps.md](/Users/mu9/proj/handAgent/apps/apps.md)
 - [packages/packages.md](/Users/mu9/proj/handAgent/packages/packages.md)
+- [examples/examples.md](/Users/mu9/proj/handAgent/examples/examples.md)
 
 ## 产品边界
 
@@ -30,6 +31,7 @@ flowchart TD
 - `apps/desktop`：负责宿主生命周期、热键、PromptPanel、全局唯一 SessionWindow、状态气泡，以及通过 `MacPlatformProvider` 实现 macOS 原生能力（ScreenCaptureKit / NSWorkspace / NSPasteboard 等）。
 - `apps/agent-server`：负责本地 WebSocket session 桥、会话路由、持久化封装和 runtime 驱动。
 - `packages/core`：负责会话输入归一化、消息模型、tool 注册、LLM/tool 循环、`RemotePlatformAdapter` 通过 `PlatformBridge` 接口向桌面 App 请求平台能力。
+- `examples`：提供可复制到 `~/.spotAgent/` 的 Action Plugin 与 MCP server 示例，用于本地验证 plugin prompt 与 session-scoped MCP tool 注入。
 
 ## 主调用链路
 
@@ -172,3 +174,4 @@ flowchart TD
 1. 先读本文档，建立整体分层和主链路。
 2. 再读 [apps/apps.md](/Users/mu9/proj/handAgent/apps/apps.md)，理解入口与交互层。
 3. 再读 [packages/packages.md](/Users/mu9/proj/handAgent/packages/packages.md)，理解核心 runtime 与平台实现。
+4. 如需试用 Action Plugin / MCP 示例，再读 [examples/examples.md](/Users/mu9/proj/handAgent/examples/examples.md)。
