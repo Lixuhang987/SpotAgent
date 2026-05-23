@@ -9,7 +9,7 @@
 | 子模块 | 子文档 | 一句话职责 |
 |------|------|------|
 | `runtime/` | [runtime/runtime.md](/Users/mu9/proj/handAgent/packages/core/src/runtime/runtime.md) | LLM/tool 主循环、消息模型、ToolCallEnvelope |
-| `actions/` | [actions/actions.md](/Users/mu9/proj/handAgent/packages/core/src/actions/actions.md) | Action Plugin manifest 与 session binding 解析 |
+| `actions/` | [actions/actions.md](/Users/mu9/proj/handAgent/packages/core/src/actions/actions.md) | Action manifest 与 session binding 解析 |
 | `blob/` | [blob/blob.md](/Users/mu9/proj/handAgent/packages/core/src/blob/blob.md) | 大段上下文内容的本地 Blob 持久化与 summary 元数据 |
 | `llm/` | [llm/llm.md](/Users/mu9/proj/handAgent/packages/core/src/llm/llm.md) | LLMClient 抽象 + Vercel AI SDK 适配 |
 | `mcp/` | [mcp/mcp.md](/Users/mu9/proj/handAgent/packages/core/src/mcp/mcp.md) | 标准 MCP client 与 MCP tool adapter |
@@ -54,7 +54,7 @@
 - 平台类（依赖 `PlatformAdapter`）：`clipboard.read`、`app.frontmost`、`window.list`、`screen.capture`、`ocr.read`、`accessibility.snapshot`、`accessibility.action`。
 - 工作区类（依赖 `WorkspaceRegistry`）：`workspace.list`、`workspace.askUser`、`file.read`、`file.write`。
 
-Action Plugin 绑定的外部能力不由 core tools 目录加载私有插件进程；agent-server 会按 session metadata 组合 builtin tools 与 MCP tools。
+plugin action 绑定的外部能力不由 core tools 目录加载私有插件进程；agent-server 会按 session metadata 组合 builtin tools 与 MCP tools。skill action 不创建 session binding，只作为普通 prompt 进入 runtime。
 
 完整入参 / 实现位置见 [tools/tools.md](/Users/mu9/proj/handAgent/packages/core/src/tools/tools.md)。
 

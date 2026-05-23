@@ -26,13 +26,15 @@ final class HotkeyRegistrarTests: XCTestCase {
         XCTAssertEqual(backend.boundShortcuts, [newShortcut])
     }
 
-    func testPromptActionShortcutNameReadsUpdatedStoredShortcut() {
-        let action = PromptAction(
+    func testActionDefinitionShortcutNameReadsUpdatedStoredShortcut() {
+        let action = ActionDefinition.command(
             id: "hotkey-reload-test-\(UUID().uuidString)",
+            trigger: "reload",
             title: "测试动作",
+            description: nil,
             keywords: [],
             defaultShortcut: nil,
-            perform: {}
+            command: .openSettings
         )
         let oldShortcut = KeyboardShortcuts.Shortcut(.k, modifiers: [.command])
         let newShortcut = KeyboardShortcuts.Shortcut(.l, modifiers: [.command])
@@ -46,32 +48,38 @@ final class HotkeyRegistrarTests: XCTestCase {
         XCTAssertEqual(KeyboardShortcuts.getShortcut(for: action.shortcutName), newShortcut)
     }
 
-    func testAppScopeShortcutDefaultPersistsWithoutGlobalRegistration() {
-        let name = KeyboardShortcuts.Name("app-scope.default-test-\(UUID().uuidString)")
+    func testActionShortcutDefaultPersistsStoredShortcut() {
+        let name = KeyboardShortcuts.Name("action.default-test-\(UUID().uuidString)")
         let shortcut = KeyboardShortcuts.Shortcut(.comma, modifiers: [.command])
         defer { KeyboardShortcuts.setShortcut(nil, for: name) }
 
-        AppScopeShortcutDefaults.ensureDefault(shortcut, for: name)
+        ActionShortcutDefaults.ensureDefault(shortcut, for: name)
 
         XCTAssertEqual(KeyboardShortcuts.getShortcut(for: name), shortcut)
-        XCTAssertFalse(KeyboardShortcuts.isEnabled(for: name))
     }
 
-    func testAppScopeShortcutDispatcherMatchesStoredShortcut() {
-        let name = KeyboardShortcuts.Name("app-scope.dispatch-test-\(UUID().uuidString)")
+    func testActionShortcutMatchingFindsStoredShortcut() {
+        let name = KeyboardShortcuts.Name("action.dispatch-test-\(UUID().uuidString)")
         let shortcut = KeyboardShortcuts.Shortcut(.comma, modifiers: [.command])
         defer { KeyboardShortcuts.setShortcut(nil, for: name) }
         var didPerform = false
-        let action = PromptAction(
+        let action = ActionDefinition.command(
             id: "dispatch-test",
+            trigger: "dispatch",
             title: "测试动作",
+            description: nil,
             keywords: [],
             defaultShortcut: shortcut,
-            perform: { didPerform = true }
+            command: .openSettings
         )
-        AppScopeShortcutDefaults.ensureDefault(shortcut, for: name)
+        ActionShortcutDefaults.ensureDefault(shortcut, for: name)
 
-        let didHandle = AppScopeShortcutDispatcher.performMatchingShortcut(shortcut, actions: [action], nameForAction: { _ in name })
+        let didHandle = ActionShortcutDefaults.performMatchingShortcut(
+            shortcut,
+            actions: [action],
+            nameForAction: { _ in name },
+            perform: { _ in didPerform = true }
+        )
 
         XCTAssertTrue(didHandle)
         XCTAssertTrue(didPerform)

@@ -11,6 +11,7 @@ final class PromptPanelViewModel {
 
     var onSubmit: ((String, [PromptAttachmentResult]) -> Void)?
     var onSubmitAction: ((String, ActionBindingPayload, [PromptAttachmentResult]) -> Void)?
+    var onPerformCommand: ((ActionCommand) -> Void)?
     var onHide: (() -> Void)?
     var onOpenSettings: (() -> Void)?
     var onPreviewImage: ((PromptAttachmentResult) -> Void)?
@@ -18,15 +19,7 @@ final class PromptPanelViewModel {
     @ObservationIgnored private var actions: [ActionDefinition]
 
     var filteredActions: [ActionDefinition] {
-        let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return actions }
-
-        let query = trimmed.lowercased()
-        return actions.filter {
-            $0.trigger.lowercased().hasPrefix(query)
-                || $0.title.lowercased().contains(query)
-                || ($0.description?.lowercased().contains(query) ?? false)
-        }
+        ActionDefinition.filter(actions, query: draft)
     }
 
     init(actions: [ActionDefinition]) {
@@ -73,21 +66,7 @@ final class PromptPanelViewModel {
 
         switch ActionInvocation.parse(draft: draft, actions: actions) {
         case .action(let parsed):
-            do {
-                let rendered = try parsed.renderedPrompt()
-                let binding = ActionBindingPayload(
-                    pluginId: parsed.action.pluginId,
-                    promptName: parsed.action.promptName
-                )
-                onSubmitAction?(rendered, binding, validAttachments())
-                resetForNewSession()
-            } catch ActionInvocationError.missingRequiredArgument(let name) {
-                submissionDisabledMessage = "缺少必填参数：\(name)"
-            } catch {
-                submissionDisabledMessage = "Action 渲染失败"
-            }
-            return
-        case .partial:
+            submit(parsed)
             return
         case .plain:
             break
@@ -98,7 +77,10 @@ final class PromptPanelViewModel {
     }
 
     func selectAction(_ action: ActionDefinition) {
-        draft = action.arguments.isEmpty ? action.trigger : "\(action.trigger) "
+        let argumentTemplate = action.arguments
+            .map { "[\($0.name): ]" }
+            .joined(separator: " ")
+        draft = argumentTemplate.isEmpty ? action.trigger : "\(action.trigger) \(argumentTemplate)"
     }
 
     func openSettings() {
@@ -110,6 +92,33 @@ final class PromptPanelViewModel {
         attachments.filter {
             if case .selectionError = $0 { return false }
             return true
+        }
+    }
+
+    private func submit(_ parsed: ParsedActionInvocation) {
+        switch parsed.action.submission {
+        case .appendPrompt:
+            do {
+                onSubmit?(try parsed.renderedPrompt(), validAttachments())
+                resetForNewSession()
+            } catch ActionInvocationError.missingRequiredArgument(let name) {
+                submissionDisabledMessage = "缺少必填参数：\(name)"
+            } catch {
+                submissionDisabledMessage = "Action 渲染失败"
+            }
+        case .plugin(let binding):
+            do {
+                let payload = ActionBindingPayload(pluginId: binding.pluginId, promptName: binding.promptName)
+                onSubmitAction?(try parsed.renderedPrompt(), payload, validAttachments())
+                resetForNewSession()
+            } catch ActionInvocationError.missingRequiredArgument(let name) {
+                submissionDisabledMessage = "缺少必填参数：\(name)"
+            } catch {
+                submissionDisabledMessage = "Action 渲染失败"
+            }
+        case .command(let command):
+            onPerformCommand?(command)
+            resetForNewSession()
         }
     }
 }

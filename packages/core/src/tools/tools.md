@@ -47,12 +47,12 @@ flowchart LR
 
 `SettingsBackedToolRegistry` 在 agent-server 启动和每轮 user message 进入 runtime 前按 `settings.json` 文件戳刷新 builtin tool；`disabled` 列表回流到 `console.log`，便于排错；当 `workspaceRegistry` 缺失时，三个 file/workspace tool 直接进 disabled；当缺少 `WorkspaceAskResolver` 时，`workspace.askUser` 单独进 disabled。
 
-本目录不再包含私有 `tools[] + command` 插件运行时。用户触发的本地 Action Plugin 只负责 prompt 模板与 `actionBinding`，绑定的外部能力通过标准 MCP tool 进入 session-scoped registry。
+本目录不再包含私有 `tools[] + command` 插件运行时。本地 Action manifest 只负责 prompt 模板、`kind`、`globalShortcut` 与可选 `actionBinding`；只有 plugin action 的外部能力通过标准 MCP tool 进入 session-scoped registry，skill action 只提交渲染后的普通 prompt。
 
 ## 编辑此目录的约束
 
 - 新增 builtin tool 必须：实现 `AgentTool` → 在 `registerBuiltins.ts` 的 `candidates` 里挂上 → 同步更新 [README](/Users/mu9/proj/handAgent/README.md) 与本文件的"11 个 builtin tool"表。
-- 新增 Action Plugin 或 MCP 字段时，同步更新对应模块文档，并补 manifest / MCP 配置解析测试。
+- 新增 Action manifest 或 MCP 字段时，同步更新对应模块文档，并补 manifest / MCP 配置解析测试。
 - tool name 一律点号风格（`category.action`），描述要包含调用场景与边界条件，方便 LLM 自决策。
 - 不要在 tool 内部直接 `import "node:fs"` 与平台无关的 IO；platform 类 tool 必须经 `PlatformAdapter`，文件类 tool 必须经 `WorkspaceRegistry`。
 - 工具结果优先返回**可序列化对象**（runtime 自动 JSON.stringify）；返回字符串只用于人类阅读场景。

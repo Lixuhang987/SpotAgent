@@ -7,7 +7,7 @@ final class PromptPanelViewModelTests: XCTestCase {
         let actions = makeTestActions()
         let vm = PromptPanelViewModel(actions: actions)
 
-        XCTAssertEqual(vm.filteredActions.map(\.id), ["open-settings", "new-session"])
+        XCTAssertEqual(vm.filteredActions.map(\.id), ["open-settings", "new-session", "weather/current"])
     }
 
     @MainActor
@@ -25,10 +25,8 @@ final class PromptPanelViewModelTests: XCTestCase {
         let vm = PromptPanelViewModel(actions: makeTestActions())
 
         vm.updateActions([
-            ActionDefinition(
+            ActionDefinition.skill(
                 id: "recent-session-1",
-                pluginId: "history",
-                promptName: "recent",
                 trigger: "history",
                 title: "最近会话：API 设计",
                 description: "session",
@@ -36,8 +34,7 @@ final class PromptPanelViewModelTests: XCTestCase {
                 arguments: [
                     ActionArgumentDefinition(name: "query", description: nil, required: false)
                 ],
-                mcpServerIds: [],
-                icons: []
+                defaultShortcut: nil
             )
         ])
 
@@ -112,7 +109,7 @@ final class PromptPanelViewModelTests: XCTestCase {
         var submitted: (String, ActionBindingPayload)?
         vm.onSubmitAction = { prompt, binding, _ in submitted = (prompt, binding) }
 
-        vm.draft = "r \"let x = 1\""
+        vm.draft = "r [code: let x = 1]"
         vm.submit()
 
         XCTAssertEqual(submitted?.0, "Review:\\nlet x = 1")
@@ -132,6 +129,54 @@ final class PromptPanelViewModelTests: XCTestCase {
 
         XCTAssertFalse(submitted)
         XCTAssertEqual(vm.draft, "r")
+        XCTAssertEqual(vm.submissionDisabledMessage, "缺少必填参数：code")
+    }
+
+    @MainActor
+    func testSubmitSkillInvocationAppendsRenderedPromptWithoutActionBinding() {
+        let action = ActionDefinition.skill(
+            id: "skill/weather",
+            trigger: "weather",
+            title: "天气",
+            description: nil,
+            template: "查询当前天气",
+            arguments: [],
+            defaultShortcut: nil
+        )
+        let vm = PromptPanelViewModel(actions: [action])
+        var submitted: String?
+        var submittedAction = false
+        vm.onSubmit = { prompt, _ in submitted = prompt }
+        vm.onSubmitAction = { _, _, _ in submittedAction = true }
+
+        vm.draft = "weather"
+        vm.submit()
+
+        XCTAssertEqual(submitted, "查询当前天气")
+        XCTAssertFalse(submittedAction)
+        XCTAssertEqual(vm.draft, "")
+    }
+
+    @MainActor
+    func testSubmitCommandInvocationPerformsCommand() {
+        let action = ActionDefinition.command(
+            id: "open-settings",
+            trigger: "settings",
+            title: "打开设置",
+            description: nil,
+            keywords: [],
+            defaultShortcut: nil,
+            command: .openSettings
+        )
+        let vm = PromptPanelViewModel(actions: [action])
+        var command: ActionCommand?
+        vm.onPerformCommand = { command = $0 }
+
+        vm.draft = "settings"
+        vm.submit()
+
+        XCTAssertEqual(command, .openSettings)
+        XCTAssertEqual(vm.draft, "")
     }
 
     @MainActor
@@ -141,7 +186,7 @@ final class PromptPanelViewModelTests: XCTestCase {
 
         vm.selectAction(action)
 
-        XCTAssertEqual(vm.draft, "r ")
+        XCTAssertEqual(vm.draft, "r [code: ]")
     }
 
     @MainActor
@@ -201,24 +246,17 @@ final class PromptPanelViewModelTests: XCTestCase {
 
     private func makeTestActions() -> [ActionDefinition] {
         [
-            ActionDefinition(
+            ActionDefinition.command(
                 id: "open-settings",
-                pluginId: "settings",
-                promptName: "open",
                 trigger: "settings",
                 title: "打开设置",
                 description: "preferences",
-                template: "{{query}}",
-                arguments: [
-                    ActionArgumentDefinition(name: "query", description: nil, required: false)
-                ],
-                mcpServerIds: [],
-                icons: []
+                keywords: ["preferences"],
+                defaultShortcut: nil,
+                command: .openSettings
             ),
-            ActionDefinition(
+            ActionDefinition.skill(
                 id: "new-session",
-                pluginId: "session",
-                promptName: "new",
                 trigger: "new",
                 title: "新建会话",
                 description: "session",
@@ -226,17 +264,23 @@ final class PromptPanelViewModelTests: XCTestCase {
                 arguments: [
                     ActionArgumentDefinition(name: "query", description: nil, required: false)
                 ],
-                mcpServerIds: [],
-                icons: []
+                defaultShortcut: nil
+            ),
+            ActionDefinition.skill(
+                id: "weather/current",
+                trigger: "weather",
+                title: "当前天气",
+                description: "weather",
+                template: "查询当前天气",
+                arguments: [],
+                defaultShortcut: nil
             )
         ]
     }
 
     private func makeReviewAction() -> ActionDefinition {
-        ActionDefinition(
+        ActionDefinition.plugin(
             id: "review/code_review",
-            pluginId: "review",
-            promptName: "code_review",
             trigger: "r",
             title: "Review",
             description: nil,
@@ -244,8 +288,13 @@ final class PromptPanelViewModelTests: XCTestCase {
             arguments: [
                 ActionArgumentDefinition(name: "code", description: nil, required: true)
             ],
-            mcpServerIds: ["github"],
-            icons: []
+            icons: [],
+            defaultShortcut: nil,
+            binding: ActionPluginBinding(
+                pluginId: "review",
+                promptName: "code_review",
+                mcpServerIds: ["github"]
+            )
         )
     }
 }

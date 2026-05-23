@@ -21,6 +21,9 @@ export function resolveActionBindingFromManifest(
   if (!prompt) {
     throw new Error(`Plugin prompt not found: ${request.promptName}`);
   }
+  if (prompt.kind === "skill") {
+    throw new Error(`Plugin prompt is not bindable: ${request.promptName}`);
+  }
 
   return {
     pluginId: manifest.id,

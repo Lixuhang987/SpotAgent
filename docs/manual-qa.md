@@ -22,6 +22,18 @@
 1. 确认 SessionWindow 仍按协议事件显示 user、tool、assistant 消息气泡，最终 assistant 文案为 `Mock file.write completed for hello.txt.`。
 1. 打开对应 `~/.spotAgent/sessions/<session-id>.json`，确认持久化只包含 `messages` / `events` 等会话数据，不依赖 runtime 额外返回 UI 气泡字段。
 
+## ActionDefinition 统一模型回归（P1）
+
+1. 在 `~/.spotAgent/plugins/qa-action-definition/plugin.json` 创建一个 manifest，至少包含两个 prompt：
+   - `kind: "skill"`、`trigger: "weather"`、无必填参数、`template: "查询当前天气"`。
+   - `kind: "plugin"`、`trigger: "r"`、必填参数 `code`、可选参数 `focus`、`template` 引用 `{{code}}` 与 `{{focus}}`，并配置一个可用或故意缺失的 `mcpServerIds`。
+1. 启动桌面 App，打开 PromptPanel，确认 `weather`、`r`、内建“打开设置”和“会话历史”都作为 Action rows 出现。
+1. 输入 `weather` 并提交，确认创建新 session，session metadata 中没有 `actionBinding`。
+1. 输入 `r [code: let x = 1] [focus: race conditions]` 并提交，确认创建新 session，`~/.spotAgent/sessions/<session-id>.json` 的 metadata 写入 `{ pluginId, promptName, mcpServerIds }`。
+1. 输入 `r foo bar` 并提交，确认不会把 `foo bar` 当作位置参数；必填 `code` 为空时 PromptPanel 保留草稿并显示缺少参数提示。
+1. 在 Settings → 快捷键 → Action 快捷键中给 `weather` 配置一个未被系统占用的快捷键，关闭 PromptPanel 后按该快捷键，确认可直接创建普通 prompt session。
+1. 给 `r` 配置一个未被系统占用的快捷键，关闭 PromptPanel 后按该快捷键，确认 PromptPanel 打开并预填 `r [code: ] [focus: ]`，不会提交空参数。
+
 ## 删除 running session 回归（P1）
 
 1. 使用 mock LLM 打包并启动桌面 App：`bash ./scripts/package-app.sh --mock-llm`，再打开 `dist/HandAgentDesktop.app`。

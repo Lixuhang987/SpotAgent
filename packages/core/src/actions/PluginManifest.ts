@@ -4,12 +4,21 @@ export type PluginPromptArgument = {
   required?: boolean;
 };
 
+export type PluginPromptShortcut = {
+  key: string;
+  modifiers: string[];
+};
+
+export type PluginPromptKind = "plugin" | "skill";
+
 export type PluginPrompt = {
   name: string;
+  kind?: PluginPromptKind;
   trigger: string;
   title: string;
   description?: string;
   template: string;
+  globalShortcut?: PluginPromptShortcut;
   arguments: PluginPromptArgument[];
 };
 
@@ -48,11 +57,40 @@ function parsePrompt(value: unknown): PluginPrompt {
 
   return {
     name: requiredString(value, "name"),
+    kind: optionalPromptKind(value, "kind"),
     trigger: requiredString(value, "trigger"),
     title: requiredString(value, "title"),
     description: optionalString(value, "description"),
     template: requiredString(value, "template"),
+    globalShortcut: optionalShortcut(value, "globalShortcut"),
     arguments: Array.isArray(value.arguments) ? value.arguments.map(parseArgument) : [],
+  };
+}
+
+function optionalPromptKind(
+  record: Record<string, unknown>,
+  key: string,
+): PluginPromptKind | undefined {
+  const value = record[key];
+  if (value === undefined) return undefined;
+  if (value !== "plugin" && value !== "skill") {
+    throw new Error(`plugin manifest ${key} must be "plugin" or "skill"`);
+  }
+  return value;
+}
+
+function optionalShortcut(
+  record: Record<string, unknown>,
+  key: string,
+): PluginPromptShortcut | undefined {
+  const value = record[key];
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) {
+    throw new Error(`plugin manifest ${key} must be an object`);
+  }
+  return {
+    key: requiredString(value, "key"),
+    modifiers: optionalStringArray(value, "modifiers"),
   };
 }
 

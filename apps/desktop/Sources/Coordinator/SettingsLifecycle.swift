@@ -23,7 +23,7 @@ final class SettingsLifecycle {
         toolSettingsViewModel: ToolSettingsViewModel,
         permissionRulesViewModel: PermissionRulesViewModel,
         workspaceViewModel: WorkspaceSettingsViewModel,
-        shortcutActions: [PromptAction],
+        shortcutActions: [ActionDefinition],
         onClosed: @escaping @MainActor () -> Void
     ) {
         setActivationPolicy(activationPolicy.policyAfterUpdatingSettingsWindow(isOpen: true))

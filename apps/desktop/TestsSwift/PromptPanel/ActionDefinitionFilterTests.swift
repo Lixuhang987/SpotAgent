@@ -2,26 +2,30 @@ import XCTest
 import KeyboardShortcuts
 @testable import HandAgentDesktop
 
-final class PromptActionTests: XCTestCase {
+final class ActionDefinitionFilterTests: XCTestCase {
     func testFiltersActionsByKeyword() {
         let actions = [
-            PromptAction(
+            ActionDefinition.command(
                 id: "open",
+                trigger: "open",
                 title: "Open File",
+                description: nil,
                 keywords: ["file", "document"],
                 defaultShortcut: .init(.o, modifiers: [.command]),
-                perform: {}
+                command: .openSettings
             ),
-            PromptAction(
+            ActionDefinition.command(
                 id: "new",
+                trigger: "new",
                 title: "New Session",
+                description: nil,
                 keywords: ["workspace"],
                 defaultShortcut: .init(.n, modifiers: [.command]),
-                perform: {}
+                command: .openHistory
             )
         ]
 
-        let filtered = PromptAction.filter(actions, query: "file")
+        let filtered = ActionDefinition.filter(actions, query: "file")
 
         XCTAssertEqual(filtered.map(\.id), ["open"])
     }

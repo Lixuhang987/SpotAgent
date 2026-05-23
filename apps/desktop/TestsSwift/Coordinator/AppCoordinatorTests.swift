@@ -152,11 +152,53 @@ final class AppCoordinatorTests: XCTestCase {
 
         XCTAssertEqual(stub.startCount, 1)
     }
+
+    @MainActor
+    func testBuiltInActionTriggerWinsOverPluginTriggerConflict() throws {
+        let root = try FileManager.default.url(
+            for: .itemReplacementDirectory,
+            in: .userDomainMask,
+            appropriateFor: FileManager.default.temporaryDirectory,
+            create: true
+        )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let plugins = root.appendingPathComponent("plugins", isDirectory: true)
+        let pluginDir = plugins.appendingPathComponent("conflict", isDirectory: true)
+        try FileManager.default.createDirectory(at: pluginDir, withIntermediateDirectories: true)
+        try """
+        {
+          "version": 1,
+          "id": "conflict",
+          "title": "Conflict",
+          "enabled": true,
+          "prompts": [
+            {
+              "name": "settings",
+              "trigger": "settings",
+              "title": "Plugin Settings",
+              "template": "Plugin settings"
+            }
+          ]
+        }
+        """.data(using: .utf8)!.write(to: pluginDir.appendingPathComponent("plugin.json"))
+        let presenter = StubSettingsWindowPresenter()
+        let services = AppServices.testing(
+            settingsWindowPresenter: presenter,
+            actionManifestStore: ActionManifestStore(pluginsDirectoryURL: plugins)
+        )
+        let coordinator = AppCoordinator(services: services)
+
+        coordinator.send(.openSettings)
+
+        XCTAssertEqual(presenter.lastShortcutActions.map(\.trigger).filter { $0 == "settings" }.count, 1)
+        XCTAssertEqual(presenter.lastShortcutActions.first(where: { $0.trigger == "settings" })?.id, "open-settings")
+    }
 }
 
 @MainActor
 final class StubSettingsWindowPresenter: SettingsWindowPresenting {
     private let onPresent: () -> Void
+    private(set) var lastShortcutActions: [ActionDefinition] = []
 
     init(onPresent: @escaping () -> Void = {}) {
         self.onPresent = onPresent
@@ -167,9 +209,10 @@ final class StubSettingsWindowPresenter: SettingsWindowPresenting {
         toolSettingsViewModel: ToolSettingsViewModel,
         permissionRulesViewModel: PermissionRulesViewModel,
         workspaceViewModel: WorkspaceSettingsViewModel,
-        shortcutActions: [PromptAction],
+        shortcutActions: [ActionDefinition],
         onClose: @escaping () -> Void
     ) -> NSWindow? {
+        lastShortcutActions = shortcutActions
         onPresent()
         return NSWindow()
     }

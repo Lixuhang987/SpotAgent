@@ -51,12 +51,12 @@ sequenceDiagram
   Server->>Server: WebSocketServer.listen(4317)
 ```
 
-## MCP 与 Action Plugin 流程
+## MCP 与 ActionDefinition 流程
 
-MCP server 与 Action Plugin 是两条相互独立的注入通道，作用时机也不同：
+MCP server 与 ActionDefinition 是两条相互独立的注入通道，作用时机也不同：
 
 1. **全局 MCP**：`~/.spotAgent/mcp.json` 中配置的所有 server 默认对所有 session 可用。`startDefaultServer` 启动时把这些 server id 作为 `globalMcpServerIds` 传给 `SessionScopedToolRegistry`，每轮 user message 前都会自动 `tools/list` 并注入为 `mcp.<serverId>.<toolName>`。client 复用，按 server id 缓存。除了 tools，`MCPServerRegistry` 还代理 `prompts/list` / `prompts/get` / `resources/list` / `resources/read`，供未来的 prompt picker 或 resource UI 调用。`computer_use` / `computer-use` 是兼容例外：仍按 `mcp.<serverId>.*` 注入，但 client 由 `ComputerUseMCPClient` 接管，避免 Codex 私有 Computer Use MCP 在非 Codex app-server 父链路下 `tools/call` 挂起。
-2. **Plugin 触发的 MCP**：`create_session_request.payload.actionBinding` 只包含 `{ pluginId, promptName }`。agent-server 不信任 desktop 传来的 MCP server 列表，而是通过 `ActionBindingResolver` 重新读取 `~/.spotAgent/plugins/<plugin-id>/plugin.json`，校验 plugin id、prompt name 和 enabled 状态，再把 manifest 中的 `mcpServerIds` 写入 session metadata，作为该 session 在全局集合之外的额外注入。
+2. **plugin action 触发的 MCP**：`create_session_request.payload.actionBinding` 只包含 `{ pluginId, promptName }`。agent-server 不信任 desktop 传来的 MCP server 列表，而是通过 `ActionBindingResolver` 重新读取 `~/.spotAgent/plugins/<plugin-id>/plugin.json`，校验 plugin id、prompt name、enabled 状态和 prompt `kind`。默认 `kind` 是 `plugin`，允许绑定；显式 `kind: "skill"` 的 prompt 只用于 desktop 侧渲染普通 prompt，不能创建 `actionBinding`。校验通过后，agent-server 把 manifest 中的 `mcpServerIds` 写入 session metadata，作为该 session 在全局集合之外的额外注入。
 
 `SessionScopedToolRegistry.refreshForSession` 把全局集合与 plugin binding 集合做并集去重，按 tool name 第一次出现的实例为准。缺失的 MCP server 会被记录为 `[agent-server] skipped MCP server ...`，不会阻断 prompt runtime。
 
@@ -87,7 +87,7 @@ socket 关闭时，若该 socket 持有 bridge token，会调用 `bridge.detach(
 | `~/.spotAgent/workspaces.json` | desktop（`WorkspaceSettingsViewModel`） + agent-server（`FileWorkspaceRegistry` 自播种 default） | 双侧 | workspace 注册表 |
 | `~/.spotAgent/permissions.json` | agent-server（`FilePermissionPolicy.remember`） | agent-server | 永久权限规则 |
 | `~/.spotAgent/log/<YYYY-MM-DD>/network-NNN.jsonl` | agent-server（`FileNetworkLogger`） | 人工排查 | LLM 请求 / 响应 body |
-| `~/.spotAgent/plugins/<plugin-id>/plugin.json` | 用户 / 本地安装流程 | desktop / agent-server | Action Plugin manifest；desktop 渲染 prompt template，agent-server 校验 `actionBinding` 并解析 `mcpServerIds` |
+| `~/.spotAgent/plugins/<plugin-id>/plugin.json` | 用户 / 本地安装流程 | desktop / agent-server | Action manifest；desktop 构建 `ActionDefinition` 并渲染 prompt template，agent-server 校验 plugin action 的 `actionBinding` 并解析 `mcpServerIds` |
 | `~/.spotAgent/mcp.json` | 用户 / 本地安装流程 | agent-server | MCP server 配置；缺失文件等价于 `{ "version": 1, "servers": [] }` |
 
 ## LLM 模式
