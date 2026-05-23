@@ -806,6 +806,7 @@ describe("SessionRuntimeOrchestrator", () => {
   });
 
   it("pushes and records an error when runtime execution fails", async () => {
+
     const pushed: SessionMessage[] = [];
     const persistence = new SessionPersistence(
       new InMemorySessionStore(),
@@ -847,5 +848,39 @@ describe("SessionRuntimeOrchestrator", () => {
         message: "Missing apiKey in ~/.spotAgent/settings.json. 请先在设置页完成模型配置。",
       },
     ]);
+  });
+});
+
+describe("SessionRuntimeOrchestrator activation hook", () => {
+  it("invokes beforeRun with the session id before runtime.runWithMessages", async () => {
+    const calls: string[] = [];
+    const persistence = new SessionPersistence(
+      new InMemorySessionStore(),
+      () => "2026-05-23T00:00:00.000Z",
+    );
+    const orchestrator = new SessionRuntimeOrchestrator(
+      {
+        async runWithMessages(messages: AgentMessage[]) {
+          calls.push("runWithMessages");
+          return { messages, bubbles: [] };
+        },
+      },
+      persistence,
+      () => "2026-05-23T00:00:00.000Z",
+      async (sessionId) => {
+        calls.push(`before:${sessionId}`);
+      },
+    );
+
+    await persistence.ensureSession("s1");
+    await orchestrator.handleUserMessage(
+      createUserMessage("s1", "hi", "user-1"),
+      () => {},
+    );
+
+    // beforeRun must fire before runWithMessages, and receive the correct sessionId
+    expect(calls[0]).toBe("before:s1");
+    expect(calls[1]).toBe("runWithMessages");
+    expect(calls).toEqual(["before:s1", "runWithMessages"]);
   });
 });
