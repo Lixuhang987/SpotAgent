@@ -22,7 +22,7 @@
 | `src/ActionBindingResolver.ts` | 校验 `create_session_request.actionBinding`，并从本地 Plugin manifest 解析 session 绑定的 `mcpServerIds` |
 | `src/MCPServerRegistry.ts` | MCP client 缓存与协议适配；同一个 `serverId` 复用 client 与 adapted tools；除 `tools/*` 外还代理 `prompts/list` / `prompts/get` / `resources/list` / `resources/read` 给上层使用 |
 | `src/ComputerUseMCPClient.ts` | HandAgent 原生 Computer Use MCP 兼容层；当 MCP server id 为 `computer_use` / `computer-use` 时，暴露 `list_apps` 与 `get_app_state`，底层走 `RemotePlatformAdapter`，不再直接依赖 Codex 私有 Computer Use 子进程的 `tools/call`；`get_app_state` 解析 App 时先走精确 bundle/name，再处理系统别名（如 `Finder` → `com.apple.finder`），最后才做模糊子串匹配 |
-| `src/SessionScopedToolRegistry.ts` | 按 session metadata 组合 builtin tools 与 MCP tools，并为每个 session 维护独立 `ToolRegistry`；未激活 session 只暴露 meta-tool（`use_tools`），激活后扩展为完整 builtin + MCP 工具集；`mcp.json` 中的 server 默认全局注入所有 session（`globalMcpServerIds`），plugin `actionBinding.mcpServerIds` 在此基础上叠加去重；plugin-binding 的 session 在 `refreshForSession` 中自动激活，跳过懒加载阶段；MCP server 缺失或初始化失败时记录 skip 日志并保留 builtin tools；agent-server 重启后通过历史 tool message 推断激活状态，已有真实 tool call 记录的 session 直接视为已激活；删除 session 时调用 `forgetSession` 清理激活集合与 session 专属工具表 |
+| `src/SessionScopedToolRegistry.ts` | 按 session metadata 组合 builtin tools 与 MCP tools，并为每个 session 维护独立 `ToolRegistry`；未激活 session 只暴露 meta-tool（`use_tools`），激活后扩展为完整 builtin + MCP 工具集；`mcp.json` 中的 server 默认全局注入所有 session（`globalMcpServerIds`），plugin `actionBinding.mcpServerIds` 在此基础上叠加去重；plugin-binding 的 session 在 `refreshForSession` 中自动激活，跳过懒加载阶段；mock LLM 模式下未激活 session 额外暴露 builtin tools，但不标记为已激活、不加载 MCP，用于支持固定触发词直接返回 `file.write` 等内置 tool call；MCP server 缺失或初始化失败时记录 skip 日志并保留 builtin tools；agent-server 重启后通过历史 tool message 推断激活状态，已有真实 tool call 记录的 session 直接视为已激活；删除 session 时调用 `forgetSession` 清理激活集合与 session 专属工具表 |
 | `src/WebSocketPlatformBridge.ts` | 实现 core 的 `PlatformBridge` 接口；通过 `attach(send)` 接管来自 desktop 的 `channel: "platform"` 反向 socket 并返回 fencing token，按 `requestId + token` 关联 `platform_request` / `platform_response`，60s 超时 |
 | `src/SessionPermissionBridge.ts` | 实现 `FilePermissionPolicy` 的 `AskResolver`：把 `permission_request` 推到 desktop，按 `requestId + session binding token` 等回 `permission_response`，60s 超时视为 deny |
 | `src/SessionWorkspaceAskBridge.ts` | 实现 `workspace.askUser` 的 `WorkspaceAskResolver`：把 `workspace_ask_request` 推到 desktop，按 `requestId + session binding token` 等回 `workspace_ask_response`，同一 session 内多个 ask 串行展示，取消 / 超时 / 关闭返回 `{ cancelled: true }` |
@@ -94,7 +94,7 @@ socket 关闭时，若该 socket 持有 bridge token，会调用 `bridge.detach(
 
 默认模式是 `settings`：`startDefaultServer` 使用 `SettingsBackedLLMClient` 读取 `~/.spotAgent/settings.json` 并启用 `TurnSummarizer`。`llm.provider` 缺失时默认走 `openai-compatible`；当前支持 `openai-compatible` 与 `anthropic`。core 的 `LLMClientFactory` 会显式声明 provider capability，并在不支持图片时提前抛错，在不支持 tool calling 的路径上传空 tools 降级。
 
-当环境变量 `HANDAGENT_LLM_MODE=mock` 时，`startDefaultServer` 改用 core 的 `MockLLMClient`，并关闭 summarizer，避免日常 QA 触发真实端点。桌面 QA 推荐通过包参数写入 bundle marker：
+当环境变量 `HANDAGENT_LLM_MODE=mock` 时，`startDefaultServer` 改用 core 的 `MockLLMClient`，关闭 summarizer，并让未激活 session 额外暴露 builtin tools，避免 mock 固定场景直接返回 `file.write` 等 tool call 时被 meta-tool 懒加载拦截；该路径不标记 session 已激活，也不会提前加载全局或 action 绑定的 MCP tools。桌面 QA 推荐通过包参数写入 bundle marker：
 
 ```bash
 bash ./scripts/package-app.sh --mock-llm

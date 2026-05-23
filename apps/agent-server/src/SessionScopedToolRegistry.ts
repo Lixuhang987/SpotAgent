@@ -13,6 +13,7 @@ export class SessionScopedToolRegistry {
       builtinRegistry: ToolRegistry;
       globalMcpServerIds: string[];
       listMcpTools: (serverId: string) => Promise<AgentTool[]>;
+      exposeBuiltinToolsBeforeActivation?: boolean;
     },
     private readonly dependencies: {
       log?: (message: string) => void;
@@ -29,6 +30,13 @@ export class SessionScopedToolRegistry {
     }
     if (this.activated.has(sessionId)) {
       await this.refreshActivated(sessionId, binding, registry);
+      return;
+    }
+    if (this.options.exposeBuiltinToolsBeforeActivation) {
+      this.replaceWithUniqueTools(registry, [
+        this.metaTool,
+        ...this.options.builtinRegistry.all(),
+      ]);
       return;
     }
     registry.replaceAll([this.metaTool]);
@@ -81,6 +89,10 @@ export class SessionScopedToolRegistry {
       }
     }
 
+    this.replaceWithUniqueTools(registry, tools);
+  }
+
+  private replaceWithUniqueTools(registry: ToolRegistry, tools: AgentTool[]): void {
     const byName = new Map<string, AgentTool>();
     for (const tool of tools) {
       if (!byName.has(tool.name)) {

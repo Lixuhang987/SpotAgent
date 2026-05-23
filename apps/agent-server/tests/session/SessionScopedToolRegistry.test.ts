@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { MockLLMClient } from "@handagent/core/llm/MockLLMClient.ts";
+import { AgentRuntime } from "@handagent/core/runtime/AgentRuntime.ts";
 import type { AgentTool } from "@handagent/core/tools/AgentTool.ts";
 import { ToolRegistry } from "@handagent/core/tools/ToolRegistry.ts";
 import { SessionScopedToolRegistry } from "../../src/SessionScopedToolRegistry";
@@ -107,6 +109,74 @@ describe("SessionScopedToolRegistry lazy activation", () => {
       "use_tools",
       "frontmost.app",
       "clipboard.read",
+    ]);
+  });
+
+  it("can eagerly expose builtin tools for mock LLM direct tool-call scenarios", async () => {
+    const fileWriteCalls: unknown[] = [];
+    const fileWriteTool: AgentTool = {
+      name: "file.write",
+      description: "write file",
+      inputSchema: { type: "object" },
+      call: async (input) => {
+        fileWriteCalls.push(input);
+        return "ok";
+      },
+    };
+    const scoped = new SessionScopedToolRegistry({
+      builtinRegistry: new ToolRegistry([fileWriteTool]),
+      globalMcpServerIds: [],
+      listMcpTools: async () => [],
+      exposeBuiltinToolsBeforeActivation: true,
+    });
+
+    await scoped.refreshForSession("mock-session", undefined);
+    const runtime = new AgentRuntime(
+      new MockLLMClient(),
+      scoped.registryForSession("mock-session"),
+      {
+        isSessionActivated: (sessionId) => scoped.isActivated(sessionId),
+      },
+    );
+
+    const result = await runtime.runWithMessages(
+      [{ role: "user", content: "please [mock:file-write]" }],
+      () => {},
+      { sessionId: "mock-session" },
+    );
+
+    expect(fileWriteCalls).toEqual([
+      {
+        workspaceId: "qa-workspace",
+        relativePath: "hello.txt",
+        content: "hello from MockLLMClient",
+      },
+    ]);
+    expect(result.messages.at(-1)).toEqual({
+      role: "assistant",
+      content: "Mock file.write completed for hello.txt.",
+    });
+  });
+
+  it("does not eagerly load MCP tools when only builtin tools are needed for mock LLM scenarios", async () => {
+    let listMcpToolCalls = 0;
+    const scoped = new SessionScopedToolRegistry({
+      builtinRegistry: new ToolRegistry([fakeTool("file.write")]),
+      globalMcpServerIds: ["filesystem"],
+      listMcpTools: async () => {
+        listMcpToolCalls += 1;
+        return [fakeTool("mcp.filesystem.read_file")];
+      },
+      exposeBuiltinToolsBeforeActivation: true,
+    });
+
+    await scoped.refreshForSession("mock-session", undefined);
+
+    expect(listMcpToolCalls).toBe(0);
+    expect(scoped.isActivated("mock-session")).toBe(false);
+    expect(scoped.registryForSession("mock-session").list().map((t) => t.name)).toEqual([
+      "use_tools",
+      "file.write",
     ]);
   });
 });

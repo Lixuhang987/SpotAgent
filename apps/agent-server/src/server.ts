@@ -234,6 +234,7 @@ export async function startDefaultServer(port = 4317) {
     workspaceAskResolver: workspaceAskBridge.ask,
   });
   await toolRegistry.refresh();
+  const llmMode = resolveLLMMode();
 
   const mcpRegistry = new MCPServerRegistry({
     createClient: (serverId: string) => {
@@ -256,6 +257,7 @@ export async function startDefaultServer(port = 4317) {
       builtinRegistry: toolRegistry.registry,
       globalMcpServerIds,
       listMcpTools: (serverId: string) => mcpRegistry.listTools(serverId),
+      exposeBuiltinToolsBeforeActivation: llmMode === "mock",
     },
     {
       log: (message: string) => console.warn(message),
@@ -268,7 +270,6 @@ export async function startDefaultServer(port = 4317) {
     askResolver: permissionBridge.ask,
   });
 
-  const llmMode = resolveLLMMode();
   const llmClient = llmMode === "mock"
     ? new MockLLMClient()
     : new SettingsBackedLLMClient({ networkLogger });
