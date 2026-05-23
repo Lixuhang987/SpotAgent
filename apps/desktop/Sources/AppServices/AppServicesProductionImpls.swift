@@ -74,6 +74,9 @@ final class ProductionSettingsWindowPresenter: SettingsWindowPresenting {
     func present(
         settingsViewModel: AgentSettingsViewModel,
         toolSettingsViewModel: ToolSettingsViewModel,
+        pluginSettingsViewModel: PluginSettingsViewModel,
+        appendPromptSettingsViewModel: AppendPromptSettingsViewModel,
+        mcpSettingsViewModel: MCPSettingsViewModel,
         permissionRulesViewModel: PermissionRulesViewModel,
         workspaceViewModel: WorkspaceSettingsViewModel,
         shortcutActions: [ActionDefinition],
@@ -83,6 +86,9 @@ final class ProductionSettingsWindowPresenter: SettingsWindowPresenting {
             rootView: SettingsView(
                 settingsViewModel: settingsViewModel,
                 toolSettingsViewModel: toolSettingsViewModel,
+                pluginSettingsViewModel: pluginSettingsViewModel,
+                appendPromptSettingsViewModel: appendPromptSettingsViewModel,
+                mcpSettingsViewModel: mcpSettingsViewModel,
                 permissionRulesViewModel: permissionRulesViewModel,
                 workspaceViewModel: workspaceViewModel,
                 shortcutActions: shortcutActions

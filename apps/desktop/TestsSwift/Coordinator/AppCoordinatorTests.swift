@@ -206,6 +206,9 @@ final class StubSettingsWindowPresenter: SettingsWindowPresenting {
     func present(
         settingsViewModel: AgentSettingsViewModel,
         toolSettingsViewModel: ToolSettingsViewModel,
+        pluginSettingsViewModel: PluginSettingsViewModel,
+        appendPromptSettingsViewModel: AppendPromptSettingsViewModel,
+        mcpSettingsViewModel: MCPSettingsViewModel,
         permissionRulesViewModel: PermissionRulesViewModel,
         workspaceViewModel: WorkspaceSettingsViewModel,
         shortcutActions: [ActionDefinition],

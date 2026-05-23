@@ -5,6 +5,9 @@ import SwiftUI
 enum SettingsTab: String, CaseIterable, Identifiable {
     case model
     case tools
+    case plugins
+    case appendPrompts
+    case mcp
     case permissions
     case shortcuts
     case workspaces
@@ -15,6 +18,9 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         switch self {
         case .model: return "模型"
         case .tools: return "工具"
+        case .plugins: return "Plugin"
+        case .appendPrompts: return "追加"
+        case .mcp: return "MCP"
         case .permissions: return "权限"
         case .shortcuts: return "快捷键"
         case .workspaces: return "工作区"
@@ -25,6 +31,9 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         switch self {
         case .model: return "cpu"
         case .tools: return "slider.horizontal.3"
+        case .plugins: return "puzzlepiece.extension"
+        case .appendPrompts: return "text.badge.plus"
+        case .mcp: return "server.rack"
         case .permissions: return "lock.shield"
         case .shortcuts: return "keyboard"
         case .workspaces: return "folder"
@@ -182,6 +191,37 @@ struct SettingsFieldStyle: TextFieldStyle {
                 RoundedRectangle(cornerRadius: theme.radius.sm)
                     .strokeBorder(theme.colors.border, lineWidth: 0.5)
             )
+    }
+}
+
+struct SettingsTextEditor: View {
+    @Binding var text: String
+    let placeholder: String
+    @Environment(\.appTheme) private var theme
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            if text.isEmpty {
+                Text(placeholder)
+                    .font(theme.typography.captionFont)
+                    .foregroundStyle(theme.colors.textSecondary)
+                    .padding(.horizontal, theme.spacing.md)
+                    .padding(.vertical, theme.spacing.sm)
+                    .allowsHitTesting(false)
+            }
+            TextEditor(text: $text)
+                .font(theme.typography.captionFont.monospaced())
+                .foregroundStyle(theme.colors.textPrimary)
+                .scrollContentBackground(.hidden)
+                .padding(.horizontal, theme.spacing.sm)
+                .padding(.vertical, theme.spacing.xs)
+        }
+        .frame(maxWidth: 340, minHeight: 92)
+        .borderedCard(
+            fill: theme.colors.surface,
+            border: theme.colors.border,
+            cornerRadius: theme.radius.sm
+        )
     }
 }
 

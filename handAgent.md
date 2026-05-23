@@ -8,6 +8,7 @@
 
 - [apps/apps.md](/Users/mu9/proj/handAgent/apps/apps.md)
 - [packages/packages.md](/Users/mu9/proj/handAgent/packages/packages.md)
+- [examples/examples.md](/Users/mu9/proj/handAgent/examples/examples.md)
 
 ## 产品边界
 

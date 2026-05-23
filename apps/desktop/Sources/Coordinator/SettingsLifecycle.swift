@@ -21,6 +21,9 @@ final class SettingsLifecycle {
     func openOrFocus(
         settingsViewModel: AgentSettingsViewModel,
         toolSettingsViewModel: ToolSettingsViewModel,
+        pluginSettingsViewModel: PluginSettingsViewModel,
+        appendPromptSettingsViewModel: AppendPromptSettingsViewModel,
+        mcpSettingsViewModel: MCPSettingsViewModel,
         permissionRulesViewModel: PermissionRulesViewModel,
         workspaceViewModel: WorkspaceSettingsViewModel,
         shortcutActions: [ActionDefinition],
@@ -37,6 +40,9 @@ final class SettingsLifecycle {
         window = windowPresenter.present(
             settingsViewModel: settingsViewModel,
             toolSettingsViewModel: toolSettingsViewModel,
+            pluginSettingsViewModel: pluginSettingsViewModel,
+            appendPromptSettingsViewModel: appendPromptSettingsViewModel,
+            mcpSettingsViewModel: mcpSettingsViewModel,
             permissionRulesViewModel: permissionRulesViewModel,
             workspaceViewModel: workspaceViewModel,
             shortcutActions: shortcutActions,

@@ -16,6 +16,9 @@ protocol SettingsWindowPresenting {
     func present(
         settingsViewModel: AgentSettingsViewModel,
         toolSettingsViewModel: ToolSettingsViewModel,
+        pluginSettingsViewModel: PluginSettingsViewModel,
+        appendPromptSettingsViewModel: AppendPromptSettingsViewModel,
+        mcpSettingsViewModel: MCPSettingsViewModel,
         permissionRulesViewModel: PermissionRulesViewModel,
         workspaceViewModel: WorkspaceSettingsViewModel,
         shortcutActions: [ActionDefinition],
@@ -152,6 +155,9 @@ final class NopSettingsWindowPresenter: SettingsWindowPresenting {
     func present(
         settingsViewModel: AgentSettingsViewModel,
         toolSettingsViewModel: ToolSettingsViewModel,
+        pluginSettingsViewModel: PluginSettingsViewModel,
+        appendPromptSettingsViewModel: AppendPromptSettingsViewModel,
+        mcpSettingsViewModel: MCPSettingsViewModel,
         permissionRulesViewModel: PermissionRulesViewModel,
         workspaceViewModel: WorkspaceSettingsViewModel,
         shortcutActions: [ActionDefinition],

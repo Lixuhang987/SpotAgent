@@ -17,6 +17,9 @@ final class SettingsLifecycleTests: XCTestCase {
         lifecycle.openOrFocus(
             settingsViewModel: AgentSettingsViewModel(store: AgentSettingsStore()),
             toolSettingsViewModel: ToolSettingsViewModel(store: AgentSettingsStore()),
+            pluginSettingsViewModel: PluginSettingsViewModel(),
+            appendPromptSettingsViewModel: AppendPromptSettingsViewModel(),
+            mcpSettingsViewModel: MCPSettingsViewModel(),
             permissionRulesViewModel: PermissionRulesViewModel(),
             workspaceViewModel: WorkspaceSettingsViewModel(),
             shortcutActions: [],
@@ -40,6 +43,9 @@ final class SettingsLifecycleTests: XCTestCase {
         lifecycle.openOrFocus(
             settingsViewModel: AgentSettingsViewModel(store: AgentSettingsStore()),
             toolSettingsViewModel: ToolSettingsViewModel(store: AgentSettingsStore()),
+            pluginSettingsViewModel: PluginSettingsViewModel(),
+            appendPromptSettingsViewModel: AppendPromptSettingsViewModel(),
+            mcpSettingsViewModel: MCPSettingsViewModel(),
             permissionRulesViewModel: PermissionRulesViewModel(),
             workspaceViewModel: WorkspaceSettingsViewModel(),
             shortcutActions: [],
@@ -48,6 +54,9 @@ final class SettingsLifecycleTests: XCTestCase {
         lifecycle.openOrFocus(
             settingsViewModel: AgentSettingsViewModel(store: AgentSettingsStore()),
             toolSettingsViewModel: ToolSettingsViewModel(store: AgentSettingsStore()),
+            pluginSettingsViewModel: PluginSettingsViewModel(),
+            appendPromptSettingsViewModel: AppendPromptSettingsViewModel(),
+            mcpSettingsViewModel: MCPSettingsViewModel(),
             permissionRulesViewModel: PermissionRulesViewModel(),
             workspaceViewModel: WorkspaceSettingsViewModel(),
             shortcutActions: [],
@@ -69,6 +78,9 @@ final class SettingsLifecycleTests: XCTestCase {
         lifecycle.openOrFocus(
             settingsViewModel: AgentSettingsViewModel(store: AgentSettingsStore()),
             toolSettingsViewModel: ToolSettingsViewModel(store: AgentSettingsStore()),
+            pluginSettingsViewModel: PluginSettingsViewModel(),
+            appendPromptSettingsViewModel: AppendPromptSettingsViewModel(),
+            mcpSettingsViewModel: MCPSettingsViewModel(),
             permissionRulesViewModel: PermissionRulesViewModel(),
             workspaceViewModel: WorkspaceSettingsViewModel(),
             shortcutActions: [],

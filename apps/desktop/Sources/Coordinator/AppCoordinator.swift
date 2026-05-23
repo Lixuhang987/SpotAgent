@@ -116,6 +116,18 @@ final class AppCoordinator {
         ToolSettingsViewModel(store: services.settingsStore)
     }
 
+    func makePluginSettingsViewModel() -> PluginSettingsViewModel {
+        PluginSettingsViewModel()
+    }
+
+    func makeAppendPromptSettingsViewModel() -> AppendPromptSettingsViewModel {
+        AppendPromptSettingsViewModel()
+    }
+
+    func makeMCPSettingsViewModel() -> MCPSettingsViewModel {
+        MCPSettingsViewModel()
+    }
+
     func makePermissionRulesViewModel() -> PermissionRulesViewModel {
         PermissionRulesViewModel()
     }
@@ -192,6 +204,9 @@ final class AppCoordinator {
         settingsLifecycle.openOrFocus(
             settingsViewModel: makeSettingsViewModel(),
             toolSettingsViewModel: makeToolSettingsViewModel(),
+            pluginSettingsViewModel: makePluginSettingsViewModel(),
+            appendPromptSettingsViewModel: makeAppendPromptSettingsViewModel(),
+            mcpSettingsViewModel: makeMCPSettingsViewModel(),
             permissionRulesViewModel: makePermissionRulesViewModel(),
             workspaceViewModel: WorkspaceSettingsViewModel(),
             shortcutActions: actions,
