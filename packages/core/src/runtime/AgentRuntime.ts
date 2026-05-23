@@ -20,14 +20,8 @@ import {
   META_TOOL_ALREADY_ACTIVE_RESULT,
 } from "../tools/MetaToolUseTool.ts";
 
-export type AgentBubble = {
-  id: string;
-  text: string;
-};
-
 export type AgentRunResult = {
   messages: AgentMessage[];
-  bubbles: AgentBubble[];
 };
 
 export type AgentRuntimeEvent =
@@ -137,7 +131,6 @@ export class AgentRuntime {
     throwIfAborted(runOptions.signal);
     await this.waitForPendingSummaries(nextMessages);
     throwIfAborted(runOptions.signal);
-    const bubbles: AgentBubble[] = [];
     let assistantCount = 0;
 
     for (let turn = 0; turn < this.maxTurns; turn += 1) {
@@ -152,19 +145,12 @@ export class AgentRuntime {
           : completion.message;
 
       nextMessages.push(assistantMessage);
-      if (assistantMessage.role === "assistant") {
-        bubbles.push({
-          id: `assistant-${assistantCount}`,
-          text: assistantMessage.content,
-        });
-      }
 
       const toolCalls = completion.toolCalls ?? [];
       if (toolCalls.length === 0) {
         this.startTurnSummary(nextMessages);
         return {
           messages: nextMessages,
-          bubbles,
         };
       }
 

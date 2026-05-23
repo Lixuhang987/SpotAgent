@@ -61,7 +61,6 @@ describe("SessionRuntimeOrchestrator", () => {
                 content: "你好，我收到了。",
               },
             ],
-            bubbles: [],
           };
         },
       },
@@ -144,7 +143,6 @@ describe("SessionRuntimeOrchestrator", () => {
                 content: reply,
               },
             ],
-            bubbles: [],
           };
         },
       },
@@ -207,7 +205,7 @@ describe("SessionRuntimeOrchestrator", () => {
         async runWithMessages(messages: AgentMessage[]) {
           order.push("runtime");
           runtimeCalls.push(messages.map((message) => ({ ...message })));
-          return { messages, bubbles: [] };
+          return { messages };
         },
       },
       persistence,
@@ -244,7 +242,7 @@ describe("SessionRuntimeOrchestrator", () => {
       {
         async runWithMessages(messages: AgentMessage[]) {
           runtimeCalls.push(messages.map((message) => ({ ...message })));
-          return { messages, bubbles: [] };
+          return { messages };
         },
       },
       persistence,
@@ -331,7 +329,6 @@ describe("SessionRuntimeOrchestrator", () => {
                 content: "file contents here",
               },
             ],
-            bubbles: [],
           };
         },
       },
@@ -452,7 +449,6 @@ describe("SessionRuntimeOrchestrator", () => {
                 content: "done",
               },
             ],
-            bubbles: [],
           };
         },
       },
@@ -529,7 +525,7 @@ describe("SessionRuntimeOrchestrator", () => {
     );
     let runtimeSignal: AbortSignal | undefined;
     let emitLateEvent: ((event: AgentRuntimeEvent) => void) | undefined;
-    let finishRun: ((result: { messages: AgentMessage[]; bubbles: [] }) => void) | undefined;
+    let finishRun: ((result: { messages: AgentMessage[] }) => void) | undefined;
     const runStarted = Promise.withResolvers<void>();
     const orchestrator = new SessionRuntimeOrchestrator(
       {
@@ -573,7 +569,6 @@ describe("SessionRuntimeOrchestrator", () => {
         { role: "assistant", content: "late assistant" },
         { role: "tool", toolCallId: "tc-1", name: "file.read", content: "late tool" },
       ],
-      bubbles: [],
     });
     await runPromise;
 
@@ -613,7 +608,7 @@ describe("SessionRuntimeOrchestrator", () => {
       new InMemorySessionStore(),
       () => "2026-05-20T00:00:00.000Z",
     );
-    let finishRun: ((result: { messages: AgentMessage[]; bubbles: [] }) => void) | undefined;
+    let finishRun: ((result: { messages: AgentMessage[] }) => void) | undefined;
     const runStarted = Promise.withResolvers<void>();
     const orchestrator = new SessionRuntimeOrchestrator(
       {
@@ -624,7 +619,6 @@ describe("SessionRuntimeOrchestrator", () => {
                 { role: "user", content: "删除中" },
                 { role: "assistant", content: "late" },
               ],
-              bubbles: [],
             });
           });
           runStarted.resolve();
@@ -862,7 +856,7 @@ describe("SessionRuntimeOrchestrator activation hook", () => {
       {
         async runWithMessages(messages: AgentMessage[]) {
           calls.push("runWithMessages");
-          return { messages, bubbles: [] };
+          return { messages };
         },
       },
       persistence,

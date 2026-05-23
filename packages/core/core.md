@@ -71,12 +71,8 @@ flowchart TD
 
 ### Runtime 输出
 
-- `AgentBubble`
-  - `id`
-  - `text`
 - `AgentRunResult`
   - `messages`
-  - `bubbles`
 
 ### Tool 协议
 

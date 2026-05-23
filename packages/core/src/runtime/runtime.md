@@ -26,7 +26,7 @@ flowchart TD
   C1 --> D[push assistant message]
   D --> E{toolCalls.length > 0?}
   E -- 否 --> S[start async TurnSummarizer]
-  S --> F[return AgentRunResult]
+  S --> F[return AgentRunResult.messages]
   E -- 是 --> G[for each toolCall]
   G --> H[PermissionPolicy.check]
   H --> I{decision}

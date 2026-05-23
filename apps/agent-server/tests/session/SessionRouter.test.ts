@@ -1052,7 +1052,6 @@ describe("SessionRouter", () => {
                 content: "ws reply",
               },
             ],
-            bubbles: [],
           };
         },
       },
