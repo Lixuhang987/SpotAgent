@@ -27,14 +27,14 @@ final class HotkeyRegistrarTests: XCTestCase {
     }
 
     func testActionDefinitionShortcutNameReadsUpdatedStoredShortcut() {
-        let action = ActionDefinition.command(
+        let action = ActionDefinition.skill(
             id: "hotkey-reload-test-\(UUID().uuidString)",
             trigger: "reload",
             title: "测试动作",
             description: nil,
-            keywords: [],
-            defaultShortcut: nil,
-            command: .openSettings
+            template: "reload",
+            arguments: [],
+            defaultShortcut: nil
         )
         let oldShortcut = KeyboardShortcuts.Shortcut(.k, modifiers: [.command])
         let newShortcut = KeyboardShortcuts.Shortcut(.l, modifiers: [.command])
@@ -63,14 +63,14 @@ final class HotkeyRegistrarTests: XCTestCase {
         let shortcut = KeyboardShortcuts.Shortcut(.comma, modifiers: [.command])
         defer { KeyboardShortcuts.setShortcut(nil, for: name) }
         var didPerform = false
-        let action = ActionDefinition.command(
+        let action = ActionDefinition.skill(
             id: "dispatch-test",
             trigger: "dispatch",
             title: "测试动作",
             description: nil,
-            keywords: [],
-            defaultShortcut: shortcut,
-            command: .openSettings
+            template: "dispatch",
+            arguments: [],
+            defaultShortcut: shortcut
         )
         ActionShortcutDefaults.ensureDefault(shortcut, for: name)
 

@@ -154,7 +154,7 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
-    func testBuiltInActionTriggerWinsOverPluginTriggerConflict() throws {
+    func testShortcutActionsComeOnlyFromManifestActions() throws {
         let root = try FileManager.default.url(
             for: .itemReplacementDirectory,
             in: .userDomainMask,
@@ -190,8 +190,7 @@ final class AppCoordinatorTests: XCTestCase {
 
         coordinator.send(.openSettings)
 
-        XCTAssertEqual(presenter.lastShortcutActions.map(\.trigger).filter { $0 == "settings" }.count, 1)
-        XCTAssertEqual(presenter.lastShortcutActions.first(where: { $0.trigger == "settings" })?.id, "open-settings")
+        XCTAssertEqual(presenter.lastShortcutActions.map(\.id), ["conflict/settings"])
     }
 }
 

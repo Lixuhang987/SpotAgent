@@ -37,26 +37,6 @@ final class AppCoordinator {
         selectionProvider: MacSelectionCaptureProvider(),
         regionProvider: MacRegionCaptureProvider()
     )
-    @ObservationIgnored private lazy var builtInActions: [ActionDefinition] = [
-        ActionDefinition.command(
-            id: "open-settings",
-            trigger: "settings",
-            title: "打开设置",
-            description: "打开设置窗口",
-            keywords: ["settings", "preferences", "shortcut", "hotkey"],
-            defaultShortcut: nil,
-            command: .openSettings
-        ),
-        ActionDefinition.command(
-            id: "open-history",
-            trigger: "history",
-            title: "会话历史",
-            description: "打开会话历史",
-            keywords: ["history", "recent", "session"],
-            defaultShortcut: nil,
-            command: .openHistory
-        )
-    ]
 
     convenience init() { self.init(services: AppServices()) }
 
@@ -140,8 +120,6 @@ final class AppCoordinator {
         PermissionRulesViewModel()
     }
 
-    func makeShortcutActionDefinitions() -> [ActionDefinition] { buildActionDefinitions() }
-
     private func setupPromptPanel() {
         refreshActionDefinitions()
         promptPanelController.onSubmit = { [weak self] draft, attachments in
@@ -149,9 +127,6 @@ final class AppCoordinator {
         }
         promptPanelController.onSubmitAction = { [weak self] prompt, binding, attachments in
             self?.send(.submitActionPrompt(prompt, actionBinding: binding, attachments: attachments))
-        }
-        promptPanelController.onPerformCommand = { [weak self] command in
-            self?.handleActionCommand(command)
         }
         promptPanelController.onOpenSettings = { [weak self] in
             self?.send(.openSettings)
@@ -242,7 +217,7 @@ final class AppCoordinator {
     }
 
     private func buildActionDefinitions() -> [ActionDefinition] {
-        uniqueActionsByTrigger(builtInActions + services.actionManifestStore.load().actions)
+        uniqueActionsByTrigger(services.actionManifestStore.load().actions)
     }
 
     private func uniqueActionsByTrigger(_ actions: [ActionDefinition]) -> [ActionDefinition] {
@@ -283,8 +258,6 @@ final class AppCoordinator {
 
     private func performActionShortcut(_ action: ActionDefinition) {
         switch action.submission {
-        case .command(let command):
-            handleActionCommand(command)
         case .appendPrompt, .plugin:
             if action.requiresArguments {
                 promptPanelController.selectActionAndShow(action)
@@ -302,21 +275,10 @@ final class AppCoordinator {
                         attachments: [],
                         actionBinding: ActionBindingPayload(pluginId: binding.pluginId, promptName: binding.promptName)
                     )
-                case .command:
-                    break
                 }
             } catch {
                 promptPanelController.show()
             }
-        }
-    }
-
-    private func handleActionCommand(_ command: ActionCommand) {
-        switch command {
-        case .openSettings:
-            send(.openSettings)
-        case .openHistory:
-            send(.openHistory)
         }
     }
 }

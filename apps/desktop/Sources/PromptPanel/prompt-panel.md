@@ -7,7 +7,7 @@
 | 文件 | 职责 |
 |------|------|
 | `PromptPanelView.swift` | 纯 UI：输入框 + action 列表 + 附件 chip（图片 chip 可点击触发 QuickLook 预览）+ server 不可用提示，绑定 ViewModel 状态，消费 Theme token |
-| `PromptPanelViewModel.swift` | `@Observable` 状态：`draft` / `focusSeed` / `filteredActions` / `attachments` / `submissionDisabledMessage`；支持 `updateActions(_:)` 刷新 action；`onSubmit` / `onSubmitAction` / `onPerformCommand` / `onHide` / `onOpenSettings` / `onPreviewImage` 回调出口 |
+| `PromptPanelViewModel.swift` | `@Observable` 状态：`draft` / `focusSeed` / `filteredActions` / `attachments` / `submissionDisabledMessage`；支持 `updateActions(_:)` 刷新 action；`onSubmit` / `onSubmitAction` / `onHide` / `onOpenSettings` / `onPreviewImage` 回调出口 |
 | `PromptPanelController.swift` | `NSPanel` 生命周期、ESC 局部监听、ViewModel 注入、持有 `QuickLookPreviewController` |
 | `PromptPanelWindow.swift` | `NSPanel` 子类，处理失焦自动隐藏 |
 | `PromptPanelStyles.swift` | `PromptPanelContainerModifier` / `ActionRowModifier` |
@@ -21,15 +21,14 @@
 
 ```
 Coordinator
-  └─ 内建 command action + 读取 ActionManifestStore → Controller.register(actions:)
+  └─ 读取 ActionManifestStore → Controller.register(actions:)
                             └─ 创建 ViewModel(actions:)
                             └─ 已创建 ViewModel 时调用 updateActions(_:)
-                            └─ ViewModel.onSubmit/onSubmitAction/onPerformCommand/onHide/onOpenSettings 回调到 Controller
+                            └─ ViewModel.onSubmit/onSubmitAction/onHide/onOpenSettings 回调到 Controller
                                                                        └─ 转发给 Coordinator.send(.xxx)
 Hotkey → Coordinator.send(.togglePromptPanel) → Controller.toggle()
                                               └─ 显示时 ViewModel.focusSeed += 1（驱动 View 重新聚焦输入框）
 ActionShortcut → Coordinator.performActionShortcut(ActionDefinition)
-              ├─ command：直接执行宿主动作
               ├─ 无必填参数 skill/plugin：直接渲染并创建 session
               └─ 有必填参数 skill/plugin：打开 PromptPanel 并预填 `trigger [arg: ]`
 键盘事件 → NSEvent 局部监听 → ESC 隐藏
@@ -39,7 +38,6 @@ AgentServerHealth.onAvailabilityChange → Controller.setSubmissionEnabled(...)
 
 `ActionDefinition` 是 PromptPanel 下放的所有可选择 item，类似 Raycast item。当前来源包括：
 
-- 内建 command action：如“打开设置”“会话历史”，提交时执行宿主动作。
 - skill action：manifest prompt 显式 `kind: "skill"`，提交时只把渲染后的 prompt 作为普通 prompt 创建新 session。
 - plugin action：manifest prompt 默认 `kind` 为 `"plugin"`，提交时渲染 prompt，并携带 `{ pluginId, promptName }` 创建新 session；agent-server 会重新读取 manifest 校验并激活对应 MCP tool scope。
 
@@ -55,20 +53,20 @@ Action prompt 的参数与提交流程：
 
 - **View 只读 ViewModel**：不要让 View 直接调 `NSEvent` / `NSPanel` / `KeyboardShortcuts.*` API，键盘与窗口副作用全部在 Controller。
 - **ViewModel 不持有 SwiftUI 类型**：不要让 `@Observable` class 引入 `View` / `Color` / `Font`；只暴露 plain Swift 状态与回调。
-- **Controller 是窗口管理 + 事件监听层**：不直接写消息循环或会话逻辑，所有跨模块意图通过 `onSubmit` / `onSubmitAction` / `onPerformCommand` / `onOpenSettings` 闭包出口给 Coordinator。全局快捷键注册由 [Hotkey](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Hotkey/hotkey.md) 承接，不在 PromptPanel 内直接绑定 `KeyboardShortcuts`。
+- **Controller 是窗口管理 + 事件监听层**：不直接写消息循环或会话逻辑，所有跨模块意图通过 `onSubmit` / `onSubmitAction` / `onOpenSettings` 闭包出口给 Coordinator。全局快捷键注册由 [Hotkey](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Hotkey/hotkey.md) 承接，不在 PromptPanel 内直接绑定 `KeyboardShortcuts`。
 - **Action 全局快捷键**：每个 `ActionDefinition` 通过 `shortcutName = "action.<id>"` 获得可配置全局快捷键名；plugin manifest 可通过 prompt 级 `globalShortcut` 声明默认值，用户改过后不覆盖。
 - **动态 action 刷新**：Controller 可多次 `register(actions:)`；首次创建 ViewModel，后续只刷新 ViewModel action 列表。Coordinator 同步刷新 Action 全局快捷键注册。新增动态 action 不要覆盖已有用户自定义快捷键。
 - **Styles 抽取阈值**：跨 View 复用的样式才放 `PromptPanelStyles.swift`；一次性样式写在 View 里，避免 ViewModifier 爆炸。
 - **窗口与拖动区域**：`NSPanel` 自身设为 `isOpaque = false` + `backgroundColor = .clear`，可见背景全部由 SwiftUI `promptPanelContainer()` 的圆角 + ultraThinMaterial 提供，避免顶部"标题栏条"和主体颜色不一致。`isMovableByWindowBackground = true` 让任何空白处都能拖；首行的 input 框宽度固定（左上角紧凑，带 surface 背景与 border），右侧是齿轮按钮，中间留出的 `Spacer` 区域天然成为不显眼的拖动手柄。新增首行控件时不要让控件铺满整行，必须保留中间的拖动空隙。
 - **Action 匹配大小写不敏感**：trigger 使用前缀匹配，title / description 使用包含匹配；trigger 冲突按 plugin id 稳定排序保留第一个。
 - **server 不可用时不丢草稿**：`submissionDisabledMessage != nil` 时输入框禁用并显示提示，`submit()` 直接返回，不清空 `draft` / `attachments`。
-- **测试**：[PromptPanelViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/PromptPanel/PromptPanelViewModelTests.swift) 覆盖普通 draft 提交 / 过滤 / skill/plugin/command action 提交；[ActionDefinitionTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/PromptPanel/ActionDefinitionTests.swift)、[ActionInvocationTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/PromptPanel/ActionInvocationTests.swift)、[ActionManifestStoreTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/PromptPanel/ActionManifestStoreTests.swift) 覆盖 manifest 校验、trigger 解析和目录读取。
+- **测试**：[PromptPanelViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/PromptPanel/PromptPanelViewModelTests.swift) 覆盖普通 draft 提交 / 过滤 / skill/plugin action 提交；[ActionDefinitionTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/PromptPanel/ActionDefinitionTests.swift)、[ActionInvocationTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/PromptPanel/ActionInvocationTests.swift)、[ActionManifestStoreTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/PromptPanel/ActionManifestStoreTests.swift) 覆盖 manifest 校验、trigger 解析和目录读取。
 
 ## 与其他模块的关系
 
 - 由 [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 持有并注入 actions。
 - 提交 prompt 后由 Coordinator 聚焦或创建全局 [SessionWindow](/Users/mu9/proj/handAgent/apps/desktop/Sources/SessionWindow/session-window.md)，再由窗口模型创建新的会话 tab；当前 active tab 不会接收 PromptPanel 的初始提交。
 - [AgentServer](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/AgentServer/agent-server.md) 可用性变化会同步到 `setSubmissionEnabled`，避免重启期间提交新 prompt。
-- "打开设置"按钮与内建 command action 都由 Controller 回调到 Coordinator，再路由到 [Settings](/Users/mu9/proj/handAgent/apps/desktop/Sources/Settings/settings.md) 窗口。
-- "会话历史"由内建 command action 路由到 [SessionWindow](/Users/mu9/proj/handAgent/apps/desktop/Sources/SessionWindow/session-window.md) 的左侧历史列表。
+- "打开设置"按钮由 Controller 回调到 Coordinator，再路由到 [Settings](/Users/mu9/proj/handAgent/apps/desktop/Sources/Settings/settings.md) 窗口。
+- 会话历史是宿主事件入口，由 Coordinator 路由到 [SessionWindow](/Users/mu9/proj/handAgent/apps/desktop/Sources/SessionWindow/session-window.md) 的左侧历史列表，不属于 `ActionDefinition`。
 - 全局热键来自 [AppServices/Hotkey](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Hotkey/hotkey.md)。

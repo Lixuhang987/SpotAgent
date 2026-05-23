@@ -92,22 +92,6 @@ final class ActionDefinitionTests: XCTestCase {
         XCTAssertEqual(actions.disabled, [])
     }
 
-    func testBuildsCommandActionForPromptPanelItem() {
-        let action = ActionDefinition.command(
-            id: "open-settings",
-            trigger: "settings",
-            title: "打开设置",
-            description: "Preferences",
-            keywords: ["preferences"],
-            defaultShortcut: nil,
-            command: .openSettings
-        )
-
-        XCTAssertEqual(action.submission, .command(.openSettings))
-        XCTAssertEqual(action.keywords, ["preferences"])
-        XCTAssertEqual(action.shortcutName.rawValue, "action.open-settings")
-    }
-
     func testDisablesPromptWhenTemplateReferencesUnknownArgument() throws {
         let manifest = PluginManifestDefinition(
             version: 1,

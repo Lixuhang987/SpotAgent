@@ -152,11 +152,6 @@ struct ActionDefinitionBuildResult: Equatable {
     let disabled: [DisabledActionDefinition]
 }
 
-enum ActionCommand: Equatable {
-    case openSettings
-    case openHistory
-}
-
 struct ActionPluginBinding: Equatable {
     let pluginId: String
     let promptName: String
@@ -166,7 +161,6 @@ struct ActionPluginBinding: Equatable {
 enum ActionSubmission: Equatable {
     case appendPrompt
     case plugin(ActionPluginBinding)
-    case command(ActionCommand)
 }
 
 struct ActionDefinition: Equatable, Identifiable {
@@ -174,7 +168,6 @@ struct ActionDefinition: Equatable, Identifiable {
     let trigger: String
     let title: String
     let description: String?
-    let keywords: [String]
     let template: String
     let arguments: [ActionArgumentDefinition]
     let icons: [ActionIconDefinition]
@@ -210,7 +203,6 @@ struct ActionDefinition: Equatable, Identifiable {
             trigger: trigger,
             title: title,
             description: description,
-            keywords: [],
             template: template,
             arguments: arguments,
             icons: [],
@@ -235,35 +227,11 @@ struct ActionDefinition: Equatable, Identifiable {
             trigger: trigger,
             title: title,
             description: description,
-            keywords: [],
             template: template,
             arguments: arguments,
             icons: icons,
             defaultShortcut: defaultShortcut,
             submission: .plugin(binding)
-        )
-    }
-
-    static func command(
-        id: String,
-        trigger: String,
-        title: String,
-        description: String?,
-        keywords: [String],
-        defaultShortcut: KeyboardShortcuts.Shortcut?,
-        command: ActionCommand
-    ) -> ActionDefinition {
-        ActionDefinition(
-            id: id,
-            trigger: trigger,
-            title: title,
-            description: description,
-            keywords: keywords,
-            template: "",
-            arguments: [],
-            icons: [],
-            defaultShortcut: defaultShortcut,
-            submission: .command(command)
         )
     }
 
@@ -391,7 +359,6 @@ struct ActionDefinition: Equatable, Identifiable {
             action.trigger.lowercased().hasPrefix(normalizedQuery)
                 || action.title.lowercased().contains(normalizedQuery)
                 || (action.description?.lowercased().contains(normalizedQuery) ?? false)
-                || action.keywords.contains(where: { $0.lowercased().contains(normalizedQuery) })
         }
     }
 }

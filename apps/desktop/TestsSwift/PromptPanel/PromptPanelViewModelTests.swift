@@ -7,7 +7,7 @@ final class PromptPanelViewModelTests: XCTestCase {
         let actions = makeTestActions()
         let vm = PromptPanelViewModel(actions: actions)
 
-        XCTAssertEqual(vm.filteredActions.map(\.id), ["open-settings", "new-session", "weather/current"])
+        XCTAssertEqual(vm.filteredActions.map(\.id), ["new-session", "weather/current"])
     }
 
     @MainActor
@@ -15,9 +15,9 @@ final class PromptPanelViewModelTests: XCTestCase {
         let actions = makeTestActions()
         let vm = PromptPanelViewModel(actions: actions)
 
-        vm.draft = "settings"
+        vm.draft = "weather"
 
-        XCTAssertEqual(vm.filteredActions.map(\.id), ["open-settings"])
+        XCTAssertEqual(vm.filteredActions.map(\.id), ["weather/current"])
     }
 
     @MainActor
@@ -158,28 +158,6 @@ final class PromptPanelViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testSubmitCommandInvocationPerformsCommand() {
-        let action = ActionDefinition.command(
-            id: "open-settings",
-            trigger: "settings",
-            title: "打开设置",
-            description: nil,
-            keywords: [],
-            defaultShortcut: nil,
-            command: .openSettings
-        )
-        let vm = PromptPanelViewModel(actions: [action])
-        var command: ActionCommand?
-        vm.onPerformCommand = { command = $0 }
-
-        vm.draft = "settings"
-        vm.submit()
-
-        XCTAssertEqual(command, .openSettings)
-        XCTAssertEqual(vm.draft, "")
-    }
-
-    @MainActor
     func testSelectActionWritesTriggerIntoDraft() {
         let action = makeReviewAction()
         let vm = PromptPanelViewModel(actions: [action])
@@ -246,15 +224,6 @@ final class PromptPanelViewModelTests: XCTestCase {
 
     private func makeTestActions() -> [ActionDefinition] {
         [
-            ActionDefinition.command(
-                id: "open-settings",
-                trigger: "settings",
-                title: "打开设置",
-                description: "preferences",
-                keywords: ["preferences"],
-                defaultShortcut: nil,
-                command: .openSettings
-            ),
             ActionDefinition.skill(
                 id: "new-session",
                 trigger: "new",

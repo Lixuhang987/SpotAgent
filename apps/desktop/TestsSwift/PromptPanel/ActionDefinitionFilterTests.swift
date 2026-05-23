@@ -3,25 +3,25 @@ import KeyboardShortcuts
 @testable import HandAgentDesktop
 
 final class ActionDefinitionFilterTests: XCTestCase {
-    func testFiltersActionsByKeyword() {
+    func testFiltersActionsByDescription() {
         let actions = [
-            ActionDefinition.command(
+            ActionDefinition.skill(
                 id: "open",
                 trigger: "open",
                 title: "Open File",
-                description: nil,
-                keywords: ["file", "document"],
-                defaultShortcut: .init(.o, modifiers: [.command]),
-                command: .openSettings
+                description: "file document",
+                template: "Open file",
+                arguments: [],
+                defaultShortcut: .init(.o, modifiers: [.command])
             ),
-            ActionDefinition.command(
+            ActionDefinition.skill(
                 id: "new",
                 trigger: "new",
                 title: "New Session",
-                description: nil,
-                keywords: ["workspace"],
-                defaultShortcut: .init(.n, modifiers: [.command]),
-                command: .openHistory
+                description: "workspace",
+                template: "New session",
+                arguments: [],
+                defaultShortcut: .init(.n, modifiers: [.command])
             )
         ]
 

@@ -11,7 +11,6 @@ final class PromptPanelViewModel {
 
     var onSubmit: ((String, [PromptAttachmentResult]) -> Void)?
     var onSubmitAction: ((String, ActionBindingPayload, [PromptAttachmentResult]) -> Void)?
-    var onPerformCommand: ((ActionCommand) -> Void)?
     var onHide: (() -> Void)?
     var onOpenSettings: (() -> Void)?
     var onPreviewImage: ((PromptAttachmentResult) -> Void)?
@@ -116,9 +115,6 @@ final class PromptPanelViewModel {
             } catch {
                 submissionDisabledMessage = "Action 渲染失败"
             }
-        case .command(let command):
-            onPerformCommand?(command)
-            resetForNewSession()
         }
     }
 }
