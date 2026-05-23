@@ -47,6 +47,7 @@ describe("MockLLMClient", () => {
       "[mock:plugin-workspace-escape]",
       "[mock:plugin-workspace-symlink]",
       "[mock:mcp-echo]",
+      "[mock:mcp-filesystem-read]",
       "[mock:computer-use-list-apps]",
       "[mock:computer-use-get-finder]",
       "[mock:ocr-invalid]",
@@ -295,6 +296,18 @@ describe("MockLLMClient", () => {
           id: "mock-mcp-echo-1",
           name: "mcp.qa_echo.echo",
           arguments: { text: "hello from MockLLMClient" },
+        },
+      ],
+    });
+
+    await expect(
+      client.complete([{ role: "user", content: "run [mock:mcp-filesystem-read]" }], []),
+    ).resolves.toMatchObject({
+      toolCalls: [
+        {
+          id: "mock-mcp-filesystem-read-1",
+          name: "mcp.filesystem.read_file",
+          arguments: { path: "/tmp/handagent-mcp-example/hello.txt" },
         },
       ],
     });

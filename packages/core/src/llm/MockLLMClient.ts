@@ -241,6 +241,17 @@ export const mockLLMScenarios: MockLLMScenario[] = [
     finalText: "Mock MCP echo completed.",
   }),
   toolScenario({
+    id: "mcp-filesystem-read",
+    trigger: "[mock:mcp-filesystem-read]",
+    description: "调用 mcp.filesystem.read_file，用于验证 filesystem MCP tool 权限气泡。",
+    toolCall: {
+      id: "mock-mcp-filesystem-read-1",
+      name: "mcp.filesystem.read_file",
+      arguments: { path: "/tmp/handagent-mcp-example/hello.txt" },
+    },
+    finalText: "Mock MCP filesystem read completed.",
+  }),
+  toolScenario({
     id: "computer-use-list-apps",
     trigger: "[mock:computer-use-list-apps]",
     description: "调用 mcp.computer_use.list_apps，用于验证 Computer Use MCP 全局注入与只读工具调用。",
