@@ -8,6 +8,8 @@ import type { MCPClient } from "@handagent/core/mcp/MCPClient.ts";
 import type { MCPServerConfig } from "@handagent/core/mcp/MCPConfig.ts";
 import type { PlatformAdapter } from "@handagent/core/platform/PlatformAdapter.ts";
 import { parseMCPConfig } from "@handagent/core/mcp/MCPConfig.ts";
+import type { AgentMessage } from "@handagent/core/runtime/AgentMessage.ts";
+import { META_TOOL_NAME } from "@handagent/core/tools/MetaToolUseTool.ts";
 import { SessionPersistence } from "./SessionPersistence.ts";
 import { SessionRouter } from "./SessionRouter.ts";
 import { SessionRuntimeOrchestrator } from "./SessionRuntimeOrchestrator.ts";
@@ -282,6 +284,10 @@ export async function startDefaultServer(port = 4317) {
     permissionPolicy,
     blobStore,
     turnSummarizer: summarizer,
+    onMetaToolActivate: async (sessionId) => {
+      await sessionScopedTools.activate(sessionId);
+    },
+    isSessionActivated: (sessionId) => sessionScopedTools.isActivated(sessionId),
   });
   const persistence = new SessionPersistence(store, undefined, blobStore);
   const orchestrator = new SessionRuntimeOrchestrator(
@@ -291,10 +297,20 @@ export async function startDefaultServer(port = 4317) {
     async (sessionId) => {
       await toolRegistry.refresh();
       const session = await persistence.getSession(sessionId);
-      await sessionScopedTools.refreshForSession(
-        sessionId,
-        session?.metadata.actionBinding,
-      );
+      const binding = session?.metadata.actionBinding;
+
+      if (!sessionScopedTools.isActivated(sessionId)) {
+        if (binding) {
+          await sessionScopedTools.activate(sessionId);
+        } else {
+          const history = await persistence.getMessages(sessionId);
+          if (historyShowsToolsActivated(history)) {
+            await sessionScopedTools.activate(sessionId);
+          }
+        }
+      }
+
+      await sessionScopedTools.refreshForSession(sessionId, binding);
     },
   );
   const router = new SessionRouter(
@@ -302,6 +318,7 @@ export async function startDefaultServer(port = 4317) {
     persistence,
     undefined,
     new ActionBindingResolver({ pluginsDir: paths.pluginsDir }),
+    (sessionId) => sessionScopedTools.forgetSession(sessionId),
   );
 
   return startServer({
@@ -401,6 +418,10 @@ function isNotFoundError(error: unknown): boolean {
     "code" in error &&
     error.code === "ENOENT"
   );
+}
+
+function historyShowsToolsActivated(messages: readonly AgentMessage[]): boolean {
+  return messages.some((m) => m.role === "tool" && m.name === META_TOOL_NAME);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

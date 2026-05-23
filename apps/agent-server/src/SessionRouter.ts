@@ -33,6 +33,7 @@ export class SessionRouter {
     private readonly persistence: SessionPersistence,
     private readonly now: () => string = () => new Date().toISOString(),
     private readonly actionBindingResolver?: ActionBindingResolver,
+    private readonly onSessionDeleted?: (sessionId: string) => void,
   ) {}
 
   async createSession(title?: string): Promise<PersistedSession> {
@@ -261,6 +262,7 @@ export class SessionRouter {
     }
 
     await this.persistence.deleteSession(targetSessionId);
+    this.onSessionDeleted?.(targetSessionId);
     push({
       type: "delete_session_response",
       sessionId: message.sessionId,

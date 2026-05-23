@@ -52,7 +52,17 @@ flowchart TD
 - `permission_decision`：进入 `ask` 路径后的解析结果；用于审计事件，不直接发 UI 消息。
 - `runtime_error`：仅类型预留，目前未在循环内主动 emit；外层捕获 throw 后由 `SessionRuntimeOrchestrator` 通过 `MessageTranslator.toErrorMessage` 翻译。
 
-## 默认策略
+## meta-tool 激活分支
+
+`AgentRuntime.handleToolCall` 在分派 tool call 前先检查 tool name 是否等于 `META_TOOL_NAME`（`"use_tools"`）：
+
+- 命中时跳过 `PermissionPolicy.check`，直接触发激活回调，不走普通 tool 执行路径。
+- 两个可选回调由 agent-server 注入：
+  - `onMetaToolActivate(sessionId)`：激活时通知 `SessionScopedToolRegistry` 扩展工具集。
+  - `isSessionActivated(sessionId)`：每次 LLM 请求前判断当前 session 是否已激活，用于决定传入完整工具集还是仅 meta-tool。
+- tool-use-policy system prompt section 仅在 `hasRealTools`（registry 中存在非 meta-tool）为真时出现；未激活 session 不注入该 section，避免引导模型调用尚不存在的工具。
+
+
 
 - `maxTurns = 8`：防失控循环。
 - `permissionPolicy = AllowAllPermissionPolicy()`：仅在测试 / 脚本场景默认放行；生产由 `agent-server` 注入 `FilePermissionPolicy(askResolver)`。

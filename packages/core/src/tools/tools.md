@@ -60,6 +60,17 @@ flowchart LR
 - 入参 schema 单一源：写 `zod` schema 即可，`defineTool` 自动派生 JSON Schema、TS 类型，并在 `call(input)` 内执行运行时校验；不要再手写 JSON Schema 字面量，也不要在 builtin tool 里重复做外层入参结构校验。
 - 运行时入参校验失败时，`call(input)` 以 rejected `Error` 返回统一可读错误，错误信息包含 tool name 与字段路径（例如缺字段、类型错误、strict object 的未知字段），方便 `AgentRuntime` 与审计日志直接展示。
 
+## meta-tool：懒加载激活入口
+
+`MetaToolUseTool`（常量 `META_TOOL_NAME = "use_tools"`）是工具集的激活入口，与普通 builtin tool 有以下本质区别：
+
+- 不进入 `registerBuiltins` / `registerTools` 的 builtin 注册流程，由 `SessionScopedToolRegistry` 单独管理。
+- 不受 `~/.spotAgent/settings.json` 的 `allowlist` / `denylist` 影响；无论 settings 如何配置，未激活 session 始终只暴露这一个 tool。
+- 激活后 meta-tool 仍保留在 registry 里；重复调用走幂等路径，返回 `META_TOOL_ALREADY_ACTIVE_RESULT`，不会重复扩展工具集。
+- 首次激活返回 `META_TOOL_FIRST_ACTIVATION_RESULT`，runtime 随即把完整 builtin + MCP 工具集注入当前 session。
+
+导出常量：`META_TOOL_NAME`、`META_TOOL_FIRST_ACTIVATION_RESULT`、`META_TOOL_ALREADY_ACTIVE_RESULT`。
+
 ## 相关文档
 
 - 平台抽象：[platform/platform.md](/Users/mu9/proj/handAgent/packages/core/src/platform/platform.md)

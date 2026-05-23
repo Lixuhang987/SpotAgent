@@ -15,6 +15,10 @@ import {
   buildSystemPromptMessages,
   type SystemPromptSection,
 } from "./SystemPrompt.ts";
+import {
+  META_TOOL_NAME,
+  META_TOOL_ALREADY_ACTIVE_RESULT,
+} from "../tools/MetaToolUseTool.ts";
 
 export type AgentBubble = {
   id: string;
@@ -90,6 +94,8 @@ export class AgentRuntime {
   private readonly turnSummarizer?: TurnSummarizerLike;
   private readonly systemPromptSections: SystemPromptSection[];
   private pendingTurnSummary: Promise<void> = Promise.resolve();
+  private readonly onMetaToolActivate?: (sessionId: string) => Promise<void>;
+  private readonly isSessionActivated?: (sessionId: string) => boolean;
 
   constructor(
     private readonly client: LLMClientLike,
@@ -100,6 +106,8 @@ export class AgentRuntime {
       blobStore?: BlobStore;
       turnSummarizer?: TurnSummarizerLike;
       systemPromptSections?: SystemPromptSection[];
+      onMetaToolActivate?: (sessionId: string) => Promise<void>;
+      isSessionActivated?: (sessionId: string) => boolean;
     }
   ) {
     this.maxTurns = options?.maxTurns ?? 8;
@@ -107,6 +115,8 @@ export class AgentRuntime {
     this.blobStore = options?.blobStore;
     this.turnSummarizer = options?.turnSummarizer;
     this.systemPromptSections = options?.systemPromptSections ?? buildDefaultSystemPromptSections();
+    this.onMetaToolActivate = options?.onMetaToolActivate;
+    this.isSessionActivated = options?.isSessionActivated;
   }
 
   async run(userInput: string): Promise<AgentRunResult> {
@@ -185,6 +195,12 @@ export class AgentRuntime {
       throw new Error(`Unknown tool: ${toolCall.name}`);
     }
 
+    // Meta-tool short-circuit: skip permission checks entirely
+    if (toolCall.name === META_TOOL_NAME) {
+      await this.handleMetaToolCall({ tool, toolCall, messages, onEvent, runOptions });
+      return;
+    }
+
     const decision = await this.resolveToolPermission(toolCall, onEvent, runOptions);
     if (decision === "deny") {
       this.appendDeniedToolResult(toolCall, messages, onEvent);
@@ -215,6 +231,62 @@ export class AgentRuntime {
       status: execution.status,
       output: truncateOutput(execution.content),
       durationMs: execution.durationMs,
+    });
+  }
+
+  private async handleMetaToolCall(input: {
+    tool: AgentTool;
+    toolCall: ToolCallEnvelope;
+    messages: AgentMessage[];
+    onEvent: AgentRuntimeEventSink;
+    runOptions: AgentRuntimeRunOptions;
+  }): Promise<void> {
+    const { tool, toolCall, messages, onEvent, runOptions } = input;
+    const { sessionId } = runOptions;
+    const startedAt = Date.now();
+
+    throwIfAborted(runOptions.signal);
+
+    onEvent({
+      type: "tool_call",
+      toolCallId: toolCall.id,
+      toolName: toolCall.name,
+      input: toolCall.arguments,
+    });
+
+    let content: string;
+
+    if (sessionId !== undefined && this.isSessionActivated?.(sessionId) === true) {
+      // Already activated — return the already-active result without calling the tool
+      content = META_TOOL_ALREADY_ACTIVE_RESULT;
+    } else {
+      // First activation: invoke the callback, then call the tool to get the result
+      if (sessionId !== undefined) {
+        await this.onMetaToolActivate?.(sessionId);
+      }
+      throwIfAborted(runOptions.signal);
+      const result = await tool.call(toolCall.arguments, {
+        sessionId,
+        toolCallId: toolCall.id,
+      });
+      throwIfAborted(runOptions.signal);
+      content = serializeToolResult(result);
+    }
+
+    messages.push({
+      role: "tool",
+      toolCallId: toolCall.id,
+      name: toolCall.name,
+      content,
+    });
+
+    onEvent({
+      type: "tool_result",
+      toolCallId: toolCall.id,
+      toolName: toolCall.name,
+      status: "success",
+      output: truncateOutput(content),
+      durationMs: Date.now() - startedAt,
     });
   }
 

@@ -876,6 +876,50 @@ describe("SessionRouter", () => {
     ]);
   });
 
+  it("calls onSessionDeleted hook after persistence.deleteSession", async () => {
+    const persistence = new SessionPersistence(
+      new InMemorySessionStore(),
+      () => "2026-05-23T00:00:00.000Z",
+    );
+    const deletedIds: string[] = [];
+    const deleteOrder: string[] = [];
+
+    // Wrap persistence.deleteSession to record call order
+    const originalDelete = persistence.deleteSession.bind(persistence);
+    persistence.deleteSession = async (sessionId: string) => {
+      await originalDelete(sessionId);
+      deleteOrder.push(`persistence:${sessionId}`);
+    };
+
+    const router = new SessionRouter(
+      { async handleUserMessage() {}, interruptSession() {}, async interruptAndWait() {} },
+      persistence,
+      () => "2026-05-23T00:01:00.000Z",
+      undefined,
+      (sessionId) => {
+        deleteOrder.push(`hook:${sessionId}`);
+        deletedIds.push(sessionId);
+      },
+    );
+
+    await persistence.ensureSession("session-hook-test");
+    await router.receive(
+      {
+        type: "delete_session_request",
+        sessionId: "request-session",
+        messageId: "delete-hook-1",
+        timestamp: "2026-05-23T00:01:00.000Z",
+        payload: { targetSessionId: "session-hook-test" },
+      },
+      () => {},
+    );
+
+    expect(deletedIds).toEqual(["session-hook-test"]);
+    // hook must fire AFTER persistence.deleteSession
+    expect(deleteOrder).toEqual(["persistence:session-hook-test", "hook:session-hook-test"]);
+    expect(await persistence.getSession("session-hook-test")).toBeNull();
+  });
+
   it("routes interrupt frames to the runtime orchestrator", async () => {
     const interrupted: string[] = [];
     const router = new SessionRouter(

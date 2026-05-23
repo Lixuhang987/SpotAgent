@@ -38,6 +38,34 @@ describe("SystemPrompt", () => {
       ]);
   });
 
+  it("treats use_tools as non-real and skips tool-use-policy when only meta-tool is registered", async () => {
+    const sections = buildDefaultSystemPromptSections();
+    const metaToolOnly: RegisteredTool = {
+      name: "use_tools",
+      description: "Activate tools.",
+      inputSchema: { type: "object", additionalProperties: false },
+    };
+
+    await expect(
+      resolveSystemPromptSections(sections, { tools: [metaToolOnly] }),
+    ).resolves.toEqual([]);
+  });
+
+  it("emits tool-use-policy when meta-tool is mixed with real tools", async () => {
+    const sections = buildDefaultSystemPromptSections();
+    const metaToolOnly: RegisteredTool = {
+      name: "use_tools",
+      description: "Activate tools.",
+      inputSchema: { type: "object", additionalProperties: false },
+    };
+
+    await expect(
+      resolveSystemPromptSections(sections, {
+        tools: [metaToolOnly, fakeRegisteredTool],
+      }),
+    ).resolves.toEqual([expect.stringContaining("structured tool calls")]);
+  });
+
   it("converts resolved sections to system messages before conversation messages", async () => {
     const messages: AgentMessage[] = [
       { role: "system", content: "用户自定义系统提示" },

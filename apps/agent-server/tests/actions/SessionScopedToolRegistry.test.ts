@@ -4,7 +4,7 @@ import type { AgentTool } from "@handagent/core/tools/AgentTool.ts";
 import { SessionScopedToolRegistry } from "../../src/SessionScopedToolRegistry.ts";
 
 describe("SessionScopedToolRegistry", () => {
-  it("adds mcp tools only for sessions bound to their server", async () => {
+  it("adds mcp tools only for sessions bound to their server (after activation)", async () => {
     const builtin = new ToolRegistry([makeTool("clipboard.read")]);
     const scoped = new SessionScopedToolRegistry({
       builtinRegistry: builtin,
@@ -13,23 +13,26 @@ describe("SessionScopedToolRegistry", () => {
         serverId === "github" ? [makeTool("mcp.github.create_issue")] : [],
     });
 
+    // plain session without binding stays meta-only
     await scoped.refreshForSession("plain", undefined);
     expect(scoped.registry.list().map((tool) => tool.name)).toEqual([
-      "clipboard.read",
+      "use_tools",
     ]);
 
+    // session with plugin binding gets activated immediately with full tools
     await scoped.refreshForSession("action", {
       pluginId: "review",
       promptName: "code_review",
       mcpServerIds: ["github"],
     });
     expect(scoped.registry.list().map((tool) => tool.name)).toEqual([
+      "use_tools",
       "clipboard.read",
       "mcp.github.create_issue",
     ]);
   });
 
-  it("loads global mcp servers for all sessions regardless of binding", async () => {
+  it("loads global mcp servers for activated sessions", async () => {
     const builtin = new ToolRegistry([makeTool("clipboard.read")]);
     const scoped = new SessionScopedToolRegistry({
       builtinRegistry: builtin,
@@ -38,8 +41,16 @@ describe("SessionScopedToolRegistry", () => {
         serverId === "github" ? [makeTool("mcp.github.create_issue")] : [],
     });
 
+    // before activation: meta-only (global MCP servers are not loaded until activated)
     await scoped.refreshForSession("plain", undefined);
     expect(scoped.registry.list().map((tool) => tool.name)).toEqual([
+      "use_tools",
+    ]);
+
+    // after explicit activation: meta + builtin + global MCP
+    await scoped.activate("plain");
+    expect(scoped.registry.list().map((tool) => tool.name)).toEqual([
+      "use_tools",
       "clipboard.read",
       "mcp.github.create_issue",
     ]);
@@ -60,12 +71,13 @@ describe("SessionScopedToolRegistry", () => {
       mcpServerIds: ["github"],
     });
     expect(scoped.registry.list().map((tool) => tool.name)).toEqual([
+      "use_tools",
       "clipboard.read",
       "mcp.github.create_issue",
     ]);
   });
 
-  it("skips missing mcp servers without dropping builtin tools", async () => {
+  it("skips missing mcp servers without dropping builtin tools (activated session)", async () => {
     const logs: string[] = [];
     const builtin = new ToolRegistry([makeTool("clipboard.read")]);
     const scoped = new SessionScopedToolRegistry(
@@ -79,9 +91,11 @@ describe("SessionScopedToolRegistry", () => {
       { log: (message) => logs.push(message) },
     );
 
-    await scoped.refreshForSession("action", undefined);
+    // use activate() to trigger full tool load; MCP error should be swallowed
+    await scoped.activate("action");
 
     expect(scoped.registry.list().map((tool) => tool.name)).toEqual([
+      "use_tools",
       "clipboard.read",
     ]);
     expect(logs[0]).toContain("skipped MCP server missing");
