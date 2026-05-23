@@ -387,10 +387,7 @@ describe("MockLLMClient", () => {
       role: "assistant",
       content: "Mock file.write completed for hello.txt.",
     });
-    expect(result.bubbles.at(-1)).toEqual({
-      id: "assistant-2",
-      text: "Mock file.write completed for hello.txt.",
-    });
+    expect(result).not.toHaveProperty("bubbles");
   });
 
   it("throws explicit errors for failure triggers and missing triggers", async () => {

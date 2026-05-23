@@ -238,10 +238,7 @@ describe("AgentRuntime", () => {
       role: "assistant",
       content: "done",
     });
-    expect(result.bubbles.at(-1)).toEqual({
-      id: "assistant-2",
-      text: "done",
-    });
+    expect(result).not.toHaveProperty("bubbles");
   });
 
   it("passes session context into tool calls", async () => {
@@ -590,12 +587,7 @@ describe("AgentRuntime", () => {
       role: "assistant",
       content: "这是真流式",
     });
-    expect(result.bubbles).toEqual([
-      {
-        id: "assistant-1",
-        text: "这是真流式",
-      },
-    ]);
+    expect(result).not.toHaveProperty("bubbles");
   });
 
   it("preserves assistant toolCalls in message history and emits minimal assistant streaming events", async () => {
@@ -774,16 +766,7 @@ describe("AgentRuntime", () => {
       role: "assistant",
       content: "工具已完成",
     });
-    expect(result.bubbles).toEqual([
-      {
-        id: "assistant-1",
-        text: "先调用工具",
-      },
-      {
-        id: "assistant-2",
-        text: "工具已完成",
-      },
-    ]);
+    expect(result).not.toHaveProperty("bubbles");
   });
 
   it("stops streaming and emits interrupted status when the run signal is aborted", async () => {

@@ -100,7 +100,6 @@ flowchart TD
   - `toolCalls?: ToolCallEnvelope[]`
 - `AgentRunResult`
   - `messages: AgentMessage[]`
-  - `bubbles: AgentBubble[]`
 
 ### 4. Tool 与平台
 

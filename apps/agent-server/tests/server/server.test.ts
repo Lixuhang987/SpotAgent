@@ -308,7 +308,7 @@ describe("attachSessionSocketHandlers", () => {
       () => "2026-05-20T00:00:00.000Z",
     );
     let runtimeSignal: AbortSignal | undefined;
-    let finishRun: ((result: { messages: AgentMessage[]; bubbles: [] }) => void) | undefined;
+    let finishRun: ((result: { messages: AgentMessage[] }) => void) | undefined;
     const runStarted = Promise.withResolvers<void>();
     const orchestrator = new SessionRuntimeOrchestrator(
       {
@@ -323,7 +323,6 @@ describe("attachSessionSocketHandlers", () => {
                   content: "late assistant after close",
                 },
               ],
-              bubbles: [],
             });
           });
           runStarted.resolve();
