@@ -23,6 +23,7 @@ type RuntimeLike = {
   ): Promise<AgentRunResult>;
   waitForPendingSummaries?(messages?: AgentMessage[]): Promise<void>;
 };
+type RuntimeResolver = RuntimeLike | ((sessionId: string) => RuntimeLike);
 
 type PushMessage = (message: SessionMessage) => void;
 type BeforeRunHook = (sessionId: string) => void | Promise<void>;
@@ -48,7 +49,7 @@ export class SessionRuntimeOrchestrator {
   private readonly interruptPollIntervalMs: number;
 
   constructor(
-    private readonly runtime: RuntimeLike,
+    private readonly runtimeResolver: RuntimeResolver,
     private readonly persistence: SessionPersistence,
     private readonly now: () => string = () => new Date().toISOString(),
     private readonly beforeRun: BeforeRunHook = () => {},
@@ -84,12 +85,13 @@ export class SessionRuntimeOrchestrator {
 
     const history = await this.persistence.getMessages(sessionId);
     await this.beforeRun(sessionId);
-    await this.runtime.waitForPendingSummaries?.(history);
+    const runtime = this.runtimeForSession(sessionId);
+    await runtime.waitForPendingSummaries?.(history);
     const runtimeHistory = agentMessagesToRuntimeMessages(history);
 
     try {
       const events: SessionEvent[] = [];
-      const result = await this.runtime.runWithMessages(
+      const result = await runtime.runWithMessages(
         runtimeHistory,
         (event) => {
           if (!this.isActive(sessionId, activeRun) || activeRun.controller.signal.aborted) {
@@ -217,6 +219,12 @@ export class SessionRuntimeOrchestrator {
 
   private isActive(sessionId: string, activeRun: ActiveRun): boolean {
     return this.activeRuns.get(sessionId)?.generation === activeRun.generation;
+  }
+
+  private runtimeForSession(sessionId: string): RuntimeLike {
+    return typeof this.runtimeResolver === "function"
+      ? this.runtimeResolver(sessionId)
+      : this.runtimeResolver;
   }
 }
 

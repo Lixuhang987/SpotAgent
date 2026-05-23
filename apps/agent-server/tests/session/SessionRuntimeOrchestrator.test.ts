@@ -883,4 +883,57 @@ describe("SessionRuntimeOrchestrator activation hook", () => {
     expect(calls[1]).toBe("runWithMessages");
     expect(calls).toEqual(["before:s1", "runWithMessages"]);
   });
+
+  it("resolves an isolated runtime for each session run", async () => {
+    const calls: string[] = [];
+    const persistence = new SessionPersistence(
+      new InMemorySessionStore(),
+      () => "2026-05-24T00:00:00.000Z",
+    );
+    const orchestrator = new SessionRuntimeOrchestrator(
+      (sessionId) => {
+        calls.push(`runtime:${sessionId}`);
+        return {
+          async waitForPendingSummaries() {
+            calls.push(`summary:${sessionId}`);
+          },
+          async runWithMessages(
+            messages: AgentMessage[],
+            _onEvent,
+            runOptions,
+          ) {
+            calls.push(`run:${sessionId}:${runOptions?.sessionId}`);
+            return { messages, bubbles: [] };
+          },
+        };
+      },
+      persistence,
+      () => "2026-05-24T00:00:00.000Z",
+      (sessionId) => {
+        calls.push(`before:${sessionId}`);
+      },
+    );
+
+    await persistence.ensureSession("s1");
+    await persistence.ensureSession("s2");
+    await orchestrator.handleUserMessage(
+      createUserMessage("s1", "one", "user-1"),
+      () => {},
+    );
+    await orchestrator.handleUserMessage(
+      createUserMessage("s2", "two", "user-2"),
+      () => {},
+    );
+
+    expect(calls).toEqual([
+      "before:s1",
+      "runtime:s1",
+      "summary:s1",
+      "run:s1:s1",
+      "before:s2",
+      "runtime:s2",
+      "summary:s2",
+      "run:s2:s2",
+    ]);
+  });
 });

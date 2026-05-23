@@ -4,9 +4,9 @@ import type { SessionActionBinding } from "@handagent/core/storage/index.ts";
 import { MetaToolUseTool } from "@handagent/core/tools/MetaToolUseTool.ts";
 
 export class SessionScopedToolRegistry {
-  readonly registry = new ToolRegistry();
   private readonly metaTool: AgentTool = MetaToolUseTool.create();
   private readonly activated = new Set<string>();
+  private readonly registries = new Map<string, ToolRegistry>();
 
   constructor(
     private readonly options: {
@@ -23,32 +23,44 @@ export class SessionScopedToolRegistry {
     sessionId: string,
     binding: SessionActionBinding | undefined,
   ): Promise<void> {
+    const registry = this.registryForSession(sessionId);
     if (binding) {
       this.activated.add(sessionId);
     }
     if (this.activated.has(sessionId)) {
-      await this.refreshActivated(sessionId, binding);
+      await this.refreshActivated(sessionId, binding, registry);
       return;
     }
-    this.registry.replaceAll([this.metaTool]);
+    registry.replaceAll([this.metaTool]);
   }
 
   async activate(sessionId: string): Promise<void> {
     this.activated.add(sessionId);
-    await this.refreshActivated(sessionId, undefined);
+    await this.refreshActivated(sessionId, undefined, this.registryForSession(sessionId));
   }
 
   isActivated(sessionId: string): boolean {
     return this.activated.has(sessionId);
   }
 
+  registryForSession(sessionId: string): ToolRegistry {
+    let registry = this.registries.get(sessionId);
+    if (!registry) {
+      registry = new ToolRegistry([this.metaTool]);
+      this.registries.set(sessionId, registry);
+    }
+    return registry;
+  }
+
   forgetSession(sessionId: string): void {
     this.activated.delete(sessionId);
+    this.registries.delete(sessionId);
   }
 
   private async refreshActivated(
     sessionId: string,
     binding: SessionActionBinding | undefined,
+    registry: ToolRegistry,
   ): Promise<void> {
     void sessionId;
     const tools: AgentTool[] = [this.metaTool, ...this.options.builtinRegistry.all()];
@@ -75,6 +87,6 @@ export class SessionScopedToolRegistry {
         byName.set(tool.name, tool);
       }
     }
-    this.registry.replaceAll([...byName.values()]);
+    registry.replaceAll([...byName.values()]);
   }
 }
