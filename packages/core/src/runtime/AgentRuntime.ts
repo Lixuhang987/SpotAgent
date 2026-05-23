@@ -110,7 +110,7 @@ export class AgentRuntime {
       isSessionActivated?: (sessionId: string) => boolean;
     }
   ) {
-    this.maxTurns = options?.maxTurns ?? 8;
+    this.maxTurns = options?.maxTurns ?? 100;
     this.permissionPolicy = options?.permissionPolicy ?? new AllowAllPermissionPolicy();
     this.blobStore = options?.blobStore;
     this.turnSummarizer = options?.turnSummarizer;
