@@ -1,0 +1,40 @@
+{
+  "description": "User-managed append prompt actions.",
+  "enabled": true,
+  "id": "append-prompts",
+  "mcpServerIds": [],
+  "prompts": [
+    {
+      "arguments": [
+        {
+          "description": "Code to explain",
+          "name": "code",
+          "required": true
+        }
+      ],
+      "description": "Explain a pasted code block.",
+      "kind": "skill",
+      "name": "explain-code",
+      "template": "Explain this code clearly. Call out inputs, outputs, side effects, and any risks.\n\n{{code}}",
+      "title": "Explain Code",
+      "trigger": "explain"
+    },
+    {
+      "arguments": [
+        {
+          "description": "Text to summarize",
+          "name": "text",
+          "required": true
+        }
+      ],
+      "description": "Summarize pasted text into concise bullets.",
+      "kind": "skill",
+      "name": "summarize-text",
+      "template": "Summarize the text below in Chinese. Keep only the important facts.\n\n{{text}}",
+      "title": "Summarize Text",
+      "trigger": "sum"
+    }
+  ],
+  "title": "Append Prompts",
+  "version": 1
+}

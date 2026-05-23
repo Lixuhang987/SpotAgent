@@ -21,8 +21,40 @@ enum TestFiles {
             .appendingPathComponent("permissions.json")
     }
 
+    static func pluginsDirectoryURL(_ homeURL: URL) -> URL {
+        homeURL
+            .appendingPathComponent(".spotAgent", isDirectory: true)
+            .appendingPathComponent("plugins", isDirectory: true)
+    }
+
+    static func mcpConfigFileURL(_ homeURL: URL) -> URL {
+        homeURL
+            .appendingPathComponent(".spotAgent", isDirectory: true)
+            .appendingPathComponent("mcp.json")
+    }
+
     static func writeSettings(_ homeURL: URL, _ json: String) throws {
         let fileURL = settingsFileURL(homeURL)
+        try FileManager.default.createDirectory(
+            at: fileURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Data(json.utf8).write(to: fileURL)
+    }
+
+    static func writePlugin(_ homeURL: URL, id: String, json: String) throws {
+        let fileURL = pluginsDirectoryURL(homeURL)
+            .appendingPathComponent(id, isDirectory: true)
+            .appendingPathComponent("plugin.json")
+        try FileManager.default.createDirectory(
+            at: fileURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Data(json.utf8).write(to: fileURL)
+    }
+
+    static func writeMCPConfig(_ homeURL: URL, _ json: String) throws {
+        let fileURL = mcpConfigFileURL(homeURL)
         try FileManager.default.createDirectory(
             at: fileURL.deletingLastPathComponent(),
             withIntermediateDirectories: true

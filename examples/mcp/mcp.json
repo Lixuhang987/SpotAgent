@@ -1,0 +1,28 @@
+{
+  "servers": [
+    {
+      "args": [
+        "--yes",
+        "@modelcontextprotocol/server-filesystem",
+        "/tmp/handagent-mcp-example"
+      ],
+      "command": "npx",
+      "id": "filesystem",
+      "requestTimeoutMs": 60000,
+      "title": "Filesystem",
+      "transport": "stdio"
+    },
+    {
+      "args": [],
+      "command": "computer-use",
+      "elicitation": {
+        "autoAcceptEmptyForm": true
+      },
+      "id": "computer_use",
+      "requestTimeoutMs": 60000,
+      "title": "Computer Use",
+      "transport": "stdio"
+    }
+  ],
+  "version": 1
+}

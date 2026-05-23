@@ -3,6 +3,9 @@ import SwiftUI
 struct SettingsView: View {
     @Bindable var settingsViewModel: AgentSettingsViewModel
     @Bindable var toolSettingsViewModel: ToolSettingsViewModel
+    @Bindable var pluginSettingsViewModel: PluginSettingsViewModel
+    @Bindable var appendPromptSettingsViewModel: AppendPromptSettingsViewModel
+    @Bindable var mcpSettingsViewModel: MCPSettingsViewModel
     @Bindable var permissionRulesViewModel: PermissionRulesViewModel
     @Bindable var workspaceViewModel: WorkspaceSettingsViewModel
     let shortcutActions: [ActionDefinition]
@@ -27,6 +30,12 @@ struct SettingsView: View {
             AgentSettingsView(viewModel: settingsViewModel)
         case .tools:
             ToolSettingsView(viewModel: toolSettingsViewModel)
+        case .plugins:
+            PluginSettingsView(viewModel: pluginSettingsViewModel)
+        case .appendPrompts:
+            AppendPromptSettingsView(viewModel: appendPromptSettingsViewModel)
+        case .mcp:
+            MCPSettingsView(viewModel: mcpSettingsViewModel)
         case .permissions:
             PermissionRulesView(viewModel: permissionRulesViewModel)
         case .shortcuts:

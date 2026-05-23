@@ -1,0 +1,27 @@
+{
+  "description": "Example plugin action bound to the filesystem MCP server.",
+  "enabled": true,
+  "id": "example-review",
+  "mcpServerIds": [
+    "filesystem"
+  ],
+  "prompts": [
+    {
+      "arguments": [
+        {
+          "description": "File or folder path",
+          "name": "path",
+          "required": true
+        }
+      ],
+      "description": "Use the filesystem MCP server to review a file or folder.",
+      "kind": "plugin",
+      "name": "review",
+      "template": "Review the target with filesystem tools.\n\nTarget: {{path}}\n\nFocus on correctness, risks, and missing verification.",
+      "title": "Review With Filesystem",
+      "trigger": "review"
+    }
+  ],
+  "title": "Example Review",
+  "version": 1
+}

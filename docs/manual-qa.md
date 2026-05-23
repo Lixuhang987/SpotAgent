@@ -34,6 +34,18 @@
 1. 在 Settings → 快捷键 → Action 快捷键中给 `weather` 配置一个未被系统占用的快捷键，关闭 PromptPanel 后按该快捷键，确认可直接创建普通 prompt session。
 1. 给 `r` 配置一个未被系统占用的快捷键，关闭 PromptPanel 后按该快捷键，确认 PromptPanel 打开并预填 `r [code: ] [focus: ]`，不会提交空参数。
 
+## Settings Plugin / Append Prompt / MCP 管理页（P1）
+
+1. 使用 mock LLM 打包并启动桌面 App：`bash ./scripts/package-app.sh --mock-llm`，再打开 `dist/HandAgentDesktop.app`。
+1. 打开 Settings，确认顶部 tab 包含 `Plugin`、`追加`、`MCP`，且八个 tab 在窗口宽度内不重叠。
+1. 在 `Plugin` 页点击"添加示例"，确认列表出现 `Example Review`；打开 `~/.spotAgent/plugins/example-review/plugin.json`，确认 `kind: "plugin"`、`trigger: "review"`、`mcpServerIds: ["filesystem"]`。
+1. 切换 `Example Review` 的启用开关，确认同一 manifest 的 `enabled` 字段随开关变化。
+1. 在 `追加` 页点击"添加示例"，确认列表出现 `Explain Code` 与 `Summarize Text`；打开 `~/.spotAgent/plugins/append-prompts/plugin.json`，确认两个 prompt 都是 `kind: "skill"` 且不写入 `actionBinding`。
+1. 打开 PromptPanel，输入 `explain [code: let x = 1]` 并提交，确认创建普通 session，session metadata 中没有 `actionBinding`。
+1. 在 `MCP` 页点击"添加示例"，确认列表出现 `Filesystem` 与 `Computer Use`；打开 `~/.spotAgent/mcp.json`，确认两个 server 均为 `transport: "stdio"`，`computer_use` 带 `elicitation.autoAcceptEmptyForm: true`。
+1. 重启桌面 App 后提交需要 MCP filesystem 的 prompt，确认 agent-server 能读取新 `mcp.json`，并在权限气泡中出现 `mcp.filesystem.*` tool。
+1. 在三个页面分别尝试保存缺少 Trigger / Template / Command / URL 的表单，确认 UI 保留表单并显示错误，不写出不可解析 JSON。
+
 ## 删除 running session 回归（P1）
 
 1. 使用 mock LLM 打包并启动桌面 App：`bash ./scripts/package-app.sh --mock-llm`，再打开 `dist/HandAgentDesktop.app`。

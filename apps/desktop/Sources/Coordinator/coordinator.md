@@ -22,6 +22,7 @@
 - 历史入口语义：`openHistory` 聚焦全局 SessionWindow 并刷新左侧历史，不打开独立窗口，不改变 active tab。
 - PromptPanel 提交语义：`submitPrompt` 与 `submitActionPrompt` 都复用全局 SessionWindow，但每次提交都通过 `create_session_request` 创建新 session/tab；SessionWindow 底部 composer 才会在已有 active tab 中继续追问。
 - Action prompt 由 PromptPanel 先渲染 template。skill action 只携带渲染后的 prompt 创建新 session；plugin action 额外携带 `{ pluginId, promptName }` 作为 `actionBinding` 创建新 session。
+- Settings 打开时会创建模型、builtin tool、Plugin、Append Prompt、MCP、权限和 workspace 的 ViewModel。Coordinator 只负责注入，不直接读写 `~/.spotAgent/plugins` 或 `~/.spotAgent/mcp.json`。
 - agent-server 健康状态独立：server 不可用时拒绝 `submitPrompt` 并保留面板草稿。
 
 ## 当前 Action 列表

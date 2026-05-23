@@ -6,7 +6,7 @@ HandAgent 是一个 macOS 优先的桌面 Agent Runtime MVP。当前桌面壳使
 
 - 全局热键唤起 `PromptPanel`
 - `PromptPanel` 右上角按钮和 `Command+,` 打开快捷键设置页
-- 设置页支持配置模型、全局热键、App 内快捷键和 workspace
+- 设置页支持配置模型、builtin tools、Plugin、Append Prompt、MCP server、权限规则、快捷键和 workspace
 - PromptPanel 会读取 `~/.spotAgent/plugins/*/plugin.json` 中的 prompts，构建 `ActionDefinition`，按 trigger 渲染 template 并创建新 session
 - 文本选区与区域截图可作为 PromptPanel attachment chip 附加到用户输入
 - 提交 prompt 后创建 `SessionWindow`
@@ -54,6 +54,8 @@ bash ./scripts/swiftw run HandAgentDesktop
 Action manifest 位于 `~/.spotAgent/plugins/<plugin-id>/plugin.json`，声明 `prompts[]`、`kind`、`template`、参数、可选全局快捷键和 `mcpServerIds`。Desktop 负责构建 `ActionDefinition`、trigger 解析、`[name: value]` 参数填充和 template 渲染；skill action 只提交普通 prompt，plugin action 额外发送 `actionBinding`。agent-server 会重新校验 plugin action 的 `actionBinding`，并把 manifest 中的 `mcpServerIds` 持久化到新 session metadata。
 
 MCP server 配置位于 `~/.spotAgent/mcp.json`，支持 `stdio` 与 `streamableHttp`。所有配置的 MCP server 会作为全局 tools 注入每个 session；plugin action 的 `mcpServerIds` 只是在全局集合之外追加 session 绑定的 server。stdio server 可按需配置 `elicitation.autoAcceptEmptyForm: true`，用于 Computer Use 这类只要求空表单确认的本地授权握手。
+
+Settings 中的 `Plugin`、`追加` 与 `MCP` 页面可以直接编辑这些本地文件，并提供与 `examples/` 目录一致的示例配置。MCP 配置由 agent-server 启动时读取，保存后需要重启桌面 App 才会进入当前运行中的 server。
 
 ## 说明
 

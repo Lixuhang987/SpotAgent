@@ -18,7 +18,7 @@
 
 | 文件 | 职责 |
 |------|------|
-| `AppServices.swift` | DI 容器：持有 `agentServer` / `sessionRegistry` / `settingsStore` / `sessionHistoryStore` / `agentServerURL` / `platformBridgeFactory` / `hotkeyRegistrar` / `sessionWindowPresenter` / `settingsWindowPresenter` / `fatalAlertPresenter` / `setActivationPolicy` / `showsStatusBubble`。生产由 `init()` 默认参数装配，测试用 `AppServices.testing()` 注入 nop 替身。同文件还定义 `SessionWindowPresenting` / `SettingsWindowPresenting` / `HotkeyRegistering` / `FatalAlertPresenting` 协议与 `Nop*` 测试替身 |
+| `AppServices.swift` | DI 容器：持有 `agentServer` / `sessionRegistry` / `settingsStore` / `sessionHistoryStore` / `actionManifestStore` / `agentServerURL` / `platformBridgeFactory` / `hotkeyRegistrar` / `sessionWindowPresenter` / `settingsWindowPresenter` / `fatalAlertPresenter` / `setActivationPolicy` / `showsStatusBubble`。生产由 `init()` 默认参数装配，测试用 `AppServices.testing()` 注入 nop 替身。同文件还定义 `SessionWindowPresenting` / `SettingsWindowPresenting` / `HotkeyRegistering` / `FatalAlertPresenting` 协议与 `Nop*` 测试替身 |
 | `AppServicesProductionImpls.swift` | 生产实现：`ProductionHotkeyRegistrar`（委托 Hotkey 层绑定 `KeyboardShortcuts.Name`）+ `ProductionSessionWindowPresenter` / `ProductionSettingsWindowPresenter`（构建 `NSWindow` + `NSHostingController`，并通过 `WindowCloseObservation` 持有和释放关闭通知 token）+ `ProductionFatalAlertPresenter` |
 
 ## DI 协议
@@ -35,6 +35,7 @@
 ## 编辑此层的约束
 
 - **服务与 presenter 分层**：`AgentServer` / `AgentSettingsStore` / `SessionRegistry` 等服务保持 UI 无关；生产 window presenter 可以 `import AppKit/SwiftUI`，但只能负责窗口构造与关闭回调，不写业务逻辑。
+- **SettingsWindowPresenting 只注入 ViewModel**：Settings 的 Plugin / Append Prompt / MCP 页面各自直接读写 `~/.spotAgent/plugins` 或 `~/.spotAgent/mcp.json`；presenter 只把 ViewModel 交给 `SettingsView`，不解析配置文件。
 - **`@Observable` 优先**：`SessionRegistry` / `AgentSettingsStore` 已迁到 `@Observable`；新建状态类不要再用 `ObservableObject` / `@Published` / Combine。
 - **依赖通过 init 注入**：`AgentSettingsStore(homeDirectoryURL:)` 这样允许测试注入临时目录；不要在服务内直接读 `FileManager.default.homeDirectoryForCurrentUser` 之外的全局状态。
 - **Main actor 隔离**：UI 相关的 `@Observable` class（`SessionRegistry` / `AgentSettingsStore`）标 `@MainActor`，进程 / IO 类（`AgentServerService`）保持非 MainActor。
