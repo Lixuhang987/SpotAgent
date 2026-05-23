@@ -15,13 +15,6 @@
 - 已通过 `bash ./scripts/swiftw test`。
 - 已通过 `bash ./scripts/swiftw build`。
 
-## AgentCore 消息输出回归（P2）
-
-1. 使用 mock LLM 打包并启动桌面 App：`bash ./scripts/package-app.sh --mock-llm`，再打开 `dist/HandAgentDesktop.app`。
-1. 通过 PromptPanel 提交 `please [mock:file-write] QA_AGENTCORE_MESSAGES_ONLY_YYYYMMDD_HHMMSS`。
-1. 确认 SessionWindow 仍按协议事件显示 user、tool、assistant 消息气泡，最终 assistant 文案为 `Mock file.write completed for hello.txt.`。
-1. 打开对应 `~/.spotAgent/sessions/<session-id>.json`，确认持久化只包含 `messages` / `events` 等会话数据，不依赖 runtime 额外返回 UI 气泡字段。
-
 ## ActionDefinition 统一模型回归（P1）
 
 1. 在 `~/.spotAgent/plugins/qa-action-definition/plugin.json` 创建一个 manifest，至少包含两个 prompt：

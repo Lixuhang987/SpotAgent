@@ -31,19 +31,4 @@
 
 ## 当前 bug
 
-### mock file-write 回归返回 Unknown tool
-
-- 严重级别：P1。
-- 发现日期：2026-05-24。
-- 复现步骤：
-  1. 在 `/Users/mu9/proj/handAgent` 的 `main` 分支执行基线：`bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`，三项均通过。
-  2. 执行 `bash ./scripts/package-app.sh --mock-llm` 并打开 `dist/HandAgentDesktop.app`。
-  3. 通过默认全局快捷键 `⌘⇧Space` 打开 PromptPanel，提交 `please [mock:file-write] QA_AGENTCORE_MESSAGES_ONLY_20260524_025249`。
-- 实际结果：SessionWindow 显示 `Unknown tool: file.write`，底部状态也显示同一错误；未出现 `file.write` tool 气泡，也没有最终 assistant 文案。
-- 期望结果：SessionWindow 应按协议事件显示 user、tool、assistant 消息气泡，最终 assistant 文案应为 `Mock file.write completed for hello.txt.`。
-- 证据：
-  - UI：Computer Use 观察到 SessionWindow 消息区文本为 `please [mock:file-write] QA_AGENTCORE_MESSAGES_ONLY_20260524_025249 Unknown tool: file.write`，错误状态为 `Unknown tool: file.write`。
-  - mock 模式：`dist/HandAgentDesktop.app/Contents/Resources/HandAgentRuntimeMode.json` 内容为 `{"llmMode":"mock"}`。
-  - 进程：`HandAgentDesktop` pid `3000`；`node` pid `3045` 监听 `*:4317`。
-  - 持久化：`~/.spotAgent/sessions/session-1779562389146-q7j355.json` 只有 1 条 user message，`events` 中记录 `{ "type": "error", "message": "Unknown tool: file.write" }`。
-- 初步调用链 / 根因边界：PromptPanel 提交、SessionWindow 打开、agent-server 持久化均已到达；失败发生在 mock LLM 产生 `file.write` tool call 后，runtime/tool registry 查找阶段未找到 `file.write`。需检查 mock client 的 tool name 与当前注册工具名称是否漂移，或 mock 打包模式下内置工具注册是否被 settings 过滤。
+暂无已记录未修复 bug。

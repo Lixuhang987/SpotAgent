@@ -749,3 +749,21 @@
 - **验证过程**：在同一个 mock App 中使用真实 `⌘⇧Space` 唤起 PromptPanel，通过 AX 确认 `window 1` 存在 `text field 1`，写入并提交 `[mock:workspace-list] QA_TOOL_WORKSPACE_LIST_20260523_0015`。提交后等待 SessionWindow 完成运行，再核对底部按钮和 session 持久化内容。
 - **证据**：会话文件 `/Users/mu9/.spotAgent/sessions/session-1779466633012-tii05w.json` 的 `messages` 包含 user prompt、assistant `toolCalls[0].name = "workspace.list"`、tool message `name = "workspace.list"`、最终 assistant `Mock workspace.list completed.`；`events` 包含 `tool_call workspace.list` 与 `tool_result success`，`durationMs = 2`；SessionWindow 底部按钮 help 列表为 `新会话, 搜索会话, 新标签页, 添加附件, 语音输入（即将推出）, 发送消息, 设置`。
 - **结论**：PromptPanel → SessionWindow → agent-server → mock LLM → `workspace.list` tool 调用 → tool result 回灌 → 持久化 → UI 可发送态反馈链路通过。状态气泡 AX 仍只暴露 `help=打开最近会话或输入面板`，不能作为运行/空闲文本状态的强证据。
+
+### AgentCore 消息输出回归
+
+- **验证日期**：2026-05-24
+- **验证环境**：mock-llm / macOS 15+ / `dist/HandAgentDesktop.app` / `HandAgentDesktop` pid `14538` / `agent-server` pid `14547` 监听 `*:4317`
+- **验证过程**：在 `main` 执行 `bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build` 均通过；随后执行 `bash ./scripts/package-app.sh --mock-llm` 并打开 App。通过 `⌘⇧Space` 打开 PromptPanel，提交 `please [mock:file-write] QA_AGENTCORE_MESSAGES_ONLY_20260524_031518`。SessionWindow 先显示 `file.write` 权限气泡，选择“仅本次”后显示 `file.write` tool result 和最终 assistant 文案 `Mock file.write completed for hello.txt.`。
+- **证据**：`dist/HandAgentDesktop.app/Contents/Resources/HandAgentRuntimeMode.json` 内容为 `{\"llmMode\":\"mock\"}`；`~/.spotAgent/sessions/session-1779563829474-y58j9v.json` 包含 user、assistant tool call、`file.write` tool message、最终 assistant 共 4 条 messages，并包含 `permission_request`、`tool_call`、`tool_result` events；`~/.spotAgent/qa-workspace/hello.txt` 内容为 `hello from MockLLMClient`。
+- **结论**：通过。持久化只依赖 `messages` / `events` 等会话数据，不依赖 runtime 额外 UI 气泡字段。
+
+### 已修复：mock file-write 回归返回 Unknown tool
+
+- **修复日期**：2026-05-24
+- **严重级别**：P1
+- **根因**：引入懒加载工具激活后，普通未激活 session 默认只暴露 `use_tools`；mock LLM 固定场景会首轮直接返回 `file.write` tool call，导致 `AgentRuntime` 在 `ToolRegistry.get(\"file.write\")` 阶段抛出 `Unknown tool: file.write`。
+- **修复内容**：`SessionScopedToolRegistry` 增加 `exposeBuiltinToolsBeforeActivation`，`startDefaultServer` 仅在 `HANDAGENT_LLM_MODE=mock` 时开启；mock 未激活 session 额外暴露 `use_tools + builtin tools`，但不标记为已激活、不提前加载 MCP，真实 settings 模式懒加载语义不变。
+- **自动化验证**：`pnpm exec vitest run apps/agent-server/tests/session/SessionScopedToolRegistry.test.ts` 通过并覆盖 `[mock:file-write]` 跑通及 global MCP 不提前加载；`bash ./scripts/test.sh` 通过，50 个测试文件通过、1 个 integration 跳过；`bash ./scripts/swiftw test` 与 `bash ./scripts/swiftw build` 均通过。
+- **实机回归证据**：`~/.spotAgent/sessions/session-1779563829474-y58j9v.json` 中 `file.write` tool result 为 `{\"workspaceId\":\"qa-workspace\",\"relativePath\":\"hello.txt\",\"bytesWritten\":24}`，最终 assistant 为 `Mock file.write completed for hello.txt.`；UI 未再出现 `Unknown tool: file.write`。
+- **结论**：已修复并通过 mock App 实机回归。
