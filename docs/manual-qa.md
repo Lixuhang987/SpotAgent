@@ -55,6 +55,14 @@
 
 最近阻塞记录：2026-05-23 在 `main` 合并 `feat/lazy-tool-activation` 后完成基线验证：`bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build` 均通过。实机 QA 先用 `bash ./scripts/package-app.sh --mock-llm` 验证 App 可打包启动，但 mock LLM 不写真实 network log，也不会生成 `use_tools` 激活调用，因此不能作为本项通过证据。随后使用 settings/真实 LLM 模式重新打包启动，`session-1779550406952-0hxdoo` 的纯聊天首轮请求成功返回，网络日志 `/Users/mu9/.spotAgent/log/2026-05-23/network-001.jsonl` 显示请求体 `tools` 只包含 `use_tools`，且 session 只有 user/assistant 消息，没有 tool message。继续在同一 session 发送 `Please read my screen. HANDAGENT_LAZY_TOOL_QA_20260523` 后，日志写入第二轮 request，`tools` 仍只包含 `use_tools`，但超过 1 分钟没有对应 response 行，session 文件仍只有 3 条消息且 `events: []`。因此场景 1 的“纯聊天不激活真实工具”已有证据，场景 2–4 受真实 LLM 流未返回阻塞，暂不能归档通过。QA 后已停止 `HandAgentDesktop`，`agent-server` 随父进程退出。
 
+### 场景 0：并发 session 工具激活隔离
+
+1. 使用真实 LLM 模式启动桌面 App，打开两个不同 session。
+1. 在 session A 中提交需要工具的 prompt（例如"看一下我屏幕"），等待出现 `use_tools` 或真实工具调用。
+1. 在 session B 中提交普通聊天 prompt，确认 session B 不出现 session A 的真实工具列表或 tool call 气泡。
+1. 继续回到 session A 发送需要工具的第二轮 prompt，确认 session A 仍可继续使用真实工具，不会退回只暴露 `use_tools`。
+1. 打开 `~/.spotAgent/log/<YYYY-MM-DD>/network-NNN.jsonl`，对比两条 session 的请求体：session A 激活后应包含完整工具集，session B 未激活时仍只包含 `use_tools`。
+
 ### 场景 1：纯聊天问题不触发工具激活
 
 1. 新建 session，输入一个不需要工具的普通问题（例如"今天天气怎么样"或"帮我写一首诗"）。

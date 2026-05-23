@@ -30,7 +30,7 @@ describe("SessionScopedToolRegistry lazy activation", () => {
     const scoped = buildScoped();
     await scoped.refreshForSession("s1", undefined);
 
-    expect(scoped.registry.list().map((t) => t.name)).toEqual(["use_tools"]);
+    expect(scoped.registryForSession("s1").list().map((t) => t.name)).toEqual(["use_tools"]);
     expect(scoped.isActivated("s1")).toBe(false);
   });
 
@@ -43,7 +43,7 @@ describe("SessionScopedToolRegistry lazy activation", () => {
 
     await scoped.activate("s1");
 
-    expect(scoped.registry.list().map((t) => t.name)).toEqual([
+    expect(scoped.registryForSession("s1").list().map((t) => t.name)).toEqual([
       "use_tools",
       "frontmost.app",
       "clipboard.read",
@@ -59,7 +59,11 @@ describe("SessionScopedToolRegistry lazy activation", () => {
 
     expect(scoped.isActivated("s1")).toBe(true);
     expect(scoped.isActivated("s2")).toBe(false);
-    expect(scoped.registry.list().map((t) => t.name)).toEqual(["use_tools"]);
+    expect(scoped.registryForSession("s2").list().map((t) => t.name)).toEqual(["use_tools"]);
+    expect(scoped.registryForSession("s1").list().map((t) => t.name)).toEqual([
+      "use_tools",
+      "frontmost.app",
+    ]);
   });
 
   it("plugin binding session skips meta-only and goes straight to full tools", async () => {
@@ -71,7 +75,7 @@ describe("SessionScopedToolRegistry lazy activation", () => {
 
     await scoped.refreshForSession("s1", { mcpServerIds: ["srv"] });
 
-    expect(scoped.registry.list().map((t) => t.name)).toEqual([
+    expect(scoped.registryForSession("s1").list().map((t) => t.name)).toEqual([
       "use_tools",
       "frontmost.app",
       "mcp.srv.echo",
@@ -86,5 +90,23 @@ describe("SessionScopedToolRegistry lazy activation", () => {
 
     scoped.forgetSession("s1");
     expect(scoped.isActivated("s1")).toBe(false);
+  });
+
+  it("does not rewrite one session registry when another session refreshes", async () => {
+    const scoped = buildScoped({
+      builtin: [fakeTool("frontmost.app"), fakeTool("clipboard.read")],
+    });
+
+    await scoped.activate("s1");
+    const s1Registry = scoped.registryForSession("s1");
+
+    await scoped.refreshForSession("s2", undefined);
+
+    expect(scoped.registryForSession("s2").list().map((t) => t.name)).toEqual(["use_tools"]);
+    expect(s1Registry.list().map((t) => t.name)).toEqual([
+      "use_tools",
+      "frontmost.app",
+      "clipboard.read",
+    ]);
   });
 });

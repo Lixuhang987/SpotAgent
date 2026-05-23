@@ -280,18 +280,26 @@ export async function startDefaultServer(port = 4317) {
     });
   console.log(`[agent-server] llm mode: ${llmMode}`);
 
-  const runtime = new AgentRuntime(llmClient, sessionScopedTools.registry, {
-    permissionPolicy,
-    blobStore,
-    turnSummarizer: summarizer,
-    onMetaToolActivate: async (sessionId) => {
-      await sessionScopedTools.activate(sessionId);
-    },
-    isSessionActivated: (sessionId) => sessionScopedTools.isActivated(sessionId),
-  });
+  const runtimeBySession = new Map<string, InstanceType<typeof AgentRuntime>>();
+  const runtimeForSession = (sessionId: string) => {
+    let runtime = runtimeBySession.get(sessionId);
+    if (!runtime) {
+      runtime = new AgentRuntime(llmClient, sessionScopedTools.registryForSession(sessionId), {
+        permissionPolicy,
+        blobStore,
+        turnSummarizer: summarizer,
+        onMetaToolActivate: async (activeSessionId) => {
+          await sessionScopedTools.activate(activeSessionId);
+        },
+        isSessionActivated: (activeSessionId) => sessionScopedTools.isActivated(activeSessionId),
+      });
+      runtimeBySession.set(sessionId, runtime);
+    }
+    return runtime;
+  };
   const persistence = new SessionPersistence(store, undefined, blobStore);
   const orchestrator = new SessionRuntimeOrchestrator(
-    runtime,
+    runtimeForSession,
     persistence,
     undefined,
     async (sessionId) => {
@@ -318,7 +326,10 @@ export async function startDefaultServer(port = 4317) {
     persistence,
     undefined,
     new ActionBindingResolver({ pluginsDir: paths.pluginsDir }),
-    (sessionId) => sessionScopedTools.forgetSession(sessionId),
+    (sessionId) => {
+      sessionScopedTools.forgetSession(sessionId);
+      runtimeBySession.delete(sessionId);
+    },
   );
 
   return startServer({

@@ -14,7 +14,7 @@
 |------|------|
 | `src/server.ts` | 启动入口；`startServer` 注入式构造，`attachSessionSocketHandlers` 维护单 socket 的 bridge token 与会话绑定状态，`startDefaultServer` 是组合根（拉起 store / blobStore / bridge / registry / policy / runtime / SessionPersistence / SessionRuntimeOrchestrator / SessionRouter），`resolveServerPaths()` 集中管理 `~/.spotAgent/` 下所有文件路径 |
 | `src/SessionRouter.ts` | 协议路由层：处理 `open_session` / `list_sessions_request` / `load_session_request` / `delete_session_request`；`open_session` 回 `session_snapshot` 用于桌面端重连续联，并把 `user_message` 委托给 runtime 编排层 |
-| `src/SessionRuntimeOrchestrator.ts` | 一轮用户消息编排：确保 session、持久化 user message、等待 pending summary、把 image STUB 展开为 runtime 多模态 content、跑 `AgentRuntime`、翻译 runtime event、落库最终 messages / audit events |
+| `src/SessionRuntimeOrchestrator.ts` | 一轮用户消息编排：确保 session、持久化 user message、按 session 解析独立 `AgentRuntime`、等待 pending summary、把 image STUB 展开为 runtime 多模态 content、翻译 runtime event、落库最终 messages / audit events |
 | `src/SessionPersistence.ts` | 会话持久化封装：唯一直接持有 `SessionStore` 的 agent-server 模块，负责 CRUD、标题生成、历史读取、messages / events 写入，并把 image attachment 交给 BlobStore |
 | `src/MessageTranslator.ts` | 纯函数：`AgentRuntimeEvent` ↔ `SessionMessage` / `SessionEvent` 翻译（`toSessionMessage` / `toAuditEvent` / `agentMessagesToConversation` / `agentMessagesToRuntimeMessages` / `composeUserContent` / `deriveTitle` / `toErrorMessage`）。`composeUserContent` 会把 image attachment 写入 BlobStore 并渲染 image STUB；`agentMessagesToRuntimeMessages` 在进入 runtime 前把 image STUB 转为多模态 image part；新增 tool_message 形态只改这里 |
 | `src/SettingsBackedLLMClient.ts` | 每次 `complete` / `stream` 先检查 `~/.spotAgent/settings.json` 的 `mtimeMs + size` stamp；stamp 未变复用已缓存的 provider client，stamp 变化后重读 settings，并只在 `provider / model / apiKey / baseUrl / api` 等有效 LLM 配置变化时经 core `LLMClientFactory` 重建 client；会把 options（例如 `blobStore`）透传给内部 client；可用 `purpose=summarizer` 读取 `summarizerModel`；注入 `FileNetworkLogger` 把 LLM 网络调用 JSONL 落盘 |
@@ -22,7 +22,7 @@
 | `src/ActionBindingResolver.ts` | 校验 `create_session_request.actionBinding`，并从本地 Plugin manifest 解析 session 绑定的 `mcpServerIds` |
 | `src/MCPServerRegistry.ts` | MCP client 缓存与协议适配；同一个 `serverId` 复用 client 与 adapted tools；除 `tools/*` 外还代理 `prompts/list` / `prompts/get` / `resources/list` / `resources/read` 给上层使用 |
 | `src/ComputerUseMCPClient.ts` | HandAgent 原生 Computer Use MCP 兼容层；当 MCP server id 为 `computer_use` / `computer-use` 时，暴露 `list_apps` 与 `get_app_state`，底层走 `RemotePlatformAdapter`，不再直接依赖 Codex 私有 Computer Use 子进程的 `tools/call`；`get_app_state` 解析 App 时先走精确 bundle/name，再处理系统别名（如 `Finder` → `com.apple.finder`），最后才做模糊子串匹配 |
-| `src/SessionScopedToolRegistry.ts` | 按 session metadata 组合 builtin tools 与 MCP tools；未激活 session 只暴露 meta-tool（`use_tools`），激活后扩展为完整 builtin + MCP 工具集；`mcp.json` 中的 server 默认全局注入所有 session（`globalMcpServerIds`），plugin `actionBinding.mcpServerIds` 在此基础上叠加去重；plugin-binding 的 session 在 `refreshForSession` 中自动激活，跳过懒加载阶段；MCP server 缺失或初始化失败时记录 skip 日志并保留 builtin tools；agent-server 重启后通过历史 tool message 推断激活状态，已有真实 tool call 记录的 session 直接视为已激活；删除 session 时调用 `forgetSession` 清理激活集合 |
+| `src/SessionScopedToolRegistry.ts` | 按 session metadata 组合 builtin tools 与 MCP tools，并为每个 session 维护独立 `ToolRegistry`；未激活 session 只暴露 meta-tool（`use_tools`），激活后扩展为完整 builtin + MCP 工具集；`mcp.json` 中的 server 默认全局注入所有 session（`globalMcpServerIds`），plugin `actionBinding.mcpServerIds` 在此基础上叠加去重；plugin-binding 的 session 在 `refreshForSession` 中自动激活，跳过懒加载阶段；MCP server 缺失或初始化失败时记录 skip 日志并保留 builtin tools；agent-server 重启后通过历史 tool message 推断激活状态，已有真实 tool call 记录的 session 直接视为已激活；删除 session 时调用 `forgetSession` 清理激活集合与 session 专属工具表 |
 | `src/WebSocketPlatformBridge.ts` | 实现 core 的 `PlatformBridge` 接口；通过 `attach(send)` 接管来自 desktop 的 `channel: "platform"` 反向 socket 并返回 fencing token，按 `requestId + token` 关联 `platform_request` / `platform_response`，60s 超时 |
 | `src/SessionPermissionBridge.ts` | 实现 `FilePermissionPolicy` 的 `AskResolver`：把 `permission_request` 推到 desktop，按 `requestId + session binding token` 等回 `permission_response`，60s 超时视为 deny |
 | `src/SessionWorkspaceAskBridge.ts` | 实现 `workspace.askUser` 的 `WorkspaceAskResolver`：把 `workspace_ask_request` 推到 desktop，按 `requestId + session binding token` 等回 `workspace_ask_response`，同一 session 内多个 ask 串行展示，取消 / 超时 / 关闭返回 `{ cancelled: true }` |
@@ -44,7 +44,7 @@ sequenceDiagram
   Server->>Server: SessionScopedToolRegistry 组合 builtin registry + session-bound MCP tools
   Server->>Server: SessionPermissionBridge + FilePermissionPolicy(askResolver)
   Server->>Server: resolveLLMMode() → SettingsBackedLLMClient 或 MockLLMClient
-  Server->>Server: AgentRuntime(LLMClient, sessionScopedRegistry, {policy, blobStore, turnSummarizer})
+  Server->>Server: runtimeBySession 按 session 创建 AgentRuntime(LLMClient, registryForSession(sessionId), {policy, blobStore, turnSummarizer})
   Server->>Server: SessionPersistence(store, blobStore)
   Server->>Server: SessionRuntimeOrchestrator(runtime, persistence, beforeRun refresh scoped tools)
   Server->>Server: SessionRouter(orchestrator, persistence, ActionBindingResolver)
@@ -58,7 +58,7 @@ MCP server 与 ActionDefinition 是两条相互独立的注入通道，作用时
 1. **全局 MCP**：`~/.spotAgent/mcp.json` 中配置的所有 server 默认对所有 session 可用。`startDefaultServer` 启动时把这些 server id 作为 `globalMcpServerIds` 传给 `SessionScopedToolRegistry`，每轮 user message 前都会自动 `tools/list` 并注入为 `mcp.<serverId>.<toolName>`。client 复用，按 server id 缓存。除了 tools，`MCPServerRegistry` 还代理 `prompts/list` / `prompts/get` / `resources/list` / `resources/read`，供未来的 prompt picker 或 resource UI 调用。`computer_use` / `computer-use` 是兼容例外：仍按 `mcp.<serverId>.*` 注入，但 client 由 `ComputerUseMCPClient` 接管，避免 Codex 私有 Computer Use MCP 在非 Codex app-server 父链路下 `tools/call` 挂起。
 2. **plugin action 触发的 MCP**：`create_session_request.payload.actionBinding` 只包含 `{ pluginId, promptName }`。agent-server 不信任 desktop 传来的 MCP server 列表，而是通过 `ActionBindingResolver` 重新读取 `~/.spotAgent/plugins/<plugin-id>/plugin.json`，校验 plugin id、prompt name、enabled 状态和 prompt `kind`。默认 `kind` 是 `plugin`，允许绑定；显式 `kind: "skill"` 的 prompt 只用于 desktop 侧渲染普通 prompt，不能创建 `actionBinding`。校验通过后，agent-server 把 manifest 中的 `mcpServerIds` 写入 session metadata，作为该 session 在全局集合之外的额外注入。
 
-`SessionScopedToolRegistry.refreshForSession` 把全局集合与 plugin binding 集合做并集去重，按 tool name 第一次出现的实例为准。缺失的 MCP server 会被记录为 `[agent-server] skipped MCP server ...`，不会阻断 prompt runtime。
+`SessionScopedToolRegistry.refreshForSession` 只刷新当前 session 的专属工具表，把全局集合与 plugin binding 集合做并集去重，按 tool name 第一次出现的实例为准。缺失的 MCP server 会被记录为 `[agent-server] skipped MCP server ...`，不会阻断 prompt runtime。`startDefaultServer` 同时按 session 缓存 `AgentRuntime`，让并发 session 的 tool registry、激活状态与 pending turn summary 不互相覆盖；删除 session 时会同步清理 runtime cache 与工具表。
 
 ## 一条 socket 上的消息分派
 

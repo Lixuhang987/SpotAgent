@@ -15,7 +15,7 @@ describe("SessionScopedToolRegistry", () => {
 
     // plain session without binding stays meta-only
     await scoped.refreshForSession("plain", undefined);
-    expect(scoped.registry.list().map((tool) => tool.name)).toEqual([
+    expect(scoped.registryForSession("plain").list().map((tool) => tool.name)).toEqual([
       "use_tools",
     ]);
 
@@ -25,7 +25,7 @@ describe("SessionScopedToolRegistry", () => {
       promptName: "code_review",
       mcpServerIds: ["github"],
     });
-    expect(scoped.registry.list().map((tool) => tool.name)).toEqual([
+    expect(scoped.registryForSession("action").list().map((tool) => tool.name)).toEqual([
       "use_tools",
       "clipboard.read",
       "mcp.github.create_issue",
@@ -43,13 +43,13 @@ describe("SessionScopedToolRegistry", () => {
 
     // before activation: meta-only (global MCP servers are not loaded until activated)
     await scoped.refreshForSession("plain", undefined);
-    expect(scoped.registry.list().map((tool) => tool.name)).toEqual([
+    expect(scoped.registryForSession("plain").list().map((tool) => tool.name)).toEqual([
       "use_tools",
     ]);
 
     // after explicit activation: meta + builtin + global MCP
     await scoped.activate("plain");
-    expect(scoped.registry.list().map((tool) => tool.name)).toEqual([
+    expect(scoped.registryForSession("plain").list().map((tool) => tool.name)).toEqual([
       "use_tools",
       "clipboard.read",
       "mcp.github.create_issue",
@@ -70,7 +70,7 @@ describe("SessionScopedToolRegistry", () => {
       promptName: "code_review",
       mcpServerIds: ["github"],
     });
-    expect(scoped.registry.list().map((tool) => tool.name)).toEqual([
+    expect(scoped.registryForSession("action").list().map((tool) => tool.name)).toEqual([
       "use_tools",
       "clipboard.read",
       "mcp.github.create_issue",
@@ -94,7 +94,7 @@ describe("SessionScopedToolRegistry", () => {
     // use activate() to trigger full tool load; MCP error should be swallowed
     await scoped.activate("action");
 
-    expect(scoped.registry.list().map((tool) => tool.name)).toEqual([
+    expect(scoped.registryForSession("action").list().map((tool) => tool.name)).toEqual([
       "use_tools",
       "clipboard.read",
     ]);
