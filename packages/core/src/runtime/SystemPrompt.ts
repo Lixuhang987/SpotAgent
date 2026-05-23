@@ -1,5 +1,6 @@
 import type { AgentMessage } from "./AgentMessage.ts";
 import type { RegisteredTool } from "../tools/ToolRegistry.ts";
+import { META_TOOL_NAME } from "../tools/MetaToolUseTool.ts";
 
 export type SystemPromptContext = {
   tools: RegisteredTool[];
@@ -45,9 +46,13 @@ export function buildDefaultSystemPromptSections(): SystemPromptSection[] {
 
 export function buildToolUsePolicySection(): SystemPromptSection {
   return systemPromptSection("tool-use-policy", ({ tools }) => {
-    if (tools.length === 0) return null;
+    if (!hasRealTools(tools)) return null;
     return TOOL_USE_POLICY_PROMPT;
   });
+}
+
+function hasRealTools(tools: RegisteredTool[]): boolean {
+  return tools.some((t) => t.name !== META_TOOL_NAME);
 }
 
 export const TOOL_USE_POLICY_PROMPT =
