@@ -285,7 +285,7 @@ export class AgentRuntime {
       toolCallId: toolCall.id,
       toolName: toolCall.name,
       status: "success",
-      output: content,
+      output: truncateOutput(content),
       durationMs: Date.now() - startedAt,
     });
   }
