@@ -775,3 +775,23 @@
 - **验证过程**：在 `~/.spotAgent/plugins/qa-action-definition/plugin.json` 写入 `kind: \"skill\"` 的 `weather` action 和 `kind: \"plugin\"` 的 `r` action。打开 PromptPanel 后可见 `Weather, weather` 与 `Review, r` 两个 Action rows。提交 `weather` 后创建 `查询当前天气` session；提交 `r [code: let x = 1] [focus: race conditions]` 后创建 `Review code:` session；提交 `r foo bar` 后 PromptPanel 保留草稿并显示 `缺少必填参数：code`。在 UserDefaults 中为 `weather` 写入 F13、为 `r` 写入 F14 后重启 App，Settings → 快捷键 → Action 快捷键显示 `Weather F13` 与 `Review F14`；F13 直接创建普通 prompt session，F14 打开 PromptPanel 并预填 `r [code: ] [focus: ]`，未提交空参数。
 - **证据**：`~/.spotAgent/sessions/session-1779564440188-byk5de.json` 的 metadata 无 `actionBinding`，user content 为 `查询当前天气`；`~/.spotAgent/sessions/session-1779564547557-g3jq93.json` 的 metadata 写入 `{ \"pluginId\": \"qa-action-definition\", \"promptName\": \"review\", \"mcpServerIds\": [\"qa_missing_mcp\"] }`；F13 触发后新增 `~/.spotAgent/sessions/session-1779564925160-xnvgo6.json`，metadata 无 `actionBinding`；F14 触发前后最新 session 文件未变化，Computer Use 观察到 PromptPanel 输入框值为 `r [code: ] [focus: ]`。
 - **结论**：通过。ActionDefinition 的 skill/plugin 统一模型、命名参数解析、缺参拦截、session metadata 写入和 Action 全局快捷键行为符合预期。
+
+### Settings Plugin / Append Prompt / MCP 管理页（P1）
+
+- **验证日期**：2026-05-24
+- **验证环境**：mock-llm / `dist/HandAgentDesktop.app` / macOS 15+ / main `780a43f`
+- **验证过程**：
+  - 在 `/Users/mu9/proj/handAgent` 的 `main` 上执行 `bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`，三项均通过。
+  - 使用 `bash ./scripts/package-app.sh --mock-llm` 打包并启动桌面 App，确认 bundle marker 为 `{"llmMode":"mock"}`，agent-server 进程为 `/Users/mu9/proj/handAgent/apps/agent-server/src/server.ts`，4317 端口监听正常。
+  - Settings 顶部八个 tab 可见且不重叠：模型、工具、Plugin、追加、MCP、权限、快捷键、工作区。
+  - Plugin 页点击“添加示例”后出现 `Example Review`；`~/.spotAgent/plugins/example-review/plugin.json` 可解析，prompt 为 `kind: "plugin"`、`trigger: "review"`，manifest `mcpServerIds: ["filesystem"]`；启用开关可写回 `enabled: false`，再切回 `enabled: true`。
+  - 追加页点击“添加示例”后出现 `Explain Code` 与 `Summarize Text`；`~/.spotAgent/plugins/append-prompts/plugin.json` 可解析，两个 prompt 均为 `kind: "skill"`。提交 `explain [code: let x = 1]` 后创建普通 session `~/.spotAgent/sessions/session-1779565670291-o3gl1x.json`，metadata 无 `actionBinding`。
+  - MCP 页点击“添加示例”后出现 `Filesystem` 与 `Computer Use`；`~/.spotAgent/mcp.json` 可解析，两个 server 均为 `transport: "stdio"`，`computer_use.elicitation.autoAcceptEmptyForm: true`。
+  - 为闭环 filesystem MCP 权限气泡，先补充并合入 mock 场景 `[mock:mcp-filesystem-read]`（commit `780a43f`），再创建 QA 专用 plugin action `~/.spotAgent/plugins/qa-mcp-filesystem-read/plugin.json`，绑定 `mcpServerIds: ["filesystem"]`，trigger 为 `mcpfs`，模板内包含 `[mock:mcp-filesystem-read]`。重启桌面 App 后提交 `mcpfs [path: /tmp/handagent-mcp-example/hello.txt]`，SessionWindow 出现权限气泡“授权调用 mcp.filesystem.read_file”，参数为 `{ "path": "/tmp/handagent-mcp-example/hello.txt" }`。点击“仅本次”后 runtime 继续执行并写入 tool result 与最终 assistant 文本。
+  - 错误表单路径已实机验证：Plugin 缺少 Trigger 显示“标题、Trigger 和 Template 不能为空”；追加页缺少 Template 显示同一错误；MCP stdio 缺少 Command 显示“标题和 Command 不能为空”；MCP HTTP 缺少 URL 显示“标题和 URL 不能为空”。上述错误均保留表单，且未写入临时项 `qa-plugin-missing-trigger`、`qa-append-missing-template`、`qa-mcp-missing-command`、`qa-mcp-missing-url`。
+- **证据**：
+  - `~/.spotAgent/mcp.json`：包含 `filesystem` 与 `computer_use` 两个 stdio server，`computer_use.elicitation.autoAcceptEmptyForm: true`。
+  - `~/.spotAgent/plugins/example-review/plugin.json`、`~/.spotAgent/plugins/append-prompts/plugin.json`、`~/.spotAgent/plugins/qa-mcp-filesystem-read/plugin.json` 均可 JSON 解析。
+  - `~/.spotAgent/sessions/session-1779565670291-o3gl1x.json`：append prompt 普通 session，metadata 无 `actionBinding`。
+  - `~/.spotAgent/sessions/session-1779568071596-bbtt3l.json`：metadata `actionBinding.pluginId = "qa-mcp-filesystem-read"`、`promptName = "read"`、`mcpServerIds = ["filesystem"]`；messages 包含 `tool` message `name = "mcp.filesystem.read_file"`；events 包含 `permission_request`、`tool_call`、`tool_result`，toolName 均为 `mcp.filesystem.read_file`。
+- **结论**：Settings Plugin / Append Prompt / MCP 管理页条目通过实机 QA，已从 `docs/manual-qa.md` 移除。
