@@ -55,24 +55,6 @@ Action manifest 位于 `~/.spotAgent/plugins/<plugin-id>/plugin.json`，声明 `
 
 MCP server 配置位于 `~/.spotAgent/mcp.json`，支持 `stdio` 与 `streamableHttp`。所有配置的 MCP server 会作为全局 tools 注入每个 session；plugin action 的 `mcpServerIds` 只是在全局集合之外追加 session 绑定的 server。stdio server 可按需配置 `elicitation.autoAcceptEmptyForm: true`，用于 Computer Use 这类只要求空表单确认的本地授权握手。
 
-仓库内置示例位于 `examples/`：
-
-- `examples/plugins/code-review/plugin.json`
-- `examples/plugins/meeting-notes/plugin.json`
-- `examples/plugins/release-notes/plugin.json`
-- `examples/mcp/handagent-demo/server.mjs`
-- `examples/mcp/mcp.example.json`
-
-从仓库根目录复制示例到本机配置目录：
-
-```bash
-mkdir -p ~/.spotAgent/plugins
-cp -R examples/plugins/* ~/.spotAgent/plugins/
-cp examples/mcp/mcp.example.json ~/.spotAgent/mcp.json
-```
-
-`mcp.example.json` 默认以仓库根目录为 `cwd`。如果从其他目录启动 App 或 agent-server，需要把其中的 `cwd` 改成仓库根目录绝对路径。
-
 ## 说明
 
 - 默认不会把屏幕、窗口、文件、剪贴板、App 状态等上下文预注入模型。
