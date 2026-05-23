@@ -70,7 +70,7 @@ Coordinator.handleSubmitPrompt
 ## 历史入口
 
 - SessionWindow 首次创建时会自动加载左侧历史列表，不依赖手动刷新入口。
-- PromptPanel 的“会话历史”只聚焦全局 SessionWindow 并刷新左侧历史，不改变 active tab、running 状态或草稿。
+- 历史入口只聚焦全局 SessionWindow 并刷新左侧历史，不改变 active tab、running 状态或草稿。
 - PromptPanel 提交 prompt 创建新会话后，收到 `create_session_response` 会自动刷新左侧历史列表。
 - 点击左侧历史项会创建或激活 tab；不会再打开独立历史窗口。
 - 删除历史项必须先进入待确认状态，确认后发送 `delete_session_request`；server 返回成功的 `delete_session_response` 后关闭对应已打开 tab 并刷新列表。

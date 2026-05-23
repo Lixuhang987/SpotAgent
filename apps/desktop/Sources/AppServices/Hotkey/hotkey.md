@@ -23,7 +23,7 @@
 
 ### Action 全局快捷键
 
-- 每个 `ActionDefinition` 通过 `shortcutName` 计算属性生成 `KeyboardShortcuts.Name("action.<id>")`。
+- 每个由 manifest prompt 派生的 `ActionDefinition` 通过 `shortcutName` 计算属性生成 `KeyboardShortcuts.Name("action.<id>")`。
 - Action 快捷键使用 `KeyboardShortcuts.Recorder` 配置，存储仍由 KeyboardShortcuts 写入 UserDefaults。
 - Action 快捷键是系统级全局快捷键，由 `ProductionHotkeyRegistrar.registerActionShortcut(...)` 注册。
 - 默认值来自 plugin manifest prompt 级 `globalShortcut`，仅当用户未自定义时写入。
@@ -42,5 +42,5 @@
 ## 与其他模块的关系
 
 - [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 注册全局热键回调。
-- [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 构建 `ActionDefinition` 列表并注册 Action 全局快捷键。
+- [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 从 manifest 构建 `ActionDefinition` 列表并注册 Action 全局快捷键。
 - [Settings](/Users/mu9/proj/handAgent/apps/desktop/Sources/Settings/settings.md) 提供配置 UI。

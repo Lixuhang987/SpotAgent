@@ -51,9 +51,9 @@ sequenceDiagram
   Server->>Server: WebSocketServer.listen(4317)
 ```
 
-## MCP 与 ActionDefinition 流程
+## MCP 与 plugin action binding 流程
 
-MCP server 与 ActionDefinition 是两条相互独立的注入通道，作用时机也不同：
+全局 MCP server 与 plugin action binding 是两条相互独立的注入通道，作用时机也不同：
 
 1. **全局 MCP**：`~/.spotAgent/mcp.json` 中配置的所有 server 默认对所有 session 可用。`startDefaultServer` 启动时把这些 server id 作为 `globalMcpServerIds` 传给 `SessionScopedToolRegistry`，每轮 user message 前都会自动 `tools/list` 并注入为 `mcp.<serverId>.<toolName>`。client 复用，按 server id 缓存。除了 tools，`MCPServerRegistry` 还代理 `prompts/list` / `prompts/get` / `resources/list` / `resources/read`，供未来的 prompt picker 或 resource UI 调用。`computer_use` / `computer-use` 是兼容例外：仍按 `mcp.<serverId>.*` 注入，但 client 由 `ComputerUseMCPClient` 接管，避免 Codex 私有 Computer Use MCP 在非 Codex app-server 父链路下 `tools/call` 挂起。
 2. **plugin action 触发的 MCP**：`create_session_request.payload.actionBinding` 只包含 `{ pluginId, promptName }`。agent-server 不信任 desktop 传来的 MCP server 列表，而是通过 `ActionBindingResolver` 重新读取 `~/.spotAgent/plugins/<plugin-id>/plugin.json`，校验 plugin id、prompt name、enabled 状态和 prompt `kind`。默认 `kind` 是 `plugin`，允许绑定；显式 `kind: "skill"` 的 prompt 只用于 desktop 侧渲染普通 prompt，不能创建 `actionBinding`。校验通过后，agent-server 把 manifest 中的 `mcpServerIds` 写入 session metadata，作为该 session 在全局集合之外的额外注入。

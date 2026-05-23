@@ -12,7 +12,7 @@
 | `ToolSettingsView.swift` | 工具管理 UI：builtin tool 列表、风险提示、开关切换 |
 | `PermissionRulesViewModel.swift` | `@Observable` 代理：直接读写 `~/.spotAgent/permissions.json`，展示永久规则并支持按 `argHash` 撤销 |
 | `PermissionRulesView.swift` | 权限规则 UI：toolName / decision / createdAt / 参数摘要列表 + 撤销按钮 |
-| `ShortcutSettingsView.swift` | 快捷键配置 UI；上栏是固定系统入口“全局快捷键”，下栏是 `ActionDefinition` 派生的“Action 快捷键”，两栏都用 `KeyboardShortcuts.Recorder` |
+| `ShortcutSettingsView.swift` | 快捷键配置 UI；上栏是固定系统入口“全局快捷键”，下栏是 manifest `ActionDefinition` 派生的“Action 快捷键”，两栏都用 `KeyboardShortcuts.Recorder` |
 | `WorkspaceSettingsView.swift` | 工作区列表 + 添加 / 编辑 / 删除 UI；SwiftUI `fileImporter` 选目录 + 表单 sheet |
 | `WorkspaceSettingsViewModel.swift` | `@Observable` 代理：直接读写 `~/.spotAgent/workspaces.json`（与 core 侧 `FileWorkspaceRegistry` 共享文件） |
 | `SettingsStyles.swift` | 共享样式：`SettingsTab`、`SettingsTabBar`、`SettingsSection`、`SettingsListSection`、`SettingsRow`、`SettingsRowDivider`、`SettingsFieldStyle`、`SettingsSectionSeparator` |
@@ -45,7 +45,7 @@ Coordinator.send(.openSettings)
 - **Tab 增加规则**：新建 Tab 先在 `SettingsTab` enum 增 case、标题和图标，再在 `SettingsView.tabContent` 接入内容；Tab 内如果有副作用则配套加 ViewModel；纯展示可直接写 View。
 - **视觉风格**：设置页面使用 `settingsCard()` 卡片容器 + `SettingsFieldStyle` 输入框 + `SettingsRow` 行布局，与 PromptPanel / SessionWindow 保持统一暗色玻璃风格。不要使用系统 `Form` / `GroupBox` / `.grouped` 样式。窗口标题栏设为透明 + fullSizeContentView，与 SessionWindow 一致。
 - **不要在 Settings 里读 LLM/tool 运行态**：宿主层不组装 LLM 消息，`api`/`baseURL`/`apiKey` 和工具开关只是写入 settings.json；agent-server 侧每次模型请求自己读模型配置，每轮 user message 前刷新 tool registry。
-- **快捷键只有两类模型**：固定系统入口全局快捷键仅包含“唤起面板 / 捕获文本选区 / 圈选区域截图”；其余可选择项统一归为 Action 快捷键，由 `ActionDefinition.shortcutName` 生成 `KeyboardShortcuts.Name("action.<id>")` 并注册为系统级全局快捷键。不要再新增 PromptPanel 局部快捷键模型。
+- **快捷键只有两类模型**：固定系统入口全局快捷键仅包含“唤起面板 / 捕获文本选区 / 圈选区域截图”；manifest prompt 派生的 `ActionDefinition` 归为 Action 快捷键，由 `ActionDefinition.shortcutName` 生成 `KeyboardShortcuts.Name("action.<id>")` 并注册为系统级全局快捷键。不要再新增 PromptPanel 局部快捷键模型。
 - **测试**：[AgentSettingsViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/Settings/AgentSettingsViewModelTests.swift) 用临时 home 目录验证读写串通；[AgentSettingsStoreTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/AppServices/AgentSettings/AgentSettingsStoreTests.swift) 覆盖磁盘 IO + 轮询；[PermissionRulesViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/Settings/PermissionRulesViewModelTests.swift) 覆盖权限规则读取、参数摘要和撤销写回。
 
 ## 与其他模块的关系

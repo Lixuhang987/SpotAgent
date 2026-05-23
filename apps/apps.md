@@ -29,7 +29,7 @@ flowchart LR
 
 - 用户提交 prompt 后，`AppCoordinator` 创建 `SessionWindow` 与 `SessionViewModel`。
 - `SessionSocketClient` 通过 `agent-server` 发送 `SessionMessage`，由后端 `SessionRouter` 路由并交给 `SessionRuntimeOrchestrator` 驱动 `AgentRuntime`。
-- PromptPanel 会根据 `~/.spotAgent/sessions/` 生成最近会话 action；独立历史窗口用于搜索、预览、恢复和删除持久化会话。
+- SessionWindow 左侧历史列表读取 `~/.spotAgent/sessions/`，用于搜索、预览、恢复和删除持久化会话。
 
 ### 3. 平台能力反向 IPC
 

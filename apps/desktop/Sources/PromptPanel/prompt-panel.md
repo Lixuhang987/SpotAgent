@@ -36,7 +36,7 @@ AgentServerHealth.onAvailabilityChange → Controller.setSubmissionEnabled(...)
                                       └─ server 不可用时 ViewModel.submit() 保留 draft，不上抛 onSubmit
 ```
 
-`ActionDefinition` 是 PromptPanel 下放的所有可选择 item，类似 Raycast item。当前来源包括：
+`ActionDefinition` 是 PromptPanel 中由 manifest prompt 派生的可选择 action item，类似 Raycast item。当前来源包括：
 
 - skill action：manifest prompt 显式 `kind: "skill"`，提交时只把渲染后的 prompt 作为普通 prompt 创建新 session。
 - plugin action：manifest prompt 默认 `kind` 为 `"plugin"`，提交时渲染 prompt，并携带 `{ pluginId, promptName }` 创建新 session；agent-server 会重新读取 manifest 校验并激活对应 MCP tool scope。
@@ -67,6 +67,4 @@ Action prompt 的参数与提交流程：
 - 由 [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 持有并注入 actions。
 - 提交 prompt 后由 Coordinator 聚焦或创建全局 [SessionWindow](/Users/mu9/proj/handAgent/apps/desktop/Sources/SessionWindow/session-window.md)，再由窗口模型创建新的会话 tab；当前 active tab 不会接收 PromptPanel 的初始提交。
 - [AgentServer](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/AgentServer/agent-server.md) 可用性变化会同步到 `setSubmissionEnabled`，避免重启期间提交新 prompt。
-- "打开设置"按钮由 Controller 回调到 Coordinator，再路由到 [Settings](/Users/mu9/proj/handAgent/apps/desktop/Sources/Settings/settings.md) 窗口。
-- 会话历史是宿主事件入口，由 Coordinator 路由到 [SessionWindow](/Users/mu9/proj/handAgent/apps/desktop/Sources/SessionWindow/session-window.md) 的左侧历史列表，不属于 `ActionDefinition`。
 - 全局热键来自 [AppServices/Hotkey](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Hotkey/hotkey.md)。

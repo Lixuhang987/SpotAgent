@@ -1,6 +1,6 @@
 # actions
 
-Action manifest 与 session action binding 解析。Desktop 负责读取同形状 manifest 来构建 `ActionDefinition`、渲染 prompt template 与注册 Action 全局快捷键；agent-server 在 plugin action 创建 session 时重新读取 manifest，校验 `{ pluginId, promptName }` 并解析 `mcpServerIds`。
+Action manifest 与 session action binding 解析。Desktop 负责读取 manifest prompts 来构建 `ActionDefinition`、渲染 prompt template 与注册 Action 全局快捷键；agent-server 在 plugin action 创建 session 时重新读取 manifest，校验 `{ pluginId, promptName }` 并解析 `mcpServerIds`。
 
 | 文件 | 职责 |
 |------|------|

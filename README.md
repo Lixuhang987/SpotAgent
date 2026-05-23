@@ -1,6 +1,6 @@
 # HandAgent
 
-HandAgent 是一个 macOS 优先的桌面 Agent Runtime MVP。当前桌面壳使用 `AppKit + SwiftUI`，Agent Core 负责会话与工具编排，LLM 按需调用 builtin tools；PromptPanel 统一用 `ActionDefinition` 表示可选择 item，其中 plugin action 可把 prompt 模板绑定到 session-scoped MCP tools。
+HandAgent 是一个 macOS 优先的桌面 Agent Runtime MVP。当前桌面壳使用 `AppKit + SwiftUI`，Agent Core 负责会话与工具编排，LLM 按需调用 builtin tools；PromptPanel 会把本地 manifest prompts 构建为 `ActionDefinition`，其中 plugin action 可把 prompt 模板绑定到 session-scoped MCP tools。
 
 ## 当前能力
 

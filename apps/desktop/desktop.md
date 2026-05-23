@@ -142,7 +142,7 @@ sequenceDiagram
 - `.imageRegion(base64:mimeType:)`：用户区域截图（来自 `MacRegionCaptureProvider`，保留 `screencapture -i` 作为用户主动圈选入口）。
 - `.selectionError(message:)`：采集失败，UI 以禁用 chip + tooltip 反馈。
 
-`ActionDefinition` 是 PromptPanel 下放的统一 item 模型，包含 trigger、参数、可选 Action 全局快捷键、提交行为和可选 plugin binding。来源是 `~/.spotAgent/plugins/*/plugin.json` 的 `prompts[]`。参数统一使用 `[name: value]` 命名块；无参数 action 可以只输入 trigger。skill action 只提交渲染后的 prompt；plugin action 提交渲染后的 prompt 与 `{ pluginId, promptName }`，由 agent-server 重新校验并持久化 session 绑定，后续按 `mcpServerIds` 激活对应 MCP tool scope。
+`ActionDefinition` 是 PromptPanel 中由 manifest prompt 派生的 item 模型，包含 trigger、参数、可选 Action 全局快捷键、提交行为和可选 plugin binding。来源是 `~/.spotAgent/plugins/*/plugin.json` 的 `prompts[]`。参数统一使用 `[name: value]` 命名块；无参数 action 可以只输入 trigger。skill action 只提交渲染后的 prompt；plugin action 提交渲染后的 prompt 与 `{ pluginId, promptName }`，由 agent-server 重新校验并持久化 session 绑定，后续按 `mcpServerIds` 激活对应 MCP tool scope。
 
 ## 注意事项
 
