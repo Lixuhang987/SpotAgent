@@ -31,4 +31,15 @@
 
 ## 当前 bug
 
-暂无已记录未修复 bug。
+### `AI SDK stream finished without assistant content or tool calls`
+
+- **严重级别**：P1
+- **发现日期**：2026-05-24
+- **复现步骤**：
+  1. 以真实 LLM 模式启动 `HandAgentDesktop`。
+  1. 提交 `Please inspect my current screen with tools and summarize what you see. HANDAGENT_LAZY_TOOL_QA_20260524`。
+  1. 在 `screen.capture` / `accessibility.snapshot` 授权弹窗中先经历一次拒绝，再点 `始终允许` 重试 `HANDAGENT_LAZY_TOOL_QA_20260524_RETRY`。
+- **实际结果**：SessionWindow 先显示 `use_tools`、`window.list`、`screen.capture` 等工具结果，但最终出现红色警告 `AI SDK stream finished without assistant content or tool calls.`，没有产出最终 assistant 总结。
+- **期望结果**：工具执行完成后，流应正常收尾并输出 assistant 总结，session 里应有可见 assistant 内容而不是空流错误。
+- **证据**：`~/.spotAgent/sessions/session-1779601103378-sa0wyo.json` 记录了初始 `use_tools`、`app.frontmost`、`screen.capture`、`accessibility.snapshot` 以及 `error` 事件 `AI SDK stream finished without assistant content or tool calls.`；`~/.spotAgent/log/2026-05-24/network-001.jsonl` 可见对应 `screen.capture` / `accessibility.snapshot` 请求与返回。UI 中也直接显示同名告警。
+- **初步调用链 / 根因边界**：问题出现在 `LLMClient` 流式收尾到 session 持久化之间的收束阶段，暂不确定是模型空收尾、AI SDK 处理空结尾，还是 runtime 对工具结果后的 assistant 完成信号处理有缺口。
