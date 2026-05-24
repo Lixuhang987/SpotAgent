@@ -795,3 +795,9 @@
   - `~/.spotAgent/sessions/session-1779565670291-o3gl1x.json`：append prompt 普通 session，metadata 无 `actionBinding`。
   - `~/.spotAgent/sessions/session-1779568071596-bbtt3l.json`：metadata `actionBinding.pluginId = "qa-mcp-filesystem-read"`、`promptName = "read"`、`mcpServerIds = ["filesystem"]`；messages 包含 `tool` message `name = "mcp.filesystem.read_file"`；events 包含 `permission_request`、`tool_call`、`tool_result`，toolName 均为 `mcp.filesystem.read_file`。
 - **结论**：Settings Plugin / Append Prompt / MCP 管理页条目通过实机 QA，已从 `docs/manual-qa.md` 移除。
+### 删除 running session 回归（P1）
+
+- **验证日期**：2026-05-24
+- **验证环境**：mock-llm / macOS；主仓库 `/Users/mu9/proj/handAgent`，分支 `main`；`dist/HandAgentDesktop.app/Contents/Resources/HandAgentRuntimeMode.json` 为 `{"llmMode":"mock"}`。
+- **验证过程**：通过 PromptPanel 提交 `[mock:slow-focus] QA_DELETE_RUNNING_SESSION_TIMEOUT_20260524_043305`，生成 running 会话 `session-1779568466925-l2g7yi`；SessionWindow 底部出现停止按钮 `stop.fill`，会话文件最初仅包含 user message。随后在左侧历史列表对同一 session 执行删除，确认删除弹窗后窗口返回其他会话，目标 tab 不再打开，未卡在 running 或等待删除状态。
+- **证据**：目标文件 `~/.spotAgent/sessions/session-1779568466925-l2g7yi.json` 已不存在；`rg -n "QA_DELETE_RUNNING_SESSION_TIMEOUT_20260524_043305|session-1779568466925-l2g7yi" ~/.spotAgent/sessions -g '*.json'` 无命中；历史侧栏仍可见的 `QA_DELETE_RUNNING_SESSION_TIM...` 是 2026-05-22 旧 QA 会话，不是本次 session。删除后 `HandAgentDesktop` 与 `agent-server` 仍运行，`lsof -nP -iTCP:4317 -sTCP:LISTEN` 显示 `node` 继续监听 `*:4317`。
