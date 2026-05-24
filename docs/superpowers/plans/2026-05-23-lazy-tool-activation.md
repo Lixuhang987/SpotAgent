@@ -470,7 +470,7 @@ import {
 
 ```ts
     options?: {
-      maxTurns?: number;
+      maxTimes?: number;
       permissionPolicy?: PermissionPolicy;
       blobStore?: BlobStore;
       turnSummarizer?: TurnSummarizerLike;

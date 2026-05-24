@@ -77,7 +77,7 @@ plugin action 绑定的外部能力不由 core tools 目录加载私有插件进
 
 ## 当前实现特点与已知改进项
 
-- `AgentRuntime` 默认 `maxTurns = 8`，防止无限循环。
+- `AgentRuntime` 默认 `maxTimes = 100`，限制一次用户输入内的 LLM/tool 循环次数，防止无限循环。
 - tool 结果统一序列化为字符串再回灌；`MAX_OUTPUT_BYTES = 8 KiB` 截断。
 - `VercelClient` 当前默认模型 `gpt-5-mini`。
 - user message 支持字符串或多模态 content parts；持久化层仍保存 STUB 文本，agent-server 在 runtime 前展开 image STUB。

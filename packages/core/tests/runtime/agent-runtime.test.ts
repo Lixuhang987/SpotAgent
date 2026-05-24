@@ -241,6 +241,30 @@ describe("AgentRuntime", () => {
     expect(result).not.toHaveProperty("bubbles");
   });
 
+  it("limits repeated LLM/tool loops with maxTimes", async () => {
+    const client = {
+      async complete() {
+        return {
+          message: { role: "assistant" as const, content: "calling tool" },
+          toolCalls: [
+            {
+              id: "call-loop",
+              name: "echo",
+              arguments: {
+                value: "again",
+              },
+            },
+          ],
+        };
+      },
+    };
+    const runtime = new AgentRuntime(client, new ToolRegistry([new FakeTool()]), {
+      maxTimes: 1,
+    });
+
+    await expect(runtime.run("loop")).rejects.toThrow("AgentRuntime exceeded maxTimes: 1");
+  });
+
   it("passes session context into tool calls", async () => {
     const tool = new ContextCapturingTool();
     const client = {

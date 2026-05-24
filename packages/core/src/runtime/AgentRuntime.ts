@@ -82,7 +82,7 @@ type ToolExecutionResult = {
 };
 
 export class AgentRuntime {
-  private readonly maxTurns: number;
+  private readonly maxTimes: number;
   private readonly permissionPolicy: PermissionPolicy;
   private readonly blobStore?: BlobStore;
   private readonly turnSummarizer?: TurnSummarizerLike;
@@ -95,7 +95,7 @@ export class AgentRuntime {
     private readonly client: LLMClientLike,
     private readonly toolRegistry: ToolRegistry,
     options?: {
-      maxTurns?: number;
+      maxTimes?: number;
       permissionPolicy?: PermissionPolicy;
       blobStore?: BlobStore;
       turnSummarizer?: TurnSummarizerLike;
@@ -104,7 +104,7 @@ export class AgentRuntime {
       isSessionActivated?: (sessionId: string) => boolean;
     }
   ) {
-    this.maxTurns = options?.maxTurns ?? 100;
+    this.maxTimes = options?.maxTimes ?? 100;
     this.permissionPolicy = options?.permissionPolicy ?? new AllowAllPermissionPolicy();
     this.blobStore = options?.blobStore;
     this.turnSummarizer = options?.turnSummarizer;
@@ -133,8 +133,8 @@ export class AgentRuntime {
     throwIfAborted(runOptions.signal);
     let assistantCount = 0;
 
-    for (let turn = 0; turn < this.maxTurns; turn += 1) {
-      const completion = await this.completeTurn(nextMessages, onEvent, ++assistantCount, runOptions);
+    for (let time = 0; time < this.maxTimes; time += 1) {
+      const completion = await this.completeAssistantResponse(nextMessages, onEvent, ++assistantCount, runOptions);
       throwIfAborted(runOptions.signal);
       const assistantMessage =
         completion.toolCalls && completion.toolCalls.length > 0
@@ -164,7 +164,7 @@ export class AgentRuntime {
       }
     }
 
-    throw new Error(`AgentRuntime exceeded maxTurns: ${this.maxTurns}`);
+    throw new Error(`AgentRuntime exceeded maxTimes: ${this.maxTimes}`);
   }
 
   private async handleToolCall(input: {
@@ -358,7 +358,7 @@ export class AgentRuntime {
     };
   }
 
-  private async completeTurn(
+  private async completeAssistantResponse(
     messages: AgentMessage[],
     onEvent: AgentRuntimeEventSink,
     assistantCount: number,

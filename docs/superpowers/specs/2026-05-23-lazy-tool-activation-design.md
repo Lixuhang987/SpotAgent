@@ -109,7 +109,7 @@ MCP server 的工具是原子的、不可拆分。一个 server 暴露的多个 
 1. 在 `handleToolCall` 进入 `callTool` 之前识别 tool name === `META_TOOL_NAME`：
    - 若 runtime 持有的 sessionId 已激活（通过 `isSessionActivated?: (sessionId) => boolean` 回调判断），跳过激活回调，直接构造 tool message 内容为 `"Tools are already active."` 并入消息历史。
    - 否则先 `await onMetaToolActivate(sessionId)`，再执行 meta-tool 的 `call`（返回首次激活文案）。
-2. 激活回调先于 tool result 入消息历史，确保下一轮 `completeTurn` 读取 `toolRegistry.list()` 时已经看到扩展后的工具集。
+2. 激活回调先于 tool result 入消息历史，确保下一次 `completeAssistantResponse` 读取 `toolRegistry.list()` 时已经看到扩展后的工具集。
 3. 权限检查（`resolveToolPermission`）对 meta-tool 跳过 — meta-tool 不是真实能力，不应弹审批。具体实现：在 `handleToolCall` 入口判断到 meta-tool 时直接跳过权限分支，但保留 abort 检查。
 4. Tool message 正常写入；runtime 不为 meta-tool 做特殊持久化处理 — 它对历史而言就是一次普通的 tool call + tool result，参与 prompt cache 与 turn 计数。
 
