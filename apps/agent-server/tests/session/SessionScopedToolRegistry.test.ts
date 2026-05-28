@@ -3,7 +3,7 @@ import { MockLLMClient } from "@handagent/core/llm/MockLLMClient.ts";
 import { AgentRuntime } from "@handagent/core/runtime/AgentRuntime.ts";
 import type { AgentTool } from "@handagent/core/tools/AgentTool.ts";
 import { ToolRegistry } from "@handagent/core/tools/ToolRegistry.ts";
-import { SessionScopedToolRegistry } from "../../src/SessionScopedToolRegistry";
+import { SessionScopedToolRegistry } from "../../src/actions/SessionScopedToolRegistry.ts";
 
 function fakeTool(name: string): AgentTool {
   return {

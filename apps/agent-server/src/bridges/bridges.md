@@ -1,0 +1,85 @@
+# bridges
+
+## 目录职责
+
+`bridges/` 把 core 的抽象回调接到 desktop WebSocket。这里不执行 LLM 或 tool 逻辑，只维护请求、响应、超时、socket 重绑和 token fencing。
+
+## 文件
+
+| 文件 | 职责 |
+|------|------|
+| `WebSocketPlatformBridge.ts` | 实现 core `PlatformBridge`；向 desktop 发送 `platform_request`，按 `requestId + BridgeToken` 等待 `platform_response` |
+| `SessionPermissionBridge.ts` | 实现 `FilePermissionPolicy` 的 `AskResolver`；向当前 session socket 发送 `permission_request`，等待 `permission_response` |
+| `SessionWorkspaceAskBridge.ts` | 实现 `workspace.askUser` 的 `WorkspaceAskResolver`；向当前 session socket 串行发送 `workspace_ask_request`，等待用户选择或取消 |
+
+## 三条桥的差异
+
+| 桥 | 请求来源 | 回流消息 | 默认超时 | 绑定粒度 |
+|------|------|------|------|------|
+| `WebSocketPlatformBridge` | core `RemotePlatformAdapter` | `platform_response` | `call()` 入参默认 15s | 当前 platform socket |
+| `SessionPermissionBridge` | core `FilePermissionPolicy.ask` | `permission_response` | 60s | 当前 session socket |
+| `SessionWorkspaceAskBridge` | builtin `workspace.askUser` | `workspace_ask_response` | 60s | 当前 session socket，且同 session 串行 |
+
+## 关键机制
+
+### Platform bridge token
+
+```ts
+attach(send: Send): BridgeToken {
+  const previousToken = this.currentToken;
+  if (previousToken !== null) {
+    this.failPendingForToken(previousToken, "desktop bridge replaced");
+  }
+
+  const token = ++this.nextToken;
+  this.send = send;
+  this.currentToken = token;
+  return token;
+}
+```
+
+新的 platform socket 会替换旧 socket，并让旧 token 下的 pending request 以 offline 失败。旧 socket 晚到的 response 因 token 不匹配会被忽略。
+
+### 权限审批绑定到 session
+
+```ts
+const requestId = `${sessionId}:${randomUUID()}`;
+this.pending.set(requestId, {
+  sessionId,
+  token: binding.token,
+  resolve,
+  timeout,
+});
+```
+
+权限 requestId 带 sessionId 前缀，`server/attachSessionSocketHandlers` 可以从 response requestId 找回 session，再用该 socket 持有的 binding token 调 `handleResponse()`。这保证一个 session 断线重连后，旧 socket 不能答复新 socket 发起的审批。
+
+### Workspace ask 串行展示
+
+```ts
+const queue = this.queues.get(sessionId) ?? [];
+queue.push(job);
+this.queues.set(sessionId, queue);
+this.dispatchNext(sessionId);
+```
+
+同一 session 内多个 `workspace.askUser` 会排队展示，避免桌面端同时出现多个 workspace 选择请求。当前 active job 完成、取消或超时后，才会派发下一个 job。
+
+## 失败语义
+
+- platform bridge 不可用：抛 `PlatformBridgeOfflineError`，由上层 tool/runtime 变成 tool 失败。
+- platform request 超时：抛 `PlatformBridgeTimeoutError`。
+- permission 无 session、无 socket、超时、断开：返回 deny，不抛错。
+- workspace ask 无 session、无 socket、超时、断开：返回 `{ cancelled: true }`，不抛错。
+
+## 编辑约束
+
+- 新增桥时必须定义 token/fencing 策略，避免旧 socket 响应影响新 socket。
+- `handleResponse()` 必须先校验 requestId，再校验 token 和当前绑定。
+- socket close 清理由 `server/attachSessionSocketHandlers` 统一调用；桥内部只清理自己的 pending 状态。
+
+## 下一步阅读
+
+- socket 分派：[server/server.md](/Users/mu9/proj/handAgent/apps/agent-server/src/server/server.md)
+- 权限策略：[packages/core/src/permission/permission.md](/Users/mu9/proj/handAgent/packages/core/src/permission/permission.md)
+- workspace tool：[packages/core/src/workspace/workspace.md](/Users/mu9/proj/handAgent/packages/core/src/workspace/workspace.md)

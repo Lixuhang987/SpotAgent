@@ -7,17 +7,17 @@ import type { PlatformBridgeMessage } from "@handagent/core/protocol/PlatformBri
 import type { FilePermissionPolicy } from "@handagent/core/permission/FilePermissionPolicy.ts";
 import type { MCPClient } from "@handagent/core/mcp/MCPClient.ts";
 import { InMemorySessionStore } from "@handagent/core/storage/index.ts";
-import type { SessionRouter } from "../../src/SessionRouter.ts";
-import { SessionRouter as RealSessionRouter } from "../../src/SessionRouter.ts";
-import { SessionPersistence } from "../../src/SessionPersistence.ts";
-import { SessionPermissionBridge } from "../../src/SessionPermissionBridge.ts";
-import { SessionRuntimeOrchestrator } from "../../src/SessionRuntimeOrchestrator.ts";
-import { SessionWorkspaceAskBridge } from "../../src/SessionWorkspaceAskBridge.ts";
+import type { SessionRouter } from "../../src/session/SessionRouter.ts";
+import { SessionRouter as RealSessionRouter } from "../../src/session/SessionRouter.ts";
+import { SessionPersistence } from "../../src/session/SessionPersistence.ts";
+import { SessionPermissionBridge } from "../../src/bridges/SessionPermissionBridge.ts";
+import { SessionRuntimeOrchestrator } from "../../src/session/SessionRuntimeOrchestrator.ts";
+import { SessionWorkspaceAskBridge } from "../../src/bridges/SessionWorkspaceAskBridge.ts";
 import {
   attachSessionSocketHandlers,
   createMCPClientFromConfig,
   resolveLLMMode,
-} from "../../src/server.ts";
+} from "../../src/server/server.ts";
 
 class FakeSocket extends EventEmitter {
   sent: string[] = [];

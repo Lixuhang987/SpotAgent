@@ -3,7 +3,7 @@ import XCTest
 @testable import HandAgentDesktop
 
 final class AgentServerRuntimeModeTests: XCTestCase {
-    private let agentServerRelativePath = "apps/agent-server/src/server.ts"
+    private let agentServerRelativePath = "apps/agent-server/src/server/server.ts"
 
     func testRuntimeModeDefaultsToSettingsWithoutMarker() throws {
         let resourcesURL = try makeResourcesDirectory()

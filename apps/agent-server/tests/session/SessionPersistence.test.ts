@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AgentMessage } from "@handagent/core/runtime/AgentMessage.ts";
 import { InMemorySessionStore } from "@handagent/core/storage/index.ts";
 import { MemoryBlobStore } from "../support/MemoryBlobStore.ts";
-import { SessionPersistence } from "../../src/SessionPersistence.ts";
+import { SessionPersistence } from "../../src/session/SessionPersistence.ts";
 
 describe("SessionPersistence", () => {
   it("wraps session CRUD operations", async () => {

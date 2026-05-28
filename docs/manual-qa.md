@@ -22,6 +22,14 @@
 
 最近阻塞记录：2026-05-24 复查 `~/.spotAgent/settings.json`，当前 `llm.provider` 为 `openai-compatible`，`llm.api` 为 `responses`，`llm.model` 为 `gpt-5.4`，`llm.baseUrl` 为 `http://127.0.0.1:8317/v1`，API key 仅属于 OpenAI 兼容配置；环境变量中没有 `ANTHROPIC_API_KEY` 或 `CLAUDE_API_KEY`，仅有 `ANTHROPIC_BASE_URL`。配置文件没有可用的 Anthropic key 或 Anthropic 模型；在没有用户提供真实 Anthropic 配置前，不能验证 Anthropic streaming 与 tool call 回灌，本项不归档为通过。
 
+## agent-server 源码目录重构 smoke（P2）
+
+1. 从当前 worktree 执行 `bash ./scripts/swiftw run HandAgentDesktop`。
+1. 确认 desktop 成功派生 agent-server，`ps -o pid,ppid,command -p <agent-server-pid>` 中命令路径指向 `apps/agent-server/src/server/server.ts`。
+1. 提交一个普通文本 prompt，确认 SessionWindow 能收到 assistant 回复或明确的模型配置错误气泡，不出现 `agent-server` 入口文件缺失。
+1. 在同一 session 触发一次需要 workspace 或 permission 回流的工具场景，确认权限 / workspace 选择气泡仍能回到当前 session。
+1. 打开 `~/.spotAgent/sessions/<id>.json`，确认本轮 user / assistant 或 tool / event 按预期落盘。
+
 ## 懒加载工具激活（P1）
 
 最近阻塞记录：2026-05-24 使用真实 LLM 模式重试 `HANDAGENT_LAZY_TOOL_QA_20260524`。首轮已验证 `use_tools` 激活后会调到真实工具链；在允许 `screen.capture` / `accessibility.snapshot` 之前，工具先被判定为拒绝。随后在权限弹窗中选择 `始终允许` 再重试 `HANDAGENT_LAZY_TOOL_QA_20260524_RETRY`，SessionWindow 已显示 `window.list` 与 `screen.capture` 的工具结果，但最终仍落到 UI 告警 `AI SDK stream finished without assistant content or tool calls.`，对应 session `session-1779601103378-sa0wyo` 也记录了同名 error 事件，因此本项当前仍不能归档为通过。

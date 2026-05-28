@@ -12,7 +12,7 @@ import {
   agentMessagesToConversation,
   composeUserContent,
   deriveTitle,
-} from "./MessageTranslator.ts";
+} from "../protocol/MessageTranslator.ts";
 
 export class SessionPersistence {
   constructor(

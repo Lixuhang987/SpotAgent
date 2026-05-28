@@ -29,7 +29,7 @@ protocol AgentServerStarting: AnyObject {
 }
 
 final class AgentServerService: AgentServerStarting, @unchecked Sendable {
-    private let agentServerRelativePath = "apps/agent-server/src/server.ts"
+    private let agentServerRelativePath = "apps/agent-server/src/server/server.ts"
     private let maxRestartAttempts = 5
 
     private(set) var process: Process?

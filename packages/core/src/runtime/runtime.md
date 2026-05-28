@@ -82,7 +82,7 @@ flowchart TD
 - 不要把 provider 私有 stream / SSE 细节写进 `AgentRuntime`，provider 必须先归一化成 `LLMStreamEvent`。
 - tool 调用以 `ToolRegistry.get(name)` 为唯一入口，不允许直接 `import` builtin tool。
 - 新增 system prompt 规则时优先放入 `SystemPrompt.ts` 的 section builder，不要在 `AgentRuntime.completeTurn()` 里直接拼接策略字符串。
-- 新增事件类型时，`apps/agent-server/src/MessageTranslator.ts` 的 `toSessionMessage` / `toAuditEvent` 必须同步更新。
+- 新增事件类型时，`apps/agent-server/src/protocol/MessageTranslator.ts` 的 `toSessionMessage` / `toAuditEvent` 必须同步更新。
 
 ## 相关文档
 

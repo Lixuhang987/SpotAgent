@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { WebSocketPlatformBridge } from "../../src/WebSocketPlatformBridge.ts";
+import { WebSocketPlatformBridge } from "../../src/bridges/WebSocketPlatformBridge.ts";
 import {
   PlatformBridgeOfflineError,
   PlatformBridgeRemoteError,

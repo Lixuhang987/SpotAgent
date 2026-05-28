@@ -91,7 +91,7 @@ sequenceDiagram
   App->>Coord: @State 初始化 → 自动 bootstrap()
   Coord->>Coord: setupPromptPanel + setupHotkey + setupStatusBubble
   Coord->>Server: start()
-  Server->>Node: node --experimental-transform-types apps/agent-server/src/server.ts
+  Server->>Node: node --experimental-transform-types apps/agent-server/src/server/server.ts
   Coord->>Coord: statusBubbleController.show()
 ```
 
