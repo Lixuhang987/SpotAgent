@@ -8,7 +8,7 @@ import {
   toAuditEvent,
   toErrorMessage,
   toSessionMessage,
-} from "../../src/MessageTranslator.ts";
+} from "../../src/protocol/MessageTranslator.ts";
 
 describe("MessageTranslator", () => {
   it("translates assistant runtime events into session frames", () => {

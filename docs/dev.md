@@ -39,7 +39,7 @@ bash ./scripts/swiftw run HandAgentDesktop
 
 ### 模型配置排查
 
-- 本地 `apps/agent-server/src/server.ts` 会通过 `SettingsBackedLLMClient` 在每次请求前检查 `~/.spotAgent/settings.json` 的文件戳，配置变化后重新读取。
+- 本地 `apps/agent-server/src/server/server.ts` 会通过 `SettingsBackedLLMClient` 在每次请求前检查 `~/.spotAgent/settings.json` 的文件戳，配置变化后重新读取。
 - core 的 `LLMClientFactory` 会根据配置里的 `provider` 创建 OpenAI 兼容或 Anthropic client；OpenAI 兼容路径会继续根据 `api` 选择 `responses`、`chat` 或 `completion` provider model。
 - 图片附件会先保存为本地 blob 与 session STUB；进入 LLM 请求前才展开为多模态 image part。`api=completion` 不支持图片，请使用 `responses` 或 `chat`。
 - 如果提交 prompt 后看到 `Missing apiKey in ~/.spotAgent/settings.json. 请先在设置页完成模型配置。`，说明当前设置文件里没有有效的 `apiKey`。

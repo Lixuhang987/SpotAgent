@@ -2,9 +2,9 @@
   "name": "handagent-agent-server",
   "private": true,
   "type": "module",
-  "main": "src/server.ts",
+  "main": "src/server/server.ts",
   "scripts": {
-    "start": "node src/server.ts"
+    "start": "node src/server/server.ts"
   },
   "dependencies": {
     "@handagent/core": "workspace:*",

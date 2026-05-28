@@ -4,8 +4,8 @@ import type { AgentRuntimeEvent } from "@handagent/core/runtime/AgentRuntime.ts"
 import type { SessionMessage } from "@handagent/core/protocol/SessionMessage.ts";
 import { InMemorySessionStore } from "@handagent/core/storage/index.ts";
 import { MemoryBlobStore } from "../support/MemoryBlobStore.ts";
-import { SessionPersistence } from "../../src/SessionPersistence.ts";
-import { SessionRuntimeOrchestrator } from "../../src/SessionRuntimeOrchestrator.ts";
+import { SessionPersistence } from "../../src/session/SessionPersistence.ts";
+import { SessionRuntimeOrchestrator } from "../../src/session/SessionRuntimeOrchestrator.ts";
 
 function createUserMessage(
   sessionId: string,

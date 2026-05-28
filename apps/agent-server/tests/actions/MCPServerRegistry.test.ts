@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MCPClient, MCPServerInfo } from "@handagent/core/mcp/MCPClient.ts";
-import { MCPServerRegistry } from "../../src/MCPServerRegistry.ts";
+import { MCPServerRegistry } from "../../src/actions/MCPServerRegistry.ts";
 
 describe("MCPServerRegistry", () => {
   it("caches tools per server id", async () => {

@@ -13,7 +13,7 @@ import type {
   ScreenCaptureResult,
   WindowInfo,
 } from "@handagent/core/platform/PlatformAdapter.ts";
-import { ComputerUseMCPClient } from "../../src/ComputerUseMCPClient.ts";
+import { ComputerUseMCPClient } from "../../src/actions/ComputerUseMCPClient.ts";
 
 class FakePlatformAdapter implements PlatformAdapter {
   async listApps(): Promise<AppInfo[]> {

@@ -13,7 +13,7 @@ import {
   toAuditEvent,
   toErrorMessage,
   toSessionMessage,
-} from "./MessageTranslator.ts";
+} from "../protocol/MessageTranslator.ts";
 
 type RuntimeLike = {
   runWithMessages(

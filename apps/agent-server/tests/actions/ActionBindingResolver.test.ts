@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { ActionBindingResolver } from "../../src/ActionBindingResolver.ts";
+import { ActionBindingResolver } from "../../src/actions/ActionBindingResolver.ts";
 
 describe("ActionBindingResolver", () => {
   it("resolves prompt binding from plugin manifest", async () => {

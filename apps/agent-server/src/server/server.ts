@@ -10,19 +10,19 @@ import type { PlatformAdapter } from "@handagent/core/platform/PlatformAdapter.t
 import { parseMCPConfig } from "@handagent/core/mcp/MCPConfig.ts";
 import type { AgentMessage } from "@handagent/core/runtime/AgentMessage.ts";
 import { META_TOOL_NAME } from "@handagent/core/tools/MetaToolUseTool.ts";
-import { SessionPersistence } from "./SessionPersistence.ts";
-import { SessionRouter } from "./SessionRouter.ts";
-import { SessionRuntimeOrchestrator } from "./SessionRuntimeOrchestrator.ts";
+import { SessionPersistence } from "../session/SessionPersistence.ts";
+import { SessionRouter } from "../session/SessionRouter.ts";
+import { SessionRuntimeOrchestrator } from "../session/SessionRuntimeOrchestrator.ts";
 import { FileSessionStore } from "@handagent/core/storage/index.ts";
 import {
   WebSocketPlatformBridge,
   type BridgeToken,
-} from "./WebSocketPlatformBridge.ts";
+} from "../bridges/WebSocketPlatformBridge.ts";
 import {
   SessionPermissionBridge,
   type SessionBindingToken,
-} from "./SessionPermissionBridge.ts";
-import { SessionWorkspaceAskBridge } from "./SessionWorkspaceAskBridge.ts";
+} from "../bridges/SessionPermissionBridge.ts";
+import { SessionWorkspaceAskBridge } from "../bridges/SessionWorkspaceAskBridge.ts";
 import type { FilePermissionPolicy } from "@handagent/core/permission/FilePermissionPolicy.ts";
 
 type SessionSocket = {
@@ -198,14 +198,14 @@ export async function startDefaultServer(port = 4317) {
     import("@handagent/core/platform/RemotePlatformAdapter.ts"),
     import("@handagent/core/workspace/FileWorkspaceRegistry.ts"),
     import("@handagent/core/permission/FilePermissionPolicy.ts"),
-    import("./SettingsBackedLLMClient.ts"),
-    import("./SettingsBackedToolRegistry.ts"),
-    import("./SessionScopedToolRegistry.ts"),
-    import("./ActionBindingResolver.ts"),
-    import("./MCPServerRegistry.ts"),
+    import("../settings/SettingsBackedLLMClient.ts"),
+    import("../settings/SettingsBackedToolRegistry.ts"),
+    import("../actions/SessionScopedToolRegistry.ts"),
+    import("../actions/ActionBindingResolver.ts"),
+    import("../actions/MCPServerRegistry.ts"),
     import("@handagent/core/mcp/StdioMCPClient.ts"),
     import("@handagent/core/mcp/StreamableHttpMCPClient.ts"),
-    import("./ComputerUseMCPClient.ts"),
+    import("../actions/ComputerUseMCPClient.ts"),
     import("@handagent/core/logging/FileNetworkLogger.ts"),
     import("@handagent/core/blob/FilesystemBlobStore.ts"),
     import("@handagent/core/runtime/TurnSummarizer.ts"),
