@@ -44,8 +44,6 @@
 - `FileSessionStore.get` / `list` 对解析失败 / 缺字段静默吞错（返回 null / 跳过），不利于排查。
 - 两种实现均把内部数组直接交给调用方（无 deep clone），调用方误改会污染状态。
 
-均已在 [docs/architecture-review.md](/Users/mu9/proj/handAgent/docs/architecture-review.md) 中列为改进项。
-
 ## 编辑此目录的约束
 
 - `PersistedSession.version` 升级时需要写迁移逻辑，不要直接破坏历史文件。

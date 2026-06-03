@@ -13,8 +13,10 @@
 run_hooks_and_record_inputs(...)：把输入写进会话历史，并触发用户配置的 Hooks（例如审计、提示注入）。
 history最后还是最开始保存
 
+mcpserver（plugin）除了用户显示指定，也支持在skill里启用
+
 ---
 
 ## 手工验证清单入口
 
-端到端验证步骤见 [manual-qa.md](./manual-qa.md)；实机 QA 流程与缺陷报告格式见 [live-qa-flow.md](./live-qa-flow.md)。每次完成本文条目后，应同步更新 [待验收.md](./待验收.md) 与对应模块 `<dir>.md`。
+端到端验证步骤见 [manual-qa.md](./manual-qa.md)。每次完成本文条目后，应同步更新对应模块 `<dir>.md`。

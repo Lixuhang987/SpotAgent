@@ -31,6 +31,7 @@ HandAgent 是一个 macOS 优先的桌面 Agent Runtime MVP。当前桌面壳使
 
 当前模型配置不再读取环境变量，而是统一由桌面端设置页写入 `~/.spotAgent/settings.json`。可配置项包括：
 
+- `provider`：当前支持 `openai-compatible`、`anthropic`
 - `model`
 - `apiKey`
 - `baseUrl`
@@ -53,7 +54,7 @@ bash ./scripts/swiftw run HandAgentDesktop
 
 Action manifest 位于 `~/.spotAgent/plugins/<plugin-id>/plugin.json`，声明 `prompts[]`、`kind`、`template`、参数、可选全局快捷键和 `mcpServerIds`。Desktop 负责构建 `ActionDefinition`、trigger 解析、`[name: value]` 参数填充和 template 渲染；skill action 只提交普通 prompt，plugin action 额外发送 `actionBinding`。agent-server 会重新校验 plugin action 的 `actionBinding`，并把 manifest 中的 `mcpServerIds` 持久化到新 session metadata。
 
-MCP server 配置位于 `~/.spotAgent/mcp.json`，支持 `stdio` 与 `streamableHttp`。所有配置的 MCP server 会作为全局 tools 注入每个 session；plugin action 的 `mcpServerIds` 只是在全局集合之外追加 session 绑定的 server。stdio server 可按需配置 `elicitation.autoAcceptEmptyForm: true`，用于 Computer Use 这类只要求空表单确认的本地授权握手。
+MCP server 配置位于 `~/.spotAgent/mcp.json`，支持 `stdio` 与 `streamableHttp`。真实 LLM 模式下，新 session 初始只暴露 `use_tools` 激活入口；激活后会把 builtin tools 与全局 MCP server tools 注入当前 session。plugin action 的 `mcpServerIds` 会作为该 session 的绑定范围参与激活后的工具组合。stdio server 可按需配置 `elicitation.autoAcceptEmptyForm: true`，用于 Computer Use 这类只要求空表单确认的本地授权握手。
 
 Settings 中的 `Plugin`、`追加` 与 `MCP` 页面可以直接编辑这些本地文件，并提供与 `examples/` 目录一致的示例配置。MCP 配置由 agent-server 启动时读取，保存后需要重启桌面 App 才会进入当前运行中的 server。
 

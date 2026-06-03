@@ -85,8 +85,6 @@ plugin action 绑定的外部能力不由 core tools 目录加载私有插件进
 - 文件 tool 已使用 workspace 沙箱、basename symlink 拒绝、10 MiB 写入上限与原子写。
 - `FilePermissionPolicy.cache` 与 `FileWorkspaceRegistry.cache` 不启 watcher；每次公开读写入口前比较持久化文件 `mtimeMs + size`，检测到外部修改后重读，保证 Settings 或外部撤销权限后下一次 tool 调用可见。
 
-完整问题清单与改进路线见 [docs/architecture-review.md](/Users/mu9/proj/handAgent/docs/architecture-review.md)。
-
 ## 编辑此目录的约束
 
 - core 不允许 `import` 任何 macOS / DOM 模块；只能依赖 Node 标准库 + `ai` + `@ai-sdk/openai`。

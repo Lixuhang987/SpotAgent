@@ -149,7 +149,7 @@ flowchart TD
 
 跨进程协议分为两个判别联合：
 
-- `SessionMessage` 覆盖会话生命周期、历史读写、权限审批和 workspace 选择：`open_session` / `user_message` / `assistant_message_start|delta|end` / `tool_message` / `status` / `interrupt` / `session_snapshot` / `error` / `list_sessions_*` / `load_session_*` / `delete_session_request` / `permission_request|response` / `workspace_ask_request|response`。
+- `SessionMessage` 覆盖会话生命周期、历史读写、权限审批和 workspace 选择：`create_session_*` / `open_session` / `session_open_failed` / `user_message` / `user_message_failed` / `assistant_message_start|delta|end` / `tool_message` / `status` / `interrupt` / `session_snapshot` / `error` / `list_sessions_*` / `load_session_*` / `delete_session_*` / `permission_request|response` / `workspace_ask_request|response`。
 - `PlatformBridgeMessage` 覆盖平台反向 IPC：`channel: "platform"` + `platform_bridge_hello` / `platform_request` / `platform_response`。
 
 详见 [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md)。
@@ -162,10 +162,10 @@ flowchart TD
 - `packages/core/src/storage` 提供持久化会话存储，默认使用 `FileSessionStore` 将会话写入 `~/.spotAgent/sessions/`。
 - 桌面端通过 agent-server 的会话协议读取同一目录，为 SessionWindow 左侧历史列表提供恢复和删除入口；恢复同一 sessionId 时优先激活已有 tab，未打开时创建新 tab 并等待 `open_session` 快照恢复。
 - `packages/core` 已经定义完整的 tool、platform DTO。
-- macOS 平台能力由 `apps/desktop` 内的 `MacPlatformProvider` 实现：剪贴板（`NSPasteboard`）、前台 App（`NSWorkspace`）、窗口列表（`CGWindowListCopyWindowInfo`）、屏幕截图（`ScreenCaptureKit` + `SCScreenshotManager`，支持 display / window / region 三种 target）；OCR 与 accessibility 仍未完成。
+- macOS 平台能力由 `apps/desktop` 内的 `MacPlatformProvider` 实现：剪贴板（`NSPasteboard`）、App 列表与前台 App（`NSWorkspace`）、窗口列表（`CGWindowListCopyWindowInfo`）、屏幕截图（`ScreenCaptureKit` + `SCScreenshotManager`，支持 display / window / region 三种 target）、OCR（Vision）与 Accessibility snapshot / action。
 - 桌面 App 通过 `PlatformBridgeService` 与 `agent-server` 维护一条独立 WebSocket 反向通道，core 侧通过 `RemotePlatformAdapter` 调用平台能力。
 - SessionWindow 已有断线自动重连并重发 `open_session` 的客户端逻辑；仍需实机验证 agent-server 重启后的 `session_snapshot` 恢复体验。
-- 图片 attachment 已落 Blob/Stub，但尚未接入 vision / 多模态消息，当前 LLM 不能直接理解图片内容。
+- 图片 attachment 会落 Blob/Stub；agent-server 在 runtime 前把 image STUB 展开为多模态 image part，LLM 是否能理解图片取决于当前 provider capability。
 
 ## 阅读顺序建议
 

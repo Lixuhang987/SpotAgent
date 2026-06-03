@@ -50,7 +50,7 @@ flowchart LR
 
 ## 近期重构经验
 
-最近一次 `codex/swift-refactor-review` 重构主要落在 `apps/desktop`，目标是按 `docs/swift-refactor-review.md` 优先清理 SwiftUI 层的自维护实现与字符串状态：
+最近一次 `codex/swift-refactor-review` 重构主要落在 `apps/desktop`，目标是优先清理 SwiftUI 层的自维护实现与字符串状态：
 
 - Settings 模型页把 provider / API 选择从自绘 `HStack + Button` 改为系统 segmented `Picker`，API Key 输入改为 `SecureField`；Workspace 添加目录从直接创建 `NSOpenPanel` 改为 SwiftUI `fileImporter`。
 - Settings 容器把 tab 字符串收敛为 `SettingsTab` enum，并抽出 `SettingsListSection` 复用列表分割线逻辑，避免多个页面重复 `Array(enumerated())`。
