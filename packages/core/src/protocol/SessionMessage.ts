@@ -2,6 +2,12 @@ import type {
   ConversationMessage,
   ToolMessageStatus,
 } from "../conversation/ConversationMessage.ts";
+import type {
+  RunStatus,
+  SessionListEntry,
+  UserMessageAttachment,
+  WorkspaceAskCandidate,
+} from "./SessionProtocolShared.ts";
 
 export type SessionMessage =
   | {
@@ -86,7 +92,7 @@ export type SessionMessage =
       sessionId: string;
       messageId: string;
       timestamp: string;
-      payload: { value: "idle" | "running" | "failed" | "interrupted" };
+      payload: { value: RunStatus };
     }
   | {
       type: "error";
@@ -102,7 +108,7 @@ export type SessionMessage =
       timestamp: string;
       payload: {
         messages: ConversationMessage[];
-        status: "idle" | "running" | "failed" | "interrupted";
+        status: RunStatus;
       };
     }
   | {
@@ -224,33 +230,4 @@ export type SessionMessage =
         targetSessionId: string;
         status: "deleted" | "not_found";
       };
-    };
-
-export type SessionListEntry = {
-  id: string;
-  title: string | null;
-  createdAt: string;
-  updatedAt: string;
-  messageCount: number;
-  workspaceId?: string | null;
-};
-
-export type WorkspaceAskCandidate = {
-  id: string;
-  name: string;
-  description: string;
-  isDefault: boolean;
-};
-
-export type UserMessageAttachment =
-  | {
-      kind: "text_selection";
-      id: string;
-      text: string;
-    }
-  | {
-      kind: "image";
-      id: string;
-      mimeType: "image/png" | "image/jpeg" | "image/webp";
-      base64: string;
     };

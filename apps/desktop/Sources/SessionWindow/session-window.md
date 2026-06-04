@@ -1,6 +1,6 @@
 # SessionWindow 模块
 
-会话窗口是全局唯一的会话工作区：左侧是历史对话列表，右侧是 tab 化会话区域。Window 管理历史、tabs 和 active tab；每个 tab 管理自己的 session socket、消息流、权限气泡和 workspace 选择。
+会话窗口是全局唯一的会话工作区：左侧是历史对话列表，右侧是 tab 化会话区域。Window 管理历史、tabs 和 active tab；desktop 进程内只保留一条到 agent-server 的共享连接，再按 `sessionId` 把事件分发到各 tab。
 
 ## 文件
 
@@ -14,9 +14,10 @@
 | `SessionMessageClipboard.swift` | 消息级复制 helper：把单条 message 文本写入系统剪贴板 |
 | `SessionRequestBubbleViews.swift` | 权限审批与 workspace 选择内联面板 |
 | `SessionWindowViewModel.swift` | 窗口级状态：`historyList`、`tabs`、`activeTabID`、删除确认、空态提示；负责打开/激活历史会话、创建新会话、关闭 tab |
-| `SessionTabViewModel.swift` | 单 tab 状态：`sessionID`、socket、消息、运行态、连接态、权限请求、workspace ask；消费 tab 级 `SessionEvent` |
+| `SessionTabViewModel.swift` | 单 tab 状态：`sessionID`、消息、运行态、连接态、权限请求、workspace ask；消费 tab 级 `SessionEvent`，并通过共享连接发送 command / response |
 | `SessionRunStatus.swift` | UI 内部运行态枚举；协议边界仍接收字符串，进入 ViewModel 后归一化为 `idle / running / failed / interrupted` |
 | `SessionViewModel.swift` | 旧单会话 view model 兼容层，保留消息/附件归一化类型与既有测试覆盖 |
+| `SessionProtocolClient.swift` | 新协议编解码：`SessionCommand` / `SessionEvent` / `ServerRequest` / `ClientResponse` 与 Swift UI 模型之间的转换 |
 | `SessionSocketClient.swift` | `URLSessionWebSocketTask` 包装：连接、收发 `SessionMessage`、解析 `SessionEvent`，发送 create/open/user/interrupt/list/delete/permission/workspace 响应帧；断线后自动重连 |
 | `SessionStyles.swift` | `MessageBubbleModifier`（按 role 切换 user / assistant / tool 三色） |
 
@@ -26,16 +27,17 @@
 Coordinator.handleSubmitPrompt
   └─ SessionWindowLifecycle.ensureWindow()
      └─ 创建/聚焦一个全局 SessionWindow
-     └─ history socket 自动发送 list_sessions_request
+     └─ 创建唯一 AppServerConnection + SessionEventBus
+     └─ 共享连接建立后发送 sessions_list
      └─ SessionWindowViewModel.createTabWithInitialPrompt(...)
-        └─ history socket 发送空 create_session_request
-        └─ 收到 create_session_response：创建 tab 并连接 tab socket，再刷新左侧历史
-        └─ 新 tab 通过自己的 socket 发送 user_message，确保 assistant 流进入 tab 状态
+        └─ 共享连接发送 session_create
+        └─ 收到 session_created：创建 tab 并发送 session_subscribe，再刷新左侧历史
+        └─ 新 tab 通过共享连接发送 turn_start，assistant / tool / request 事件按 sessionId 回到对应 tab
 
 左侧历史项点击
   └─ SessionWindowViewModel.openHistorySession(id)
      └─ 已打开同 sessionId：激活已有 tab
-     └─ 未打开：创建 tab，tab socket 发送 open_session，等待 session_snapshot
+     └─ 未打开：创建 tab，tab 发送 session_subscribe，等待 session_snapshot
 
 顶部 tab 关闭
   └─ SessionCloseTabButton.onClose
@@ -49,7 +51,7 @@ Coordinator.handleSubmitPrompt
 ## 布局与交互边界
 
 - 左侧只承担历史导航和持久化历史删除入口；历史删除仍必须走确认弹窗。
-- 上方 tab strip 只管理“当前窗口中已打开的 tab”。关闭 tab 只断开该 tab 的 socket 并从窗口移除，不删除本地历史文件。
+- 上方 tab strip 只管理“当前窗口中已打开的 tab”。关闭 tab 只取消该 tab 的订阅并从窗口移除，不删除本地历史文件。
 - tab item 内部拆成两个明确点击目标：左侧激活按钮与右侧 `SessionCloseTabButton`。不要把 `xmark` 作为父激活按钮里的被动图标，否则点击关闭会变成激活 tab。
 - 右侧顶部状态栏展示当前会话标题、运行/连接状态与已打开 tab 数；Stop 只作用于当前 active tab。
 - 消息列表是工作区主滚动区域；消息正文允许文本选中，每条 message 右上角提供复制图标，复制范围固定为该条 `SessionBubble.text`。
@@ -77,11 +79,10 @@ Coordinator.handleSubmitPrompt
 
 ## 断线重连
 
-- tab socket 连接时发送 `open_session`；若 server 中已有该 session，agent-server 返回 `session_snapshot`。
-- 新 tab 从 PromptPanel 首次提交时，`open_session` 的空快照可能早于或晚于本地 `user_message` 回路到达；tab 必须保留本地已追加但尚未由后续事件确认的首轮消息，不能让快照把右侧消息列表清空。
+- 共享连接建立后，window 会刷新一次历史列表；tab 打开或重连恢复时发送 `session_subscribe`，由 server 返回 `session_snapshot`。
+- 新 tab 从 PromptPanel 首次提交时，`session_subscribe` 返回的快照可能早于或晚于本地 `turn_start` 回路到达；tab 必须保留本地已追加但尚未由后续事件确认的首轮消息，不能让快照把右侧消息列表清空。
 - agent-server 重启后若 snapshot 返回 `status: "failed"`，tab 会把最后一条 assistant 文本作为错误条内容展示；这用于运行中 server 重启丢失 active run 时显示 `本轮运行因 agent-server 重启而中断，请重新发送请求。`，同时保留消息区内的 assistant 错误消息。
-- history socket 使用空 `sessionID` 作为窗口级控制通道，用于 list/create/delete 响应；空 `sessionID` 不参与普通 tab 事件过滤。
-- `receive` 失败且不是用户主动 `disconnect()` 时，客户端进入 `reconnecting`，之后新建 socket 并再次发送 `open_session`。
+- `receive` 失败且不是用户主动 `disconnect()` 时，共享连接进入 `reconnecting`；重连成功后 window 会重新拉历史，各 tab 重新发送 `session_subscribe`。
 
 ## 编辑此目录的约束
 

@@ -8,6 +8,8 @@
 |------|------|
 | `AgentServerService.swift` | 定位仓库根目录与 Node.js，启动 / 停止 agent-server 子进程；记录启动错误 |
 | `AgentServerRuntimeMode.swift` | 读取 bundle resource marker 与环境变量，决定 agent-server 子进程是否注入 `HANDAGENT_LLM_MODE=mock` |
+| `AppServerConnection.swift` | desktop 进程唯一 WebSocket 连接：处理 connect / reconnect / receive loop / 原始文本收发 |
+| `SessionEventBus.swift` | 共享连接上的本地事件分发器：按 `sessionId` 把协议消息分给对应 tab，并保留全局广播入口 |
 
 ## 职责
 
@@ -39,6 +41,6 @@
 ## 与其他模块的关系
 
 - [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 在 `bootstrap()` 调 `start()`，在 `shutdown()` 调 `stop()`；订阅 `onAvailabilityChange` 与 `onFatalError`。
-- [SessionWindow](/Users/mu9/proj/handAgent/apps/desktop/Sources/SessionWindow/session-window.md) 通过 `ws://127.0.0.1:4317/api/session` 连接子进程；socket 断开后自动重连并重发 `open_session` 获取 `session_snapshot`。
+- [SessionWindow](/Users/mu9/proj/handAgent/apps/desktop/Sources/SessionWindow/session-window.md) 通过 `ws://127.0.0.1:4317/api/session` 维护 desktop 唯一一条共享连接；断线重连后由 window 重新拉历史，并让各 tab 重发 `session_subscribe` 获取 `session_snapshot`。
 - [PlatformBridge](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/PlatformBridge/platform-bridge.md) 走同一端口的反向 WebSocket。
 - 启动错误传递给首个 `SessionViewModel.start(startupError:)`，作为 error 气泡展示。

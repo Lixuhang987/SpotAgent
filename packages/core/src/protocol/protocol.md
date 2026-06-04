@@ -1,15 +1,73 @@
 # protocol
 
-desktop ↔ agent-server 的 WebSocket 协议。会话流量走 `SessionMessage`，平台反向 RPC 走 `PlatformBridgeMessage`。两个 union 共享同一 WebSocket 入口，但平台帧用 `channel: "platform"` 显式分流，不再复用会话 `sessionId`。
+desktop ↔ agent-server 的协议正在从旧 `SessionMessage` 单 union 迁移到分层结构：
+
+- `SessionCommand`：UI -> app-server 命令
+- `SessionEvent`：app-server/core -> UI 事件
+- `ServerRequest`：server -> UI 的待回执请求
+- `ClientResponse`：UI -> server 的请求回执
+- `PlatformBridgeMessage`：独立的平台 RPC 通道
+
+当前仓库已经定义新协议类型；在 `agent-server` 与 `desktop` 全部切换完成前，旧 `SessionMessage` 仍暂时保留为迁移入口。平台 RPC 不并入 session 协议，继续走独立 `channel: "platform"`。
 
 ## 文件
 
 | 文件 | 职责 |
 |------|------|
-| `SessionMessage.ts` | `SessionMessage`（会话、历史、权限审批、workspace 选择帧）/ `SessionListEntry` / `WorkspaceAskCandidate` / `UserMessageAttachment` |
+| `SessionCommand.ts` | 新命令协议：`session_create` / `session_subscribe` / `turn_start` / `turn_interrupt` / `sessions_list` / `session_delete` |
+| `SessionEvent.ts` | 新事件协议：`session_created` / `session_snapshot` / `turn_started` / `assistant_delta` / `tool_started` / `turn_completed` 等 |
+| `ServerRequest.ts` | 新待回执请求：`permission_ask` / `workspace_ask` |
+| `ClientResponse.ts` | 新回执协议：`permission_answer` / `workspace_answer` |
+| `SessionProtocolShared.ts` | 共享类型：`RunStatus` / `SessionListEntry` / `WorkspaceAskCandidate` / `UserMessageAttachment` |
+| `SessionMessage.ts` | 旧单 union 协议；迁移完成前暂保留 |
 | `PlatformBridgeMessage.ts` | `PlatformBridgeMessage`（平台反向 RPC 帧）/ `PlatformResponsePayload` |
 
-## 消息分类
+## 新协议分类
+
+### `SessionCommand`
+
+- `session_create`
+- `session_subscribe`
+- `session_unsubscribe`
+- `turn_start`
+- `turn_interrupt`
+- `sessions_list`
+- `session_delete`
+
+### `SessionEvent`
+
+- `session_created`
+- `session_snapshot`
+- `user_message_recorded`
+- `turn_started`
+- `assistant_delta`
+- `tool_started`
+- `tool_finished`
+- `turn_completed`
+- `session_status_changed`
+- `sessions_listed`
+- `session_deleted`
+- `session_error`
+
+### `ServerRequest` / `ClientResponse`
+
+- `permission_ask` <-> `permission_answer`
+- `workspace_ask` <-> `workspace_answer`
+
+这两组消息只用于“server 发起问题，等待 UI 回执”的少量交互，不承担普通会话流。
+
+## 单连接订阅模型
+
+- desktop 进程固定只有一条到 `app-server` 的长连接。
+- tab 打开时发送 `session_subscribe(sessionId)`，关闭时发送 `session_unsubscribe(sessionId)`。
+- `session_subscribe` 的结果是 `session_snapshot`，不是新建 socket，也不是额外握手通道。
+- 所有 `SessionEvent` 与 `ServerRequest` 都带 `sessionId`，由 desktop 本地总线按会话分发。
+
+## 旧协议分类
+
+迁移完成前，旧 `SessionMessage` 仍存在，现状如下。
+
+### 消息分类
 
 | 分类 | 类型 | 方向 |
 |------|------|------|
@@ -157,7 +215,7 @@ Plugin action 创建新 session 时，desktop 在 `create_session_request.payloa
 
 ## 编辑此目录的约束
 
-- 协议是合约，desktop（Swift）与 agent-server（TS）必须严格对齐字段。**改这里就要同时改 [SessionSocketClient](/Users/mu9/proj/handAgent/apps/desktop/Sources/SessionWindow/session-window.md) 与 [SessionRouter / MessageTranslator](/Users/mu9/proj/handAgent/apps/agent-server/agent-server.md)**。
+- 协议是合约，desktop（Swift）与 agent-server（TS）必须严格对齐字段。迁移期间，新旧协议都要明确各自的消费者，不要出现“新类型已定义但仍被旧实现误消费”的半状态。
 - 新增 type 时考虑：是否同时影响 `SessionStore` 持久化、`ConversationMessage` UI、`SessionEvent` 审计三处。
 - 协议字段保持平铺，不要嵌套 anyJson 黑洞，让两边 codec 都能强类型化。
 - 平台 RPC 不带 `sessionId`；server 只通过 `channel: "platform"` 分派平台帧。

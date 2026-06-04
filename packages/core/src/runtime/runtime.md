@@ -10,6 +10,7 @@
 | `ToolCallEnvelope.ts` | `{ id, name, arguments }` 三元组，连接 LLM 输出与 ToolRegistry |
 | `AgentSession.ts` | 把 `AgentSessionInput`（prompt + 可选选区）归一化为首轮 user message；当前未在 agent-server 主链路使用，仅作为脚本入口 |
 | `AgentRuntime.ts` | 主循环：消费 `LLMClient.stream` → 按 delta 发 assistant 事件 → 收集 toolCalls → 逐个交给 `handleToolCall` 处理权限、执行、结果回灌；同一次用户输入内最多循环 `maxTimes` 次；支持 `AbortSignal` 中断 |
+| `AgentSessionHandle.ts` | Codex-style queue pair 会话把手：接收 `SessionCommand`，消费 `AgentRuntimeEvent`，输出 `SessionEvent` |
 | `SystemPrompt.ts` | system prompt 分段组装器：以 `SystemPromptSection[]` 表达默认策略，按 LLM 请求临时解析成 `system` messages，不写回会话历史 |
 | `Stub.ts` | 统一渲染 / 解析 `[STUB ...]...[/STUB]` 文本，占位引用 Blob 内容 |
 | `TurnSummarizer.ts` | turn 结束后压缩 `cached=turn` 的 tool message，写回 Blob summary 并重渲染消息 |
@@ -53,6 +54,19 @@ flowchart TD
 - `permission_decision`：进入 `ask` 路径后的解析结果；用于审计事件，不直接发 UI 消息。
 - `runtime_error`：仅类型预留，目前未在循环内主动 emit；外层捕获 throw 后由 `SessionRuntimeOrchestrator` 通过 `MessageTranslator.toErrorMessage` 翻译。
 
+## `AgentSessionHandle`
+
+- `AgentRuntime` 仍只负责 LLM/tool loop，不直接暴露给 UI 或 app-server 当作协议边界。
+- `AgentSessionHandle` 是 core 里的会话把手，形态接近 Codex 的 queue pair：
+  - 输入：`SessionCommand`，当前只处理 runtime 相关命令，例如 `turn_start`、`turn_interrupt`
+  - 输出：`SessionEvent`，例如 `user_message_recorded`、`turn_started`、`assistant_delta`、`tool_started`、`tool_finished`、`turn_completed`
+- handle 负责把 `AgentRuntimeEvent` 归一化为稳定的 turn/item 事件流，并补齐 `turnId`、`itemId`、`sessionId`
+- handle 不负责：
+  - app-server socket 协议翻译
+  - 持久化审计事件模型
+  - server 侧中断补帧策略
+  - desktop 展示状态推断
+
 ## meta-tool 激活分支
 
 `AgentRuntime.handleToolCall` 在分派 tool call 前先检查 tool name 是否等于 `META_TOOL_NAME`（`"use_tools"`）：
@@ -84,6 +98,7 @@ flowchart TD
 - tool 调用以 `ToolRegistry.get(name)` 为唯一入口，不允许直接 `import` builtin tool。
 - 新增 system prompt 规则时优先放入 `SystemPrompt.ts` 的 section builder，不要在 `AgentRuntime.completeAssistantResponse()` 里直接拼接策略字符串。
 - 新增事件类型时，`apps/agent-server/src/protocol/MessageTranslator.ts` 的 `toSessionMessage` / `toAuditEvent` 必须同步更新。
+- `AgentSessionHandle` 只能依赖 core 内类型；不要在这里引入 `SessionMessage`、WebSocket、Swift UI 或 app-server 持久化编排语义。
 
 ## 相关文档
 

@@ -4,6 +4,10 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import type { SessionMessage } from "@handagent/core/protocol/SessionMessage.ts";
 import type { PlatformBridgeMessage } from "@handagent/core/protocol/PlatformBridgeMessage.ts";
+import type { SessionCommand } from "@handagent/core/protocol/SessionCommand.ts";
+import type { ClientResponse } from "@handagent/core/protocol/ClientResponse.ts";
+import type { SessionEvent } from "@handagent/core/protocol/SessionEvent.ts";
+import type { ServerRequest } from "@handagent/core/protocol/ServerRequest.ts";
 import type { MCPClient } from "@handagent/core/mcp/MCPClient.ts";
 import type { MCPServerConfig } from "@handagent/core/mcp/MCPConfig.ts";
 import type { PlatformAdapter } from "@handagent/core/platform/PlatformAdapter.ts";
@@ -12,6 +16,8 @@ import type { AgentMessage } from "@handagent/core/runtime/AgentMessage.ts";
 import { META_TOOL_NAME } from "@handagent/core/tools/MetaToolUseTool.ts";
 import { SessionPersistence } from "../session/SessionPersistence.ts";
 import { SessionRouter } from "../session/SessionRouter.ts";
+import { SessionCommandRouter } from "../session/SessionCommandRouter.ts";
+import { SessionEventPublisher } from "../session/SessionEventPublisher.ts";
 import { SessionRuntimeOrchestrator } from "../session/SessionRuntimeOrchestrator.ts";
 import { FileSessionStore } from "@handagent/core/storage/index.ts";
 import {
@@ -31,33 +37,48 @@ type SessionSocket = {
   on(event: "close", listener: () => void): void;
 };
 
-type SocketMessage = SessionMessage | PlatformBridgeMessage;
+type SocketMessage =
+  | SessionMessage
+  | PlatformBridgeMessage
+  | SessionCommand
+  | ClientResponse;
+
+let nextConnectionId = 0;
 
 export function attachSessionSocketHandlers(
   socket: SessionSocket,
   {
     router,
+    commandRouter,
+    eventPublisher,
     bridge,
     permissionBridge,
     permissionPolicy,
     workspaceAskBridge,
   }: {
     router: SessionRouter;
+    commandRouter?: SessionCommandRouter;
+    eventPublisher?: SessionEventPublisher;
     bridge?: WebSocketPlatformBridge;
     permissionBridge?: SessionPermissionBridge;
     permissionPolicy?: FilePermissionPolicy;
     workspaceAskBridge?: SessionWorkspaceAskBridge;
   },
 ): void {
+  const connectionId = `connection-${++nextConnectionId}`;
   let bridgeToken: BridgeToken | null = null;
   const boundSessions = new Map<string, SessionBindingToken>();
   const workspaceAskBoundSessions = new Map<string, SessionBindingToken>();
   const sendSession = (outgoing: SessionMessage) => {
     socket.send(JSON.stringify(outgoing));
   };
+  const sendPublished = (outgoing: SessionEvent | ServerRequest) => {
+    socket.send(JSON.stringify(outgoing));
+  };
   const sendPlatform = (outgoing: PlatformBridgeMessage) => {
     socket.send(JSON.stringify(outgoing));
   };
+  eventPublisher?.attachConnection(connectionId, sendPublished);
 
   socket.on("message", async (raw) => {
     const message = JSON.parse(raw.toString()) as SocketMessage;
@@ -71,7 +92,7 @@ export function attachSessionSocketHandlers(
       return;
     }
 
-    if (message.type === "permission_response" && permissionBridge) {
+    if (isLegacyPermissionResponse(message) && permissionBridge) {
       const token = boundSessions.get(sessionIdFromRequestId(message.payload.requestId));
       if (token !== undefined) {
         permissionBridge.handleResponse(message.payload, token);
@@ -79,11 +100,16 @@ export function attachSessionSocketHandlers(
       return;
     }
 
-    if (message.type === "workspace_ask_response" && workspaceAskBridge) {
+    if (isLegacyWorkspaceAskResponse(message) && workspaceAskBridge) {
       const token = workspaceAskBoundSessions.get(sessionIdFromRequestId(message.payload.requestId));
       if (token !== undefined) {
         workspaceAskBridge.handleResponse(message.payload, token);
       }
+      return;
+    }
+
+    if (isClientResponse(message) && commandRouter) {
+      commandRouter.handleResponse(message, connectionId);
       return;
     }
 
@@ -102,10 +128,55 @@ export function attachSessionSocketHandlers(
       }
     }
 
+    if (isSessionCommand(message) && commandRouter) {
+      if ("sessionId" in message && typeof message.sessionId === "string") {
+        eventPublisher?.subscribe(connectionId, message.sessionId);
+      }
+      if (message.type === "turn_start") {
+        if (permissionBridge && !boundSessions.has(message.sessionId)) {
+          boundSessions.set(
+            message.sessionId,
+            permissionBridge.bindSession(message.sessionId, (legacyMessage) => {
+              const request = legacyToServerRequest(legacyMessage);
+              if (request) {
+                eventPublisher?.publishToConnection(connectionId, request);
+              }
+            }),
+          );
+        }
+        if (workspaceAskBridge && !workspaceAskBoundSessions.has(message.sessionId)) {
+          workspaceAskBoundSessions.set(
+            message.sessionId,
+            workspaceAskBridge.bindSession(message.sessionId, (legacyMessage) => {
+              const request = legacyToServerRequest(legacyMessage);
+              if (request) {
+                eventPublisher?.publishToConnection(connectionId, request);
+              }
+            }),
+          );
+        }
+      }
+      if (message.type === "session_unsubscribe") {
+        maybeUnbindSessionOwner(
+          message.sessionId,
+          boundSessions,
+          workspaceAskBoundSessions,
+          permissionBridge,
+          permissionPolicy,
+          workspaceAskBridge,
+          router,
+          sendSession,
+        );
+      }
+      await commandRouter.receive(message, connectionId);
+      return;
+    }
+
     await router.receive(message, sendSession);
   });
 
   socket.on("close", () => {
+    eventPublisher?.detachConnection(connectionId);
     if (bridgeToken !== null && bridge) {
       bridge.detach(bridgeToken);
     }
@@ -128,6 +199,34 @@ function isPlatformBridgeMessage(message: SocketMessage): message is PlatformBri
   return "channel" in message && message.channel === "platform";
 }
 
+function isSessionCommand(message: SocketMessage): message is SessionCommand {
+  return [
+    "session_create",
+    "session_subscribe",
+    "session_unsubscribe",
+    "turn_start",
+    "turn_interrupt",
+    "sessions_list",
+    "session_delete",
+  ].includes((message as { type?: string }).type ?? "");
+}
+
+function isClientResponse(message: SocketMessage): message is ClientResponse {
+  return message.type === "permission_answer" || message.type === "workspace_answer";
+}
+
+function isLegacyPermissionResponse(
+  message: SocketMessage,
+): message is Extract<SessionMessage, { type: "permission_response" }> {
+  return message.type === "permission_response";
+}
+
+function isLegacyWorkspaceAskResponse(
+  message: SocketMessage,
+): message is Extract<SessionMessage, { type: "workspace_ask_response" }> {
+  return message.type === "workspace_ask_response";
+}
+
 function sessionIdFromRequestId(requestId: string): string {
   const separator = requestId.lastIndexOf(":");
   return separator === -1 ? requestId : requestId.slice(0, separator);
@@ -135,6 +234,8 @@ function sessionIdFromRequestId(requestId: string): string {
 
 export async function startServer({
   router,
+  commandRouter,
+  eventPublisher,
   bridge,
   permissionBridge,
   permissionPolicy,
@@ -142,6 +243,8 @@ export async function startServer({
   port = 4317,
 }: {
   router: SessionRouter;
+  commandRouter?: SessionCommandRouter;
+  eventPublisher?: SessionEventPublisher;
   bridge?: WebSocketPlatformBridge;
   permissionBridge?: SessionPermissionBridge;
   permissionPolicy?: FilePermissionPolicy;
@@ -154,6 +257,8 @@ export async function startServer({
   wss.on("connection", (socket) => {
     attachSessionSocketHandlers(socket, {
       router,
+      commandRouter,
+      eventPublisher,
       bridge,
       permissionBridge,
       permissionPolicy,
@@ -332,9 +437,55 @@ export async function startDefaultServer(port = 4317) {
       runtimeBySession.delete(sessionId);
     },
   );
+  const eventPublisher = new SessionEventPublisher();
+  const commandRouter = new SessionCommandRouter(
+    orchestrator,
+    persistence,
+    eventPublisher,
+    undefined,
+    new ActionBindingResolver({ pluginsDir: paths.pluginsDir }),
+    (sessionId) => {
+      sessionScopedTools.forgetSession(sessionId);
+      runtimeBySession.delete(sessionId);
+    },
+    {
+      onPermissionResponse: (response, connectionId) => {
+        const token = boundTokenForConnection(connectionId, response.requestId, permissionBridgeBindings);
+        if (token !== undefined) {
+          permissionBridge.handleResponse(
+            {
+              requestId: response.requestId,
+              decision: response.payload.decision,
+              scope: response.payload.scope,
+              reason: response.payload.reason,
+            },
+            token,
+          );
+        }
+      },
+      onWorkspaceResponse: (response, connectionId) => {
+        const token = boundTokenForConnection(connectionId, response.requestId, workspaceBridgeBindings);
+        if (token !== undefined) {
+          workspaceAskBridge.handleResponse(
+            {
+              requestId: response.requestId,
+              workspaceId: response.payload.workspaceId,
+              cancelled: response.payload.cancelled,
+            },
+            token,
+          );
+        }
+      },
+    },
+  );
+
+  void commandRouter;
+  void eventPublisher;
 
   return startServer({
     router,
+    commandRouter,
+    eventPublisher,
     bridge: platformBridge,
     permissionBridge,
     permissionPolicy,
@@ -434,6 +585,76 @@ function isNotFoundError(error: unknown): boolean {
 
 function historyShowsToolsActivated(messages: readonly AgentMessage[]): boolean {
   return messages.some((m) => m.role === "tool" && m.name === META_TOOL_NAME);
+}
+
+const permissionBridgeBindings = new Map<string, Map<string, SessionBindingToken>>();
+const workspaceBridgeBindings = new Map<string, Map<string, SessionBindingToken>>();
+
+function boundTokenForConnection(
+  connectionId: string,
+  requestId: string,
+  bindings: Map<string, Map<string, SessionBindingToken>>,
+): SessionBindingToken | undefined {
+  return bindings.get(connectionId)?.get(sessionIdFromRequestId(requestId));
+}
+
+function legacyToServerRequest(message: SessionMessage): ServerRequest | null {
+  if (message.type === "permission_request") {
+    return {
+      type: "permission_ask",
+      requestId: message.payload.requestId,
+      sessionId: message.sessionId,
+      timestamp: message.timestamp,
+      payload: {
+        toolName: message.payload.toolName,
+        toolCallId: message.payload.toolCallId,
+        arguments: message.payload.arguments,
+        timeoutMs: message.payload.timeoutMs,
+      },
+    };
+  }
+  if (message.type === "workspace_ask_request") {
+    return {
+      type: "workspace_ask",
+      requestId: message.payload.requestId,
+      sessionId: message.sessionId,
+      timestamp: message.timestamp,
+      payload: {
+        toolCallId: message.payload.toolCallId,
+        prompt: message.payload.prompt,
+        candidates: message.payload.candidates,
+        timeoutMs: message.payload.timeoutMs,
+      },
+    };
+  }
+  return null;
+}
+
+function maybeUnbindSessionOwner(
+  sessionId: string,
+  boundSessions: Map<string, SessionBindingToken>,
+  workspaceAskBoundSessions: Map<string, SessionBindingToken>,
+  permissionBridge: SessionPermissionBridge | undefined,
+  permissionPolicy: FilePermissionPolicy | undefined,
+  workspaceAskBridge: SessionWorkspaceAskBridge | undefined,
+  router: SessionRouter,
+  sendSession: (outgoing: SessionMessage) => void,
+): void {
+  const permissionToken = boundSessions.get(sessionId);
+  if (permissionToken !== undefined) {
+    const unbound = permissionBridge?.unbindSession(sessionId, permissionToken) ?? false;
+    if (unbound) {
+      router.interruptSession(sessionId, sendSession);
+      permissionPolicy?.clearSessionRules(sessionId);
+    }
+    boundSessions.delete(sessionId);
+  }
+
+  const workspaceToken = workspaceAskBoundSessions.get(sessionId);
+  if (workspaceToken !== undefined) {
+    workspaceAskBridge?.unbindSession(sessionId, workspaceToken);
+    workspaceAskBoundSessions.delete(sessionId);
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

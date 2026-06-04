@@ -9,6 +9,8 @@
 | 文件 | 职责 |
 |------|------|
 | `SessionRouter.ts` | 处理 `create_session_request`、`open_session`、`list_sessions_request`、`load_session_request`、`delete_session_request`、`user_message`、`interrupt`；只做协议路由和轻量校验 |
+| `SessionCommandRouter.ts` | 新命令路由：处理 `SessionCommand` / `ClientResponse`，通过 `SessionEventPublisher` 推送 `SessionEvent` / `ServerRequest` |
+| `SessionEventPublisher.ts` | 维护 `connection -> subscribed sessionIds`，在单连接模型下按 `sessionId` fan-out 会话事件 |
 | `SessionRuntimeOrchestrator.ts` | 编排一轮 `user_message`：持久化用户消息、自动标题、刷新工具、等待 summary、调用 runtime、转发 event、落库最终 messages/events、处理中断和错误 |
 | `SessionPersistence.ts` | `SessionStore` 的唯一直接封装：创建/删除/重命名/读取 session，保存 user message、run result、error，恢复 server 重启后的半截轮次 |
 
@@ -35,6 +37,21 @@ sequenceDiagram
 ```
 
 ## 关键机制
+
+### 新命令路由与事件发布
+
+```mermaid
+flowchart LR
+  UI["desktop single connection"] --> Router["SessionCommandRouter"]
+  Router --> Orchestrator["SessionRuntimeOrchestrator"]
+  Orchestrator --> Router
+  Router --> Publisher["SessionEventPublisher"]
+  Publisher --> UIEvents["SessionEvent / ServerRequest"]
+```
+
+- `SessionCommandRouter` 负责接收新协议 `SessionCommand`
+- `SessionEventPublisher` 负责维护连接级订阅关系，把 `SessionEvent` / `ServerRequest` 按 `sessionId` 分发
+- 迁移期间旧 `SessionRouter` 仍保留，直到 desktop 主路径切到新协议
 
 ### Router 只做路由，不跑 runtime
 
