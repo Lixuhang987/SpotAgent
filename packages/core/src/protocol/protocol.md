@@ -1,14 +1,12 @@
 # protocol
 
-desktop ↔ agent-server 的协议正在从旧 `SessionMessage` 单 union 迁移到分层结构：
+`packages/core/src/protocol` 定义 desktop、app-server、core 之间的跨进程协议边界。当前主路径是三层单向流转：
 
-- `SessionCommand`：UI -> app-server 命令
-- `SessionEvent`：app-server/core -> UI 事件
-- `ServerRequest`：server -> UI 的待回执请求
-- `ClientResponse`：UI -> server 的请求回执
-- `PlatformBridgeMessage`：独立的平台 RPC 通道
+- desktop 只提交 `SessionCommand`，并回覆 `ClientResponse`
+- app-server / core 只向 desktop 推送 `SessionEvent`，并在需要用户决定时发 `ServerRequest`
+- 平台 RPC 独立于会话主路径，继续走 `PlatformBridgeMessage`
 
-当前仓库已经定义新协议类型；在 `agent-server` 与 `desktop` 全部切换完成前，旧 `SessionMessage` 仍暂时保留为迁移入口。平台 RPC 不并入 session 协议，继续走独立 `channel: "platform"`。
+旧 `SessionMessage` 仍保留在仓库里，仅用于迁移兼容，不再代表当前主协议。
 
 ## 文件
 
@@ -19,10 +17,27 @@ desktop ↔ agent-server 的协议正在从旧 `SessionMessage` 单 union 迁移
 | `ServerRequest.ts` | 新待回执请求：`permission_ask` / `workspace_ask` |
 | `ClientResponse.ts` | 新回执协议：`permission_answer` / `workspace_answer` |
 | `SessionProtocolShared.ts` | 共享类型：`RunStatus` / `SessionListEntry` / `WorkspaceAskCandidate` / `UserMessageAttachment` |
-| `SessionMessage.ts` | 旧单 union 协议；迁移完成前暂保留 |
+| `SessionMessage.ts` | 旧单 union 协议；仅迁移兼容 |
 | `PlatformBridgeMessage.ts` | `PlatformBridgeMessage`（平台反向 RPC 帧）/ `PlatformResponsePayload` |
 
-## 新协议分类
+## 单向边界
+
+```mermaid
+flowchart LR
+  A[desktop] -->|SessionCommand| B[app-server]
+  B -->|submit| C[core AgentSessionHandle]
+  C -->|SessionEvent| B
+  B -->|SessionEvent| A
+  B -->|ServerRequest| A
+  A -->|ClientResponse| B
+  B -->|PlatformBridgeMessage| A
+```
+
+- desktop 不直接驱动 `AgentRuntime`，只发命令、收事件。
+- app-server 负责 socket、订阅路由、持久化、权限 / workspace 回执桥接。
+- core 负责把命令转成 runtime 执行，并把执行结果归一化成稳定事件流。
+
+## 主协议分类
 
 ### `SessionCommand`
 
@@ -63,11 +78,17 @@ desktop ↔ agent-server 的协议正在从旧 `SessionMessage` 单 union 迁移
 - `session_subscribe` 的结果是 `session_snapshot`，不是新建 socket，也不是额外握手通道。
 - 所有 `SessionEvent` 与 `ServerRequest` 都带 `sessionId`，由 desktop 本地总线按会话分发。
 
-## 旧协议分类
+## core 侧消费方式
 
-迁移完成前，旧 `SessionMessage` 仍存在，现状如下。
+- `AgentSessionHandle.submit(command)` 当前只消费 runtime 相关命令：`turn_start`、`turn_interrupt`。
+- `AgentSessionHandle.nextEvent()` 顺序吐出 `SessionEvent`，由 app-server 转发给 desktop。
+- `AgentRuntimeEvent` 到 `SessionEvent` 的归一化在 core 内完成，app-server 不再把 runtime 内部事件直接暴露给 UI。
 
-### 消息分类
+## 兼容层：`SessionMessage`
+
+迁移完成前，旧 `SessionMessage` 仍存在，供旧链路兼容。它不再是当前推荐的协议模型。
+
+### 旧消息分类
 
 | 分类 | 类型 | 方向 |
 |------|------|------|
@@ -117,21 +138,21 @@ desktop ↔ agent-server 的协议正在从旧 `SessionMessage` 单 union 迁移
 
 ## 会话恢复握手
 
-- SessionWindow 首次连接和 socket 断线重连后都会发送 `open_session`。
+- 旧链路下，SessionWindow 首次连接和 socket 断线重连后都会发送 `open_session`。
 - agent-server 若在 store 中找到对应 `sessionId`，会返回 `session_snapshot`，用于恢复窗口内的消息列表和状态。
 - 如果 session 不存在，`open_session` 不创建新会话；首次用户输入仍由 `user_message` 创建并触发 runtime。
 
 ## Action Binding
 
-Plugin action 创建新 session 时，desktop 在 `create_session_request.payload.actionBinding` 里只发送 `{ pluginId, promptName }`。agent-server 会重新读取本地 manifest，确认该 prompt 是可绑定的 plugin action，解析并持久化 session metadata 的 `actionBinding.mcpServerIds`，随后只在该 session 的 runtime 前组合对应 MCP tools。`kind: "skill"` 的 action 只提交渲染后的普通 prompt，不携带 action binding。
+新协议下，plugin action 绑定信息位于 `session_create.payload.actionBinding`。app-server 会重新读取本地 manifest，确认该 prompt 是可绑定的 plugin action，解析并持久化 session metadata 的 `actionBinding.mcpServerIds`，随后只在该 session 的 runtime 前组合对应 MCP tools。`kind: "skill"` 的 action 只提交渲染后的普通 prompt，不携带 action binding。
 
-普通 `user_message` 不携带 action binding；一个 session 的 MCP scope 由创建时 metadata 决定，不随后续消息变化。
+普通 `turn_start` 不携带 action binding；一个 session 的 MCP scope 由创建时 metadata 决定，不随后续消息变化。
 
 ## 会话中断
 
-- SessionWindow 运行态 Stop 控件发送 `interrupt`，不会断开 socket。
-- agent-server 将 `interrupt` 路由给当前 session 的 active run，abort 后立即回推 `assistant_message_end(status: "interrupted")` 与 `status(value: "interrupted")`。
-- 已中断 run 的后续 assistant delta、tool result 与最终 runtime result 会被 generation 过滤，不再推送或持久化。
+- 主路径下，SessionWindow 运行态 Stop 控件发送 `turn_interrupt`，不会断开 socket。
+- core handle 在中断后输出 `turn_completed(status: "interrupted")` 与 `session_status_changed(value: "interrupted")`。
+- 已中断 run 的后续 assistant delta、tool result 与最终 runtime result 不再继续产出新事件。
 
 ## 附件
 
@@ -144,16 +165,15 @@ Plugin action 创建新 session 时，desktop 在 `create_session_request.payloa
 
 ## Workspace 选择
 
-`workspace.askUser` 通过会话协议向当前 SessionWindow 发起内联选择，而不是复用权限审批或平台 RPC。
+`workspace.askUser` 通过 `ServerRequest` / `ClientResponse` 向当前 SessionWindow 发起内联选择，而不是复用平台 RPC。
 
 ```json
 {
-  "type": "workspace_ask_request",
+  "type": "workspace_ask",
+  "requestId": "...",
   "sessionId": "...",
-  "messageId": "...",
   "timestamp": "...",
   "payload": {
-    "requestId": "...",
     "toolCallId": "...",
     "prompt": "请选择 workspace",
     "candidates": [
@@ -168,12 +188,10 @@ Plugin action 创建新 session 时，desktop 在 `create_session_request.payloa
 
 ```json
 {
-  "type": "workspace_ask_response",
-  "sessionId": "...",
-  "messageId": "...",
+  "type": "workspace_answer",
+  "requestId": "...",
   "timestamp": "...",
   "payload": {
-    "requestId": "...",
     "workspaceId": "docs",
     "cancelled": false
   }
@@ -215,7 +233,7 @@ Plugin action 创建新 session 时，desktop 在 `create_session_request.payloa
 
 ## 编辑此目录的约束
 
-- 协议是合约，desktop（Swift）与 agent-server（TS）必须严格对齐字段。迁移期间，新旧协议都要明确各自的消费者，不要出现“新类型已定义但仍被旧实现误消费”的半状态。
+- 协议是合约，desktop（Swift）与 app-server（TS）必须严格对齐字段。迁移期间，新旧协议都要明确各自的消费者，不要出现“新类型已定义但仍被旧实现误消费”的半状态。
 - 新增 type 时考虑：是否同时影响 `SessionStore` 持久化、`ConversationMessage` UI、`SessionEvent` 审计三处。
 - 协议字段保持平铺，不要嵌套 anyJson 黑洞，让两边 codec 都能强类型化。
 - 平台 RPC 不带 `sessionId`；server 只通过 `channel: "platform"` 分派平台帧。

@@ -2,6 +2,32 @@ import XCTest
 @testable import HandAgentDesktop
 
 final class SessionTabViewModelTests: XCTestCase {
+    @MainActor
+    private func makeTab(
+        sessionID: String = "session-1",
+        sentCommands: UnsafeMutablePointer<[SessionProtocolClient.Command]>? = nil,
+        sentResponses: UnsafeMutablePointer<[SessionProtocolClient.Response]>? = nil,
+        copyMessageText: @escaping @MainActor (String) -> Void = { _ in },
+        onStateChanged: @escaping @MainActor (SessionTabViewModel) -> Void = { _ in }
+    ) -> SessionTabViewModel {
+        let bus = SessionEventBus<SessionEvent>()
+        return SessionTabViewModel(
+            tabID: "tab-1",
+            sessionID: sessionID,
+            subscribeToEvents: { id, handler in
+                bus.subscribe(sessionID: id, handler: handler)
+            },
+            sendCommand: { command in
+                sentCommands?.pointee.append(command)
+            },
+            sendResponse: { response in
+                sentResponses?.pointee.append(response)
+            },
+            copyMessageText: copyMessageText,
+            onStateChanged: onStateChanged
+        )
+    }
+
     func testSessionRunStatusNormalizesProtocolValues() {
         XCTAssertEqual(SessionRunStatus.fromProtocolStatus("running"), .running)
         XCTAssertEqual(SessionRunStatus.fromProtocolStatus("completed"), .idle)
@@ -11,11 +37,7 @@ final class SessionTabViewModelTests: XCTestCase {
 
     @MainActor
     func testSnapshotFillsMessages() {
-        let tab = SessionTabViewModel(
-            tabID: "tab-1",
-            sessionID: "session-1",
-            socketClient: .noop
-        )
+        let tab = makeTab()
 
         tab.handle(.sessionSnapshot(
             messages: [SessionBubble(id: "m1", role: "user", text: "hello")],
@@ -28,11 +50,7 @@ final class SessionTabViewModelTests: XCTestCase {
 
     @MainActor
     func testBackgroundTabKeepsRunningState() {
-        let tab = SessionTabViewModel(
-            tabID: "tab-1",
-            sessionID: "session-1",
-            socketClient: .noop
-        )
+        let tab = makeTab()
 
         tab.handle(.assistantMessageStart(
             messageID: "a1",
@@ -50,11 +68,7 @@ final class SessionTabViewModelTests: XCTestCase {
 
     @MainActor
     func testOpenSessionSnapshotDoesNotClearInFlightLocalPrompt() {
-        let tab = SessionTabViewModel(
-            tabID: "tab-1",
-            sessionID: "session-1",
-            socketClient: .noop
-        )
+        let tab = makeTab()
 
         tab.sendPrompt("hello from panel")
         tab.handle(.sessionSnapshot(messages: [], status: "idle"))
@@ -65,11 +79,7 @@ final class SessionTabViewModelTests: XCTestCase {
 
     @MainActor
     func testOpenSessionSnapshotDoesNotClearStreamingAssistantBubble() {
-        let tab = SessionTabViewModel(
-            tabID: "tab-1",
-            sessionID: "session-1",
-            socketClient: .noop
-        )
+        let tab = makeTab()
 
         tab.sendPrompt("hello from panel")
         tab.handle(.assistantMessageStart(messageID: "assistant-1", timestamp: "2026-05-20T00:00:00.000Z"))
@@ -89,11 +99,7 @@ final class SessionTabViewModelTests: XCTestCase {
 
     @MainActor
     func testOpenSessionSnapshotWithPersistedPromptKeepsLocalTurnRunning() {
-        let tab = SessionTabViewModel(
-            tabID: "tab-1",
-            sessionID: "session-1",
-            socketClient: .noop
-        )
+        let tab = makeTab()
 
         tab.sendPrompt("hello from panel")
         tab.handle(.sessionSnapshot(
@@ -107,11 +113,7 @@ final class SessionTabViewModelTests: XCTestCase {
 
     @MainActor
     func testLateStaleSnapshotDoesNotClearCompletedLocalAssistantBubble() {
-        let tab = SessionTabViewModel(
-            tabID: "tab-1",
-            sessionID: "session-1",
-            socketClient: .noop
-        )
+        let tab = makeTab()
 
         tab.sendPrompt("hello from panel")
         tab.handle(.assistantMessageStart(messageID: "assistant-1", timestamp: "2026-05-20T00:00:00.000Z"))
@@ -136,11 +138,7 @@ final class SessionTabViewModelTests: XCTestCase {
 
     @MainActor
     func testStaleSnapshotWithRepeatedPromptTextKeepsNewLocalTurnRunning() {
-        let tab = SessionTabViewModel(
-            tabID: "tab-1",
-            sessionID: "session-1",
-            socketClient: .noop
-        )
+        let tab = makeTab()
 
         tab.handle(.sessionSnapshot(
             messages: [
@@ -164,11 +162,7 @@ final class SessionTabViewModelTests: XCTestCase {
 
     @MainActor
     func testOpenFailedMarksTabInvalid() {
-        let tab = SessionTabViewModel(
-            tabID: "tab-1",
-            sessionID: "session-1",
-            socketClient: .noop
-        )
+        let tab = makeTab()
 
         tab.handle(.sessionOpenFailed(reason: "not_found", message: "Session not found: session-1"))
 
@@ -179,12 +173,7 @@ final class SessionTabViewModelTests: XCTestCase {
     @MainActor
     func testCopyMessageCopiesOneMessageTextByID() {
         var copiedTexts: [String] = []
-        let tab = SessionTabViewModel(
-            tabID: "tab-1",
-            sessionID: "session-1",
-            socketClient: .noop,
-            copyMessageText: { copiedTexts.append($0) }
-        )
+        let tab = makeTab(copyMessageText: { copiedTexts.append($0) })
 
         tab.handle(.sessionSnapshot(
             messages: [
@@ -201,11 +190,7 @@ final class SessionTabViewModelTests: XCTestCase {
 
     @MainActor
     func testFailedSnapshotUsesLastAssistantMessageAsErrorBanner() {
-        let tab = SessionTabViewModel(
-            tabID: "tab-1",
-            sessionID: "session-1",
-            socketClient: .noop
-        )
+        let tab = makeTab()
 
         tab.handle(.sessionSnapshot(
             messages: [
@@ -225,11 +210,7 @@ final class SessionTabViewModelTests: XCTestCase {
 
     @MainActor
     func testTerminalToolMessageClearsMatchingPendingPermissionRequest() {
-        let tab = SessionTabViewModel(
-            tabID: "tab-1",
-            sessionID: "session-1",
-            socketClient: .noop
-        )
+        let tab = makeTab()
 
         tab.handle(.permissionRequest(
             requestId: "session-1:req-1",
@@ -262,12 +243,7 @@ final class SessionTabViewModelTests: XCTestCase {
     @MainActor
     func testPermissionRequestKeepsTabRunningAfterAssistantEndCompleted() {
         var stateChangeStatuses: [SessionRunStatus] = []
-        let tab = SessionTabViewModel(
-            tabID: "tab-1",
-            sessionID: "session-1",
-            socketClient: .noop,
-            onStateChanged: { stateChangeStatuses.append($0.status) }
-        )
+        let tab = makeTab(onStateChanged: { stateChangeStatuses.append($0.status) })
 
         tab.handle(.assistantMessageStart(
             messageID: "assistant-1",
@@ -297,12 +273,7 @@ final class SessionTabViewModelTests: XCTestCase {
     @MainActor
     func testWorkspaceAskRequestKeepsTabRunningAfterAssistantEndCompleted() {
         var stateChangeStatuses: [SessionRunStatus] = []
-        let tab = SessionTabViewModel(
-            tabID: "tab-1",
-            sessionID: "session-1",
-            socketClient: .noop,
-            onStateChanged: { stateChangeStatuses.append($0.status) }
-        )
+        let tab = makeTab(onStateChanged: { stateChangeStatuses.append($0.status) })
 
         tab.handle(.assistantMessageStart(
             messageID: "assistant-1",
@@ -333,12 +304,7 @@ final class SessionTabViewModelTests: XCTestCase {
     @MainActor
     func testRunningToolMessageKeepsTabRunningAfterAssistantEndCompleted() {
         var stateChangeStatuses: [SessionRunStatus] = []
-        let tab = SessionTabViewModel(
-            tabID: "tab-1",
-            sessionID: "session-1",
-            socketClient: .noop,
-            onStateChanged: { stateChangeStatuses.append($0.status) }
-        )
+        let tab = makeTab(onStateChanged: { stateChangeStatuses.append($0.status) })
 
         tab.handle(.assistantMessageStart(
             messageID: "assistant-1",
@@ -360,5 +326,24 @@ final class SessionTabViewModelTests: XCTestCase {
         XCTAssertEqual(tab.status, .running)
         XCTAssertEqual(tab.messages.last?.text, "workspace.list: {}")
         XCTAssertEqual(stateChangeStatuses.last, .running)
+    }
+
+    @MainActor
+    func testSendPromptUsesSharedCommandPath() {
+        var commands: [SessionProtocolClient.Command] = []
+        let tab = withUnsafeMutablePointer(to: &commands) { pointer in
+            makeTab(sentCommands: pointer)
+        }
+
+        tab.sendPrompt("hello", attachments: [.textSelection(id: "sel-1", text: "let value = 1")])
+
+        XCTAssertEqual(tab.messages.map(\.text), ["hello"])
+        guard case let .turnStart(sessionId, commandId, _, text, attachments)? = commands.last else {
+            return XCTFail("expected turnStart command")
+        }
+        XCTAssertEqual(sessionId, "session-1")
+        XCTAssertEqual(commandId, tab.messages.first?.id)
+        XCTAssertEqual(text, "hello")
+        XCTAssertEqual(attachments.count, 1)
     }
 }

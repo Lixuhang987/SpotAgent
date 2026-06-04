@@ -7,14 +7,15 @@ import {
   deriveTitle,
   toAuditEvent,
   toErrorMessage,
-  toSessionMessage,
+  toSessionEvent,
 } from "../../src/protocol/MessageTranslator.ts";
 
 describe("MessageTranslator", () => {
   it("translates assistant runtime events into session frames", () => {
     expect(
-      toSessionMessage(
+      toSessionEvent(
         "session-1",
+        "turn-1",
         {
           type: "assistant_message_delta",
           messageId: "assistant-1",
@@ -23,9 +24,11 @@ describe("MessageTranslator", () => {
         "2026-05-18T00:00:00.000Z",
       ),
     ).toEqual({
-      type: "assistant_message_delta",
+      type: "assistant_delta",
       sessionId: "session-1",
-      messageId: "session-1-assistant-1",
+      eventId: "session-1-assistant-1-2026-05-18T00:00:00.000Z-delta",
+      turnId: "turn-1",
+      itemId: "session-1-assistant-1",
       timestamp: "2026-05-18T00:00:00.000Z",
       payload: { text: "你好" },
     });
@@ -33,8 +36,9 @@ describe("MessageTranslator", () => {
 
   it("translates tool call and result events into tool_message frames", () => {
     expect(
-      toSessionMessage(
+      toSessionEvent(
         "session-tool",
+        "turn-tool",
         {
           type: "tool_call",
           toolCallId: "tc-1",
@@ -44,15 +48,18 @@ describe("MessageTranslator", () => {
         "2026-05-18T00:00:00.000Z",
       ),
     ).toEqual({
-      type: "tool_message",
+      type: "tool_started",
       sessionId: "session-tool",
-      messageId: "session-tool-tc-1",
+      eventId: "session-tool-tc-1-2026-05-18T00:00:00.000Z-start",
+      turnId: "turn-tool",
+      itemId: "session-tool-tc-1",
       timestamp: "2026-05-18T00:00:00.000Z",
-      payload: { name: "clipboard.read", text: "{}", status: "running" },
+      payload: { name: "clipboard.read", input: {} },
     });
     expect(
-      toSessionMessage(
+      toSessionEvent(
         "session-tool",
+        "turn-tool",
         {
           type: "tool_result",
           toolCallId: "tc-1",
@@ -64,11 +71,18 @@ describe("MessageTranslator", () => {
         "2026-05-18T00:00:00.000Z",
       ),
     ).toEqual({
-      type: "tool_message",
+      type: "tool_finished",
       sessionId: "session-tool",
-      messageId: "session-tool-tc-1",
+      eventId: "session-tool-tc-1-2026-05-18T00:00:00.000Z-finish",
+      turnId: "turn-tool",
+      itemId: "session-tool-tc-1",
       timestamp: "2026-05-18T00:00:00.000Z",
-      payload: { name: "clipboard.read", text: "hello", status: "completed" },
+      payload: {
+        name: "clipboard.read",
+        output: "hello",
+        status: "completed",
+        durationMs: 5,
+      },
     });
   });
 

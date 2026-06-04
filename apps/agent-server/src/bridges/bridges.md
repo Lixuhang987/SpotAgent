@@ -9,16 +9,16 @@
 | 文件 | 职责 |
 |------|------|
 | `WebSocketPlatformBridge.ts` | 实现 core `PlatformBridge`；向 desktop 发送 `platform_request`，按 `requestId + BridgeToken` 等待 `platform_response` |
-| `SessionPermissionBridge.ts` | 实现 `FilePermissionPolicy` 的 `AskResolver`；向当前 session socket 发送 `permission_request`，等待 `permission_response` |
-| `SessionWorkspaceAskBridge.ts` | 实现 `workspace.askUser` 的 `WorkspaceAskResolver`；向当前 session socket 串行发送 `workspace_ask_request`，等待用户选择或取消 |
+| `SessionPermissionBridge.ts` | 实现 `FilePermissionPolicy` 的 `AskResolver`；向当前 session 绑定连接发送 `permission_ask`，等待 `permission_answer` |
+| `SessionWorkspaceAskBridge.ts` | 实现 `workspace.askUser` 的 `WorkspaceAskResolver`；向当前 session 绑定连接串行发送 `workspace_ask`，等待用户选择或取消 |
 
 ## 三条桥的差异
 
 | 桥 | 请求来源 | 回流消息 | 默认超时 | 绑定粒度 |
 |------|------|------|------|------|
 | `WebSocketPlatformBridge` | core `RemotePlatformAdapter` | `platform_response` | `call()` 入参默认 15s | 当前 platform socket |
-| `SessionPermissionBridge` | core `FilePermissionPolicy.ask` | `permission_response` | 60s | 当前 session socket |
-| `SessionWorkspaceAskBridge` | builtin `workspace.askUser` | `workspace_ask_response` | 60s | 当前 session socket，且同 session 串行 |
+| `SessionPermissionBridge` | core `FilePermissionPolicy.ask` | `permission_answer` | 60s | 当前 session 绑定连接 |
+| `SessionWorkspaceAskBridge` | builtin `workspace.askUser` | `workspace_answer` | 60s | 当前 session 绑定连接，且同 session 串行 |
 
 ## 关键机制
 
@@ -52,7 +52,7 @@ this.pending.set(requestId, {
 });
 ```
 
-权限 requestId 带 sessionId 前缀，`server/attachSessionSocketHandlers` 可以从 response requestId 找回 session，再用该 socket 持有的 binding token 调 `handleResponse()`。这保证一个 session 断线重连后，旧 socket 不能答复新 socket 发起的审批。
+权限 requestId 带 sessionId 前缀，`server/attachSessionSocketHandlers` 可以从 `permission_answer.requestId` 找回 session，再用该连接持有的 binding token 调 `handleResponse()`。这保证一个 session 断线重连后，旧 socket 不能答复新 socket 发起的审批。
 
 ### Workspace ask 串行展示
 

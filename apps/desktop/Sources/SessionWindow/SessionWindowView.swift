@@ -28,7 +28,9 @@ struct SessionWindowView: View {
                 onCloseTab: viewModel.closeTab,
                 onNewTab: { viewModel.createNewSession() },
                 onStopActiveTab: viewModel.stopActiveTab,
-                onSendPrompt: { text in viewModel.sendPrompt(text) }
+                onSendPrompt: { text in
+                    viewModel.sendPrompt(text, attachments: [])
+                }
             )
         }
         .background(theme.colors.background)

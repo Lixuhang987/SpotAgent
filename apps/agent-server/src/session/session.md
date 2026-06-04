@@ -2,74 +2,72 @@
 
 ## 目录职责
 
-`session/` 负责会话生命周期：创建/打开/列出/加载/删除 session，把一轮用户消息交给 runtime，按顺序写入持久化消息和审计事件。它是 WebSocket 协议进入 core runtime 前的状态边界。
+`session/` 负责会话生命周期：创建、订阅、取消订阅、列出、删除 session，把一轮用户消息交给 runtime，按顺序写入持久化消息和审计事件。它是 `SessionCommand` 进入 core runtime 前的状态边界，也是 `SessionEvent` 对外分发的汇合点。
 
 ## 文件
 
 | 文件 | 职责 |
 |------|------|
-| `SessionRouter.ts` | 处理 `create_session_request`、`open_session`、`list_sessions_request`、`load_session_request`、`delete_session_request`、`user_message`、`interrupt`；只做协议路由和轻量校验 |
-| `SessionCommandRouter.ts` | 新命令路由：处理 `SessionCommand` / `ClientResponse`，通过 `SessionEventPublisher` 推送 `SessionEvent` / `ServerRequest` |
+| `SessionCommandRouter.ts` | 处理 `SessionCommand`，协调 `ClientResponse` 回流，调用 orchestrator / persistence，并通过 `SessionEventPublisher` 推送 `SessionEvent` / `ServerRequest` |
 | `SessionEventPublisher.ts` | 维护 `connection -> subscribed sessionIds`，在单连接模型下按 `sessionId` fan-out 会话事件 |
 | `SessionRuntimeOrchestrator.ts` | 编排一轮 `user_message`：持久化用户消息、自动标题、刷新工具、等待 summary、调用 runtime、转发 event、落库最终 messages/events、处理中断和错误 |
 | `SessionPersistence.ts` | `SessionStore` 的唯一直接封装：创建/删除/重命名/读取 session，保存 user message、run result、error，恢复 server 重启后的半截轮次 |
 
-## 一轮 user message
+## 一轮 turn_start
 
 ```mermaid
 sequenceDiagram
-  participant Router as SessionRouter
+  participant Router as SessionCommandRouter
   participant Orchestrator as SessionRuntimeOrchestrator
   participant Persistence as SessionPersistence
   participant Runtime as core AgentRuntime
   participant Translator as protocol/MessageTranslator
+  participant Publisher as SessionEventPublisher
 
   Router->>Persistence: getSession(sessionId)
-  Router->>Orchestrator: handleUserMessage(message, push)
+  Router->>Orchestrator: handleUserMessage(turn_start, push)
   Orchestrator->>Persistence: persistUserMessage + autoTitle
   Orchestrator->>Persistence: getMessages
   Orchestrator->>Orchestrator: beforeRun(sessionId)
   Orchestrator->>Runtime: runWithMessages(runtimeHistory, onEvent, {sessionId, signal})
   Runtime-->>Orchestrator: AgentRuntimeEvent
-  Orchestrator->>Translator: toSessionMessage / toAuditEvent
-  Orchestrator-->>Router: push SessionMessage to socket
+  Orchestrator->>Translator: toSessionEvent / toAuditEvent
+  Orchestrator-->>Publisher: push SessionEvent
   Orchestrator->>Persistence: persistRunResult(messages, events)
 ```
 
 ## 关键机制
 
-### 新命令路由与事件发布
+### 主路径：命令路由、编排、事件发布
 
 ```mermaid
 flowchart LR
   UI["desktop single connection"] --> Router["SessionCommandRouter"]
+  Router --> Persistence["SessionPersistence"]
   Router --> Orchestrator["SessionRuntimeOrchestrator"]
-  Orchestrator --> Router
   Router --> Publisher["SessionEventPublisher"]
+  Orchestrator --> Publisher
   Publisher --> UIEvents["SessionEvent / ServerRequest"]
 ```
 
-- `SessionCommandRouter` 负责接收新协议 `SessionCommand`
-- `SessionEventPublisher` 负责维护连接级订阅关系，把 `SessionEvent` / `ServerRequest` 按 `sessionId` 分发
-- 迁移期间旧 `SessionRouter` 仍保留，直到 desktop 主路径切到新协议
+- `SessionCommandRouter` 是会话主入口，负责 `session_create`、`session_subscribe`、`session_unsubscribe`、`turn_start`、`turn_interrupt`、`sessions_list`、`session_delete`。
+- `SessionRuntimeOrchestrator` 只负责编排一轮运行，不维护连接。
+- `SessionEventPublisher` 负责维护连接级订阅关系，把 `SessionEvent` / `ServerRequest` 按 `sessionId` 分发。
+- 当前主路径不再经过 `SessionRouter`。
 
-### Router 只做路由，不跑 runtime
+### `session_snapshot` 是恢复入口
 
-```ts
-async receive(message: SessionMessage, push: PushMessage = () => {}): Promise<void> {
-  switch (message.type) {
-    case "open_session":
-      return this.handleOpenSession(message, push);
-    case "user_message":
-      return this.handleUserMessage(message, push);
-    case "interrupt":
-      this.orchestrator.interruptSession?.(message.sessionId, push);
-      return;
-  }
-}
-```
+- `session_subscribe` 会先把当前连接加入 `sessionId` 订阅集合，再读取持久化会话。
+- 若该 session 当前未运行，router 会先调用 `recoverIncompleteTurnForSnapshot()` 修复重启前的半截轮次。
+- 随后返回 `session_snapshot`，携带当前 `messages` 与 `status`，作为重连恢复与历史打开的统一模型。
+- `session_unsubscribe` 只移除当前连接对该 `sessionId` 的订阅；若该连接还是 permission / workspace 的绑定拥有者，server 层会同步解绑并中断对应 run。
 
-`SessionRouter` 的上游是 `server/attachSessionSocketHandlers`，下游是 `SessionRuntimeOrchestrator` 和 `SessionPersistence`。它不直接调用 LLM，不直接拼 UI 消息，只决定当前协议帧该交给谁。
+### 单连接多 session
+
+- `SessionEventPublisher` 维护 `connectionId -> subscribed sessionIds`。
+- 同一条 desktop socket 可以同时订阅多个 session。
+- 只要事件带 `sessionId`，publisher 就按订阅关系 fan-out；不带 `sessionId` 的消息按连接直发。
+- permission / workspace 请求虽然不属于 `SessionEvent`，但仍复用同一连接路由语义，由 publisher 定向回发给绑定连接。
 
 ### Orchestrator 用 generation 防止旧 run 写回
 
@@ -101,18 +99,18 @@ if (lastError) {
 }
 ```
 
-`open_session` 快照前会调用 `recoverIncompleteTurnForSnapshot()`。如果持久化消息最后停在 user message，它会优先复用已有 error 事件补 assistant 消息；只有没有任何可归属错误时，才写入 `run_lost_after_restart`，避免 agent-server 重启后历史里只剩用户消息。
+`session_snapshot` 发出前会调用 `recoverIncompleteTurnForSnapshot()`。如果持久化消息最后停在 user message，它会优先复用已有 error 事件补 assistant 消息；只有没有任何可归属错误时，才写入 `run_lost_after_restart`，避免 agent-server 重启后历史里只剩用户消息。
 
 ## 状态边界
 
-- `SessionRouter` 只面向协议帧和会话存在性。
+- `SessionCommandRouter` 只面向命令、订阅与会话存在性校验。
 - `SessionRuntimeOrchestrator` 只管理当前进程内 active run，不持有 `SessionStore` 之外的磁盘路径。
 - `SessionPersistence` 是本目录唯一直接持有 `SessionStore` 的类；新增持久化顺序优先放这里。
 
 ## 编辑约束
 
-- 新增 `SessionMessage` 分支优先落在 `SessionRouter`。
-- 新增 runtime event 到 UI / audit 的映射不要写进 orchestrator，改 `protocol/MessageTranslator.ts`。
+- 新增 `SessionCommand` 分支优先落在 `SessionCommandRouter`。
+- 新增 runtime event 到 `SessionEvent` / audit 的映射不要写进 orchestrator，改 `protocol/MessageTranslator.ts`。
 - 中断、删除、重连相关改动必须保留 generation 检查和有限等待边界，避免旧 run 污染已删除 session。
 
 ## 下一步阅读

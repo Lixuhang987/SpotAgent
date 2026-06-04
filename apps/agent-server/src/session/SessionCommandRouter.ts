@@ -1,8 +1,6 @@
 import type { SessionCommand } from "@handagent/core/protocol/SessionCommand.ts";
 import type { ClientResponse } from "@handagent/core/protocol/ClientResponse.ts";
 import type { SessionEvent } from "@handagent/core/protocol/SessionEvent.ts";
-import type { ServerRequest } from "@handagent/core/protocol/ServerRequest.ts";
-import type { SessionMessage } from "@handagent/core/protocol/SessionMessage.ts";
 import type {
   PersistedSession,
   SessionActionBinding,
@@ -63,10 +61,7 @@ export class SessionCommandRouter {
       case "turn_start":
         return this.handleTurnStart(command);
       case "turn_interrupt":
-        this.orchestrator.interruptSession?.(
-          command.sessionId,
-          this.createLegacyPush(command.sessionId, connectionId),
-        );
+        this.interruptSession(command.sessionId);
         return;
       case "sessions_list":
         return this.handleListSessions(command, connectionId);
@@ -84,6 +79,12 @@ export class SessionCommandRouter {
         this.responseHandlers.onWorkspaceResponse?.(response, connectionId);
         return;
     }
+  }
+
+  interruptSession(sessionId: string): void {
+    this.orchestrator.interruptSession?.(sessionId, (event) => {
+      this.publisher.publish(event);
+    });
   }
 
   private async handleCreateSession(
@@ -185,8 +186,7 @@ export class SessionCommandRouter {
     command: Extract<SessionCommand, { type: "turn_start" }>,
     connectionId?: string,
   ): Promise<void> {
-    const session = await this.persistence.getSession(command.sessionId);
-    if (!session) {
+    if (!(await this.persistence.getSession(command.sessionId))) {
       const errorEvent: SessionEvent = {
         type: "session_error",
         sessionId: command.sessionId,
@@ -206,15 +206,8 @@ export class SessionCommandRouter {
       return;
     }
 
-    const state = {
-      interrupted: false,
-      failed: false,
-      toolRunning: new Set<string>(),
-    };
-    const push = this.createLegacyPush(command.sessionId, connectionId, state, command.commandId);
     await this.orchestrator.handleUserMessage(
       {
-        type: "user_message",
         sessionId: command.sessionId,
         messageId: command.commandId,
         timestamp: command.timestamp,
@@ -223,41 +216,10 @@ export class SessionCommandRouter {
           attachments: command.payload.attachments,
         },
       },
-      push,
+      (event) => {
+        this.publisher.publish(event);
+      },
     );
-
-    if (state.interrupted) {
-      return;
-    }
-
-    const completionStatus: Extract<
-      SessionEvent,
-      { type: "turn_completed" }
-    >["payload"]["status"] = state.failed ? "failed" : "completed";
-    const sessionStatus: Extract<
-      SessionEvent,
-      { type: "session_status_changed" }
-    >["payload"]["value"] = state.failed ? "failed" : "idle";
-
-    this.publisher.publish({
-      type: "turn_completed",
-      sessionId: command.sessionId,
-      eventId: this.makeEventId(),
-      turnId: command.commandId,
-      timestamp: this.now(),
-      payload: {
-        status: completionStatus,
-      },
-    });
-    this.publisher.publish({
-      type: "session_status_changed",
-      sessionId: command.sessionId,
-      eventId: this.makeEventId(),
-      timestamp: this.now(),
-      payload: {
-        value: sessionStatus,
-      },
-    });
   }
 
   private async handleListSessions(
@@ -297,10 +259,9 @@ export class SessionCommandRouter {
     }
 
     if (this.orchestrator.isSessionRunning?.(targetSessionId)) {
-      await this.orchestrator.interruptAndWait?.(
-        targetSessionId,
-        this.createLegacyPush(targetSessionId, connectionId, undefined, command.commandId),
-      );
+      await this.orchestrator.interruptAndWait?.(targetSessionId, (event) => {
+        this.publisher.publish(event);
+      });
     }
 
     await this.persistence.deleteSession(targetSessionId);
@@ -317,148 +278,8 @@ export class SessionCommandRouter {
     });
   }
 
-  private createLegacyPush(
-    sessionId: string,
-    connectionId?: string,
-    state: {
-      interrupted: boolean;
-      failed: boolean;
-      toolRunning: Set<string>;
-    } = { interrupted: false, failed: false, toolRunning: new Set<string>() },
-    turnId = "legacy-turn",
-  ): (message: SessionMessage) => void {
-    return (message) => {
-      const published = legacyMessageToPublished(message, turnId, this.makeEventId(), this.now());
-      if (message.type === "assistant_message_end" && message.payload.status === "interrupted") {
-        state.interrupted = true;
-      }
-      if (message.type === "status" && message.payload.value === "interrupted") {
-        state.interrupted = true;
-      }
-      if (message.type === "error") {
-        state.failed = true;
-      }
-      if (published) {
-        if (
-          (published.type === "session_error" || published.type === "session_created" || published.type === "sessions_listed" || published.type === "session_deleted") &&
-          connectionId
-        ) {
-          this.publisher.publishToConnection(connectionId, published);
-        } else {
-          this.publisher.publish(published);
-        }
-      }
-      void sessionId;
-    };
-  }
-
   private makeEventId(): string {
     return `event-${Math.random().toString(36).slice(2, 10)}`;
-  }
-}
-
-function legacyMessageToPublished(
-  message: SessionMessage,
-  turnId: string,
-  eventId: string,
-  timestamp: string,
-): SessionEvent | ServerRequest | null {
-  switch (message.type) {
-    case "session_snapshot":
-      return {
-        type: "session_snapshot",
-        sessionId: message.sessionId,
-        eventId,
-        timestamp,
-        payload: message.payload,
-      };
-    case "assistant_message_delta":
-      return {
-        type: "assistant_delta",
-        sessionId: message.sessionId,
-        eventId,
-        turnId,
-        itemId: message.messageId,
-        timestamp,
-        payload: { text: message.payload.text },
-      };
-    case "tool_message":
-      if (message.payload.status === "running") {
-        return {
-          type: "tool_started",
-          sessionId: message.sessionId,
-          eventId,
-          turnId,
-          itemId: message.messageId,
-          timestamp,
-          payload: {
-            name: message.payload.name,
-            input: tryParseObject(message.payload.text),
-          },
-        };
-      }
-      return {
-        type: "tool_finished",
-        sessionId: message.sessionId,
-        eventId,
-        turnId,
-        itemId: message.messageId,
-        timestamp,
-        payload: {
-          name: message.payload.name,
-          status: message.payload.status,
-          output: message.payload.text,
-          durationMs: 0,
-        },
-      };
-    case "status":
-      return {
-        type: "session_status_changed",
-        sessionId: message.sessionId,
-        eventId,
-        timestamp,
-        payload: {
-          value: message.payload.value,
-        },
-      };
-    case "error":
-      return {
-        type: "session_error",
-        sessionId: message.sessionId,
-        eventId,
-        timestamp,
-        payload: {
-          message: message.payload.message,
-        },
-      };
-    case "permission_request":
-      return {
-        type: "permission_ask",
-        requestId: message.payload.requestId,
-        sessionId: message.sessionId,
-        timestamp,
-        payload: {
-          toolName: message.payload.toolName,
-          toolCallId: message.payload.toolCallId,
-          arguments: message.payload.arguments,
-          timeoutMs: message.payload.timeoutMs,
-        },
-      };
-    case "workspace_ask_request":
-      return {
-        type: "workspace_ask",
-        requestId: message.payload.requestId,
-        sessionId: message.sessionId,
-        timestamp,
-        payload: {
-          toolCallId: message.payload.toolCallId,
-          prompt: message.payload.prompt,
-          candidates: message.payload.candidates,
-          timeoutMs: message.payload.timeoutMs,
-        },
-      };
-    default:
-      return null;
   }
 }
 
@@ -471,13 +292,4 @@ function toSessionListEntry(summary: SessionSummary) {
     messageCount: summary.messageCount,
     workspaceId: summary.workspaceId,
   };
-}
-
-function tryParseObject(value: string): Record<string, unknown> {
-  try {
-    const parsed = JSON.parse(value);
-    return typeof parsed === "object" && parsed !== null ? parsed as Record<string, unknown> : {};
-  } catch {
-    return {};
-  }
 }

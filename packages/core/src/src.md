@@ -20,7 +20,7 @@
 | `workspace/` | [workspace/workspace.md](/Users/mu9/proj/handAgent/packages/core/src/workspace/workspace.md) | 显式 workspace 沙箱 + 默认播种 |
 | `config/` | [config/config.md](/Users/mu9/proj/handAgent/packages/core/src/config/config.md) | settings.json 模型与 tool 设置解析 |
 | `logging/` | [logging/logging.md](/Users/mu9/proj/handAgent/packages/core/src/logging/logging.md) | LLM 网络日志 JSONL 落盘 |
-| `protocol/` | [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md) | desktop ↔ agent-server WS 协议（SessionMessage + PlatformBridgeMessage） |
+| `protocol/` | [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md) | desktop ↔ app-server 单向会话协议（四类 session 消息 + PlatformBridgeMessage） |
 | `conversation/` | [conversation/conversation.md](/Users/mu9/proj/handAgent/packages/core/src/conversation/conversation.md) | UI / 持久化用 ConversationMessage 模型 |
 | `selection/` | [selection/selection.md](/Users/mu9/proj/handAgent/packages/core/src/selection/selection.md) | 用户主动选区抽象 |
 
@@ -34,7 +34,9 @@
 
 ### 2. runtime 阶段
 
-- `AgentRuntime.runWithMessages(messages, onEvent, {sessionId})`
+- `AgentSessionHandle.submit(command)` 作为 core 对 app-server 暴露的会话入口，当前消费 `turn_start` / `turn_interrupt`
+- `AgentSessionHandle.nextEvent()` 作为事件消费出口，按顺序吐出 `SessionEvent`
+- handle 内部调用 `AgentRuntime.runWithMessages(messages, onEvent, {sessionId})`
 - 每轮先通过 `SystemPrompt` 把默认 system prompt sections 临时前置到 LLM 输入，再消费 `LLMClient.stream(llmMessages, registry.list(), {blobStore?})`
 - 处理 `toolCalls`：`PermissionPolicy.check` → ask / allow / deny → tool 调用 → 写 tool message
 - 详细流程图见 [runtime/runtime.md](/Users/mu9/proj/handAgent/packages/core/src/runtime/runtime.md)
@@ -71,8 +73,10 @@ plugin action 绑定的外部能力不由 core tools 目录加载私有插件进
 
 ### 7. 跨进程协议
 
-- desktop 与 agent-server 走 `ws://127.0.0.1:4317/api/session`；会话帧是 `SessionMessage`，平台反向 IPC 帧是 `PlatformBridgeMessage`。
-- 反向平台 IPC 复用同一 WebSocket 入口，但通过 `channel: "platform"` 显式分流。
+- desktop 与 app-server 走 `ws://127.0.0.1:4317/api/session`；会话主路径拆为 `SessionCommand`、`SessionEvent`、`ServerRequest`、`ClientResponse` 四类消息。
+- `SessionCommand` 只表示 UI 主动提交的命令；`SessionEvent` 只表示 server/core 向 UI 推送的结果事件。
+- `ServerRequest` / `ClientResponse` 只覆盖少量“server 提问，UI 回执”的交互，如权限审批与 workspace 选择。
+- 平台反向 IPC 不并入 session 主协议，继续走独立 `PlatformBridgeMessage`，通过 `channel: "platform"` 分流。
 - 字段说明详见 [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md)。
 
 ## 当前实现特点与已知改进项
@@ -81,7 +85,7 @@ plugin action 绑定的外部能力不由 core tools 目录加载私有插件进
 - tool 结果统一序列化为字符串再回灌；`MAX_OUTPUT_BYTES = 8 KiB` 截断。
 - `VercelClient` 当前默认模型 `gpt-5-mini`。
 - user message 支持字符串或多模态 content parts；持久化层仍保存 STUB 文本，agent-server 在 runtime 前展开 image STUB。
-- `assistant_message_delta` 来自 `LLMStreamEvent.text_delta`，desktop UI 可逐段拼接 assistant 回复。
+- `assistant_delta` 来自 `LLMStreamEvent.text_delta`，desktop UI 可逐段拼接 assistant 回复。
 - 文件 tool 已使用 workspace 沙箱、basename symlink 拒绝、10 MiB 写入上限与原子写。
 - `FilePermissionPolicy.cache` 与 `FileWorkspaceRegistry.cache` 不启 watcher；每次公开读写入口前比较持久化文件 `mtimeMs + size`，检测到外部修改后重读，保证 Settings 或外部撤销权限后下一次 tool 调用可见。
 

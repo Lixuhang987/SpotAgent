@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
-import type { SessionMessage } from "@handagent/core/protocol/SessionMessage.ts";
+import type { ClientResponse } from "@handagent/core/protocol/ClientResponse.ts";
+import type { ServerRequest } from "@handagent/core/protocol/ServerRequest.ts";
 import { SessionPermissionBridge } from "../../src/bridges/SessionPermissionBridge.ts";
 
 describe("SessionPermissionBridge", () => {
   it("routes permission requests to the socket bound to each session", async () => {
     const bridge = new SessionPermissionBridge();
-    const sessionASent: SessionMessage[] = [];
-    const sessionBSent: SessionMessage[] = [];
+    const sessionASent: ServerRequest[] = [];
+    const sessionBSent: ServerRequest[] = [];
     bridge.bindSession("session-A", (message) => sessionASent.push(message));
     bridge.bindSession("session-B", (message) => sessionBSent.push(message));
 
@@ -29,20 +30,12 @@ describe("SessionPermissionBridge", () => {
     const requestB = sessionBSent[0];
     expect(requestA.sessionId).toBe("session-A");
     expect(requestB.sessionId).toBe("session-B");
-    if (requestA.type !== "permission_request" || requestB.type !== "permission_request") {
+    if (requestA.type !== "permission_ask" || requestB.type !== "permission_ask") {
       throw new Error("type");
     }
 
-    bridge.handleResponse({
-      requestId: requestA.payload.requestId,
-      decision: "allow",
-      scope: "session",
-    });
-    bridge.handleResponse({
-      requestId: requestB.payload.requestId,
-      decision: "deny",
-      reason: "no",
-    });
+    bridge.handleResponse(permissionAnswer(requestA.requestId, "allow", "session"));
+    bridge.handleResponse(permissionAnswer(requestB.requestId, "deny", undefined, "no"));
 
     await expect(askA).resolves.toEqual({ decision: "allow", remember: "session" });
     await expect(askB).resolves.toEqual({ decision: "deny", reason: "no" });
@@ -50,7 +43,7 @@ describe("SessionPermissionBridge", () => {
 
   it("keeps other sessions active when one session is unbound", async () => {
     const bridge = new SessionPermissionBridge();
-    const sessionBSent: SessionMessage[] = [];
+    const sessionBSent: ServerRequest[] = [];
     bridge.bindSession("session-A", () => {});
     bridge.bindSession("session-B", (message) => sessionBSent.push(message));
 
@@ -65,11 +58,8 @@ describe("SessionPermissionBridge", () => {
 
     expect(sessionBSent).toHaveLength(1);
     const requestB = sessionBSent[0];
-    if (requestB.type !== "permission_request") throw new Error("type");
-    bridge.handleResponse({
-      requestId: requestB.payload.requestId,
-      decision: "allow",
-    });
+    if (requestB.type !== "permission_ask") throw new Error("type");
+    bridge.handleResponse(permissionAnswer(requestB.requestId, "allow"));
 
     await expect(askB).resolves.toEqual({ decision: "allow" });
   });
@@ -77,7 +67,7 @@ describe("SessionPermissionBridge", () => {
   it("does not let a stale binding unbind a newer socket for the same session", async () => {
     const bridge = new SessionPermissionBridge();
     const firstToken = bridge.bindSession("session-A", () => {});
-    const secondSent: SessionMessage[] = [];
+    const secondSent: ServerRequest[] = [];
     bridge.bindSession("session-A", (message) => secondSent.push(message));
 
     expect(bridge.unbindSession("session-A", firstToken)).toBe(false);
@@ -91,18 +81,15 @@ describe("SessionPermissionBridge", () => {
 
     expect(secondSent).toHaveLength(1);
     const request = secondSent[0];
-    if (request.type !== "permission_request") throw new Error("type");
-    bridge.handleResponse({
-      requestId: request.payload.requestId,
-      decision: "allow",
-    });
+    if (request.type !== "permission_ask") throw new Error("type");
+    bridge.handleResponse(permissionAnswer(request.requestId, "allow"));
 
     await expect(ask).resolves.toEqual({ decision: "allow" });
   });
 
   it("ignores stale permission responses after the same session is rebound", async () => {
     const bridge = new SessionPermissionBridge();
-    const firstSent: SessionMessage[] = [];
+    const firstSent: ServerRequest[] = [];
     const firstToken = bridge.bindSession("session-A", (message) => firstSent.push(message));
     const askFromFirstSocket = bridge.ask({
       sessionId: "session-A",
@@ -111,18 +98,14 @@ describe("SessionPermissionBridge", () => {
       arguments: { path: "a.txt" },
     });
 
-    const secondSent: SessionMessage[] = [];
+    const secondSent: ServerRequest[] = [];
     const secondToken = bridge.bindSession("session-A", (message) => secondSent.push(message));
 
     expect(firstSent).toHaveLength(1);
     const firstRequest = firstSent[0];
-    if (firstRequest.type !== "permission_request") throw new Error("type");
+    if (firstRequest.type !== "permission_ask") throw new Error("type");
     bridge.handleResponse(
-      {
-        requestId: firstRequest.payload.requestId,
-        decision: "allow",
-        scope: "session",
-      },
+      permissionAnswer(firstRequest.requestId, "allow", "session"),
       firstToken,
     );
 
@@ -146,15 +129,30 @@ describe("SessionPermissionBridge", () => {
     });
     expect(secondSent).toHaveLength(1);
     const secondRequest = secondSent[0];
-    if (secondRequest.type !== "permission_request") throw new Error("type");
+    if (secondRequest.type !== "permission_ask") throw new Error("type");
     bridge.handleResponse(
-      {
-        requestId: secondRequest.payload.requestId,
-        decision: "allow",
-      },
+      permissionAnswer(secondRequest.requestId, "allow"),
       secondToken,
     );
 
     await expect(askFromSecondSocket).resolves.toEqual({ decision: "allow" });
   });
 });
+
+function permissionAnswer(
+  requestId: string,
+  decision: "allow" | "deny",
+  scope?: "once" | "session" | "always",
+  reason?: string,
+): Extract<ClientResponse, { type: "permission_answer" }> {
+  return {
+    type: "permission_answer",
+    requestId,
+    timestamp: "2026-06-04T00:00:00.000Z",
+    payload: {
+      decision,
+      scope,
+      reason,
+    },
+  };
+}

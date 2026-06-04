@@ -4,15 +4,16 @@ import type {
   AgentRuntimeEvent,
   AgentRuntimeRunOptions,
 } from "@handagent/core/runtime/AgentRuntime.ts";
-import type { SessionMessage } from "@handagent/core/protocol/SessionMessage.ts";
-import type { SessionEvent } from "@handagent/core/storage/index.ts";
+import type { SessionEvent as ProtocolSessionEvent } from "@handagent/core/protocol/SessionEvent.ts";
+import type { UserMessageAttachment } from "@handagent/core/protocol/SessionProtocolShared.ts";
+import type { SessionEvent as AuditSessionEvent } from "@handagent/core/storage/index.ts";
 import type { SessionPersistence } from "./SessionPersistence.ts";
 import { RUN_INTERRUPTED_CODE, RUN_INTERRUPTED_MESSAGE } from "./SessionPersistence.ts";
 import {
   agentMessagesToRuntimeMessages,
   toAuditEvent,
   toErrorMessage,
-  toSessionMessage,
+  toSessionEvent,
 } from "../protocol/MessageTranslator.ts";
 
 type RuntimeLike = {
@@ -25,14 +26,25 @@ type RuntimeLike = {
 };
 type RuntimeResolver = RuntimeLike | ((sessionId: string) => RuntimeLike);
 
-type PushMessage = (message: SessionMessage) => void;
+type PushMessage = (message: ProtocolSessionEvent) => void;
 type BeforeRunHook = (sessionId: string) => void | Promise<void>;
 type OrchestratorOptions = {
   interruptWaitTimeoutMs?: number;
   interruptPollIntervalMs?: number;
 };
 
+type UserMessageInput = {
+  sessionId: string;
+  messageId: string;
+  timestamp: string;
+  payload: {
+    text: string;
+    attachments?: UserMessageAttachment[];
+  };
+};
+
 type ActiveRun = {
+  turnId: string;
   controller: AbortController;
   generation: number;
   interrupted: boolean;
@@ -62,11 +74,12 @@ export class SessionRuntimeOrchestrator {
   }
 
   async handleUserMessage(
-    message: Extract<SessionMessage, { type: "user_message" }>,
+    message: UserMessageInput,
     push: PushMessage,
   ): Promise<void> {
     const { sessionId } = message;
     const activeRun: ActiveRun = {
+      turnId: message.messageId,
       controller: new AbortController(),
       generation: this.nextGeneration + 1,
       interrupted: false,
@@ -82,6 +95,24 @@ export class SessionRuntimeOrchestrator {
       message.payload.attachments,
     );
     await this.persistence.autoTitle(sessionId, message.payload.text);
+    push({
+      type: "user_message_recorded",
+      sessionId,
+      eventId: `${sessionId}-${message.messageId}-user-recorded`,
+      timestamp: this.now(),
+      payload: {
+        messageId: message.messageId,
+        text: message.payload.text,
+      },
+    });
+    push({
+      type: "turn_started",
+      sessionId,
+      eventId: `${sessionId}-${message.messageId}-turn-started`,
+      turnId: message.messageId,
+      timestamp: this.now(),
+      payload: {},
+    });
 
     const history = await this.persistence.getMessages(sessionId);
     await this.beforeRun(sessionId);
@@ -90,14 +121,14 @@ export class SessionRuntimeOrchestrator {
     const runtimeHistory = agentMessagesToRuntimeMessages(history);
 
     try {
-      const events: SessionEvent[] = [];
+      const events: AuditSessionEvent[] = [];
       const result = await runtime.runWithMessages(
         runtimeHistory,
         (event) => {
           if (!this.isActive(sessionId, activeRun) || activeRun.controller.signal.aborted) {
             return;
           }
-          const outgoing = toSessionMessage(sessionId, event, this.now());
+          const outgoing = toSessionEvent(sessionId, message.messageId, event, this.now());
           if (outgoing) {
             push(outgoing);
           }
@@ -121,6 +152,21 @@ export class SessionRuntimeOrchestrator {
         mergeRuntimeResultWithPersistedHistory(history, result.messages),
         events,
       );
+      push({
+        type: "turn_completed",
+        sessionId,
+        eventId: `${sessionId}-${message.messageId}-turn-completed`,
+        turnId: message.messageId,
+        timestamp: this.now(),
+        payload: { status: "completed" },
+      });
+      push({
+        type: "session_status_changed",
+        sessionId,
+        eventId: `${sessionId}-${message.messageId}-status-idle`,
+        timestamp: this.now(),
+        payload: { value: "idle" },
+      });
     } catch (error) {
       if (isAbortError(error)) {
         if (this.isActive(sessionId, activeRun)) {
@@ -142,13 +188,28 @@ export class SessionRuntimeOrchestrator {
       }
       const errorMessage = toErrorMessage(error);
       push({
-        type: "error",
+        type: "session_error",
         sessionId,
-        messageId: `${sessionId}-error`,
+        eventId: `${sessionId}-${message.messageId}-error`,
         timestamp: this.now(),
         payload: {
           message: errorMessage,
         },
+      });
+      push({
+        type: "turn_completed",
+        sessionId,
+        eventId: `${sessionId}-${message.messageId}-turn-failed`,
+        turnId: message.messageId,
+        timestamp: this.now(),
+        payload: { status: "failed" },
+      });
+      push({
+        type: "session_status_changed",
+        sessionId,
+        eventId: `${sessionId}-${message.messageId}-status-failed`,
+        timestamp: this.now(),
+        payload: { value: "failed" },
       });
       await this.persistence.persistError(sessionId, errorMessage);
     } finally {
@@ -192,16 +253,17 @@ export class SessionRuntimeOrchestrator {
   private emitInterrupted(sessionId: string, push: PushMessage, activeRun: ActiveRun): void {
     activeRun.interrupted = true;
     push({
-      type: "assistant_message_end",
+      type: "turn_completed",
       sessionId,
-      messageId: `${sessionId}-interrupted`,
+      eventId: `${sessionId}-turn-interrupted`,
+      turnId: activeRun.turnId,
       timestamp: this.now(),
       payload: { status: "interrupted" },
     });
     push({
-      type: "status",
+      type: "session_status_changed",
       sessionId,
-      messageId: `${sessionId}-status`,
+      eventId: `${sessionId}-status-interrupted`,
       timestamp: this.now(),
       payload: { value: "interrupted" },
     });

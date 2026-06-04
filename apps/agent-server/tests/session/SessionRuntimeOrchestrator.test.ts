@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { AgentMessage } from "@handagent/core/runtime/AgentMessage.ts";
 import type { AgentRuntimeEvent } from "@handagent/core/runtime/AgentRuntime.ts";
-import type { SessionMessage } from "@handagent/core/protocol/SessionMessage.ts";
+import type { SessionEvent } from "@handagent/core/protocol/SessionEvent.ts";
+import type { UserMessageAttachment } from "@handagent/core/protocol/SessionProtocolShared.ts";
 import { InMemorySessionStore } from "@handagent/core/storage/index.ts";
 import { MemoryBlobStore } from "../support/MemoryBlobStore.ts";
 import { SessionPersistence } from "../../src/session/SessionPersistence.ts";
@@ -11,9 +12,16 @@ function createUserMessage(
   sessionId: string,
   text: string,
   messageId: string,
-): Extract<SessionMessage, { type: "user_message" }> {
+): {
+  sessionId: string;
+  messageId: string;
+  timestamp: string;
+  payload: {
+    text: string;
+    attachments?: UserMessageAttachment[];
+  };
+} {
   return {
-    type: "user_message",
     sessionId,
     messageId,
     timestamp: "2026-05-11T10:00:00.000Z",
@@ -21,9 +29,17 @@ function createUserMessage(
   };
 }
 
+function eventTypes(events: SessionEvent[]): string[] {
+  return events.map((event) => event.type);
+}
+
+function expectTypes(events: SessionEvent[], expected: SessionEvent["type"][]): void {
+  expect(eventTypes(events)).toEqual(expected);
+}
+
 describe("SessionRuntimeOrchestrator", () => {
   it("pushes assistant events and persists final user + assistant messages", async () => {
-    const pushed: SessionMessage[] = [];
+    const pushed: SessionEvent[] = [];
     const runtimeCalls: AgentMessage[][] = [];
     const store = new InMemorySessionStore();
     const persistence = new SessionPersistence(
@@ -82,29 +98,41 @@ describe("SessionRuntimeOrchestrator", () => {
         },
       ],
     ]);
-    expect(pushed).toEqual([
-      {
-        type: "assistant_message_start",
-        sessionId: "session-1",
-        messageId: "session-1-assistant-1",
-        timestamp: "2026-05-11T00:00:00.000Z",
-        payload: { role: "assistant" },
-      },
-      {
-        type: "assistant_message_delta",
-        sessionId: "session-1",
-        messageId: "session-1-assistant-1",
-        timestamp: "2026-05-11T00:00:00.000Z",
-        payload: { text: "你好，我收到了。" },
-      },
-      {
-        type: "assistant_message_end",
-        sessionId: "session-1",
-        messageId: "session-1-assistant-1",
-        timestamp: "2026-05-11T00:00:00.000Z",
-        payload: { status: "completed" },
-      },
+    expectTypes(pushed, [
+      "user_message_recorded",
+      "turn_started",
+      "assistant_delta",
+      "turn_completed",
+      "session_status_changed",
     ]);
+    expect(pushed[0]).toMatchObject({
+      type: "user_message_recorded",
+      sessionId: "session-1",
+      payload: { messageId: "user-1", text: "第一句" },
+    });
+    expect(pushed[1]).toMatchObject({
+      type: "turn_started",
+      sessionId: "session-1",
+      turnId: "user-1",
+    });
+    expect(pushed[2]).toMatchObject({
+      type: "assistant_delta",
+      sessionId: "session-1",
+      turnId: "user-1",
+      itemId: "session-1-assistant-1",
+      payload: { text: "你好，我收到了。" },
+    });
+    expect(pushed[3]).toMatchObject({
+      type: "turn_completed",
+      sessionId: "session-1",
+      turnId: "user-1",
+      payload: { status: "completed" },
+    });
+    expect(pushed[4]).toMatchObject({
+      type: "session_status_changed",
+      sessionId: "session-1",
+      payload: { value: "idle" },
+    });
     expect(await persistence.getMessages("session-1")).toEqual([
       {
         role: "user",
@@ -289,7 +317,7 @@ describe("SessionRuntimeOrchestrator", () => {
   });
 
   it("translates tool events into tool frames and records audit events", async () => {
-    const pushed: SessionMessage[] = [];
+    const pushed: SessionEvent[] = [];
     const store = new InMemorySessionStore();
     const persistence = new SessionPersistence(
       store,
@@ -342,22 +370,36 @@ describe("SessionRuntimeOrchestrator", () => {
       (message) => pushed.push(message),
     );
 
-    expect(pushed).toEqual([
-      {
-        type: "tool_message",
-        sessionId: "session-tool",
-        messageId: "session-tool-tc-1",
-        timestamp: "2026-05-17T00:00:00.000Z",
-        payload: { name: "file.read", text: "{\"path\":\"/tmp/test.txt\"}", status: "running" },
-      },
-      {
-        type: "tool_message",
-        sessionId: "session-tool",
-        messageId: "session-tool-tc-1",
-        timestamp: "2026-05-17T00:00:00.000Z",
-        payload: { name: "file.read", text: "file contents here", status: "completed" },
-      },
+    expectTypes(pushed, [
+      "user_message_recorded",
+      "turn_started",
+      "tool_started",
+      "tool_finished",
+      "turn_completed",
+      "session_status_changed",
     ]);
+    expect(pushed[2]).toMatchObject({
+      type: "tool_started",
+      sessionId: "session-tool",
+      turnId: "user-1",
+      itemId: "session-tool-tc-1",
+      payload: {
+        name: "file.read",
+        input: { path: "/tmp/test.txt" },
+      },
+    });
+    expect(pushed[3]).toMatchObject({
+      type: "tool_finished",
+      sessionId: "session-tool",
+      turnId: "user-1",
+      itemId: "session-tool-tc-1",
+      payload: {
+        name: "file.read",
+        output: "file contents here",
+        status: "completed",
+        durationMs: 12,
+      },
+    });
     const session = await persistence.getSession("session-tool");
     expect(session?.events).toEqual([
       {
@@ -379,7 +421,7 @@ describe("SessionRuntimeOrchestrator", () => {
   });
 
   it("keeps assistant turn completion separate from later tool running frames", async () => {
-    const pushed: SessionMessage[] = [];
+    const pushed: SessionEvent[] = [];
     const store = new InMemorySessionStore();
     const persistence = new SessionPersistence(
       store,
@@ -462,62 +504,38 @@ describe("SessionRuntimeOrchestrator", () => {
       (message) => pushed.push(message),
     );
 
-    expect(pushed).toEqual([
-      {
-        type: "assistant_message_start",
-        sessionId: "session-tool-running",
-        messageId: "session-tool-running-assistant-1",
-        timestamp: "2026-05-22T00:00:00.000Z",
-        payload: { role: "assistant" },
-      },
-      {
-        type: "assistant_message_end",
-        sessionId: "session-tool-running",
-        messageId: "session-tool-running-assistant-1",
-        timestamp: "2026-05-22T00:00:00.000Z",
-        payload: { status: "completed" },
-      },
-      {
-        type: "tool_message",
-        sessionId: "session-tool-running",
-        messageId: "session-tool-running-tc-1",
-        timestamp: "2026-05-22T00:00:00.000Z",
-        payload: { name: "workspace.list", text: "{}", status: "running" },
-      },
-      {
-        type: "tool_message",
-        sessionId: "session-tool-running",
-        messageId: "session-tool-running-tc-1",
-        timestamp: "2026-05-22T00:00:00.000Z",
-        payload: { name: "workspace.list", text: "[]", status: "completed" },
-      },
-      {
-        type: "assistant_message_start",
-        sessionId: "session-tool-running",
-        messageId: "session-tool-running-assistant-2",
-        timestamp: "2026-05-22T00:00:00.000Z",
-        payload: { role: "assistant" },
-      },
-      {
-        type: "assistant_message_delta",
-        sessionId: "session-tool-running",
-        messageId: "session-tool-running-assistant-2",
-        timestamp: "2026-05-22T00:00:00.000Z",
-        payload: { text: "done" },
-      },
-      {
-        type: "assistant_message_end",
-        sessionId: "session-tool-running",
-        messageId: "session-tool-running-assistant-2",
-        timestamp: "2026-05-22T00:00:00.000Z",
-        payload: { status: "completed" },
-      },
+    expectTypes(pushed, [
+      "user_message_recorded",
+      "turn_started",
+      "tool_started",
+      "tool_finished",
+      "assistant_delta",
+      "turn_completed",
+      "session_status_changed",
     ]);
-    expect(pushed.some((message) => message.type === "status")).toBe(false);
+    expect(pushed[2]).toMatchObject({
+      type: "tool_started",
+      payload: { name: "workspace.list", input: {} },
+    });
+    expect(pushed[3]).toMatchObject({
+      type: "tool_finished",
+      payload: {
+        name: "workspace.list",
+        output: "[]",
+        status: "completed",
+        durationMs: 12,
+      },
+    });
+    expect(pushed[4]).toMatchObject({
+      type: "assistant_delta",
+      itemId: "session-tool-running-assistant-2",
+      payload: { text: "done" },
+    });
+    expect(pushed.some((message) => message.type === "session_error")).toBe(false);
   });
 
   it("aborts the active run and ignores later assistant/tool output", async () => {
-    const pushed: SessionMessage[] = [];
+    const pushed: SessionEvent[] = [];
     const store = new InMemorySessionStore();
     const persistence = new SessionPersistence(
       store,
@@ -573,22 +591,23 @@ describe("SessionRuntimeOrchestrator", () => {
     await runPromise;
 
     expect(runtimeSignal?.aborted).toBe(true);
-    expect(pushed).toEqual([
-      {
-        type: "assistant_message_end",
-        sessionId: "session-interrupt",
-        messageId: "session-interrupt-interrupted",
-        timestamp: "2026-05-17T00:00:00.000Z",
-        payload: { status: "interrupted" },
-      },
-      {
-        type: "status",
-        sessionId: "session-interrupt",
-        messageId: "session-interrupt-status",
-        timestamp: "2026-05-17T00:00:00.000Z",
-        payload: { value: "interrupted" },
-      },
+    expectTypes(pushed, [
+      "user_message_recorded",
+      "turn_started",
+      "turn_completed",
+      "session_status_changed",
     ]);
+    expect(pushed[2]).toMatchObject({
+      type: "turn_completed",
+      sessionId: "session-interrupt",
+      turnId: "user-1",
+      payload: { status: "interrupted" },
+    });
+    expect(pushed[3]).toMatchObject({
+      type: "session_status_changed",
+      sessionId: "session-interrupt",
+      payload: { value: "interrupted" },
+    });
     expect(await persistence.getMessages("session-interrupt")).toEqual([
       { role: "user", content: "停止这轮" },
     ]);
@@ -603,7 +622,7 @@ describe("SessionRuntimeOrchestrator", () => {
   });
 
   it("reports running sessions and waits for interrupt cleanup", async () => {
-    const pushed: SessionMessage[] = [];
+    const pushed: SessionEvent[] = [];
     const persistence = new SessionPersistence(
       new InMemorySessionStore(),
       () => "2026-05-20T00:00:00.000Z",
@@ -654,26 +673,27 @@ describe("SessionRuntimeOrchestrator", () => {
         code: "run_interrupted",
       },
     ]);
-    expect(pushed).toEqual([
-      {
-        type: "assistant_message_end",
-        sessionId: "session-delete-running",
-        messageId: "session-delete-running-interrupted",
-        timestamp: "2026-05-20T00:00:00.000Z",
-        payload: { status: "interrupted" },
-      },
-      {
-        type: "status",
-        sessionId: "session-delete-running",
-        messageId: "session-delete-running-status",
-        timestamp: "2026-05-20T00:00:00.000Z",
-        payload: { value: "interrupted" },
-      },
+    expectTypes(pushed, [
+      "user_message_recorded",
+      "turn_started",
+      "turn_completed",
+      "session_status_changed",
     ]);
+    expect(pushed[2]).toMatchObject({
+      type: "turn_completed",
+      sessionId: "session-delete-running",
+      turnId: "user-1",
+      payload: { status: "interrupted" },
+    });
+    expect(pushed[3]).toMatchObject({
+      type: "session_status_changed",
+      sessionId: "session-delete-running",
+      payload: { value: "interrupted" },
+    });
   });
 
   it("times out interrupt cleanup when the runtime ignores abort", async () => {
-    const pushed: SessionMessage[] = [];
+    const pushed: SessionEvent[] = [];
     const persistence = new SessionPersistence(
       new InMemorySessionStore(),
       () => "2026-05-22T00:00:00.000Z",
@@ -708,22 +728,23 @@ describe("SessionRuntimeOrchestrator", () => {
 
     expect(outcome).toBe("resolved");
     expect(orchestrator.isSessionRunning("session-stubborn-runtime")).toBe(false);
-    expect(pushed).toEqual([
-      {
-        type: "assistant_message_end",
-        sessionId: "session-stubborn-runtime",
-        messageId: "session-stubborn-runtime-interrupted",
-        timestamp: "2026-05-22T00:00:00.000Z",
-        payload: { status: "interrupted" },
-      },
-      {
-        type: "status",
-        sessionId: "session-stubborn-runtime",
-        messageId: "session-stubborn-runtime-status",
-        timestamp: "2026-05-22T00:00:00.000Z",
-        payload: { value: "interrupted" },
-      },
+    expectTypes(pushed, [
+      "user_message_recorded",
+      "turn_started",
+      "turn_completed",
+      "session_status_changed",
     ]);
+    expect(pushed[2]).toMatchObject({
+      type: "turn_completed",
+      sessionId: "session-stubborn-runtime",
+      turnId: "user-1",
+      payload: { status: "interrupted" },
+    });
+    expect(pushed[3]).toMatchObject({
+      type: "session_status_changed",
+      sessionId: "session-stubborn-runtime",
+      payload: { value: "interrupted" },
+    });
     expect((await persistence.getSession("session-stubborn-runtime"))?.events).toEqual([
       {
         type: "error",
@@ -735,7 +756,7 @@ describe("SessionRuntimeOrchestrator", () => {
   });
 
   it("records interrupted instead of runtime error when an aborted run rejects without AbortError", async () => {
-    const pushed: SessionMessage[] = [];
+    const pushed: SessionEvent[] = [];
     const persistence = new SessionPersistence(
       new InMemorySessionStore(),
       () => "2026-05-22T00:00:00.000Z",
@@ -773,22 +794,23 @@ describe("SessionRuntimeOrchestrator", () => {
     );
     await runPromise;
 
-    expect(pushed).toEqual([
-      {
-        type: "assistant_message_end",
-        sessionId: "session-non-abort-reject",
-        messageId: "session-non-abort-reject-interrupted",
-        timestamp: "2026-05-22T00:00:00.000Z",
-        payload: { status: "interrupted" },
-      },
-      {
-        type: "status",
-        sessionId: "session-non-abort-reject",
-        messageId: "session-non-abort-reject-status",
-        timestamp: "2026-05-22T00:00:00.000Z",
-        payload: { value: "interrupted" },
-      },
+    expectTypes(pushed, [
+      "user_message_recorded",
+      "turn_started",
+      "turn_completed",
+      "session_status_changed",
     ]);
+    expect(pushed[2]).toMatchObject({
+      type: "turn_completed",
+      sessionId: "session-non-abort-reject",
+      turnId: "user-1",
+      payload: { status: "interrupted" },
+    });
+    expect(pushed[3]).toMatchObject({
+      type: "session_status_changed",
+      sessionId: "session-non-abort-reject",
+      payload: { value: "interrupted" },
+    });
     expect((await persistence.getSession("session-non-abort-reject"))?.events).toEqual([
       {
         type: "error",
@@ -801,7 +823,7 @@ describe("SessionRuntimeOrchestrator", () => {
 
   it("pushes and records an error when runtime execution fails", async () => {
 
-    const pushed: SessionMessage[] = [];
+    const pushed: SessionEvent[] = [];
     const persistence = new SessionPersistence(
       new InMemorySessionStore(),
       () => "2026-05-11T00:00:00.000Z",
@@ -822,17 +844,31 @@ describe("SessionRuntimeOrchestrator", () => {
       (message) => pushed.push(message),
     );
 
-    expect(pushed).toEqual([
-      {
-        type: "error",
-        sessionId: "session-4",
-        messageId: "session-4-error",
-        timestamp: "2026-05-11T00:00:00.000Z",
-        payload: {
-          message: "Missing apiKey in ~/.spotAgent/settings.json. 请先在设置页完成模型配置。",
-        },
-      },
+    expectTypes(pushed, [
+      "user_message_recorded",
+      "turn_started",
+      "session_error",
+      "turn_completed",
+      "session_status_changed",
     ]);
+    expect(pushed[2]).toMatchObject({
+      type: "session_error",
+      sessionId: "session-4",
+      payload: {
+        message: "Missing apiKey in ~/.spotAgent/settings.json. 请先在设置页完成模型配置。",
+      },
+    });
+    expect(pushed[3]).toMatchObject({
+      type: "turn_completed",
+      sessionId: "session-4",
+      turnId: "user-1",
+      payload: { status: "failed" },
+    });
+    expect(pushed[4]).toMatchObject({
+      type: "session_status_changed",
+      sessionId: "session-4",
+      payload: { value: "failed" },
+    });
     const session = await persistence.getSession("session-4");
     expect(session?.messages).toEqual([{ role: "user", content: "你好" }]);
     expect(session?.events).toEqual([

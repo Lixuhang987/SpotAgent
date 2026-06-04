@@ -2,16 +2,18 @@ import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
 import type { AgentMessage } from "@handagent/core/runtime/AgentMessage.ts";
 import type { AgentRuntimeEvent } from "@handagent/core/runtime/AgentRuntime.ts";
-import type { SessionMessage } from "@handagent/core/protocol/SessionMessage.ts";
 import type { PlatformBridgeMessage } from "@handagent/core/protocol/PlatformBridgeMessage.ts";
+import type { SessionCommand } from "@handagent/core/protocol/SessionCommand.ts";
+import type { ClientResponse } from "@handagent/core/protocol/ClientResponse.ts";
+import type { ServerRequest } from "@handagent/core/protocol/ServerRequest.ts";
 import type { FilePermissionPolicy } from "@handagent/core/permission/FilePermissionPolicy.ts";
 import type { MCPClient } from "@handagent/core/mcp/MCPClient.ts";
 import { InMemorySessionStore } from "@handagent/core/storage/index.ts";
-import type { SessionRouter } from "../../src/session/SessionRouter.ts";
-import { SessionRouter as RealSessionRouter } from "../../src/session/SessionRouter.ts";
-import { SessionPersistence } from "../../src/session/SessionPersistence.ts";
 import { SessionPermissionBridge } from "../../src/bridges/SessionPermissionBridge.ts";
+import { SessionPersistence } from "../../src/session/SessionPersistence.ts";
 import { SessionRuntimeOrchestrator } from "../../src/session/SessionRuntimeOrchestrator.ts";
+import { SessionCommandRouter } from "../../src/session/SessionCommandRouter.ts";
+import { SessionEventPublisher } from "../../src/session/SessionEventPublisher.ts";
 import { SessionWorkspaceAskBridge } from "../../src/bridges/SessionWorkspaceAskBridge.ts";
 import {
   attachSessionSocketHandlers,
@@ -27,11 +29,11 @@ class FakeSocket extends EventEmitter {
   }
 }
 
-function userMessage(sessionId: string, text: string): SessionMessage {
+function turnStart(sessionId: string, text: string): SessionCommand {
   return {
-    type: "user_message",
+    type: "turn_start",
     sessionId,
-    messageId: `message-${sessionId}-${text}`,
+    commandId: `message-${sessionId}-${text}`,
     timestamp: new Date().toISOString(),
     payload: { text },
   };
@@ -50,41 +52,55 @@ function platformHello(messageId: string): PlatformBridgeMessage {
 function permissionResponse(
   requestId: string,
   decision: "allow" | "deny" = "allow",
-): SessionMessage {
+): ClientResponse {
   return {
-    type: "permission_response",
-    sessionId: "session-A",
-    messageId: `response-${requestId}`,
+    type: "permission_answer",
+    requestId,
     timestamp: new Date().toISOString(),
-    payload: { requestId, decision, scope: "session" },
+    payload: { decision, scope: "session" },
   };
 }
 
-function workspaceAskResponse(requestId: string, workspaceId: string): SessionMessage {
+function workspaceAskResponse(requestId: string, workspaceId: string): ClientResponse {
   return {
-    type: "workspace_ask_response",
-    sessionId: "session-A",
-    messageId: `workspace-response-${requestId}`,
+    type: "workspace_answer",
+    requestId,
     timestamp: new Date().toISOString(),
-    payload: { requestId, workspaceId },
+    payload: { workspaceId },
   };
 }
 
 async function emitMessage(
   socket: FakeSocket,
-  message: SessionMessage | PlatformBridgeMessage,
+  message: SessionCommand | ClientResponse | PlatformBridgeMessage,
 ): Promise<void> {
   socket.emit("message", Buffer.from(JSON.stringify(message)));
   await Promise.resolve();
 }
 
-describe("attachSessionSocketHandlers", () => {
-  it("binds every user_message session on a socket and clears them all on close", async () => {
-    const socket = new FakeSocket();
-    const router = {
+function makeHandlerDependencies(options: {
+  commandRouter?: Partial<SessionCommandRouter>;
+  eventPublisher?: SessionEventPublisher;
+} = {}) {
+  return {
+    commandRouter: {
       receive: vi.fn(async () => {}),
       interruptSession: vi.fn(),
-    } as unknown as SessionRouter;
+      handleResponse: vi.fn(),
+      ...options.commandRouter,
+    } as unknown as SessionCommandRouter,
+    eventPublisher: options.eventPublisher ?? new SessionEventPublisher(),
+  };
+}
+
+function lastSent<T>(socket: FakeSocket): T {
+  return JSON.parse(socket.sent.at(-1) ?? "null") as T;
+}
+
+describe("attachSessionSocketHandlers", () => {
+  it("binds every turn_start session on a socket and clears them all on close", async () => {
+    const socket = new FakeSocket();
+    const { commandRouter, eventPublisher } = makeHandlerDependencies();
     const permissionBridge = {
       bindSession: vi.fn().mockReturnValueOnce(101).mockReturnValueOnce(102),
       unbindSession: vi.fn().mockReturnValue(true),
@@ -94,13 +110,14 @@ describe("attachSessionSocketHandlers", () => {
     } as unknown as FilePermissionPolicy;
 
     attachSessionSocketHandlers(socket as never, {
-      router,
+      commandRouter,
+      eventPublisher,
       permissionBridge,
       permissionPolicy,
     });
 
-    await emitMessage(socket, userMessage("session-A", "first"));
-    await emitMessage(socket, userMessage("session-B", "second"));
+    await emitMessage(socket, turnStart("session-A", "first"));
+    await emitMessage(socket, turnStart("session-B", "second"));
 
     expect(permissionBridge.bindSession).toHaveBeenCalledWith(
       "session-A",
@@ -115,18 +132,15 @@ describe("attachSessionSocketHandlers", () => {
 
     expect(permissionBridge.unbindSession).toHaveBeenCalledWith("session-A", 101);
     expect(permissionBridge.unbindSession).toHaveBeenCalledWith("session-B", 102);
-    expect(router.interruptSession).toHaveBeenCalledWith("session-A", expect.any(Function));
-    expect(router.interruptSession).toHaveBeenCalledWith("session-B", expect.any(Function));
+    expect(commandRouter.interruptSession).toHaveBeenCalledWith("session-A");
+    expect(commandRouter.interruptSession).toHaveBeenCalledWith("session-B");
     expect(permissionPolicy.clearSessionRules).toHaveBeenCalledWith("session-A");
     expect(permissionPolicy.clearSessionRules).toHaveBeenCalledWith("session-B");
   });
 
   it("does not clear a session binding or session rules when a stale socket closes after reconnect", async () => {
     const socket = new FakeSocket();
-    const router = {
-      receive: vi.fn(async () => {}),
-      interruptSession: vi.fn(),
-    } as unknown as SessionRouter;
+    const { commandRouter, eventPublisher } = makeHandlerDependencies();
     const permissionBridge = {
       bindSession: vi.fn().mockReturnValue(101),
       unbindSession: vi.fn().mockReturnValue(false),
@@ -136,55 +150,55 @@ describe("attachSessionSocketHandlers", () => {
     } as unknown as FilePermissionPolicy;
 
     attachSessionSocketHandlers(socket as never, {
-      router,
+      commandRouter,
+      eventPublisher,
       permissionBridge,
       permissionPolicy,
     });
 
-    await emitMessage(socket, userMessage("session-A", "first"));
+    await emitMessage(socket, turnStart("session-A", "first"));
     socket.emit("close");
 
     expect(permissionBridge.unbindSession).toHaveBeenCalledWith("session-A", 101);
-    expect(router.interruptSession).not.toHaveBeenCalled();
+    expect(commandRouter.interruptSession).not.toHaveBeenCalled();
     expect(permissionPolicy.clearSessionRules).not.toHaveBeenCalled();
   });
 
   it("ignores stale permission responses and only closes pending asks owned by the stale socket", async () => {
     const firstSocket = new FakeSocket();
     const secondSocket = new FakeSocket();
-    const router = {
-      receive: vi.fn(async () => {}),
-    } as unknown as SessionRouter;
+    const firstDeps = makeHandlerDependencies();
+    const secondDeps = makeHandlerDependencies();
     const permissionBridge = new SessionPermissionBridge();
     const permissionPolicy = {
       clearSessionRules: vi.fn(),
     } as unknown as FilePermissionPolicy;
 
     attachSessionSocketHandlers(firstSocket as never, {
-      router,
+      ...firstDeps,
       permissionBridge,
       permissionPolicy,
     });
     attachSessionSocketHandlers(secondSocket as never, {
-      router,
+      ...secondDeps,
       permissionBridge,
       permissionPolicy,
     });
 
-    await emitMessage(firstSocket, userMessage("session-A", "first"));
+    await emitMessage(firstSocket, turnStart("session-A", "first"));
     const staleAsk = permissionBridge.ask({
       sessionId: "session-A",
       toolName: "file.write",
       toolCallId: "tool-A",
       arguments: { path: "a.txt" },
     });
-    const staleRequest = JSON.parse(firstSocket.sent[0]) as SessionMessage;
-    if (staleRequest.type !== "permission_request") throw new Error("type");
+    const staleRequest = lastSent<ServerRequest>(firstSocket);
+    if (staleRequest.type !== "permission_ask") throw new Error("type");
 
-    await emitMessage(secondSocket, userMessage("session-A", "reconnect"));
+    await emitMessage(secondSocket, turnStart("session-A", "reconnect"));
     await emitMessage(
       firstSocket,
-      permissionResponse(staleRequest.payload.requestId, "allow"),
+      permissionResponse(staleRequest.requestId, "allow"),
     );
 
     const staleOutcome = await Promise.race([
@@ -199,6 +213,7 @@ describe("attachSessionSocketHandlers", () => {
       reason: "session closed",
     });
     expect(permissionPolicy.clearSessionRules).not.toHaveBeenCalled();
+    expect(firstDeps.commandRouter.interruptSession).not.toHaveBeenCalled();
 
     const currentAsk = permissionBridge.ask({
       sessionId: "session-A",
@@ -206,57 +221,53 @@ describe("attachSessionSocketHandlers", () => {
       toolCallId: "tool-B",
       arguments: { path: "b.txt" },
     });
-    const currentRequest = JSON.parse(secondSocket.sent[0]) as SessionMessage;
-    if (currentRequest.type !== "permission_request") throw new Error("type");
+    const currentRequest = lastSent<ServerRequest>(secondSocket);
+    if (currentRequest.type !== "permission_ask") throw new Error("type");
     await emitMessage(
       secondSocket,
-      permissionResponse(currentRequest.payload.requestId, "allow"),
+      permissionResponse(currentRequest.requestId, "allow"),
     );
 
     await expect(currentAsk).resolves.toEqual({ decision: "allow", remember: "session" });
   });
 
-  it("keeps the same binding token for repeated user messages on one socket", async () => {
+  it("keeps the same binding token for repeated turn_start commands on one socket", async () => {
     const socket = new FakeSocket();
-    const router = {
-      receive: vi.fn(async () => {}),
-    } as unknown as SessionRouter;
+    const deps = makeHandlerDependencies();
     const permissionBridge = new SessionPermissionBridge();
 
     attachSessionSocketHandlers(socket as never, {
-      router,
+      ...deps,
       permissionBridge,
     });
 
-    await emitMessage(socket, userMessage("session-A", "first"));
+    await emitMessage(socket, turnStart("session-A", "first"));
     const ask = permissionBridge.ask({
       sessionId: "session-A",
       toolName: "file.write",
       toolCallId: "tool-A",
       arguments: { path: "a.txt" },
     });
-    const request = JSON.parse(socket.sent[0]) as SessionMessage;
-    if (request.type !== "permission_request") throw new Error("type");
+    const request = lastSent<ServerRequest>(socket);
+    if (request.type !== "permission_ask") throw new Error("type");
 
-    await emitMessage(socket, userMessage("session-A", "second"));
-    await emitMessage(socket, permissionResponse(request.payload.requestId, "allow"));
+    await emitMessage(socket, turnStart("session-A", "second"));
+    await emitMessage(socket, permissionResponse(request.requestId, "allow"));
 
     await expect(ask).resolves.toEqual({ decision: "allow", remember: "session" });
   });
 
   it("routes workspace ask responses through the current socket binding", async () => {
     const socket = new FakeSocket();
-    const router = {
-      receive: vi.fn(async () => {}),
-    } as unknown as SessionRouter;
+    const deps = makeHandlerDependencies();
     const workspaceAskBridge = new SessionWorkspaceAskBridge();
 
     attachSessionSocketHandlers(socket as never, {
-      router,
+      ...deps,
       workspaceAskBridge,
     });
 
-    await emitMessage(socket, userMessage("session-A", "first"));
+    await emitMessage(socket, turnStart("session-A", "first"));
     const ask = workspaceAskBridge.ask({
       sessionId: "session-A",
       toolCallId: "tool-1",
@@ -266,37 +277,35 @@ describe("attachSessionSocketHandlers", () => {
         { id: "code", name: "代码", description: "代码", isDefault: false },
       ],
     });
-    const request = JSON.parse(socket.sent[0]) as SessionMessage;
-    if (request.type !== "workspace_ask_request") throw new Error("type");
+    const request = lastSent<ServerRequest>(socket);
+    if (request.type !== "workspace_ask") throw new Error("type");
 
-    await emitMessage(socket, workspaceAskResponse(request.payload.requestId, "docs"));
+    await emitMessage(socket, workspaceAskResponse(request.requestId, "docs"));
 
     await expect(ask).resolves.toEqual({ workspaceId: "docs" });
   });
 
   it("routes permission responses for session ids that contain colons", async () => {
     const socket = new FakeSocket();
-    const router = {
-      receive: vi.fn(async () => {}),
-    } as unknown as SessionRouter;
+    const deps = makeHandlerDependencies();
     const permissionBridge = new SessionPermissionBridge();
 
     attachSessionSocketHandlers(socket as never, {
-      router,
+      ...deps,
       permissionBridge,
     });
 
-    await emitMessage(socket, userMessage("workspace:session-A", "first"));
+    await emitMessage(socket, turnStart("workspace:session-A", "first"));
     const ask = permissionBridge.ask({
       sessionId: "workspace:session-A",
       toolName: "file.write",
       toolCallId: "tool-A",
       arguments: { path: "a.txt" },
     });
-    const request = JSON.parse(socket.sent[0]) as SessionMessage;
-    if (request.type !== "permission_request") throw new Error("type");
+    const request = lastSent<ServerRequest>(socket);
+    if (request.type !== "permission_ask") throw new Error("type");
 
-    await emitMessage(socket, permissionResponse(request.payload.requestId, "allow"));
+    await emitMessage(socket, permissionResponse(request.requestId, "allow"));
 
     await expect(ask).resolves.toEqual({ decision: "allow", remember: "session" });
   });
@@ -334,20 +343,23 @@ describe("attachSessionSocketHandlers", () => {
       persistence,
       () => "2026-05-20T00:00:00.000Z",
     );
-    const router = new RealSessionRouter(
+    const eventPublisher = new SessionEventPublisher();
+    const commandRouter = new SessionCommandRouter(
       orchestrator,
       persistence,
+      eventPublisher,
       () => "2026-05-20T00:00:00.000Z",
     );
     const permissionBridge = new SessionPermissionBridge();
 
     await persistence.ensureSession("session-A");
     attachSessionSocketHandlers(socket as never, {
-      router,
+      commandRouter,
+      eventPublisher,
       permissionBridge,
     });
 
-    await emitMessage(socket, userMessage("session-A", "close me"));
+    await emitMessage(socket, turnStart("session-A", "close me"));
     await runStarted.promise;
 
     socket.emit("close");
@@ -363,9 +375,8 @@ describe("attachSessionSocketHandlers", () => {
   it("detaches bridge sockets with the token returned by attach", async () => {
     const firstSocket = new FakeSocket();
     const secondSocket = new FakeSocket();
-    const router = {
-      receive: vi.fn(async () => {}),
-    } as unknown as SessionRouter;
+    const firstDeps = makeHandlerDependencies();
+    const secondDeps = makeHandlerDependencies();
     const bridge = {
       attach: vi.fn().mockReturnValueOnce(101).mockReturnValueOnce(102),
       detach: vi.fn(),
@@ -373,11 +384,11 @@ describe("attachSessionSocketHandlers", () => {
     };
 
     attachSessionSocketHandlers(firstSocket as never, {
-      router,
+      ...firstDeps,
       bridge: bridge as never,
     });
     attachSessionSocketHandlers(secondSocket as never, {
-      router,
+      ...secondDeps,
       bridge: bridge as never,
     });
 

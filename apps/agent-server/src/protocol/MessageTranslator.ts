@@ -1,80 +1,84 @@
 import type { AgentMessage } from "@handagent/core/runtime/AgentMessage.ts";
 import type { AgentRuntimeEvent } from "@handagent/core/runtime/AgentRuntime.ts";
-import type { SessionMessage, UserMessageAttachment } from "@handagent/core/protocol/SessionMessage.ts";
+import type { SessionEvent } from "@handagent/core/protocol/SessionEvent.ts";
+import type { UserMessageAttachment } from "@handagent/core/protocol/SessionProtocolShared.ts";
 import type { ConversationMessage } from "@handagent/core/conversation/ConversationMessage.ts";
-import type { SessionEvent } from "@handagent/core/storage/index.ts";
+import type { SessionEvent as AuditSessionEvent } from "@handagent/core/storage/index.ts";
 import type { BlobStore } from "@handagent/core/blob/BlobStore.ts";
 import { parseStub, renderStub } from "@handagent/core/runtime/Stub.ts";
 
-export function toSessionMessage(
+export function toSessionEvent(
   sessionId: string,
+  turnId: string,
   event: AgentRuntimeEvent,
   timestamp: string,
 ):
   | Extract<
-      SessionMessage,
-      | { type: "assistant_message_start" }
-      | { type: "assistant_message_delta" }
-      | { type: "assistant_message_end" }
-      | { type: "tool_message" }
+      SessionEvent,
+      | { type: "assistant_delta" }
+      | { type: "tool_started" }
+      | { type: "tool_finished" }
+      | { type: "session_error" }
     >
   | null {
   switch (event.type) {
-    case "assistant_message_start":
-      return {
-        type: "assistant_message_start",
-        sessionId,
-        messageId: `${sessionId}-${event.messageId}`,
-        timestamp,
-        payload: event.payload,
-      };
     case "assistant_message_delta":
       return {
-        type: "assistant_message_delta",
+        type: "assistant_delta",
         sessionId,
-        messageId: `${sessionId}-${event.messageId}`,
+        eventId: `${sessionId}-${event.messageId}-${timestamp}-delta`,
+        turnId,
+        itemId: `${sessionId}-${event.messageId}`,
         timestamp,
-        payload: event.payload,
-      };
-    case "assistant_message_end":
-      return {
-        type: "assistant_message_end",
-        sessionId,
-        messageId: `${sessionId}-${event.messageId}`,
-        timestamp,
-        payload: event.payload,
+        payload: { text: event.payload.text },
       };
     case "tool_call":
       return {
-        type: "tool_message",
+        type: "tool_started",
         sessionId,
-        messageId: `${sessionId}-${event.toolCallId}`,
+        eventId: `${sessionId}-${event.toolCallId}-${timestamp}-start`,
+        turnId,
+        itemId: `${sessionId}-${event.toolCallId}`,
         timestamp,
         payload: {
           name: event.toolName,
-          text: stringifyToolInput(event.input),
-          status: "running",
+          input: event.input,
         },
       };
     case "tool_result":
       return {
-        type: "tool_message",
+        type: "tool_finished",
         sessionId,
-        messageId: `${sessionId}-${event.toolCallId}`,
+        eventId: `${sessionId}-${event.toolCallId}-${timestamp}-finish`,
+        turnId,
+        itemId: `${sessionId}-${event.toolCallId}`,
         timestamp,
         payload: {
           name: event.toolName,
-          text: event.output,
           status: event.status === "success" ? "completed" : "failed",
+          output: event.output,
+          durationMs: event.durationMs,
         },
       };
-    case "permission_decision":
     case "runtime_error":
+      return {
+        type: "session_error",
+        sessionId,
+        eventId: `${sessionId}-${timestamp}-error`,
+        timestamp,
+        payload: {
+          code: event.code,
+          message: event.message,
+        },
+      };
+    case "assistant_message_start":
+    case "assistant_message_end":
+    case "permission_decision":
       return null;
   }
 }
 
-export function toAuditEvent(event: AgentRuntimeEvent, timestamp: string): SessionEvent | null {
+export function toAuditEvent(event: AgentRuntimeEvent, timestamp: string): AuditSessionEvent | null {
   switch (event.type) {
     case "tool_call":
       return {
@@ -194,14 +198,6 @@ export function toErrorMessage(error: unknown): string {
     return error.message;
   }
   return "Agent runtime failed.";
-}
-
-function stringifyToolInput(input: Record<string, unknown>): string {
-  try {
-    return JSON.stringify(input);
-  } catch {
-    return "";
-  }
 }
 
 function parseRuntimeUserContent(content: string): Extract<AgentMessage, { role: "user" }>["content"] {

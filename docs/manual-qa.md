@@ -41,7 +41,8 @@
 1. 从当前 worktree 执行 `bash ./scripts/swiftw run HandAgentDesktop`。
 1. 打开 SessionWindow 后连续创建两个 session tab，确认 desktop 侧只建立一条到 `ws://127.0.0.1:4317/api/session` 的连接。
 1. 在 tab A 发送普通 prompt，在 tab B 发送另一条普通 prompt，确认两边的 assistant / tool / permission / workspace 事件不会串到错误 tab。
-1. 关闭 tab A，确认 tab B 仍可继续追问；再次打开 tab A 对应历史会话，确认会重新收到 `session_snapshot`。
+1. 关闭 tab A，确认 client 会发送 `session_unsubscribe`，tab B 仍可继续追问；再次打开 tab A 对应历史会话，确认会重新发送 `session_subscribe` 并收到 `session_snapshot`。
+1. 在 tab A 触发一次需要 permission 或 workspace 选择的工具场景，确认 `permission_ask` / `workspace_ask` 只回到当前 `sessionId` 对应 tab，不会串到其他 tab。
 1. 在 agent-server 运行中手动重启 desktop 或 kill `agent-server` 后恢复，确认共享连接会自动重连、左侧历史会刷新、已打开 tab 会重新订阅并继续可用。
 
 ## 懒加载工具激活（P1）

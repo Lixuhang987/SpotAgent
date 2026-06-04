@@ -37,7 +37,7 @@
 ### 5. 输入边界（产品红线）
 
 - 只有用户主动输入和用户主动选区可以作为会话初始上下文；屏幕 / 窗口 / 文件 / 剪贴板 / App 状态一律通过 tool 按需读取。
-- 宿主层只通过 `WebSocket + SessionMessage` 与 agent-server 通信；**不组装 LLM 消息、不读取 runtime 内部状态、不直接执行 tool 编排**。
+- 宿主层只通过 `WebSocket + SessionCommand / SessionEvent / ServerRequest / ClientResponse` 与 agent-server 通信；**不组装 LLM 消息、不读取 runtime 内部状态、不直接执行 tool 编排**。
 - 快捷键配置只保存在宿主层本地（UserDefaults，由 `KeyboardShortcuts` 库管理），不下沉到 runtime。
 
 ### 6. 点击区域：视觉边界 = 可交互边界
@@ -68,7 +68,7 @@
 - [Coordinator/](Sources/Coordinator/coordinator.md) — `AppCoordinator` 单向事件流
 - [Theme/](Sources/Theme/theme.md) — 视觉 token 与 Environment 注入
 - [PromptPanel/](Sources/PromptPanel/prompt-panel.md) — 命令面板 View+ViewModel+Controller+Styles
-- [SessionWindow/](Sources/SessionWindow/session-window.md) — 单窗口多 tab 会话工作区、历史侧栏、权限气泡与 WebSocket 客户端
+- [SessionWindow/](Sources/SessionWindow/session-window.md) — 单窗口多 tab 会话工作区、历史侧栏、权限气泡与共享会话连接
 - [StatusBubble/](Sources/StatusBubble/status-bubble.md) — 右下角状态气泡
 - [Settings/](Sources/Settings/settings.md) — 设置窗口 Tab 容器（model / tools / permissions / shortcuts / workspaces）
 - [AppServices/](Sources/AppServices/app-services.md) — 跨模块共享服务（AgentServer / AgentSettings / Hotkey / Lifecycle / PlatformBridge / SelectionCapture / Session）
@@ -104,6 +104,8 @@ sequenceDiagram
   participant Coord as AppCoordinator
   participant Panel as PromptPanel
   participant Window as SessionWindow
+  participant Conn as AppServerConnection
+  participant Bus as SessionEventBus
   participant Server as agent-server
 
   User->>Hotkey: 全局热键
@@ -111,9 +113,12 @@ sequenceDiagram
   Coord->>Panel: show()
   User->>Panel: 输入并提交
   Panel->>Coord: send(.submitPrompt)
-  Coord->>Window: NSWindow + SessionWindowViewModel
-  Window->>Server: WebSocket
-  Server-->>Window: SessionEvent 流
+  Coord->>Window: NSWindow + SessionWindowLifecycle
+  Window->>Conn: 进程级唯一共享连接
+  Conn->>Server: WebSocket 文本帧
+  Server-->>Conn: command / event / request / response
+  Conn-->>Bus: SessionProtocolClient 解码后按 sessionId 分发
+  Bus-->>Window: SessionWindowViewModel / SessionTabViewModel 订阅消费
 ```
 
 ## 关键 DTO
@@ -150,3 +155,6 @@ sequenceDiagram
 - `AgentServerService` 已实现指数退避重启（最多 5 次），多次失败时通过 `onFatalError` 回调上抛 Coordinator 弹原生 alert（详见 [agent-server.md](Sources/AppServices/AgentServer/agent-server.md)）。
 - node 子进程 stdout/stderr 通过 Pipe 捕获但未暴露 UI（仅防 fd 泄漏）。
 - 设置窗口与 Session 窗口共享 `AppActivationPolicyCoordinator`，全部关闭后 app 切回 `.accessory`。
+- desktop 主会话链路是进程级唯一 `AppServerConnection`。`SessionWindow` 通过 `SessionEventBus` 按 `sessionId` 分发事件，tab 不再各自持有主 socket。
+- `SessionProtocolClient` 负责共享连接上的 command / event / request / response 编解码；`SessionWindowViewModel` / `SessionTabViewModel` 只围绕订阅、发命令、发回执和本地 UI 状态工作。
+- `LegacySessionSocketClient` 仅保留为兼容层，不是当前桌面端主路径。

@@ -1,6 +1,6 @@
 # agent-server
 
-`apps/agent-server` 是本地 WebSocket 会话桥（Node + TypeScript）。desktop 将它作为子进程启动，它监听 `ws://127.0.0.1:4317/api/session`，把桌面端的 `SessionMessage` 路由到 core `AgentRuntime`，并通过反向 bridge 向 desktop 请求平台能力、权限审批和 workspace 选择。
+`apps/agent-server` 是本地 WebSocket 会话桥（Node + TypeScript）。desktop 将它作为子进程启动，它监听 `ws://127.0.0.1:4317/api/session`，接收 `PlatformBridgeMessage`、`SessionCommand`、`ClientResponse` 三类顶层消息，驱动 core `AgentRuntime`，并通过反向 bridge 向 desktop 请求平台能力、权限审批和 workspace 选择。
 
 ## 直接子节点
 
@@ -15,9 +15,9 @@
 
 ```mermaid
 flowchart LR
-  A["apps/desktop<br/>Swift / SwiftUI"] -->|"SessionMessage / PlatformBridgeMessage"| B["apps/agent-server<br/>Node WebSocket bridge"]
+  A["apps/desktop<br/>Swift / SwiftUI"] -->|"SessionCommand / ClientResponse / PlatformBridgeMessage"| B["apps/agent-server<br/>Node WebSocket bridge"]
   B --> C["@handagent/core<br/>runtime / tools / storage / protocol"]
-  B -->|"platform_request / permission_request / workspace_ask_request"| A
+  B -->|"ServerRequest / PlatformBridgeMessage"| A
 ```
 
 ## 启动与组合
@@ -36,24 +36,33 @@ node --experimental-transform-types --experimental-specifier-resolution=node app
 4. 通过 `SettingsBackedToolRegistry` 注册 builtin tools。
 5. 通过 `SettingsBackedLLMClient` 或 `MockLLMClient` 选择 LLM 模式。
 6. 按 session 缓存 `AgentRuntime`，注入 session 级 tool registry、permission policy、blob store 和 turn summarizer。
-7. 创建 `SessionPersistence`、`SessionRuntimeOrchestrator`、`SessionRouter`。
-8. 启动 WebSocketServer，给每条 socket 挂载 session/platform/permission/workspace 分派逻辑。
+7. 创建 `SessionPersistence`、`SessionRuntimeOrchestrator`、`SessionEventPublisher`、`SessionCommandRouter`。
+8. 启动 WebSocketServer，给每条 socket 挂载 `PlatformBridgeMessage / ClientResponse / SessionCommand` 分派逻辑，并维护连接级 session 订阅与解绑。
 
 ## 主消息流
 
 ```mermaid
 flowchart TD
-  A["desktop SessionSocketClient"] --> B["server/attachSessionSocketHandlers"]
-  B --> C{"platform / response / user message?"}
-  C -- "platform" --> D["bridges/WebSocketPlatformBridge"]
-  C -- "permission/workspace response" --> E["bridges/*Bridge.handleResponse"]
-  C -- "session message" --> F["session/SessionRouter"]
+  A["desktop shared AppServerConnection"] --> B["server/attachSessionSocketHandlers"]
+  B --> C{"PlatformBridgeMessage / ClientResponse / SessionCommand"}
+  C -- "PlatformBridgeMessage" --> D["bridges/WebSocketPlatformBridge"]
+  C -- "ClientResponse" --> E["bridges/SessionPermissionBridge<br/>bridges/SessionWorkspaceAskBridge"]
+  C -- "SessionCommand" --> F["session/SessionCommandRouter"]
   F --> G["session/SessionRuntimeOrchestrator"]
-  G --> H["@handagent/core AgentRuntime"]
-  H --> I["protocol/MessageTranslator"]
-  I --> J["desktop SessionWindow"]
-  G --> K["session/SessionPersistence"]
+  F --> H["session/SessionEventPublisher"]
+  G --> I["@handagent/core AgentRuntime"]
+  I --> J["protocol/MessageTranslator"]
+  J --> H
+  H --> K["desktop SessionWindow"]
+  G --> L["session/SessionPersistence"]
 ```
+
+## 协议主干
+
+- socket 顶层只接收三类消息：`PlatformBridgeMessage`、`SessionCommand`、`ClientResponse`。
+- 会话事件主干统一走 `SessionEvent`；`session_snapshot` 是订阅或重连后的恢复入口。
+- permission / workspace 不再走旧会话 union，统一由 server 发 `ServerRequest`，desktop 回 `ClientResponse`。
+- 单条 desktop 连接可以同时订阅多个 session；`session_subscribe` / `session_unsubscribe` 只改变当前连接的订阅集合。
 
 ## 与文件系统约定
 
@@ -61,7 +70,7 @@ flowchart TD
 |------|--------|--------|------|
 | `~/.spotAgent/settings.json` | desktop settings | `settings/` | LLM provider/model/API 与 builtin tool 开关；按文件 stamp 热加载 |
 | `~/.spotAgent/sessions/<id>.json` | `session/SessionPersistence` | agent-server / desktop 历史列表 | `PersistedSession`，包含 messages 与 events |
-| `~/.spotAgent/blobs/` | `protocol/composeUserContent`、core runtime summary | LLM adapter /后续 tool | 图片附件、大段 tool 输出与 summary 元数据 |
+| `~/.spotAgent/blobs/` | `protocol/composeUserContent`、core runtime summary | LLM adapter / 后续 tool | 图片附件、大段 tool 输出与 summary 元数据 |
 | `~/.spotAgent/log/` | `FileNetworkLogger` | 人工排查 | LLM 请求/响应 JSONL |
 | `~/.spotAgent/workspaces.json` | desktop settings + core registry | agent-server / desktop | workspace 注册表 |
 | `~/.spotAgent/permissions.json` | core `FilePermissionPolicy` | agent-server | 永久权限规则 |
@@ -81,7 +90,7 @@ open dist/HandAgentDesktop.app
 
 ## 编辑约束
 
-- 不在 `agent-server` 内定义跨进程 DTO；会话帧走 `@handagent/core/protocol/SessionMessage.ts`，平台帧走 `@handagent/core/protocol/PlatformBridgeMessage.ts`。
+- 不在 `agent-server` 内定义跨进程 DTO；会话命令走 `@handagent/core/protocol/SessionCommand.ts`，会话事件走 `@handagent/core/protocol/SessionEvent.ts`，请求回流走 `ServerRequest` / `ClientResponse`，平台帧走 `@handagent/core/protocol/PlatformBridgeMessage.ts`。
 - 不 import macOS、Swift、AppKit、SwiftUI 或 browser-only 模块；平台能力一律经 `PlatformAdapter` / `PlatformBridge`。
 - 新增源码子目录时，更新 [src/src.md](/Users/mu9/proj/handAgent/apps/agent-server/src/src.md)；新增测试子目录时，更新 [tests/tests.md](/Users/mu9/proj/handAgent/apps/agent-server/tests/tests.md)。
 - 修改 TypeScript 后必须重启 desktop app 才能生效，无 hot reload。

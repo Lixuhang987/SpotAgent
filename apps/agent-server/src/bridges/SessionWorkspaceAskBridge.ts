@@ -1,15 +1,16 @@
 import { randomUUID } from "node:crypto";
 import type {
-  SessionMessage,
   WorkspaceAskCandidate,
-} from "@handagent/core/protocol/SessionMessage.ts";
+} from "@handagent/core/protocol/SessionProtocolShared.ts";
+import type { ClientResponse } from "@handagent/core/protocol/ClientResponse.ts";
+import type { ServerRequest } from "@handagent/core/protocol/ServerRequest.ts";
 import type {
   WorkspaceAskResolver,
   WorkspaceAskUserResult,
 } from "@handagent/core/tools/builtins/WorkspaceAskUserTool.ts";
 import type { SessionBindingToken } from "./SessionPermissionBridge.ts";
 
-type Send = (message: SessionMessage) => void;
+type Send = (message: Extract<ServerRequest, { type: "workspace_ask" }>) => void;
 
 type PendingJob = {
   requestId: string;
@@ -91,23 +92,22 @@ export class SessionWorkspaceAskBridge {
     });
   };
 
-  handleResponse(payload: {
-    requestId: string;
-    workspaceId?: string;
-    cancelled?: boolean;
-  }, token?: SessionBindingToken): void {
-    const sessionId = sessionIdFromRequestId(payload.requestId);
+  handleResponse(
+    response: Extract<ClientResponse, { type: "workspace_answer" }>,
+    token?: SessionBindingToken,
+  ): void {
+    const sessionId = sessionIdFromRequestId(response.requestId);
     const pending = this.active.get(sessionId);
-    if (!pending || pending.requestId !== payload.requestId) return;
+    if (!pending || pending.requestId !== response.requestId) return;
     if (token !== undefined && pending.token !== token) return;
     const binding = this.sessions.get(sessionId);
     if (!binding || binding.token !== pending.token) return;
 
     this.resolveJob(
       pending,
-      payload.cancelled || !payload.workspaceId
+      response.payload.cancelled || !response.payload.workspaceId
         ? { cancelled: true }
-        : { workspaceId: payload.workspaceId },
+        : { workspaceId: response.payload.workspaceId },
     );
   }
 
@@ -135,12 +135,11 @@ export class SessionWorkspaceAskBridge {
     }, this.defaultTimeoutMs);
 
     next.send({
-      type: "workspace_ask_request",
+      type: "workspace_ask",
+      requestId: next.requestId,
       sessionId,
-      messageId: next.requestId,
       timestamp: new Date().toISOString(),
       payload: {
-        requestId: next.requestId,
         toolCallId: next.toolCallId,
         prompt: next.prompt,
         candidates: next.candidates,

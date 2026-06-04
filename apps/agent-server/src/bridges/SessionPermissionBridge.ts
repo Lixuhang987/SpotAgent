@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type { AskResolver } from "@handagent/core/permission/FilePermissionPolicy.ts";
-import type { SessionMessage } from "@handagent/core/protocol/SessionMessage.ts";
+import type { ClientResponse } from "@handagent/core/protocol/ClientResponse.ts";
+import type { ServerRequest } from "@handagent/core/protocol/ServerRequest.ts";
 
-type Send = (message: SessionMessage) => void;
+type Send = (message: Extract<ServerRequest, { type: "permission_ask" }>) => void;
 export type SessionBindingToken = number;
 
 type Pending = {
@@ -81,12 +82,11 @@ export class SessionPermissionBridge {
       });
 
       binding.send({
-        type: "permission_request",
+        type: "permission_ask",
+        requestId,
         sessionId,
-        messageId: requestId,
         timestamp: new Date().toISOString(),
         payload: {
-          requestId,
           toolName: request.toolName,
           toolCallId: request.toolCallId,
           arguments: request.arguments,
@@ -96,24 +96,22 @@ export class SessionPermissionBridge {
     });
   };
 
-  handleResponse(payload: {
-    requestId: string;
-    decision: "allow" | "deny";
-    scope?: "once" | "session" | "always";
-    reason?: string;
-  }, token?: SessionBindingToken): void {
-    const pending = this.pending.get(payload.requestId);
+  handleResponse(
+    response: Extract<ClientResponse, { type: "permission_answer" }>,
+    token?: SessionBindingToken,
+  ): void {
+    const pending = this.pending.get(response.requestId);
     if (!pending) return;
     if (token !== undefined && pending.token !== token) return;
     const binding = this.sessions.get(pending.sessionId);
     if (!binding || binding.token !== pending.token) return;
 
     clearTimeout(pending.timeout);
-    this.pending.delete(payload.requestId);
+    this.pending.delete(response.requestId);
     pending.resolve({
-      decision: payload.decision,
-      remember: payload.scope,
-      reason: payload.reason,
+      decision: response.payload.decision,
+      remember: response.payload.scope,
+      reason: response.payload.reason,
     });
   }
 

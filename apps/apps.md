@@ -13,7 +13,8 @@
 
 ```mermaid
 flowchart LR
-  A[apps/desktop<br/>macOS 宿主] -->|SessionMessage / PlatformBridgeMessage WS| B[apps/agent-server<br/>本地会话桥]
+  A[apps/desktop<br/>macOS 宿主] -->|SessionCommand / ClientResponse / PlatformBridgeMessage WS| B[apps/agent-server<br/>本地会话桥]
+  B -->|SessionEvent / ServerRequest| A
   B --> C[packages/core<br/>runtime / tool / LLM]
   A -->|PlatformBridge 反向 IPC| B
 ```
@@ -27,8 +28,9 @@ flowchart LR
 
 ### 2. 会话交互
 
-- 用户提交 prompt 后，`AppCoordinator` 创建 `SessionWindow` 与 `SessionViewModel`。
-- `SessionSocketClient` 通过 `agent-server` 发送 `SessionMessage`，由后端 `SessionRouter` 路由并交给 `SessionRuntimeOrchestrator` 驱动 `AgentRuntime`。
+- 用户提交 prompt 后，`AppCoordinator` 创建或聚焦 `SessionWindow`。
+- `SessionWindowLifecycle` 为 desktop 进程维护唯一 `AppServerConnection`；tab 通过 `SessionEventBus` 按 `sessionId` 订阅事件。
+- `SessionProtocolClient` 通过共享连接发送 `SessionCommand` / `ClientResponse`，由后端 `SessionCommandRouter` 路由并交给 `SessionRuntimeOrchestrator` 驱动 `AgentRuntime`。
 - SessionWindow 左侧历史列表读取 `~/.spotAgent/sessions/`，用于搜索、预览、恢复和删除持久化会话。
 
 ### 3. 平台能力反向 IPC
@@ -45,7 +47,7 @@ flowchart LR
 
 - `PromptAttachmentResult`（5 case：textSelection / selectionError / textToken / imageRegion / noAttachment）
 - `SessionSummary`
-- `SessionMessage`（含 user_message / assistant_message_* / tool_message / permission_request 等会话帧）
+- `SessionCommand` / `SessionEvent` / `ServerRequest` / `ClientResponse`
 - `PlatformBridgeMessage`（含 platform_bridge_hello / platform_request / platform_response）
 
 ## 近期重构经验

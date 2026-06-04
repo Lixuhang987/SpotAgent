@@ -9,8 +9,8 @@
 | `AgentMessage.ts` | LLM 面向的消息判别联合：`user / assistant(+toolCalls?) / tool / system`；user content 支持字符串或 `text/image` 多模态 parts |
 | `ToolCallEnvelope.ts` | `{ id, name, arguments }` 三元组，连接 LLM 输出与 ToolRegistry |
 | `AgentSession.ts` | 把 `AgentSessionInput`（prompt + 可选选区）归一化为首轮 user message；当前未在 agent-server 主链路使用，仅作为脚本入口 |
-| `AgentRuntime.ts` | 主循环：消费 `LLMClient.stream` → 按 delta 发 assistant 事件 → 收集 toolCalls → 逐个交给 `handleToolCall` 处理权限、执行、结果回灌；同一次用户输入内最多循环 `maxTimes` 次；支持 `AbortSignal` 中断 |
-| `AgentSessionHandle.ts` | Codex-style queue pair 会话把手：接收 `SessionCommand`，消费 `AgentRuntimeEvent`，输出 `SessionEvent` |
+| `AgentRuntime.ts` | 主循环：消费 `LLMClient.stream` → 按 delta 发 assistant runtime 事件 → 收集 toolCalls → 逐个交给 `handleToolCall` 处理权限、执行、结果回灌；同一次用户输入内最多循环 `maxTimes` 次；支持 `AbortSignal` 中断 |
+| `AgentSessionHandle.ts` | core 对 app-server 暴露的会话把手：提交 `SessionCommand`，顺序消费 `SessionEvent` |
 | `SystemPrompt.ts` | system prompt 分段组装器：以 `SystemPromptSection[]` 表达默认策略，按 LLM 请求临时解析成 `system` messages，不写回会话历史 |
 | `Stub.ts` | 统一渲染 / 解析 `[STUB ...]...[/STUB]` 文本，占位引用 Blob 内容 |
 | `TurnSummarizer.ts` | turn 结束后压缩 `cached=turn` 的 tool message，写回 Blob summary 并重渲染消息 |
@@ -46,20 +46,20 @@ flowchart TD
 
 ## 事件
 
-`AgentRuntimeEvent` 是回调流，供 agent-server 翻译成 `SessionMessage`：
+`AgentRuntimeEvent` 是 runtime 内部回调流，供 `AgentSessionHandle` 归一化为 `SessionEvent`：
 
 - `assistant_message_start | assistant_message_delta | assistant_message_end`：由 `LLMStreamEvent.text_delta` 逐段转发；legacy `complete()` client 会经 `streamLLM()` 兼容层退化为单段 delta；中断时 `_end` status 为 `interrupted`。
-- `tool_call`：tool 调用前埋点；agent-server 会翻译成 `tool_message(status: "running")`。
-- `tool_result`：成功 / 失败 + 序列化输出（`MAX_OUTPUT_BYTES = 8 KiB` 截断）+ duration；agent-server 会翻译成 `tool_message(status: "completed" | "failed")`。
+- `tool_call`：tool 调用前埋点；handle 会翻译成 `tool_started`。
+- `tool_result`：成功 / 失败 + 序列化输出（`MAX_OUTPUT_BYTES = 8 KiB` 截断）+ duration；handle 会翻译成 `tool_finished`。
 - `permission_decision`：进入 `ask` 路径后的解析结果；用于审计事件，不直接发 UI 消息。
-- `runtime_error`：仅类型预留，目前未在循环内主动 emit；外层捕获 throw 后由 `SessionRuntimeOrchestrator` 通过 `MessageTranslator.toErrorMessage` 翻译。
+- `runtime_error`：仅类型预留，目前未在循环内主动 emit；若出现，会被 handle 归一化为 `session_error`。
 
 ## `AgentSessionHandle`
 
 - `AgentRuntime` 仍只负责 LLM/tool loop，不直接暴露给 UI 或 app-server 当作协议边界。
 - `AgentSessionHandle` 是 core 里的会话把手，形态接近 Codex 的 queue pair：
-  - 输入：`SessionCommand`，当前只处理 runtime 相关命令，例如 `turn_start`、`turn_interrupt`
-  - 输出：`SessionEvent`，例如 `user_message_recorded`、`turn_started`、`assistant_delta`、`tool_started`、`tool_finished`、`turn_completed`
+  - 输入：`submit(command: SessionCommand)`，当前只处理 runtime 相关命令，例如 `turn_start`、`turn_interrupt`
+  - 输出：`nextEvent(): Promise<SessionEvent>`，例如 `user_message_recorded`、`turn_started`、`assistant_delta`、`tool_started`、`tool_finished`、`turn_completed`
 - handle 负责把 `AgentRuntimeEvent` 归一化为稳定的 turn/item 事件流，并补齐 `turnId`、`itemId`、`sessionId`
 - handle 不负责：
   - app-server socket 协议翻译
@@ -86,6 +86,7 @@ flowchart TD
 - 带 `stubByDefault` 的 tool 若输入里显式传 `cached=turn|persist`，runtime 会把序列化结果写入注入的 `BlobStore`，并把 tool message content 渲染成 STUB。
 - runtime 不解析持久化 image STUB；agent-server 会在调用 runtime 前把用户主动提交的 image STUB 转成多模态 image part，runtime 只负责把注入的 `BlobStore` 继续透传给 `LLMClient`。
 - `cached=turn` 的 tool message 在本 turn 内保留完整 body；turn 自然结束后 `TurnSummarizer` 异步压缩，下一次 LLM 调用前 `waitForPendingSummaries()` 会等待并应用 summary。
+- handle 在 `startTurn` 前先持久化 user message，然后发 `user_message_recorded` 与 `turn_started`；run 结束后补 `turn_completed` 和 `session_status_changed`。
 - 单个 tool call 的处理拆在 `handleToolCall` / `resolveToolPermission` / `callTool` / `appendDeniedToolResult` 内：主循环只负责 turn 推进与消息顺序，权限记忆、拒绝回灌、执行计时和错误序列化各自独立。
 - `truncateOutput` 按 UTF-8 字节判长度，但截断时按 JS 字符索引切片（已知潜在 bug，见架构改进）。
 - `runOptions.signal` 被 abort 后，runtime 抛 `AbortError`，停止后续 assistant / tool 事件与消息追加；无法硬取消的 tool 返回后也不会再写入本 run。
@@ -97,8 +98,8 @@ flowchart TD
 - 不要把 provider 私有 stream / SSE 细节写进 `AgentRuntime`，provider 必须先归一化成 `LLMStreamEvent`。
 - tool 调用以 `ToolRegistry.get(name)` 为唯一入口，不允许直接 `import` builtin tool。
 - 新增 system prompt 规则时优先放入 `SystemPrompt.ts` 的 section builder，不要在 `AgentRuntime.completeAssistantResponse()` 里直接拼接策略字符串。
-- 新增事件类型时，`apps/agent-server/src/protocol/MessageTranslator.ts` 的 `toSessionMessage` / `toAuditEvent` 必须同步更新。
-- `AgentSessionHandle` 只能依赖 core 内类型；不要在这里引入 `SessionMessage`、WebSocket、Swift UI 或 app-server 持久化编排语义。
+- 新增事件类型时，app-server 的协议转发层与审计落盘层必须同步更新。
+- `AgentSessionHandle` 只能依赖 core 内类型；不要在这里引入旧 `SessionMessage` 兼容层、WebSocket、Swift UI 或 app-server 持久化编排语义。
 
 ## 相关文档
 

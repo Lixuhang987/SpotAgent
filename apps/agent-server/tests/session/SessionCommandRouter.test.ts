@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { InMemorySessionStore } from "@handagent/core/storage/index.ts";
-import type { SessionMessage } from "@handagent/core/protocol/SessionMessage.ts";
 import type { SessionCommand } from "@handagent/core/protocol/SessionCommand.ts";
+import type { SessionEvent } from "@handagent/core/protocol/SessionEvent.ts";
 import { SessionPersistence } from "../../src/session/SessionPersistence.ts";
 import { SessionEventPublisher } from "../../src/session/SessionEventPublisher.ts";
 import { SessionCommandRouter } from "../../src/session/SessionCommandRouter.ts";
@@ -29,8 +29,8 @@ describe("SessionCommandRouter", () => {
 
   it("subscribes and immediately emits a snapshot without starting runtime", async () => {
     const publisher = new SessionEventPublisher();
-    const sent: SessionMessage[] = [];
-    publisher.attachConnection("c1", (event) => sent.push(event as never));
+    const sent: SessionEvent[] = [];
+    publisher.attachConnection("c1", (event) => sent.push(event as SessionEvent));
     const persistence = new SessionPersistence(
       new InMemorySessionStore(),
       () => "2026-06-04T00:00:00.000Z",
@@ -78,27 +78,63 @@ describe("SessionCommandRouter", () => {
     publisher.subscribe("c1", session.metadata.id);
 
     const orchestrator = {
-      handleUserMessage: vi.fn(async (_message, push: (message: SessionMessage) => void) => {
+      handleUserMessage: vi.fn(async (_message, push: (message: SessionEvent) => void) => {
         push({
-          type: "assistant_message_delta",
+          type: "user_message_recorded",
           sessionId: session.metadata.id,
-          messageId: "assistant-1",
+          eventId: "event-user",
+          timestamp: "2026-06-04T00:00:00.000Z",
+          payload: { messageId: "turn-1", text: "hi" },
+        });
+        push({
+          type: "turn_started",
+          sessionId: session.metadata.id,
+          eventId: "event-turn",
+          turnId: "turn-1",
+          timestamp: "2026-06-04T00:00:00.000Z",
+          payload: {},
+        });
+        push({
+          type: "assistant_delta",
+          sessionId: session.metadata.id,
+          eventId: "event-assistant",
+          turnId: "turn-1",
+          itemId: "assistant-1",
           timestamp: "2026-06-04T00:00:00.000Z",
           payload: { text: "hi" },
         });
         push({
-          type: "tool_message",
+          type: "tool_started",
           sessionId: session.metadata.id,
-          messageId: "tool-1",
+          eventId: "event-tool-start",
+          turnId: "turn-1",
+          itemId: "tool-1",
           timestamp: "2026-06-04T00:00:00.000Z",
-          payload: { name: "echo", text: "{\"value\":\"x\"}", status: "running" },
+          payload: { name: "echo", input: { value: "x" } },
         });
         push({
-          type: "tool_message",
+          type: "tool_finished",
           sessionId: session.metadata.id,
-          messageId: "tool-1",
+          eventId: "event-tool-finish",
+          turnId: "turn-1",
+          itemId: "tool-1",
           timestamp: "2026-06-04T00:00:00.000Z",
-          payload: { name: "echo", text: "ok", status: "completed" },
+          payload: { name: "echo", output: "ok", status: "completed", durationMs: 0 },
+        });
+        push({
+          type: "turn_completed",
+          sessionId: session.metadata.id,
+          eventId: "event-completed",
+          turnId: "turn-1",
+          timestamp: "2026-06-04T00:00:00.000Z",
+          payload: { status: "completed" },
+        });
+        push({
+          type: "session_status_changed",
+          sessionId: session.metadata.id,
+          eventId: "event-status",
+          timestamp: "2026-06-04T00:00:00.000Z",
+          payload: { value: "idle" },
         });
       }),
     };
@@ -122,6 +158,8 @@ describe("SessionCommandRouter", () => {
 
     expect(orchestrator.handleUserMessage).toHaveBeenCalled();
     expect(seen).toEqual([
+      "user_message_recorded",
+      "turn_started",
       "assistant_delta",
       "tool_started",
       "tool_finished",

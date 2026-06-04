@@ -2,7 +2,7 @@
 
 ## 目录职责
 
-`server/` 是 agent-server 的进程入口与组合根。它负责启动 WebSocketServer、给每条 socket 挂上会话/平台/权限/workspace 处理器，并把 core 与本目录其他模块组装成生产运行图。
+`server/` 是 agent-server 的进程入口与组合根。它负责启动 WebSocketServer、给每条 socket 挂上平台消息、会话命令、客户端响应三类处理器，并把 core 与本目录其他模块组装成生产运行图。
 
 ## 文件
 
@@ -35,12 +35,18 @@ if (isPlatformBridgeMessage(message)) {
 }
 ```
 
-这段逻辑先把 `channel: "platform"` 的消息从普通 `SessionMessage` 中剥离。`platform_bridge_hello` 会为当前 socket 生成 fencing token；之后的 `platform_response` 必须带着这条 socket 当前 token 才能唤醒 pending request，避免旧 socket 的晚到响应污染新连接。
+这段逻辑先把 `channel: "platform"` 的消息从其他顶层消息中剥离。`platform_bridge_hello` 会为当前 socket 生成 fencing token；之后的 `platform_response` 必须带着这条 socket 当前 token 才能唤醒 pending request，避免旧 socket 的晚到响应污染新连接。
 
-### 会话绑定与关闭清理
+当前 server 顶层只接收三类消息：
+
+- `PlatformBridgeMessage`：平台桥接 hello / response。
+- `ClientResponse`：desktop 对 `permission_ask`、`workspace_ask` 的回答。
+- `SessionCommand`：会话创建、订阅、取消订阅、开跑、中断、列出、删除。
+
+### 会话绑定、订阅与关闭清理
 
 ```ts
-if (message.type === "user_message") {
+if (message.type === "turn_start") {
   if (permissionBridge && !boundSessions.has(message.sessionId)) {
     boundSessions.set(
       message.sessionId,
@@ -50,7 +56,9 @@ if (message.type === "user_message") {
 }
 ```
 
-`user_message` 是权限审批与 workspace 选择回流的绑定时机。socket close 时会按 token 解绑，旧 socket 只能取消自己 token 下的 pending 请求；如果同一 session 已经被新 socket 绑定，旧 socket close 不会清掉新绑定。
+`turn_start` 是 permission / workspace 回流的绑定时机。`attachSessionSocketHandlers` 同时会在带 `sessionId` 的 `SessionCommand` 到达时自动订阅当前连接；`session_unsubscribe` 会移除订阅，并尝试解绑该连接持有的 permission / workspace token。socket close 时会按 token 解绑，旧 socket 只能取消自己 token 下的 pending 请求；如果同一 session 已经被新 socket 绑定，旧 socket close 不会清掉新绑定。
+
+`SessionEventPublisher` 负责 `connectionId -> subscribed sessionIds` 映射，所以一条 desktop 连接可以同时订阅多个 session，并靠 `session_snapshot` 恢复各自状态。
 
 ### 组合根
 
@@ -89,7 +97,7 @@ const runtimeForSession = (sessionId: string) => {
 ## 编辑约束
 
 - 新增长驻依赖时放进 `startDefaultServer`，保持 `startServer` 只接收已注入对象，方便单元测试。
-- 新增 socket 顶层分支前先判断它是否属于平台通道、审批回流、workspace 回流或普通 session 路由。
+- 新增 socket 顶层分支前先判断它是否属于 `PlatformBridgeMessage`、`ClientResponse` 或 `SessionCommand`；不要再扩散旧 union。
 - 不在本目录写业务翻译逻辑；runtime event 翻译归 `protocol/`，会话状态归 `session/`，工具/MCP 归 `actions/`。
 
 ## 下一步阅读

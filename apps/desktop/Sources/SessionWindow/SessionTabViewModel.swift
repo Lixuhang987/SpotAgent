@@ -22,34 +22,16 @@ final class SessionTabViewModel: Identifiable {
         pendingWorkspaceAskRequests.first
     }
 
-    @ObservationIgnored private let socketClient: SessionSocketClient?
-    @ObservationIgnored private let sendCommand: ((SessionProtocolClient.Command) -> Void)?
-    @ObservationIgnored private let sendResponse: ((SessionProtocolClient.Response) -> Void)?
-    @ObservationIgnored private let subscribeToEvents: ((String, @escaping (SessionEvent) -> Void) -> SessionEventBus<SessionEvent>.Subscription)?
+    @ObservationIgnored private let sendCommand: (SessionProtocolClient.Command) -> Void
+    @ObservationIgnored private let sendResponse: (SessionProtocolClient.Response) -> Void
+    @ObservationIgnored private let subscribeToEvents: (
+        String,
+        @escaping (SessionEvent) -> Void
+    ) -> SessionEventBus<SessionEvent>.Subscription
     @ObservationIgnored private let copyMessageText: @MainActor (String) -> Void
     @ObservationIgnored private let onStateChanged: @MainActor (SessionTabViewModel) -> Void
     @ObservationIgnored private var pendingLocalTurnStartIndex: Int?
     @ObservationIgnored private var eventSubscription: SessionEventBus<SessionEvent>.Subscription?
-
-    init(
-        tabID: String,
-        sessionID: String,
-        socketClient: SessionSocketClient,
-        copyMessageText: @escaping @MainActor (String) -> Void = { text in
-            SessionMessageClipboard.copy(text)
-        },
-        onStateChanged: @escaping @MainActor (SessionTabViewModel) -> Void = { _ in }
-    ) {
-        self.id = tabID
-        self.tabID = tabID
-        self.sessionID = sessionID
-        self.socketClient = socketClient
-        self.sendCommand = nil
-        self.sendResponse = nil
-        self.subscribeToEvents = nil
-        self.copyMessageText = copyMessageText
-        self.onStateChanged = onStateChanged
-    }
 
     init(
         tabID: String,
@@ -65,7 +47,6 @@ final class SessionTabViewModel: Identifiable {
         self.id = tabID
         self.tabID = tabID
         self.sessionID = sessionID
-        self.socketClient = nil
         self.sendCommand = sendCommand
         self.sendResponse = sendResponse
         self.subscribeToEvents = subscribeToEvents
@@ -74,15 +55,6 @@ final class SessionTabViewModel: Identifiable {
     }
 
     func open() {
-        if let socketClient {
-            socketClient.onEvent = { [weak self] event in
-                Task { @MainActor in self?.handle(event) }
-            }
-            socketClient.connect(sessionID: sessionID)
-            return
-        }
-
-        guard let subscribeToEvents, let sendCommand else { return }
         eventSubscription = subscribeToEvents(sessionID) { [weak self] event in
             self?.handle(event)
         }
@@ -94,14 +66,9 @@ final class SessionTabViewModel: Identifiable {
     }
 
     func disconnect() {
-        if let socketClient {
-            socketClient.disconnect()
-            return
-        }
-
         eventSubscription?.cancel()
         eventSubscription = nil
-        sendCommand?(.sessionUnsubscribe(
+        sendCommand(.sessionUnsubscribe(
             sessionId: sessionID,
             commandId: UUID().uuidString,
             timestamp: Self.timestamp()
@@ -109,8 +76,7 @@ final class SessionTabViewModel: Identifiable {
     }
 
     func resubscribe() {
-        guard socketClient == nil else { return }
-        sendCommand?(.sessionSubscribe(
+        sendCommand(.sessionSubscribe(
             sessionId: sessionID,
             commandId: UUID().uuidString,
             timestamp: Self.timestamp()
@@ -130,37 +96,23 @@ final class SessionTabViewModel: Identifiable {
         appendUserMessage(messageID: messageID, text: trimmedText, attachments: attachments)
         pendingLocalTurnStartIndex = messages.count - 1
         onStateChanged(self)
-        if let socketClient {
-            socketClient.sendUserMessage(
-                sessionID: sessionID,
-                messageID: messageID,
-                text: trimmedText,
-                timestamp: timestamp,
-                attachments: attachments
-            )
-        } else {
-            sendCommand?(.turnStart(
-                sessionId: sessionID,
-                commandId: messageID,
-                timestamp: timestamp,
-                text: trimmedText,
-                attachments: attachments
-            ))
-        }
+        sendCommand(.turnStart(
+            sessionId: sessionID,
+            commandId: messageID,
+            timestamp: timestamp,
+            text: trimmedText,
+            attachments: attachments
+        ))
     }
 
     func stop() {
         guard status.isRunning else { return }
         status = .interrupted
-        if let socketClient {
-            socketClient.sendInterrupt(sessionID: sessionID)
-        } else {
-            sendCommand?(.turnInterrupt(
-                sessionId: sessionID,
-                commandId: UUID().uuidString,
-                timestamp: Self.timestamp()
-            ))
-        }
+        sendCommand(.turnInterrupt(
+            sessionId: sessionID,
+            commandId: UUID().uuidString,
+            timestamp: Self.timestamp()
+        ))
         onStateChanged(self)
     }
 
@@ -172,41 +124,23 @@ final class SessionTabViewModel: Identifiable {
     }
 
     func resolvePermission(requestId: String, decision: String, scope: String?) {
-        if let socketClient {
-            socketClient.sendPermissionResponse(
-                sessionID: sessionID,
-                requestId: requestId,
-                decision: decision,
-                scope: scope
-            )
-        } else {
-            sendResponse?(.permissionAnswer(
-                requestId: requestId,
-                timestamp: Self.timestamp(),
-                decision: decision == "deny" ? .deny : .allow,
-                scope: permissionScope(from: scope),
-                reason: nil
-            ))
-        }
+        sendResponse(.permissionAnswer(
+            requestId: requestId,
+            timestamp: Self.timestamp(),
+            decision: decision == "deny" ? .deny : .allow,
+            scope: permissionScope(from: scope),
+            reason: nil
+        ))
         pendingPermissionRequests.removeAll { $0.id == requestId }
     }
 
     func resolveWorkspaceAsk(requestId: String, workspaceId: String?) {
-        if let socketClient {
-            socketClient.sendWorkspaceAskResponse(
-                sessionID: sessionID,
-                requestId: requestId,
-                workspaceId: workspaceId,
-                cancelled: workspaceId == nil
-            )
-        } else {
-            sendResponse?(.workspaceAnswer(
-                requestId: requestId,
-                timestamp: Self.timestamp(),
-                workspaceId: workspaceId,
-                cancelled: workspaceId == nil
-            ))
-        }
+        sendResponse(.workspaceAnswer(
+            requestId: requestId,
+            timestamp: Self.timestamp(),
+            workspaceId: workspaceId,
+            cancelled: workspaceId == nil
+        ))
         pendingWorkspaceAskRequests.removeAll { $0.id == requestId }
     }
 

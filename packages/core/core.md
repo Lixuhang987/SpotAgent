@@ -25,7 +25,7 @@ TypeScript workspace 包名为 `@handagent/core`。应用层代码应通过 `@ha
 | `workspace/` | Workspace 注册表与文件沙箱根目录 | [workspace/workspace.md](/Users/mu9/proj/handAgent/packages/core/src/workspace/workspace.md) |
 | `config/` | settings.json 解析（model / tools） | [config/config.md](/Users/mu9/proj/handAgent/packages/core/src/config/config.md) |
 | `logging/` | NetworkLogger 与 fetch 包装，落 JSONL 到 `~/.spotAgent/log/` | [logging/logging.md](/Users/mu9/proj/handAgent/packages/core/src/logging/logging.md) |
-| `protocol/` | desktop ↔ agent-server WS 协议：SessionMessage + PlatformBridgeMessage | [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md) |
+| `protocol/` | desktop ↔ app-server 会话协议：`SessionCommand` / `SessionEvent` / `ServerRequest` / `ClientResponse` + `PlatformBridgeMessage` | [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md) |
 | `conversation/` | UI / 持久化用 ConversationMessage 模型 | [conversation/conversation.md](/Users/mu9/proj/handAgent/packages/core/src/conversation/conversation.md) |
 | `selection/` | 用户主动选区抽象 | [selection/selection.md](/Users/mu9/proj/handAgent/packages/core/src/selection/selection.md) |
 
@@ -33,16 +33,16 @@ TypeScript workspace 包名为 `@handagent/core`。应用层代码应通过 `@ha
 
 ```mermaid
 flowchart TD
-  A[AgentSession.open] --> B[buildInitialUserMessage]
-  B --> C[AgentRuntime.run]
-  C --> D[LLMClient.stream]
-  D --> D1[assistant delta events]
-  D1 --> E{toolCalls?}
-  E -- 否 --> F[AgentRunResult]
-  E -- 是 --> G[ToolRegistry.get]
-  G --> H[AgentTool.call]
-  H --> I[tool result -> AgentMessage(tool)]
-  I --> D
+  A[desktop 提交 SessionCommand] --> B[app-server 路由命令]
+  B --> C[core AgentSessionHandle.submit]
+  C --> D[AgentRuntime.runWithMessages]
+  D --> E[LLMClient.stream]
+  E --> F{toolCalls?}
+  F -- 否 --> G[AgentSessionHandle 输出 SessionEvent]
+  F -- 是 --> H[ToolRegistry.get]
+  H --> I[AgentTool.call]
+  I --> J[tool result -> AgentMessage(tool)]
+  J --> E
 ```
 
 ## Core 核心 DTO
@@ -73,6 +73,9 @@ flowchart TD
 
 - `AgentRunResult`
   - `messages`
+- `AgentSessionHandle`
+  - `submit(command: SessionCommand)`
+  - `nextEvent(): Promise<SessionEvent>`
 
 ### Tool 协议
 
@@ -104,14 +107,17 @@ flowchart TD
 
 ### 跨进程协议
 
-- `SessionMessage`（会话、历史、权限审批帧）
+- `SessionCommand`（desktop -> app-server 命令）
+- `SessionEvent`（app-server/core -> desktop 事件）
+- `ServerRequest`（app-server/core -> desktop 的待回执请求）
+- `ClientResponse`（desktop -> app-server 的请求回执）
 - `PlatformBridgeMessage` / `PlatformResponsePayload`
 - `UserMessageAttachment` / `SessionListEntry`
 - `ConversationMessage` / `ConversationMessageStatus` / `ToolMessageStatus`
 
 ## 目录级职责边界
 
-- `runtime` 只管消息循环，不关心 UI。
+- `runtime` 负责 LLM/tool 循环，以及 `AgentSessionHandle` 的提交 / 事件消费接口，不关心 UI 或 socket。
 - `llm` 只管 provider 适配，不关心窗口或平台。
 - `tools` 只管 tool schema 与调用，不关心会话页面状态。
 - `platform` 只定义协议与 RPC 入口，不写 macOS 细节。
@@ -120,7 +126,7 @@ flowchart TD
 - `workspace` 只管沙箱根目录，不暴露绝对路径给 LLM。
 - `config` 仅同步读取 `~/.spotAgent/settings.json`，无监听器、无缓存。
 - `logging` 仅写网络日志，不参与产品决策。
-- `protocol` 仅定义跨进程 WS 消息形状；TS / Swift 双侧据此对齐。
+- `protocol` 仅定义跨进程消息形状；会话主路径以四类单向消息建模，TS / Swift 双侧据此对齐。
 - `conversation` 是 UI/持久化消息模型，与 LLM 面向的 `AgentMessage` 解耦。
 - `selection` 只定义用户选区抽象，不做宿主编排。
 
