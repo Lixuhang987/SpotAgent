@@ -19,15 +19,15 @@
 2. `SessionWindowViewModel` / `SessionTabViewModel` 既保存 UI 状态，又保存线程运行缓存，还直接持有协议发送逻辑，边界不清晰。
 3. 宿主层对外暴露的主语义仍是 `session_*`，与目标中的 `thread / turn` 语义不一致，也不利于后续对齐 codex 的线程模型。
 
-本次重构的目标不是在旧结构外再包一层，而是**做一次明确的破坏性重构**：以 `Thread` 为唯一主命名，建立新的宿主内核、协议和 store 模型，最终删除旧 `session_*` 主路径，不保留长期兼容实现。
+本次重构的目标不是在旧结构外再包一层，而是**做一次明确的破坏性重构**：以前后端统一 `Thread` 为唯一主命名，建立新的宿主内核、协议和 store 模型，最终删除旧 `session_*` 主路径，不保留长期兼容实现，也不在新代码中保留 `Session` 语义命名。
 
 ## 本次硬约束
 
-- Swift 宿主层统一以 `Thread` 命名主语义，不再新增或扩展 `Session*` 主路径对象。
+- 前端与后端统一以 `Thread` 命名主语义；新代码中不再新增 `Session*` 语义类型、协议类型或 store 类型。
 - 这是一次破坏性重构，最终状态**不兼容旧实现**；允许分支内短暂中间态，但合入前必须全面切换到新代码。
 - `PlatformBridgeService` 保持独立对象，但归属于统一的 `AppServer` 宿主内核，不再维护平行的宿主语义体系。
 - Swift 前端状态统一迁移到 `swift-composable-architecture`（TCA）模型：`Store / State / Action / Reducer`。
-- `SessionState` 改为线程配置快照容器；`EventStore` 改为线程运行缓存容器。这里的 `SessionState` 是本地状态类型名，不再代表旧协议里的 session 概念。
+- `ThreadState` 表示线程配置快照容器；`EventStore` 表示线程运行缓存容器。
 - 本次只落地最小可用 `thread / turn` 协议；未实现的 codex 语义统一登记到 `docs/TODO.md`。
 
 ## 范围
@@ -38,7 +38,7 @@
 - Swift 宿主统一 `AppServerClient` 原始协议客户端。
 - `apps/agent-server` 与 `packages/core` 主协议从 `session_*` 切换为最小 `thread / turn` 语义。
 - Swift 宿主 store 切换到 TCA。
-- 线程状态拆分为 `SessionState` 与 `EventStore`。
+- 线程状态拆分为 `ThreadState` 与 `EventStore`。
 - `PlatformBridgeService` 改为订阅统一连接体系中的平台请求流。
 - 相关自动化测试、架构文档、手工 QA 文档同步更新。
 
@@ -176,15 +176,15 @@ flowchart LR
   - 线程列表刷新触发
   - 入站 notification / request 总入口
 - `ThreadDomain`
-  - 单线程配置快照 `SessionState`
+  - 单线程配置快照 `ThreadState`
 - `EventStoreDomain`
   - 单线程运行缓存 `EventStore`
 - `ThreadWindowDomain`
   - 窗口、tab、active thread、删除确认、搜索态等纯 UI 编排状态
 
-### `SessionState`
+### `ThreadState`
 
-`SessionState` 表示线程配置快照，只保存“恢复一个 thread 时应该得到的稳定定义”，建议包含：
+`ThreadState` 表示线程配置快照，只保存“恢复一个 thread 时应该得到的稳定定义”，建议包含：
 
 - `threadId`
 - `status`
@@ -197,7 +197,7 @@ flowchart LR
 - 最近一次恢复得到的 thread snapshot 元数据
 - 线程是否已失效、失效原因
 
-`SessionState` 不保存 assistant streaming 文本、tool 运行中间态、待处理 permission/workspace request，也不保存 tab 选中状态。
+`ThreadState` 不保存 assistant streaming 文本、tool 运行中间态、待处理 permission/workspace request，也不保存 tab 选中状态。
 
 ### `EventStore`
 
@@ -231,7 +231,7 @@ flowchart LR
 
 ### 从 `SessionTabViewModel` 迁移
 
-迁入 `SessionState`：
+迁入 `ThreadState`：
 
 - `sessionID` -> `threadId`
 - 稳定状态快照
@@ -259,7 +259,7 @@ flowchart LR
 
 ### 从 `SessionRegistry` 迁移
 
-现有 `SessionSummary` 不再作为独立主状态维护，而是改为从 `SessionState + EventStore` 派生得到的线程摘要视图。
+现有 `SessionSummary` 不再作为独立主状态维护，而是改为从 `ThreadState + EventStore` 派生得到的线程摘要视图。
 
 ## 最小 `thread / turn` 主协议
 
@@ -349,7 +349,7 @@ flowchart LR
 - `SessionEventBus` 不再承担主事件分发。
 - `SessionWindowViewModel` / `SessionTabViewModel` 不再承担主业务状态。
 - `LegacySessionSocketClient` 不再保留为主路径兼容层。
-- 新增业务功能不得继续加在旧 `Session*` 主路径对象上。
+- 新增业务功能不得继续加在旧 `Session*` 主路径对象上，也不得在新代码中重新引入 `Session` 语义命名。
 
 允许在分支中间提交里短暂并存旧对象，但合入前必须：
 
@@ -461,6 +461,6 @@ flowchart LR
 2. Swift 主 store 完全基于 TCA。
 3. 主协议命名统一为 `thread / turn`。
 4. `PlatformBridgeService` 成为统一连接体系中的独立平台请求处理器。
-5. 旧 `session_*` 主路径不再作为运行时主实现存在。
+5. 前后端新代码不再保留 `Session` 主语义命名，旧 `session_*` 主路径不再作为运行时主实现存在。
 6. 最小 `thread.start / resume / list / delete` 与 `turn.start / interrupt` 全链路可用。
 7. 所有缺失的 codex 语义明确写入 `docs/TODO.md`，不在实现中隐式留坑。
