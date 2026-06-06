@@ -292,11 +292,11 @@ describe("AgentRuntime", () => {
     const runtime = new AgentRuntime(client, new ToolRegistry([tool]));
 
     await runtime.runWithMessages([{ role: "user", content: "hello" }], () => {}, {
-      sessionId: "session-ctx",
+      threadId: "thread-ctx",
     });
 
     expect(tool.seenContext).toEqual({
-      sessionId: "session-ctx",
+      threadId: "thread-ctx",
       toolCallId: "tool-ctx",
     });
   });
@@ -892,19 +892,19 @@ describe("AgentRuntime", () => {
 
     const registry = new ToolRegistry([MetaToolUseTool.create(undefined)]);
     const runtime = new AgentRuntime(client, registry, {
-      onMetaToolActivate: async (sessionId: string) => {
-        activations.push(sessionId);
+      onMetaToolActivate: async (threadId: string) => {
+        activations.push(threadId);
       },
-      isSessionActivated: () => false,
+      isThreadActivated: () => false,
     });
 
     const result = await runtime.runWithMessages(
       [{ role: "user", content: "do something" }],
       (event) => events.push(event),
-      { sessionId: "session-A" },
+      { threadId: "thread-A" },
     );
 
-    expect(activations).toEqual(["session-A"]);
+    expect(activations).toEqual(["thread-A"]);
 
     const toolResultEvent = events.find(
       (e) => (e as { type: string }).type === "tool_result" &&
@@ -940,16 +940,16 @@ describe("AgentRuntime", () => {
 
     const registry = new ToolRegistry([MetaToolUseTool.create(undefined)]);
     const runtime = new AgentRuntime(client, registry, {
-      onMetaToolActivate: async (sessionId: string) => {
-        activations.push(sessionId);
+      onMetaToolActivate: async (threadId: string) => {
+        activations.push(threadId);
       },
-      isSessionActivated: () => true, // already activated
+      isThreadActivated: () => true, // already activated
     });
 
     await runtime.runWithMessages(
       [{ role: "user", content: "do something" }],
       (event) => events.push(event),
-      { sessionId: "session-B" },
+      { threadId: "thread-B" },
     );
 
     expect(activations).toHaveLength(0);
@@ -994,13 +994,13 @@ describe("AgentRuntime", () => {
     const registry = new ToolRegistry([MetaToolUseTool.create(undefined)]);
     const runtime = new AgentRuntime(client, registry, {
       permissionPolicy: countingPolicy,
-      isSessionActivated: () => false,
+      isThreadActivated: () => false,
     });
 
     await runtime.runWithMessages(
       [{ role: "user", content: "activate" }],
       () => {},
-      { sessionId: "session-C" },
+      { threadId: "thread-C" },
     );
 
     expect(permissionChecks).toBe(0);

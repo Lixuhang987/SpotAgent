@@ -1,0 +1,277 @@
+import type { ThreadCommand } from "@handagent/core/protocol/ThreadCommand.ts";
+import type { ClientResponse } from "@handagent/core/protocol/ClientResponse.ts";
+import type { ThreadNotification } from "@handagent/core/protocol/ThreadNotification.ts";
+import type {
+  ThreadActionBinding,
+  ThreadSummary,
+} from "@handagent/core/storage/index.ts";
+import { ThreadNotificationPublisher } from "./ThreadNotificationPublisher.ts";
+import type { ThreadPersistence } from "./ThreadPersistence.ts";
+import type { ThreadRuntimeOrchestrator } from "./ThreadRuntimeOrchestrator.ts";
+
+type CreateThreadActionBinding = {
+  pluginId: string;
+  promptName: string;
+};
+
+type ActionBindingResolver = {
+  resolve(binding: CreateThreadActionBinding): Promise<ThreadActionBinding>;
+};
+
+type RouterOrchestrator = Pick<ThreadRuntimeOrchestrator, "handleUserMessage"> &
+  Partial<
+    Pick<
+      ThreadRuntimeOrchestrator,
+      "interruptThread" | "interruptAndWait" | "isThreadRunning"
+    >
+  >;
+
+type ResponseHandlers = {
+  onPermissionResponse?: (
+    response: Extract<ClientResponse, { type: "permission.answered" }>,
+    connectionId: string,
+  ) => void;
+  onWorkspaceResponse?: (
+    response: Extract<ClientResponse, { type: "workspace.answered" }>,
+    connectionId: string,
+  ) => void;
+};
+
+export class ThreadCommandRouter {
+  constructor(
+    private readonly orchestrator: RouterOrchestrator,
+    private readonly persistence: ThreadPersistence,
+    private readonly publisher: ThreadNotificationPublisher,
+    private readonly now: () => string = () => new Date().toISOString(),
+    private readonly actionBindingResolver?: ActionBindingResolver,
+    private readonly onThreadDeleted?: (threadId: string) => void,
+    private readonly responseHandlers: ResponseHandlers = {},
+  ) {}
+
+  async receive(command: ThreadCommand, connectionId: string): Promise<void> {
+    switch (command.type) {
+      case "thread.start":
+        return this.handleCreateThread(command, connectionId);
+      case "thread.resume":
+        return this.handleResumeThread(command, connectionId);
+      case "turn.start":
+        return this.handleTurnStart(command);
+      case "turn.interrupt":
+        this.interruptThread(command.threadId);
+        return;
+      case "thread.list":
+        return this.handleListThreads(command, connectionId);
+      case "thread.delete":
+        return this.handleDeleteThread(command, connectionId);
+    }
+  }
+
+  handleResponse(response: ClientResponse, connectionId: string): void {
+    switch (response.type) {
+      case "permission.answered":
+        this.responseHandlers.onPermissionResponse?.(response, connectionId);
+        return;
+      case "workspace.answered":
+        this.responseHandlers.onWorkspaceResponse?.(response, connectionId);
+        return;
+    }
+  }
+
+  interruptThread(threadId: string): void {
+    this.orchestrator.interruptThread?.(threadId, (event) => {
+      this.publisher.publish(event);
+    });
+  }
+
+  private async handleCreateThread(
+    command: Extract<ThreadCommand, { type: "thread.start" }>,
+    connectionId: string,
+  ): Promise<void> {
+    let actionBinding: ThreadActionBinding | undefined;
+    if (command.payload.actionBinding) {
+      actionBinding = await this.actionBindingResolver?.resolve(
+        command.payload.actionBinding,
+      );
+      if (!actionBinding) {
+        this.publisher.publishToConnection(connectionId, {
+          type: "thread.error",
+          notificationId: this.makeNotificationId(),
+          commandId: command.commandId,
+          timestamp: this.now(),
+          payload: {
+            code: "invalid_request",
+            message: "Action binding resolver is not configured",
+          },
+        });
+        return;
+      }
+    }
+
+    const Thread = await this.persistence.createThread(
+      undefined,
+      actionBinding,
+      command.payload.workspaceId,
+    );
+    const threadId = Thread.metadata.id;
+    this.publisher.subscribe(connectionId, threadId);
+    this.publisher.publishToConnection(connectionId, {
+      type: "thread.started",
+      threadId,
+      notificationId: this.makeNotificationId(),
+      commandId: command.commandId,
+      timestamp: this.now(),
+      payload: { preview: Thread.metadata.preview ?? null },
+    });
+  }
+
+  private async handleResumeThread(
+    command: Extract<ThreadCommand, { type: "thread.resume" }>,
+    connectionId: string,
+  ): Promise<void> {
+    this.publisher.subscribe(connectionId, command.threadId);
+    const thread = await this.persistence.getThread(command.threadId);
+    if (!thread) {
+      this.publisher.publishToConnection(connectionId, {
+        type: "thread.error",
+        threadId: command.threadId,
+        notificationId: this.makeNotificationId(),
+        commandId: command.commandId,
+        timestamp: this.now(),
+        payload: {
+          code: "not_found",
+          message: `Thread not found: ${command.threadId}`,
+        },
+      });
+      return;
+    }
+
+    const isRunning = this.orchestrator.isThreadRunning?.(command.threadId) ?? false;
+    const recoveredStatus = !isRunning
+      ? await this.persistence.recoverIncompleteTurnForSnapshot(command.threadId, this.now())
+      : null;
+    const messages = await this.persistence.getConversationMessages(command.threadId);
+
+    this.publisher.publishToConnection(connectionId, {
+      type: "thread.snapshot",
+      threadId: command.threadId,
+      notificationId: this.makeNotificationId(),
+      commandId: command.commandId,
+      timestamp: this.now(),
+      payload: {
+        messages,
+        status: isRunning ? "running" : (recoveredStatus ?? "idle"),
+      },
+    });
+  }
+
+  private async handleTurnStart(
+    command: Extract<ThreadCommand, { type: "turn.start" }>,
+    connectionId?: string,
+  ): Promise<void> {
+    if (!(await this.persistence.getThread(command.threadId))) {
+      const errorEvent: ThreadNotification = {
+        type: "thread.error",
+        threadId: command.threadId,
+        notificationId: this.makeNotificationId(),
+        commandId: command.commandId,
+        timestamp: this.now(),
+        payload: {
+          code: "thread_not_found",
+          message: `Thread not found: ${command.threadId}`,
+        },
+      };
+      if (connectionId) {
+        this.publisher.publishToConnection(connectionId, errorEvent);
+      } else {
+        this.publisher.publish(errorEvent);
+      }
+      return;
+    }
+
+    await this.orchestrator.handleUserMessage(
+      {
+        threadId: command.threadId,
+        messageId: command.commandId,
+        timestamp: command.timestamp,
+        payload: {
+          text: command.payload.text,
+          attachments: command.payload.attachments,
+        },
+      },
+      (event) => {
+        this.publisher.publish(event);
+      },
+    );
+  }
+
+  private async handleListThreads(
+    command: Extract<ThreadCommand, { type: "thread.list" }>,
+    connectionId: string,
+  ): Promise<void> {
+    const threads = await this.persistence.listThreads();
+    this.publisher.publishToConnection(connectionId, {
+      type: "thread.listed",
+      notificationId: this.makeNotificationId(),
+      commandId: command.commandId,
+      timestamp: this.now(),
+      payload: {
+        threads: threads.map(toThreadListEntry),
+      },
+    });
+  }
+
+  private async handleDeleteThread(
+    command: Extract<ThreadCommand, { type: "thread.delete" }>,
+    connectionId: string,
+  ): Promise<void> {
+    const targetThreadId = command.payload.targetThreadId;
+    const existing = await this.persistence.getThread(targetThreadId);
+    if (!existing) {
+      this.publisher.publishToConnection(connectionId, {
+        type: "thread.deleted",
+        notificationId: this.makeNotificationId(),
+        commandId: command.commandId,
+        timestamp: this.now(),
+        payload: {
+          targetThreadId,
+          status: "not_found",
+        },
+      });
+      return;
+    }
+
+    if (this.orchestrator.isThreadRunning?.(targetThreadId)) {
+      await this.orchestrator.interruptAndWait?.(targetThreadId, (event) => {
+        this.publisher.publish(event);
+      });
+    }
+
+    await this.persistence.deleteThread(targetThreadId);
+    this.onThreadDeleted?.(targetThreadId);
+    this.publisher.publishToConnection(connectionId, {
+      type: "thread.deleted",
+      notificationId: this.makeNotificationId(),
+      commandId: command.commandId,
+      timestamp: this.now(),
+      payload: {
+        targetThreadId,
+        status: "deleted",
+      },
+    });
+  }
+
+  private makeNotificationId(): string {
+    return `notification-${Math.random().toString(36).slice(2, 10)}`;
+  }
+}
+
+function toThreadListEntry(summary: ThreadSummary) {
+  return {
+    id: summary.id,
+    preview: summary.preview,
+    createdAt: summary.createdAt,
+    updatedAt: summary.updatedAt,
+    messageCount: summary.messageCount,
+    workspaceId: summary.workspaceId,
+  };
+}

@@ -15,7 +15,7 @@ TypeScript workspace 包名为 `@handagent/core`。应用层代码应通过 `@ha
 | 子模块 | 职责 | 文档 |
 |------|------|------|
 | `runtime/` | 会话循环、消息模型、tool call 编排 | [runtime/runtime.md](/Users/mu9/proj/handAgent/packages/core/src/runtime/runtime.md) |
-| `actions/` | Action manifest 与 session binding 解析 | [actions/actions.md](/Users/mu9/proj/handAgent/packages/core/src/actions/actions.md) |
+| `actions/` | Action manifest 与 thread binding 解析 | [actions/actions.md](/Users/mu9/proj/handAgent/packages/core/src/actions/actions.md) |
 | `llm/` | LLMClient 抽象与 Vercel AI SDK 适配 | [llm/llm.md](/Users/mu9/proj/handAgent/packages/core/src/llm/llm.md) |
 | `mcp/` | 标准 MCP client 与 tool adapter | [mcp/mcp.md](/Users/mu9/proj/handAgent/packages/core/src/mcp/mcp.md) |
 | `tools/` | AgentTool 协议、ToolRegistry、11 个 builtin tool | [tools/tools.md](/Users/mu9/proj/handAgent/packages/core/src/tools/tools.md) |

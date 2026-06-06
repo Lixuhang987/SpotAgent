@@ -6,7 +6,7 @@
 
 | 文件 | 职责 |
 |------|------|
-| `AgentTool.ts` | `AgentTool<TInput, TOutput>` 接口：`name / description / inputSchema (JSON Schema) / call(input, context?)`；`context` 当前包含 `sessionId / toolCallId`；可选 `stubByDefault` 声明 runtime 可把结果写成 Blob/Stub |
+| `AgentTool.ts` | `AgentTool<TInput, TOutput>` 接口：`name / description / inputSchema (JSON Schema) / call(input, context?)`；`context` 当前包含 `threadId / toolCallId`；可选 `stubByDefault` 声明 runtime 可把结果写成 Blob/Stub |
 | `defineTool.ts` | `defineTool({ name, description, inputSchema (zod), stubByDefault?, run })` 工厂：`zod` schema 自动转 JSON Schema 2019-09；`.create(deps)` 生成的 `call(input, context?)` 会先用同一个 schema 做运行时入参校验，再调用 `run` |
 | `ToolRegistry.ts` | Map 包装；`register / replaceAll / get / list`，单次注册重名抛错，`replaceAll()` 供 settings 热加载原地刷新；`list()` 返回 `RegisteredTool`（去掉 `call`），供 `LLMClient.stream` 使用 |
 | `registerBuiltins.ts` | 组合根：根据 `PlatformAdapter` + 可选 `WorkspaceRegistry` + `ToolSettings` 装配 candidates，过 allowlist/denylist 后注册 |
@@ -26,7 +26,7 @@
 | `accessibility.snapshot` | `AccessibilitySnapshotTarget` | `PlatformAdapter.accessibilitySnapshot` | macOS Accessibility 快照 |
 | `accessibility.action` | `AccessibilityActionRequest` | `PlatformAdapter.performAccessibilityAction` | macOS Accessibility 动作 |
 | `workspace.list` | `{}` | `WorkspaceRegistry.summarize` | 返回 `[{id, name, description, isDefault}]`，**不含 rootPath** |
-| `workspace.askUser` | `{ prompt, candidateIds? }` | `WorkspaceRegistry.summarize` + `WorkspaceAskResolver` | 多个 workspace 候选都合理时，通过 SessionWindow 内联气泡让用户选择；取消、超时或无活动 session 返回 `{ cancelled: true }` |
+| `workspace.askUser` | `{ prompt, candidateIds? }` | `WorkspaceRegistry.summarize` + `WorkspaceAskResolver` | 多个 workspace 候选都合理时，通过 Thread UI 内联气泡让用户选择；取消、超时或无活动 thread 返回 `{ cancelled: true }` |
 | `file.read` | `{ workspaceId, relativePath, cached }` | `WorkspaceRegistry` | 沙箱 read：经 `realpath` 校验仍在 rootPath 内；`cached` 必填，取 `turn` 或 `persist` |
 | `file.write` | `{ workspaceId, relativePath, content }` | `WorkspaceRegistry` | 沙箱 write：写前 lstat 拒绝 basename 是 symlink；10 MiB 上限；`.tmp → rename` 原子写 |
 
@@ -47,7 +47,7 @@ flowchart LR
 
 `SettingsBackedToolRegistry` 在 agent-server 启动和每轮 user message 进入 runtime 前按 `settings.json` 文件戳刷新 builtin tool；`disabled` 列表回流到 `console.log`，便于排错；当 `workspaceRegistry` 缺失时，三个 file/workspace tool 直接进 disabled；当缺少 `WorkspaceAskResolver` 时，`workspace.askUser` 单独进 disabled。
 
-本目录不再包含私有 `tools[] + command` 插件运行时。本地 Action manifest 只负责 prompt 模板、`kind`、`globalShortcut` 与可选 `actionBinding`；只有 plugin action 的外部能力通过标准 MCP tool 进入 session-scoped registry，skill action 只提交渲染后的普通 prompt。
+本目录不再包含私有 `tools[] + command` 插件运行时。本地 Action manifest 只负责 prompt 模板、`kind`、`globalShortcut` 与可选 `actionBinding`；只有 plugin action 的外部能力通过标准 MCP tool 进入 thread-scoped registry，skill action 只提交渲染后的普通 prompt。
 
 ## 编辑此目录的约束
 
@@ -64,10 +64,10 @@ flowchart LR
 
 `MetaToolUseTool`（常量 `META_TOOL_NAME = "use_tools"`）是工具集的激活入口，与普通 builtin tool 有以下本质区别：
 
-- 不进入 `registerBuiltins` / `registerTools` 的 builtin 注册流程，由 `SessionScopedToolRegistry` 单独管理。
-- 不受 `~/.spotAgent/settings.json` 的 `allowlist` / `denylist` 影响；无论 settings 如何配置，未激活 session 始终只暴露这一个 tool。
+- 不进入 `registerBuiltins` / `registerTools` 的 builtin 注册流程，由 `ThreadScopedToolRegistry` 单独管理。
+- 不受 `~/.spotAgent/settings.json` 的 `allowlist` / `denylist` 影响；无论 settings 如何配置，未激活 thread 始终只暴露这一个 tool。
 - 激活后 meta-tool 仍保留在 registry 里；重复调用走幂等路径，返回 `META_TOOL_ALREADY_ACTIVE_RESULT`，不会重复扩展工具集。
-- 首次激活返回 `META_TOOL_FIRST_ACTIVATION_RESULT`，runtime 随即把完整 builtin + MCP 工具集注入当前 session。
+- 首次激活返回 `META_TOOL_FIRST_ACTIVATION_RESULT`，runtime 随即把完整 builtin + MCP 工具集注入当前 thread。
 
 导出常量：`META_TOOL_NAME`、`META_TOOL_FIRST_ACTIVATION_RESULT`、`META_TOOL_ALREADY_ACTIVE_RESULT`。
 

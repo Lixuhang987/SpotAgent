@@ -1,9 +1,9 @@
 import type { AgentTool } from "@handagent/core/tools/AgentTool.ts";
 import { ToolRegistry } from "@handagent/core/tools/ToolRegistry.ts";
-import type { SessionActionBinding } from "@handagent/core/storage/index.ts";
+import type { ThreadActionBinding } from "@handagent/core/storage/index.ts";
 import { MetaToolUseTool } from "@handagent/core/tools/MetaToolUseTool.ts";
 
-export class SessionScopedToolRegistry {
+export class ThreadScopedToolRegistry {
   private readonly metaTool: AgentTool = MetaToolUseTool.create();
   private readonly activated = new Set<string>();
   private readonly registries = new Map<string, ToolRegistry>();
@@ -20,16 +20,16 @@ export class SessionScopedToolRegistry {
     } = {},
   ) {}
 
-  async refreshForSession(
-    sessionId: string,
-    binding: SessionActionBinding | undefined,
+  async refreshForThread(
+    threadId: string,
+    binding: ThreadActionBinding | undefined,
   ): Promise<void> {
-    const registry = this.registryForSession(sessionId);
+    const registry = this.registryForThread(threadId);
     if (binding) {
-      this.activated.add(sessionId);
+      this.activated.add(threadId);
     }
-    if (this.activated.has(sessionId)) {
-      await this.refreshActivated(sessionId, binding, registry);
+    if (this.activated.has(threadId)) {
+      await this.refreshActivated(threadId, binding, registry);
       return;
     }
     if (this.options.exposeBuiltinToolsBeforeActivation) {
@@ -42,35 +42,35 @@ export class SessionScopedToolRegistry {
     registry.replaceAll([this.metaTool]);
   }
 
-  async activate(sessionId: string): Promise<void> {
-    this.activated.add(sessionId);
-    await this.refreshActivated(sessionId, undefined, this.registryForSession(sessionId));
+  async activate(threadId: string): Promise<void> {
+    this.activated.add(threadId);
+    await this.refreshActivated(threadId, undefined, this.registryForThread(threadId));
   }
 
-  isActivated(sessionId: string): boolean {
-    return this.activated.has(sessionId);
+  isActivated(threadId: string): boolean {
+    return this.activated.has(threadId);
   }
 
-  registryForSession(sessionId: string): ToolRegistry {
-    let registry = this.registries.get(sessionId);
+  registryForThread(threadId: string): ToolRegistry {
+    let registry = this.registries.get(threadId);
     if (!registry) {
       registry = new ToolRegistry([this.metaTool]);
-      this.registries.set(sessionId, registry);
+      this.registries.set(threadId, registry);
     }
     return registry;
   }
 
-  forgetSession(sessionId: string): void {
-    this.activated.delete(sessionId);
-    this.registries.delete(sessionId);
+  forgetThread(threadId: string): void {
+    this.activated.delete(threadId);
+    this.registries.delete(threadId);
   }
 
   private async refreshActivated(
-    sessionId: string,
-    binding: SessionActionBinding | undefined,
+    threadId: string,
+    binding: ThreadActionBinding | undefined,
     registry: ToolRegistry,
   ): Promise<void> {
-    void sessionId;
+    void threadId;
     const tools: AgentTool[] = [this.metaTool, ...this.options.builtinRegistry.all()];
 
     const serverIds = new Set([

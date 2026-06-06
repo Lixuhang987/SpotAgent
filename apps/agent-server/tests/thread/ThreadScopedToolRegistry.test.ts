@@ -3,7 +3,7 @@ import { MockLLMClient } from "@handagent/core/llm/MockLLMClient.ts";
 import { AgentRuntime } from "@handagent/core/runtime/AgentRuntime.ts";
 import type { AgentTool } from "@handagent/core/tools/AgentTool.ts";
 import { ToolRegistry } from "@handagent/core/tools/ToolRegistry.ts";
-import { SessionScopedToolRegistry } from "../../src/actions/SessionScopedToolRegistry.ts";
+import { ThreadScopedToolRegistry } from "../../src/actions/ThreadScopedToolRegistry.ts";
 
 function fakeTool(name: string): AgentTool {
   return {
@@ -18,21 +18,21 @@ function buildScoped(options?: {
   builtin?: AgentTool[];
   mcp?: Record<string, AgentTool[]>;
   globalMcpServerIds?: string[];
-}): SessionScopedToolRegistry {
+}): ThreadScopedToolRegistry {
   const builtin = new ToolRegistry(options?.builtin ?? [fakeTool("frontmost.app")]);
-  return new SessionScopedToolRegistry({
+  return new ThreadScopedToolRegistry({
     builtinRegistry: builtin,
     globalMcpServerIds: options?.globalMcpServerIds ?? [],
     listMcpTools: async (id) => options?.mcp?.[id] ?? [],
   });
 }
 
-describe("SessionScopedToolRegistry lazy activation", () => {
+describe("ThreadScopedToolRegistry lazy activation", () => {
   it("only exposes the meta-tool before activation", async () => {
     const scoped = buildScoped();
-    await scoped.refreshForSession("s1", undefined);
+    await scoped.refreshForThread("s1", undefined);
 
-    expect(scoped.registryForSession("s1").list().map((t) => t.name)).toEqual(["use_tools"]);
+    expect(scoped.registryForThread("s1").list().map((t) => t.name)).toEqual(["use_tools"]);
     expect(scoped.isActivated("s1")).toBe(false);
   });
 
@@ -45,7 +45,7 @@ describe("SessionScopedToolRegistry lazy activation", () => {
 
     await scoped.activate("s1");
 
-    expect(scoped.registryForSession("s1").list().map((t) => t.name)).toEqual([
+    expect(scoped.registryForThread("s1").list().map((t) => t.name)).toEqual([
       "use_tools",
       "frontmost.app",
       "clipboard.read",
@@ -54,30 +54,30 @@ describe("SessionScopedToolRegistry lazy activation", () => {
     expect(scoped.isActivated("s1")).toBe(true);
   });
 
-  it("isolates activation state per session", async () => {
+  it("isolates activation state per Thread", async () => {
     const scoped = buildScoped();
     await scoped.activate("s1");
-    await scoped.refreshForSession("s2", undefined);
+    await scoped.refreshForThread("s2", undefined);
 
     expect(scoped.isActivated("s1")).toBe(true);
     expect(scoped.isActivated("s2")).toBe(false);
-    expect(scoped.registryForSession("s2").list().map((t) => t.name)).toEqual(["use_tools"]);
-    expect(scoped.registryForSession("s1").list().map((t) => t.name)).toEqual([
+    expect(scoped.registryForThread("s2").list().map((t) => t.name)).toEqual(["use_tools"]);
+    expect(scoped.registryForThread("s1").list().map((t) => t.name)).toEqual([
       "use_tools",
       "frontmost.app",
     ]);
   });
 
-  it("plugin binding session skips meta-only and goes straight to full tools", async () => {
+  it("plugin binding Thread skips meta-only and goes straight to full tools", async () => {
     const scoped = buildScoped({
       builtin: [fakeTool("frontmost.app")],
       mcp: { srv: [fakeTool("mcp.srv.echo")] },
       globalMcpServerIds: [],
     });
 
-    await scoped.refreshForSession("s1", { mcpServerIds: ["srv"] });
+    await scoped.refreshForThread("s1", { mcpServerIds: ["srv"] });
 
-    expect(scoped.registryForSession("s1").list().map((t) => t.name)).toEqual([
+    expect(scoped.registryForThread("s1").list().map((t) => t.name)).toEqual([
       "use_tools",
       "frontmost.app",
       "mcp.srv.echo",
@@ -85,26 +85,26 @@ describe("SessionScopedToolRegistry lazy activation", () => {
     expect(scoped.isActivated("s1")).toBe(true);
   });
 
-  it("forgetSession drops activation state", async () => {
+  it("forgetThread drops activation state", async () => {
     const scoped = buildScoped();
     await scoped.activate("s1");
     expect(scoped.isActivated("s1")).toBe(true);
 
-    scoped.forgetSession("s1");
+    scoped.forgetThread("s1");
     expect(scoped.isActivated("s1")).toBe(false);
   });
 
-  it("does not rewrite one session registry when another session refreshes", async () => {
+  it("does not rewrite one Thread registry when another Thread refreshes", async () => {
     const scoped = buildScoped({
       builtin: [fakeTool("frontmost.app"), fakeTool("clipboard.read")],
     });
 
     await scoped.activate("s1");
-    const s1Registry = scoped.registryForSession("s1");
+    const s1Registry = scoped.registryForThread("s1");
 
-    await scoped.refreshForSession("s2", undefined);
+    await scoped.refreshForThread("s2", undefined);
 
-    expect(scoped.registryForSession("s2").list().map((t) => t.name)).toEqual(["use_tools"]);
+    expect(scoped.registryForThread("s2").list().map((t) => t.name)).toEqual(["use_tools"]);
     expect(s1Registry.list().map((t) => t.name)).toEqual([
       "use_tools",
       "frontmost.app",
@@ -123,26 +123,26 @@ describe("SessionScopedToolRegistry lazy activation", () => {
         return "ok";
       },
     };
-    const scoped = new SessionScopedToolRegistry({
+    const scoped = new ThreadScopedToolRegistry({
       builtinRegistry: new ToolRegistry([fileWriteTool]),
       globalMcpServerIds: [],
       listMcpTools: async () => [],
       exposeBuiltinToolsBeforeActivation: true,
     });
 
-    await scoped.refreshForSession("mock-session", undefined);
+    await scoped.refreshForThread("mock-Thread", undefined);
     const runtime = new AgentRuntime(
       new MockLLMClient(),
-      scoped.registryForSession("mock-session"),
+      scoped.registryForThread("mock-Thread"),
       {
-        isSessionActivated: (sessionId) => scoped.isActivated(sessionId),
+        isThreadActivated: (threadId) => scoped.isActivated(threadId),
       },
     );
 
     const result = await runtime.runWithMessages(
       [{ role: "user", content: "please [mock:file-write]" }],
       () => {},
-      { sessionId: "mock-session" },
+      { threadId: "mock-Thread" },
     );
 
     expect(fileWriteCalls).toEqual([
@@ -160,7 +160,7 @@ describe("SessionScopedToolRegistry lazy activation", () => {
 
   it("does not eagerly load MCP tools when only builtin tools are needed for mock LLM scenarios", async () => {
     let listMcpToolCalls = 0;
-    const scoped = new SessionScopedToolRegistry({
+    const scoped = new ThreadScopedToolRegistry({
       builtinRegistry: new ToolRegistry([fakeTool("file.write")]),
       globalMcpServerIds: ["filesystem"],
       listMcpTools: async () => {
@@ -170,11 +170,11 @@ describe("SessionScopedToolRegistry lazy activation", () => {
       exposeBuiltinToolsBeforeActivation: true,
     });
 
-    await scoped.refreshForSession("mock-session", undefined);
+    await scoped.refreshForThread("mock-Thread", undefined);
 
     expect(listMcpToolCalls).toBe(0);
-    expect(scoped.isActivated("mock-session")).toBe(false);
-    expect(scoped.registryForSession("mock-session").list().map((t) => t.name)).toEqual([
+    expect(scoped.isActivated("mock-Thread")).toBe(false);
+    expect(scoped.registryForThread("mock-Thread").list().map((t) => t.name)).toEqual([
       "use_tools",
       "file.write",
     ]);

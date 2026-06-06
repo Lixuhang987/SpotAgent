@@ -1,21 +1,21 @@
 import { randomUUID } from "node:crypto";
 import type {
   WorkspaceAskCandidate,
-} from "@handagent/core/protocol/SessionProtocolShared.ts";
+} from "@handagent/core/protocol/ThreadProtocolShared.ts";
 import type { ClientResponse } from "@handagent/core/protocol/ClientResponse.ts";
 import type { ServerRequest } from "@handagent/core/protocol/ServerRequest.ts";
 import type {
   WorkspaceAskResolver,
   WorkspaceAskUserResult,
 } from "@handagent/core/tools/builtins/WorkspaceAskUserTool.ts";
-import type { SessionBindingToken } from "./SessionPermissionBridge.ts";
+import type { ThreadBindingToken } from "./ThreadPermissionBridge.ts";
 
-type Send = (message: Extract<ServerRequest, { type: "workspace_ask" }>) => void;
+type Send = (message: Extract<ServerRequest, { type: "workspace.requested" }>) => void;
 
 type PendingJob = {
   requestId: string;
-  sessionId: string;
-  token: SessionBindingToken;
+  threadId: string;
+  token: ThreadBindingToken;
   send: Send;
   toolCallId?: string;
   prompt: string;
@@ -24,60 +24,60 @@ type PendingJob = {
   timeout?: ReturnType<typeof setTimeout>;
 };
 
-export type SessionWorkspaceAskBridgeOptions = {
+export type ThreadWorkspaceAskBridgeOptions = {
   defaultTimeoutMs?: number;
 };
 
-export class SessionWorkspaceAskBridge {
-  private readonly sessions = new Map<string, { token: SessionBindingToken; send: Send }>();
+export class ThreadWorkspaceAskBridge {
+  private readonly threads = new Map<string, { token: ThreadBindingToken; send: Send }>();
   private readonly active = new Map<string, PendingJob>();
   private readonly queues = new Map<string, PendingJob[]>();
   private readonly defaultTimeoutMs: number;
   private nextBindingToken = 0;
 
-  constructor(options: SessionWorkspaceAskBridgeOptions = {}) {
+  constructor(options: ThreadWorkspaceAskBridgeOptions = {}) {
     this.defaultTimeoutMs = options.defaultTimeoutMs ?? 60_000;
   }
 
-  bindSession(sessionId: string, send: Send): SessionBindingToken {
+  bindThread(threadId: string, send: Send): ThreadBindingToken {
     const token = ++this.nextBindingToken;
-    this.sessions.set(sessionId, { token, send });
+    this.threads.set(threadId, { token, send });
     return token;
   }
 
-  unbindSession(sessionId: string, token?: SessionBindingToken): boolean {
-    const binding = this.sessions.get(sessionId);
+  unbindThread(threadId: string, token?: ThreadBindingToken): boolean {
+    const binding = this.threads.get(threadId);
     if (!binding) {
       if (token !== undefined) {
-        this.cancelPendingForToken(sessionId, token);
+        this.cancelPendingForToken(threadId, token);
       }
       return false;
     }
     if (token !== undefined && binding.token !== token) {
-      this.cancelPendingForToken(sessionId, token);
+      this.cancelPendingForToken(threadId, token);
       return false;
     }
 
-    this.sessions.delete(sessionId);
-    this.cancelPendingForToken(sessionId, binding.token);
+    this.threads.delete(threadId);
+    this.cancelPendingForToken(threadId, binding.token);
     return true;
   }
 
   ask: WorkspaceAskResolver = async (request) => {
-    const sessionId = request.sessionId;
-    if (!sessionId) {
+    const threadId = threadIdFromCoreRequest(request);
+    if (!threadId) {
       return { cancelled: true };
     }
-    const binding = this.sessions.get(sessionId);
+    const binding = this.threads.get(threadId);
     if (!binding) {
       return { cancelled: true };
     }
 
-    const requestId = `${sessionId}:${randomUUID()}`;
+    const requestId = `${threadId}:${randomUUID()}`;
     return new Promise((resolve) => {
       const job: PendingJob = {
         requestId,
-        sessionId,
+        threadId,
         token: binding.token,
         send: binding.send,
         toolCallId: request.toolCallId,
@@ -85,22 +85,22 @@ export class SessionWorkspaceAskBridge {
         candidates: request.candidates,
         resolve,
       };
-      const queue = this.queues.get(sessionId) ?? [];
+      const queue = this.queues.get(threadId) ?? [];
       queue.push(job);
-      this.queues.set(sessionId, queue);
-      this.dispatchNext(sessionId);
+      this.queues.set(threadId, queue);
+      this.dispatchNext(threadId);
     });
   };
 
   handleResponse(
-    response: Extract<ClientResponse, { type: "workspace_answer" }>,
-    token?: SessionBindingToken,
+    response: Extract<ClientResponse, { type: "workspace.answered" }>,
+    token?: ThreadBindingToken,
   ): void {
-    const sessionId = sessionIdFromRequestId(response.requestId);
-    const pending = this.active.get(sessionId);
+    const threadId = threadIdFromRequestId(response.requestId);
+    const pending = this.active.get(threadId);
     if (!pending || pending.requestId !== response.requestId) return;
     if (token !== undefined && pending.token !== token) return;
-    const binding = this.sessions.get(sessionId);
+    const binding = this.threads.get(threadId);
     if (!binding || binding.token !== pending.token) return;
 
     this.resolveJob(
@@ -111,33 +111,33 @@ export class SessionWorkspaceAskBridge {
     );
   }
 
-  private dispatchNext(sessionId: string): void {
-    if (this.active.has(sessionId)) return;
-    const queue = this.queues.get(sessionId) ?? [];
+  private dispatchNext(threadId: string): void {
+    if (this.active.has(threadId)) return;
+    const queue = this.queues.get(threadId) ?? [];
     const next = queue.shift();
     if (!next) return;
     if (queue.length === 0) {
-      this.queues.delete(sessionId);
+      this.queues.delete(threadId);
     } else {
-      this.queues.set(sessionId, queue);
+      this.queues.set(threadId, queue);
     }
 
-    const binding = this.sessions.get(sessionId);
+    const binding = this.threads.get(threadId);
     if (!binding || binding.token !== next.token) {
       next.resolve({ cancelled: true });
-      this.dispatchNext(sessionId);
+      this.dispatchNext(threadId);
       return;
     }
 
-    this.active.set(sessionId, next);
+    this.active.set(threadId, next);
     next.timeout = setTimeout(() => {
       this.resolveJob(next, { cancelled: true });
     }, this.defaultTimeoutMs);
 
     next.send({
-      type: "workspace_ask",
+      type: "workspace.requested",
       requestId: next.requestId,
-      sessionId,
+      threadId,
       timestamp: new Date().toISOString(),
       payload: {
         toolCallId: next.toolCallId,
@@ -152,18 +152,18 @@ export class SessionWorkspaceAskBridge {
     if (job.timeout) {
       clearTimeout(job.timeout);
     }
-    this.active.delete(job.sessionId);
+    this.active.delete(job.threadId);
     job.resolve(result);
-    this.dispatchNext(job.sessionId);
+    this.dispatchNext(job.threadId);
   }
 
-  private cancelPendingForToken(sessionId: string, token: SessionBindingToken): void {
-    const active = this.active.get(sessionId);
+  private cancelPendingForToken(threadId: string, token: ThreadBindingToken): void {
+    const active = this.active.get(threadId);
     if (active?.token === token) {
       this.resolveJob(active, { cancelled: true });
     }
 
-    const queue = this.queues.get(sessionId) ?? [];
+    const queue = this.queues.get(threadId) ?? [];
     const remaining: PendingJob[] = [];
     for (const job of queue) {
       if (job.token === token) {
@@ -173,14 +173,20 @@ export class SessionWorkspaceAskBridge {
       }
     }
     if (remaining.length === 0) {
-      this.queues.delete(sessionId);
+      this.queues.delete(threadId);
     } else {
-      this.queues.set(sessionId, remaining);
+      this.queues.set(threadId, remaining);
     }
   }
 }
 
-function sessionIdFromRequestId(requestId: string): string {
+function threadIdFromRequestId(requestId: string): string {
   const separator = requestId.lastIndexOf(":");
   return separator === -1 ? requestId : requestId.slice(0, separator);
+}
+
+function threadIdFromCoreRequest(
+  request: Parameters<WorkspaceAskResolver>[0],
+): string | undefined {
+  return request.threadId;
 }

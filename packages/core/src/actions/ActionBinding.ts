@@ -1,4 +1,4 @@
-import type { SessionActionBinding } from "../storage/SessionRecord.ts";
+import type { ThreadActionBinding } from "../storage/ThreadRecord.ts";
 import type { ActionPluginManifest } from "./PluginManifest.ts";
 
 export type RequestedActionBinding = {
@@ -9,7 +9,7 @@ export type RequestedActionBinding = {
 export function resolveActionBindingFromManifest(
   manifest: ActionPluginManifest,
   request: RequestedActionBinding,
-): SessionActionBinding {
+): ThreadActionBinding {
   if (manifest.enabled === false) {
     throw new Error(`Plugin disabled: ${manifest.id}`);
   }

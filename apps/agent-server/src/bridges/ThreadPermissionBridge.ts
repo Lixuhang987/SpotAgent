@@ -3,69 +3,69 @@ import type { AskResolver } from "@handagent/core/permission/FilePermissionPolic
 import type { ClientResponse } from "@handagent/core/protocol/ClientResponse.ts";
 import type { ServerRequest } from "@handagent/core/protocol/ServerRequest.ts";
 
-type Send = (message: Extract<ServerRequest, { type: "permission_ask" }>) => void;
-export type SessionBindingToken = number;
+type Send = (message: Extract<ServerRequest, { type: "permission.requested" }>) => void;
+export type ThreadBindingToken = number;
 
 type Pending = {
-  sessionId: string;
-  token: SessionBindingToken;
+  threadId: string;
+  token: ThreadBindingToken;
   resolve: (resolution: {
     decision: "allow" | "deny";
-    remember?: "once" | "session" | "always";
+    remember?: "once" | "thread" | "always";
     reason?: string;
   }) => void;
   timeout: ReturnType<typeof setTimeout>;
 };
 
-export type SessionPermissionBridgeOptions = {
+export type ThreadPermissionBridgeOptions = {
   defaultTimeoutMs?: number;
 };
 
-export class SessionPermissionBridge {
-  private readonly sessions = new Map<string, { token: SessionBindingToken; send: Send }>();
+export class ThreadPermissionBridge {
+  private readonly threads = new Map<string, { token: ThreadBindingToken; send: Send }>();
   private readonly pending = new Map<string, Pending>();
   private readonly defaultTimeoutMs: number;
   private nextBindingToken = 0;
 
-  constructor(options: SessionPermissionBridgeOptions = {}) {
+  constructor(options: ThreadPermissionBridgeOptions = {}) {
     this.defaultTimeoutMs = options.defaultTimeoutMs ?? 60_000;
   }
 
-  bindSession(sessionId: string, send: Send): SessionBindingToken {
+  bindThread(threadId: string, send: Send): ThreadBindingToken {
     const token = ++this.nextBindingToken;
-    this.sessions.set(sessionId, { token, send });
+    this.threads.set(threadId, { token, send });
     return token;
   }
 
-  unbindSession(sessionId: string, token?: SessionBindingToken): boolean {
-    const binding = this.sessions.get(sessionId);
+  unbindThread(threadId: string, token?: ThreadBindingToken): boolean {
+    const binding = this.threads.get(threadId);
     if (!binding) {
       if (token !== undefined) {
-        this.failPendingForToken(sessionId, token);
+        this.failPendingForToken(threadId, token);
       }
       return false;
     }
     if (token !== undefined && binding.token !== token) {
-      this.failPendingForToken(sessionId, token);
+      this.failPendingForToken(threadId, token);
       return false;
     }
 
-    this.sessions.delete(sessionId);
-    this.failPendingForToken(sessionId, binding.token);
+    this.threads.delete(threadId);
+    this.failPendingForToken(threadId, binding.token);
     return true;
   }
 
   ask: AskResolver = async (request) => {
-    const sessionId = request.sessionId;
-    if (!sessionId) {
-      return { decision: "deny", reason: "no session id" };
+    const threadId = threadIdFromCoreRequest(request);
+    if (!threadId) {
+      return { decision: "deny", reason: "no thread id" };
     }
-    const binding = this.sessions.get(sessionId);
+    const binding = this.threads.get(threadId);
     if (!binding) {
       return { decision: "deny", reason: "no active socket" };
     }
 
-    const requestId = `${sessionId}:${randomUUID()}`;
+    const requestId = `${threadId}:${randomUUID()}`;
     const timeoutMs = this.defaultTimeoutMs;
 
     return new Promise((resolve) => {
@@ -75,16 +75,16 @@ export class SessionPermissionBridge {
       }, timeoutMs);
 
       this.pending.set(requestId, {
-        sessionId,
+        threadId,
         token: binding.token,
         resolve,
         timeout,
       });
 
       binding.send({
-        type: "permission_ask",
+        type: "permission.requested",
         requestId,
-        sessionId,
+        threadId,
         timestamp: new Date().toISOString(),
         payload: {
           toolName: request.toolName,
@@ -97,30 +97,34 @@ export class SessionPermissionBridge {
   };
 
   handleResponse(
-    response: Extract<ClientResponse, { type: "permission_answer" }>,
-    token?: SessionBindingToken,
+    response: Extract<ClientResponse, { type: "permission.answered" }>,
+    token?: ThreadBindingToken,
   ): void {
     const pending = this.pending.get(response.requestId);
     if (!pending) return;
     if (token !== undefined && pending.token !== token) return;
-    const binding = this.sessions.get(pending.sessionId);
+    const binding = this.threads.get(pending.threadId);
     if (!binding || binding.token !== pending.token) return;
 
     clearTimeout(pending.timeout);
     this.pending.delete(response.requestId);
     pending.resolve({
       decision: response.payload.decision,
-      remember: response.payload.scope,
-      reason: response.payload.reason,
+      ...(response.payload.scope ? { remember: response.payload.scope } : {}),
+      ...(response.payload.reason ? { reason: response.payload.reason } : {}),
     });
   }
 
-  private failPendingForToken(sessionId: string, token: SessionBindingToken): void {
+  private failPendingForToken(threadId: string, token: ThreadBindingToken): void {
     for (const [requestId, pending] of this.pending) {
-      if (pending.sessionId !== sessionId || pending.token !== token) continue;
+      if (pending.threadId !== threadId || pending.token !== token) continue;
       clearTimeout(pending.timeout);
-      pending.resolve({ decision: "deny", reason: "session closed" });
+      pending.resolve({ decision: "deny", reason: "thread closed" });
       this.pending.delete(requestId);
     }
   }
+}
+
+function threadIdFromCoreRequest(request: Parameters<AskResolver>[0]): string | undefined {
+  return request.threadId;
 }

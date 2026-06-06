@@ -26,7 +26,7 @@
 
 ## 关键数据流
 
-### 1. 会话阶段
+### 1. 输入阶段
 
 - `AgentSession.open(input)` 接收 `AgentSessionInput`
 - 内部通过 `selectionTextFromResult()` 提取 `selectedText`
@@ -34,9 +34,8 @@
 
 ### 2. runtime 阶段
 
-- `AgentSessionHandle.submit(command)` 作为 core 对 app-server 暴露的会话入口，当前消费 `turn_start` / `turn_interrupt`
-- `AgentSessionHandle.nextEvent()` 作为事件消费出口，按顺序吐出 `SessionEvent`
-- handle 内部调用 `AgentRuntime.runWithMessages(messages, onEvent, {sessionId})`
+- 新主路径由 agent-server 的 `ThreadRuntimeOrchestrator` 调 `AgentRuntime.runWithMessages(messages, onEvent, {threadId})`
+- 旧 `AgentSessionHandle.submit(command)` / `nextEvent()` 仍是 `SessionCommand` / `SessionEvent` 迁移残留，不再作为 app-server 新主入口扩展。
 - 每轮先通过 `SystemPrompt` 把默认 system prompt sections 临时前置到 LLM 输入，再消费 `LLMClient.stream(llmMessages, registry.list(), {blobStore?})`
 - 处理 `toolCalls`：`PermissionPolicy.check` → ask / allow / deny → tool 调用 → 写 tool message
 - 详细流程图见 [runtime/runtime.md](/Users/mu9/proj/handAgent/packages/core/src/runtime/runtime.md)
@@ -56,15 +55,15 @@
 - 平台类（依赖 `PlatformAdapter`）：`clipboard.read`、`app.frontmost`、`window.list`、`screen.capture`、`ocr.read`、`accessibility.snapshot`、`accessibility.action`。
 - 工作区类（依赖 `WorkspaceRegistry`）：`workspace.list`、`workspace.askUser`、`file.read`、`file.write`。
 
-plugin action 绑定的外部能力不由 core tools 目录加载私有插件进程；agent-server 会按 session metadata 组合 builtin tools 与 MCP tools。skill action 不创建 session binding，只作为普通 prompt 进入 runtime。
+plugin action 绑定的外部能力不由 core tools 目录加载私有插件进程；agent-server 会按 thread metadata 组合 builtin tools 与 MCP tools。skill action 不创建 thread binding，只作为普通 prompt 进入 runtime。
 
 完整入参 / 实现位置见 [tools/tools.md](/Users/mu9/proj/handAgent/packages/core/src/tools/tools.md)。
 
 ### 5. 权限阶段
 
 - `AgentRuntime` 在 `tool.call` 前调 `PermissionPolicy.check`，进入 `ask` 时通过 `resolveAsk` 询问。
-- 生产路径由 agent-server 注入 `FilePermissionPolicy(askResolver = SessionPermissionBridge.ask)`，UI 在 SessionWindow 内联气泡。
-- 三档记忆：once / session / always；always 持久化到 `~/.spotAgent/permissions.json`。
+- 生产路径由 agent-server 注入 `FilePermissionPolicy(askResolver = ThreadPermissionBridge.ask)`，UI 在 thread 内联气泡。
+- 三档记忆：once / thread / always；always 持久化到 `~/.spotAgent/permissions.json`。
 
 ### 6. 持久化阶段
 
@@ -85,7 +84,7 @@ plugin action 绑定的外部能力不由 core tools 目录加载私有插件进
 - tool 结果统一序列化为字符串再回灌；`MAX_OUTPUT_BYTES = 8 KiB` 截断。
 - `VercelClient` 当前默认模型 `gpt-5-mini`。
 - user message 支持字符串或多模态 content parts；持久化层仍保存 STUB 文本，agent-server 在 runtime 前展开 image STUB。
-- `assistant_delta` 来自 `LLMStreamEvent.text_delta`，desktop UI 可逐段拼接 assistant 回复。
+- `assistant.delta` 来自 `LLMStreamEvent.text_delta`，desktop UI 可逐段拼接 assistant 回复。
 - 文件 tool 已使用 workspace 沙箱、basename symlink 拒绝、10 MiB 写入上限与原子写。
 - `FilePermissionPolicy.cache` 与 `FileWorkspaceRegistry.cache` 不启 watcher；每次公开读写入口前比较持久化文件 `mtimeMs + size`，检测到外部修改后重读，保证 Settings 或外部撤销权限后下一次 tool 调用可见。
 

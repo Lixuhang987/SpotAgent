@@ -81,13 +81,13 @@ describe("WorkspaceAskUserTool", () => {
 
     const result = await tool.call(
       { prompt: "保存到哪个 workspace？", candidateIds: ["docs", "code"] },
-      { sessionId: "session-1", toolCallId: "tool-1" },
+      { threadId: "thread-1", toolCallId: "tool-1" },
     );
 
     expect(result).toEqual({ workspaceId: "docs" });
     expect(seenRequests).toEqual([
       {
-        sessionId: "session-1",
+        threadId: "thread-1",
         toolCallId: "tool-1",
         prompt: "保存到哪个 workspace？",
         candidates: [

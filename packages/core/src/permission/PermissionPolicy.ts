@@ -3,7 +3,7 @@ export type PermissionDecision = "allow" | "deny" | "ask";
 export type PermissionRequest = {
   toolName: string;
   arguments: Record<string, unknown>;
-  sessionId?: string;
+  threadId?: string;
   toolCallId: string;
 };
 
@@ -11,7 +11,7 @@ export type PermissionResolution =
   | { decision: "allow"; remember?: PermissionScope }
   | { decision: "deny"; remember?: PermissionScope; reason?: string };
 
-export type PermissionScope = "once" | "session" | "always";
+export type PermissionScope = "once" | "thread" | "always";
 
 export interface PermissionPolicy {
   check(request: PermissionRequest): Promise<PermissionDecision>;

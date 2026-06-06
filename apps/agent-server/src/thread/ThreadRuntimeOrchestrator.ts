@@ -4,16 +4,16 @@ import type {
   AgentRuntimeEvent,
   AgentRuntimeRunOptions,
 } from "@handagent/core/runtime/AgentRuntime.ts";
-import type { SessionEvent as ProtocolSessionEvent } from "@handagent/core/protocol/SessionEvent.ts";
-import type { UserMessageAttachment } from "@handagent/core/protocol/SessionProtocolShared.ts";
-import type { SessionEvent as AuditSessionEvent } from "@handagent/core/storage/index.ts";
-import type { SessionPersistence } from "./SessionPersistence.ts";
-import { RUN_INTERRUPTED_CODE, RUN_INTERRUPTED_MESSAGE } from "./SessionPersistence.ts";
+import type { ThreadNotification as ProtocolThreadNotification } from "@handagent/core/protocol/ThreadNotification.ts";
+import type { ThreadAttachment } from "@handagent/core/protocol/ThreadProtocolShared.ts";
+import type { ThreadAuditEvent } from "@handagent/core/storage/index.ts";
+import type { ThreadPersistence } from "./ThreadPersistence.ts";
+import { RUN_INTERRUPTED_CODE, RUN_INTERRUPTED_MESSAGE } from "./ThreadPersistence.ts";
 import {
   agentMessagesToRuntimeMessages,
   toAuditEvent,
   toErrorMessage,
-  toSessionEvent,
+  toThreadNotification,
 } from "../protocol/MessageTranslator.ts";
 
 type RuntimeLike = {
@@ -24,22 +24,22 @@ type RuntimeLike = {
   ): Promise<AgentRunResult>;
   waitForPendingSummaries?(messages?: AgentMessage[]): Promise<void>;
 };
-type RuntimeResolver = RuntimeLike | ((sessionId: string) => RuntimeLike);
+type RuntimeResolver = RuntimeLike | ((threadId: string) => RuntimeLike);
 
-type PushMessage = (message: ProtocolSessionEvent) => void;
-type BeforeRunHook = (sessionId: string) => void | Promise<void>;
+type PushMessage = (message: ProtocolThreadNotification) => void;
+type BeforeRunHook = (threadId: string) => void | Promise<void>;
 type OrchestratorOptions = {
   interruptWaitTimeoutMs?: number;
   interruptPollIntervalMs?: number;
 };
 
 type UserMessageInput = {
-  sessionId: string;
+  threadId: string;
   messageId: string;
   timestamp: string;
   payload: {
     text: string;
-    attachments?: UserMessageAttachment[];
+    attachments?: ThreadAttachment[];
   };
 };
 
@@ -54,7 +54,7 @@ type ActiveRun = {
 const DEFAULT_INTERRUPT_WAIT_TIMEOUT_MS = 3000;
 const DEFAULT_INTERRUPT_POLL_INTERVAL_MS = 10;
 
-export class SessionRuntimeOrchestrator {
+export class ThreadRuntimeOrchestrator {
   private readonly activeRuns = new Map<string, ActiveRun>();
   private nextGeneration = 0;
   private readonly interruptWaitTimeoutMs: number;
@@ -62,7 +62,7 @@ export class SessionRuntimeOrchestrator {
 
   constructor(
     private readonly runtimeResolver: RuntimeResolver,
-    private readonly persistence: SessionPersistence,
+    private readonly persistence: ThreadPersistence,
     private readonly now: () => string = () => new Date().toISOString(),
     private readonly beforeRun: BeforeRunHook = () => {},
     options: OrchestratorOptions = {},
@@ -77,7 +77,7 @@ export class SessionRuntimeOrchestrator {
     message: UserMessageInput,
     push: PushMessage,
   ): Promise<void> {
-    const { sessionId } = message;
+    const { threadId } = message;
     const activeRun: ActiveRun = {
       turnId: message.messageId,
       controller: new AbortController(),
@@ -86,19 +86,19 @@ export class SessionRuntimeOrchestrator {
       interruptionPersisted: false,
     };
     this.nextGeneration = activeRun.generation;
-    this.activeRuns.get(sessionId)?.controller.abort();
-    this.activeRuns.set(sessionId, activeRun);
+    this.activeRuns.get(threadId)?.controller.abort();
+    this.activeRuns.set(threadId, activeRun);
 
     await this.persistence.persistUserMessage(
-      sessionId,
+      threadId,
       message.payload.text,
       message.payload.attachments,
     );
-    await this.persistence.autoTitle(sessionId, message.payload.text);
+    await this.persistence.autoTitle(threadId, message.payload.text);
     push({
-      type: "user_message_recorded",
-      sessionId,
-      eventId: `${sessionId}-${message.messageId}-user-recorded`,
+      type: "user.message.recorded",
+      threadId,
+      notificationId: `${threadId}-${message.messageId}-user-recorded`,
       timestamp: this.now(),
       payload: {
         messageId: message.messageId,
@@ -106,29 +106,29 @@ export class SessionRuntimeOrchestrator {
       },
     });
     push({
-      type: "turn_started",
-      sessionId,
-      eventId: `${sessionId}-${message.messageId}-turn-started`,
+      type: "turn.started",
+      threadId,
+      notificationId: `${threadId}-${message.messageId}-turn-started`,
       turnId: message.messageId,
       timestamp: this.now(),
       payload: {},
     });
 
-    const history = await this.persistence.getMessages(sessionId);
-    await this.beforeRun(sessionId);
-    const runtime = this.runtimeForSession(sessionId);
+    const history = await this.persistence.getMessages(threadId);
+    await this.beforeRun(threadId);
+    const runtime = this.runtimeForThread(threadId);
     await runtime.waitForPendingSummaries?.(history);
     const runtimeHistory = agentMessagesToRuntimeMessages(history);
 
     try {
-      const events: AuditSessionEvent[] = [];
+      const events: ThreadAuditEvent[] = [];
       const result = await runtime.runWithMessages(
         runtimeHistory,
         (event) => {
-          if (!this.isActive(sessionId, activeRun) || activeRun.controller.signal.aborted) {
+          if (!this.isActive(threadId, activeRun) || activeRun.controller.signal.aborted) {
             return;
           }
-          const outgoing = toSessionEvent(sessionId, message.messageId, event, this.now());
+          const outgoing = toThreadNotification(threadId, message.messageId, event, this.now());
           if (outgoing) {
             push(outgoing);
           }
@@ -138,111 +138,111 @@ export class SessionRuntimeOrchestrator {
             events.push(auditEvent);
           }
         },
-        { sessionId, signal: activeRun.controller.signal },
+        { threadId, signal: activeRun.controller.signal },
       );
 
-      if (!this.isActive(sessionId, activeRun) || activeRun.controller.signal.aborted) {
-        if (this.isActive(sessionId, activeRun) && activeRun.interrupted) {
-          await this.persistInterrupted(sessionId, activeRun);
+      if (!this.isActive(threadId, activeRun) || activeRun.controller.signal.aborted) {
+        if (this.isActive(threadId, activeRun) && activeRun.interrupted) {
+          await this.persistInterrupted(threadId, activeRun);
         }
         return;
       }
       await this.persistence.persistRunResult(
-        sessionId,
+        threadId,
         mergeRuntimeResultWithPersistedHistory(history, result.messages),
         events,
       );
       push({
-        type: "turn_completed",
-        sessionId,
-        eventId: `${sessionId}-${message.messageId}-turn-completed`,
+        type: "turn.completed",
+        threadId,
+        notificationId: `${threadId}-${message.messageId}-turn-completed`,
         turnId: message.messageId,
         timestamp: this.now(),
         payload: { status: "completed" },
       });
       push({
-        type: "session_status_changed",
-        sessionId,
-        eventId: `${sessionId}-${message.messageId}-status-idle`,
+        type: "thread.status.changed",
+        threadId,
+        notificationId: `${threadId}-${message.messageId}-status-idle`,
         timestamp: this.now(),
         payload: { value: "idle" },
       });
     } catch (error) {
       if (isAbortError(error)) {
-        if (this.isActive(sessionId, activeRun)) {
+        if (this.isActive(threadId, activeRun)) {
           if (!activeRun.interrupted) {
-            this.emitInterrupted(sessionId, push, activeRun);
+            this.emitInterrupted(threadId, push, activeRun);
           }
-          await this.persistInterrupted(sessionId, activeRun);
+          await this.persistInterrupted(threadId, activeRun);
         }
         return;
       }
-      if (!this.isActive(sessionId, activeRun)) {
+      if (!this.isActive(threadId, activeRun)) {
         return;
       }
       if (activeRun.controller.signal.aborted) {
         if (activeRun.interrupted) {
-          await this.persistInterrupted(sessionId, activeRun);
+          await this.persistInterrupted(threadId, activeRun);
         }
         return;
       }
       const errorMessage = toErrorMessage(error);
       push({
-        type: "session_error",
-        sessionId,
-        eventId: `${sessionId}-${message.messageId}-error`,
+        type: "thread.error",
+        threadId,
+        notificationId: `${threadId}-${message.messageId}-error`,
         timestamp: this.now(),
         payload: {
           message: errorMessage,
         },
       });
       push({
-        type: "turn_completed",
-        sessionId,
-        eventId: `${sessionId}-${message.messageId}-turn-failed`,
+        type: "turn.completed",
+        threadId,
+        notificationId: `${threadId}-${message.messageId}-turn-failed`,
         turnId: message.messageId,
         timestamp: this.now(),
         payload: { status: "failed" },
       });
       push({
-        type: "session_status_changed",
-        sessionId,
-        eventId: `${sessionId}-${message.messageId}-status-failed`,
+        type: "thread.status.changed",
+        threadId,
+        notificationId: `${threadId}-${message.messageId}-status-failed`,
         timestamp: this.now(),
         payload: { value: "failed" },
       });
-      await this.persistence.persistError(sessionId, errorMessage);
+      await this.persistence.persistError(threadId, errorMessage);
     } finally {
-      if (this.isActive(sessionId, activeRun)) {
-        this.activeRuns.delete(sessionId);
+      if (this.isActive(threadId, activeRun)) {
+        this.activeRuns.delete(threadId);
       }
     }
   }
 
-  interruptSession(sessionId: string, push: PushMessage = () => {}): void {
-    const activeRun = this.activeRuns.get(sessionId);
+  interruptThread(threadId: string, push: PushMessage = () => {}): void {
+    const activeRun = this.activeRuns.get(threadId);
     if (!activeRun || activeRun.interrupted) return;
 
     activeRun.controller.abort();
-    this.emitInterrupted(sessionId, push, activeRun);
+    this.emitInterrupted(threadId, push, activeRun);
   }
 
-  isSessionRunning(sessionId: string): boolean {
-    return this.activeRuns.has(sessionId);
+  isThreadRunning(threadId: string): boolean {
+    return this.activeRuns.has(threadId);
   }
 
-  async interruptAndWait(sessionId: string, push: PushMessage = () => {}): Promise<void> {
-    const activeRun = this.activeRuns.get(sessionId);
+  async interruptAndWait(threadId: string, push: PushMessage = () => {}): Promise<void> {
+    const activeRun = this.activeRuns.get(threadId);
     if (!activeRun) return;
 
-    this.interruptSession(sessionId, push);
+    this.interruptThread(threadId, push);
 
     const startedAt = Date.now();
-    while (this.isActive(sessionId, activeRun)) {
+    while (this.isActive(threadId, activeRun)) {
       if (Date.now() - startedAt >= this.interruptWaitTimeoutMs) {
-        await this.persistInterrupted(sessionId, activeRun);
-        if (this.isActive(sessionId, activeRun)) {
-          this.activeRuns.delete(sessionId);
+        await this.persistInterrupted(threadId, activeRun);
+        if (this.isActive(threadId, activeRun)) {
+          this.activeRuns.delete(threadId);
         }
         return;
       }
@@ -250,42 +250,42 @@ export class SessionRuntimeOrchestrator {
     }
   }
 
-  private emitInterrupted(sessionId: string, push: PushMessage, activeRun: ActiveRun): void {
+  private emitInterrupted(threadId: string, push: PushMessage, activeRun: ActiveRun): void {
     activeRun.interrupted = true;
     push({
-      type: "turn_completed",
-      sessionId,
-      eventId: `${sessionId}-turn-interrupted`,
+      type: "turn.completed",
+      threadId,
+      notificationId: `${threadId}-turn-interrupted`,
       turnId: activeRun.turnId,
       timestamp: this.now(),
       payload: { status: "interrupted" },
     });
     push({
-      type: "session_status_changed",
-      sessionId,
-      eventId: `${sessionId}-status-interrupted`,
+      type: "thread.status.changed",
+      threadId,
+      notificationId: `${threadId}-status-interrupted`,
       timestamp: this.now(),
       payload: { value: "interrupted" },
     });
   }
 
-  private async persistInterrupted(sessionId: string, activeRun: ActiveRun): Promise<void> {
+  private async persistInterrupted(threadId: string, activeRun: ActiveRun): Promise<void> {
     if (!activeRun.interrupted || activeRun.interruptionPersisted) return;
     activeRun.interruptionPersisted = true;
     await this.persistence.persistError(
-      sessionId,
+      threadId,
       RUN_INTERRUPTED_MESSAGE,
       RUN_INTERRUPTED_CODE,
     );
   }
 
-  private isActive(sessionId: string, activeRun: ActiveRun): boolean {
-    return this.activeRuns.get(sessionId)?.generation === activeRun.generation;
+  private isActive(threadId: string, activeRun: ActiveRun): boolean {
+    return this.activeRuns.get(threadId)?.generation === activeRun.generation;
   }
 
-  private runtimeForSession(sessionId: string): RuntimeLike {
+  private runtimeForThread(threadId: string): RuntimeLike {
     return typeof this.runtimeResolver === "function"
-      ? this.runtimeResolver(sessionId)
+      ? this.runtimeResolver(threadId)
       : this.runtimeResolver;
   }
 }

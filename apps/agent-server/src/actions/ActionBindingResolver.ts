@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { SessionActionBinding } from "@handagent/core/storage/index.ts";
+import type { ThreadActionBinding } from "@handagent/core/storage/index.ts";
 import { parsePluginManifest } from "@handagent/core/actions/PluginManifest.ts";
 import {
   resolveActionBindingFromManifest,
@@ -10,7 +10,7 @@ import {
 export class ActionBindingResolver {
   constructor(private readonly options: { pluginsDir: string }) {}
 
-  async resolve(binding: RequestedActionBinding): Promise<SessionActionBinding> {
+  async resolve(binding: RequestedActionBinding): Promise<ThreadActionBinding> {
     const pluginDir = join(this.options.pluginsDir, binding.pluginId);
     const manifestPath = join(pluginDir, "plugin.json");
     const raw = await readFile(manifestPath, "utf8");

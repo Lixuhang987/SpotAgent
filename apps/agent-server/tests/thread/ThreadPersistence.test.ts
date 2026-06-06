@@ -1,28 +1,28 @@
 import { describe, expect, it } from "vitest";
 import type { AgentMessage } from "@handagent/core/runtime/AgentMessage.ts";
-import { InMemorySessionStore } from "@handagent/core/storage/index.ts";
+import { InMemoryThreadStore } from "@handagent/core/storage/index.ts";
 import { MemoryBlobStore } from "../support/MemoryBlobStore.ts";
-import { SessionPersistence } from "../../src/session/SessionPersistence.ts";
+import { ThreadPersistence } from "../../src/thread/ThreadPersistence.ts";
 
-describe("SessionPersistence", () => {
-  it("wraps session CRUD operations", async () => {
-    const persistence = new SessionPersistence(
-      new InMemorySessionStore(),
+describe("ThreadPersistence", () => {
+  it("wraps Thread CRUD operations", async () => {
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
       () => "2026-05-17T00:00:00.000Z",
     );
 
-    const session = await persistence.createSession("测试会话");
-    expect(session.metadata.title).toBe("测试会话");
+    const Thread = await persistence.createThread("测试 thread");
+    expect(Thread.metadata.preview).toBe("测试 thread");
 
-    await persistence.renameSession(session.metadata.id, "新标题");
-    const updated = await persistence.getSession(session.metadata.id);
-    expect(updated?.metadata.title).toBe("新标题");
+    await persistence.renameThread(Thread.metadata.id, "新预览");
+    const updated = await persistence.getThread(Thread.metadata.id);
+    expect(updated?.metadata.preview).toBe("新预览");
 
-    const sessions = await persistence.listSessions();
-    expect(sessions).toEqual([
+    const Threads = await persistence.listThreads();
+    expect(Threads).toEqual([
       {
-        id: session.metadata.id,
-        title: "新标题",
+        id: Thread.metadata.id,
+        preview: "新预览",
         createdAt: "2026-05-17T00:00:00.000Z",
         updatedAt: "2026-05-17T00:00:00.000Z",
         messageCount: 0,
@@ -31,48 +31,48 @@ describe("SessionPersistence", () => {
       },
     ]);
 
-    await persistence.deleteSession(session.metadata.id);
-    expect(await persistence.getSession(session.metadata.id)).toBeNull();
+    await persistence.deleteThread(Thread.metadata.id);
+    expect(await persistence.getThread(Thread.metadata.id)).toBeNull();
   });
 
-  it("persists user content with attachments and derives the first title", async () => {
-    const store = new InMemorySessionStore();
-    const persistence = new SessionPersistence(
+  it("persists user content with attachments and derives the first preview", async () => {
+    const store = new InMemoryThreadStore();
+    const persistence = new ThreadPersistence(
       store,
       () => "2026-05-17T00:00:00.000Z",
     );
 
-    await persistence.ensureSession("session-attach");
-    await persistence.persistUserMessage("session-attach", "解释这段代码", [
+    await persistence.ensureThread("Thread-attach");
+    await persistence.persistUserMessage("Thread-attach", "解释这段代码", [
       { kind: "text_selection", id: "a", text: "let x = 1" },
     ]);
-    await persistence.autoTitle("session-attach", "解释这段代码");
+    await persistence.autoTitle("Thread-attach", "解释这段代码");
 
-    expect(await persistence.getMessages("session-attach")).toEqual([
+    expect(await persistence.getMessages("Thread-attach")).toEqual([
       {
         role: "user",
         content: "解释这段代码\n\n[选区]\nlet x = 1",
       },
     ]);
-    const session = await persistence.getSession("session-attach");
-    expect(session?.metadata.title).toBe("解释这段代码");
+    const Thread = await persistence.getThread("Thread-attach");
+    expect(Thread?.metadata.preview).toBe("解释这段代码");
   });
 
-  it("leaves an existing title unchanged on later messages", async () => {
-    const persistence = new SessionPersistence(
-      new InMemorySessionStore(),
+  it("leaves an existing preview unchanged on later messages", async () => {
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
       () => "2026-05-17T00:00:00.000Z",
     );
 
-    await persistence.ensureSession("session-title");
-    await persistence.persistUserMessage("session-title", "第一句");
-    await persistence.autoTitle("session-title", "第一句");
-    await persistence.persistUserMessage("session-title", "第二句");
-    await persistence.autoTitle("session-title", "第二句");
+    await persistence.ensureThread("Thread-title");
+    await persistence.persistUserMessage("Thread-title", "第一句");
+    await persistence.autoTitle("Thread-title", "第一句");
+    await persistence.persistUserMessage("Thread-title", "第二句");
+    await persistence.autoTitle("Thread-title", "第二句");
 
-    const session = await persistence.getSession("session-title");
-    expect(session?.metadata.title).toBe("第一句");
-    expect(session?.messages).toEqual([
+    const Thread = await persistence.getThread("Thread-title");
+    expect(Thread?.metadata.preview).toBe("第一句");
+    expect(Thread?.messages).toEqual([
       { role: "user", content: "第一句" },
       { role: "user", content: "第二句" },
     ]);
@@ -80,14 +80,14 @@ describe("SessionPersistence", () => {
 
   it("stores image attachments as blobs and inserts image stubs into user content", async () => {
     const blobStore = new MemoryBlobStore();
-    const persistence = new SessionPersistence(
-      new InMemorySessionStore(),
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
       () => "2026-05-18T00:00:00.000Z",
       blobStore,
     );
 
-    await persistence.ensureSession("session-image");
-    await persistence.persistUserMessage("session-image", "看看这张图", [
+    await persistence.ensureThread("Thread-image");
+    await persistence.persistUserMessage("Thread-image", "看看这张图", [
       {
         kind: "image",
         id: "image-1",
@@ -105,7 +105,7 @@ describe("SessionPersistence", () => {
       },
     ]);
     await expect(blobStore.readContent("blob-1")).resolves.toEqual(Buffer.from("png-bytes"));
-    expect(await persistence.getMessages("session-image")).toEqual([
+    expect(await persistence.getMessages("Thread-image")).toEqual([
       {
         role: "user",
         content:
@@ -115,8 +115,8 @@ describe("SessionPersistence", () => {
   });
 
   it("returns conversation messages without exposing store shape", async () => {
-    const persistence = new SessionPersistence(
-      new InMemorySessionStore(),
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
       () => "2026-05-17T00:00:00.000Z",
     );
     const finalMessages: AgentMessage[] = [
@@ -130,10 +130,10 @@ describe("SessionPersistence", () => {
       },
     ];
 
-    await persistence.ensureSession("session-conversation");
-    await persistence.persistRunResult("session-conversation", finalMessages, []);
+    await persistence.ensureThread("Thread-conversation");
+    await persistence.persistRunResult("Thread-conversation", finalMessages, []);
 
-    expect(await persistence.getConversationMessages("session-conversation")).toEqual([
+    expect(await persistence.getConversationMessages("Thread-conversation")).toEqual([
       {
         id: "msg-0",
         role: "user",
@@ -163,8 +163,8 @@ describe("SessionPersistence", () => {
   });
 
   it("persists final runtime messages and audit events", async () => {
-    const store = new InMemorySessionStore();
-    const persistence = new SessionPersistence(
+    const store = new InMemoryThreadStore();
+    const persistence = new ThreadPersistence(
       store,
       () => "2026-05-17T00:00:00.000Z",
     );
@@ -173,8 +173,8 @@ describe("SessionPersistence", () => {
       { role: "assistant", content: "reading file" },
     ];
 
-    await persistence.ensureSession("session-audit");
-    await persistence.persistRunResult("session-audit", messages, [
+    await persistence.ensureThread("Thread-audit");
+    await persistence.persistRunResult("Thread-audit", messages, [
       {
         type: "tool_call",
         timestamp: "2026-05-17T00:00:00.000Z",
@@ -184,9 +184,9 @@ describe("SessionPersistence", () => {
       },
     ]);
 
-    const session = await persistence.getSession("session-audit");
-    expect(session?.messages).toEqual(messages);
-    expect(session?.events).toEqual([
+    const Thread = await persistence.getThread("Thread-audit");
+    expect(Thread?.messages).toEqual(messages);
+    expect(Thread?.events).toEqual([
       {
         type: "tool_call",
         timestamp: "2026-05-17T00:00:00.000Z",
@@ -198,22 +198,22 @@ describe("SessionPersistence", () => {
   });
 
   it("persists runtime errors as audit events", async () => {
-    const persistence = new SessionPersistence(
-      new InMemorySessionStore(),
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
       () => "2026-05-17T00:00:00.000Z",
     );
 
-    await persistence.ensureSession("session-error");
-    await persistence.persistError("session-error", "Missing apiKey");
+    await persistence.ensureThread("Thread-error");
+    await persistence.persistError("Thread-error", "Missing apiKey");
 
-    const session = await persistence.getSession("session-error");
-    expect(session?.events).toEqual([
+    const Thread = await persistence.getThread("Thread-error");
+    expect(Thread?.events).toEqual([
       {
         type: "error",
         timestamp: "2026-05-17T00:00:00.000Z",
         message: "Missing apiKey",
       },
     ]);
-    expect("code" in session!.events[0]).toBe(false);
+    expect("code" in Thread!.events[0]).toBe(false);
   });
 });

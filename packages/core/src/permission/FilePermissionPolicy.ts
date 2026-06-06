@@ -45,7 +45,7 @@ export class FilePermissionPolicy implements PermissionPolicy {
 
   private cache: PersistedRule[] | null = null;
   private cacheStamp: FileStamp | null = null;
-  private readonly sessionRules = new Map<string, "allow" | "deny">();
+  private readonly threadRules = new Map<string, "allow" | "deny">();
 
   constructor(options: FilePermissionPolicyOptions) {
     this.filePath = options.filePath;
@@ -56,8 +56,8 @@ export class FilePermissionPolicy implements PermissionPolicy {
 
   async check(request: PermissionRequest): Promise<PermissionDecision> {
     const key = this.keyFor(request);
-    const sessionRule = this.sessionRules.get(this.sessionKey(request, key));
-    if (sessionRule) return sessionRule;
+    const threadRule = this.threadRules.get(this.threadKey(request, key));
+    if (threadRule) return threadRule;
 
     const persisted = this.loadSync().find((r) => r.argHash === key);
     if (persisted) return persisted.decision;
@@ -77,8 +77,8 @@ export class FilePermissionPolicy implements PermissionPolicy {
     if (!resolution.remember || resolution.remember === "once") return;
 
     const key = this.keyFor(request);
-    if (resolution.remember === "session") {
-      this.sessionRules.set(this.sessionKey(request, key), resolution.decision);
+    if (resolution.remember === "thread") {
+      this.threadRules.set(this.threadKey(request, key), resolution.decision);
       return;
     }
 
@@ -102,11 +102,11 @@ export class FilePermissionPolicy implements PermissionPolicy {
     await this.persist(rules);
   }
 
-  clearSessionRules(sessionId: string): void {
-    const prefix = `${sessionId}::`;
-    for (const key of this.sessionRules.keys()) {
+  clearThreadRules(threadId: string): void {
+    const prefix = `${threadId}::`;
+    for (const key of this.threadRules.keys()) {
       if (key.startsWith(prefix)) {
-        this.sessionRules.delete(key);
+        this.threadRules.delete(key);
       }
     }
   }
@@ -119,8 +119,8 @@ export class FilePermissionPolicy implements PermissionPolicy {
     return hash;
   }
 
-  private sessionKey(request: PermissionRequest, argHash: string): string {
-    return `${request.sessionId ?? ""}::${argHash}`;
+  private threadKey(request: PermissionRequest, argHash: string): string {
+    return `${request.threadId ?? ""}::${argHash}`;
   }
 
   private loadSync(): PersistedRule[] {

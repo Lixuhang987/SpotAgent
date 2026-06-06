@@ -28,22 +28,22 @@
 
 最近阻塞记录：2026-05-24 复查 `~/.spotAgent/settings.json`，当前 `llm.provider` 为 `openai-compatible`，`llm.api` 为 `responses`，`llm.model` 为 `gpt-5.4`，`llm.baseUrl` 为 `http://127.0.0.1:8317/v1`，API key 仅属于 OpenAI 兼容配置；环境变量中没有 `ANTHROPIC_API_KEY` 或 `CLAUDE_API_KEY`，仅有 `ANTHROPIC_BASE_URL`。配置文件没有可用的 Anthropic key 或 Anthropic 模型；在没有用户提供真实 Anthropic 配置前，不能验证 Anthropic streaming 与 tool call 回灌，本项不归档为通过。
 
-## agent-server 源码目录重构 smoke（P2）
+## agent-server thread 主链路 smoke（P2）
 
 1. 从当前 worktree 执行 `bash ./scripts/swiftw run HandAgentDesktop`。
 1. 确认 desktop 成功派生 agent-server，`ps -o pid,ppid,command -p <agent-server-pid>` 中命令路径指向 `apps/agent-server/src/server/server.ts`。
-1. 提交一个普通文本 prompt，确认 SessionWindow 能收到 assistant 回复或明确的模型配置错误气泡，不出现 `agent-server` 入口文件缺失。
-1. 在同一 session 触发一次需要 workspace 或 permission 回流的工具场景，确认权限 / workspace 选择气泡仍能回到当前 session。
-1. 打开 `~/.spotAgent/sessions/<id>.json`，确认本轮 user / assistant 或 tool / event 按预期落盘。
+1. 提交一个普通文本 prompt，确认 thread 视图能收到 assistant 回复或明确的模型配置错误气泡，不出现 `agent-server` 入口文件缺失。
+1. 在同一 thread 触发一次需要 workspace 或 permission 回流的工具场景，确认权限 / workspace 选择气泡仍能回到当前 thread。
+1. 打开对应的 thread 持久化文件，确认本轮 user / assistant 或 tool / event 按预期落盘。
 
-## 单连接 session 路由 smoke（P2）
+## 单连接 thread 路由 smoke（P2）
 
 1. 从当前 worktree 执行 `bash ./scripts/swiftw run HandAgentDesktop`。
-1. 打开 SessionWindow 后连续创建两个 session tab，确认 desktop 侧只建立一条到 `ws://127.0.0.1:4317/api/session` 的连接。
-1. 在 tab A 发送普通 prompt，在 tab B 发送另一条普通 prompt，确认两边的 assistant / tool / permission / workspace 事件不会串到错误 tab。
-1. 关闭 tab A，确认 client 会发送 `session_unsubscribe`，tab B 仍可继续追问；再次打开 tab A 对应历史会话，确认会重新发送 `session_subscribe` 并收到 `session_snapshot`。
-1. 在 tab A 触发一次需要 permission 或 workspace 选择的工具场景，确认 `permission_ask` / `workspace_ask` 只回到当前 `sessionId` 对应 tab，不会串到其他 tab。
-1. 在 agent-server 运行中手动重启 desktop 或 kill `agent-server` 后恢复，确认共享连接会自动重连、左侧历史会刷新、已打开 tab 会重新订阅并继续可用。
+1. 打开主窗口后连续创建两个 thread，确认 desktop 侧只建立一条到 `ws://127.0.0.1:4317/api/session` 的连接。
+1. 在 thread A 发送普通 prompt，在 thread B 发送另一条普通 prompt，确认两边的 assistant / tool / permission / workspace 事件不会串到错误 thread。
+1. 恢复 thread A，确认 client 发送的是 `thread.resume`，并收到 `thread.snapshot`；不再依赖显式 unsubscribe 协议。
+1. 在 thread A 触发一次需要 permission 或 workspace 选择的工具场景，确认 `permission.requested` / `workspace.requested` 只回到当前 `threadId` 对应视图，不会串到其他 thread。
+1. 在 agent-server 运行中手动重启 desktop 或 kill `agent-server` 后恢复，确认共享连接会自动重连、历史会刷新、已打开 thread 会重新恢复并继续可用。
 
 ## 懒加载工具激活（P1）
 

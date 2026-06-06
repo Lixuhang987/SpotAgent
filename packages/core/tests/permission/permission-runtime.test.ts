@@ -74,7 +74,7 @@ describe("PermissionPolicy integration", () => {
     const tool = new EchoTool();
     const policy: PermissionPolicy = {
       async check() { return "ask"; },
-      async resolveAsk() { return { decision: "allow", remember: "session" }; },
+      async resolveAsk() { return { decision: "allow", remember: "thread" }; },
       async remember() {},
     };
     const events: AgentRuntimeEvent[] = [];
@@ -90,7 +90,7 @@ describe("PermissionPolicy integration", () => {
     expect(tool.call).toHaveBeenCalledTimes(1);
     expect(events.find((e) => e.type === "permission_decision")).toMatchObject({
       decision: "allow",
-      scope: "session",
+      scope: "thread",
     });
     expect(events.find((e) => e.type === "tool_result")).toMatchObject({
       status: "success",

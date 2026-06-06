@@ -1,52 +1,52 @@
 import { describe, expect, it } from "vitest";
 import type { AgentMessage } from "@handagent/core/runtime/AgentMessage.ts";
 import type { AgentRuntimeEvent } from "@handagent/core/runtime/AgentRuntime.ts";
-import type { SessionEvent } from "@handagent/core/protocol/SessionEvent.ts";
-import type { UserMessageAttachment } from "@handagent/core/protocol/SessionProtocolShared.ts";
-import { InMemorySessionStore } from "@handagent/core/storage/index.ts";
+import type { ThreadNotification } from "@handagent/core/protocol/ThreadNotification.ts";
+import type { ThreadAttachment } from "@handagent/core/protocol/ThreadProtocolShared.ts";
+import { InMemoryThreadStore } from "@handagent/core/storage/index.ts";
 import { MemoryBlobStore } from "../support/MemoryBlobStore.ts";
-import { SessionPersistence } from "../../src/session/SessionPersistence.ts";
-import { SessionRuntimeOrchestrator } from "../../src/session/SessionRuntimeOrchestrator.ts";
+import { ThreadPersistence } from "../../src/thread/ThreadPersistence.ts";
+import { ThreadRuntimeOrchestrator } from "../../src/thread/ThreadRuntimeOrchestrator.ts";
 
 function createUserMessage(
-  sessionId: string,
+  threadId: string,
   text: string,
   messageId: string,
 ): {
-  sessionId: string;
+  threadId: string;
   messageId: string;
   timestamp: string;
   payload: {
     text: string;
-    attachments?: UserMessageAttachment[];
+    attachments?: ThreadAttachment[];
   };
 } {
   return {
-    sessionId,
+    threadId,
     messageId,
     timestamp: "2026-05-11T10:00:00.000Z",
     payload: { text },
   };
 }
 
-function eventTypes(events: SessionEvent[]): string[] {
+function eventTypes(events: ThreadNotification[]): string[] {
   return events.map((event) => event.type);
 }
 
-function expectTypes(events: SessionEvent[], expected: SessionEvent["type"][]): void {
+function expectTypes(events: ThreadNotification[], expected: ThreadNotification["type"][]): void {
   expect(eventTypes(events)).toEqual(expected);
 }
 
-describe("SessionRuntimeOrchestrator", () => {
+describe("ThreadRuntimeOrchestrator", () => {
   it("pushes assistant events and persists final user + assistant messages", async () => {
-    const pushed: SessionEvent[] = [];
+    const pushed: ThreadNotification[] = [];
     const runtimeCalls: AgentMessage[][] = [];
-    const store = new InMemorySessionStore();
-    const persistence = new SessionPersistence(
+    const store = new InMemoryThreadStore();
+    const persistence = new ThreadPersistence(
       store,
       () => "2026-05-11T00:00:00.000Z",
     );
-    const orchestrator = new SessionRuntimeOrchestrator(
+    const orchestrator = new ThreadRuntimeOrchestrator(
       {
         async runWithMessages(
           messages: AgentMessage[],
@@ -84,9 +84,9 @@ describe("SessionRuntimeOrchestrator", () => {
       () => "2026-05-11T00:00:00.000Z",
     );
 
-    await persistence.ensureSession("session-1");
+    await persistence.ensureThread("Thread-1");
     await orchestrator.handleUserMessage(
-      createUserMessage("session-1", "第一句", "user-1"),
+      createUserMessage("Thread-1", "第一句", "user-1"),
       (message) => pushed.push(message),
     );
 
@@ -99,41 +99,41 @@ describe("SessionRuntimeOrchestrator", () => {
       ],
     ]);
     expectTypes(pushed, [
-      "user_message_recorded",
-      "turn_started",
-      "assistant_delta",
-      "turn_completed",
-      "session_status_changed",
+      "user.message.recorded",
+      "turn.started",
+      "assistant.delta",
+      "turn.completed",
+      "thread.status.changed",
     ]);
     expect(pushed[0]).toMatchObject({
-      type: "user_message_recorded",
-      sessionId: "session-1",
+      type: "user.message.recorded",
+      threadId: "Thread-1",
       payload: { messageId: "user-1", text: "第一句" },
     });
     expect(pushed[1]).toMatchObject({
-      type: "turn_started",
-      sessionId: "session-1",
+      type: "turn.started",
+      threadId: "Thread-1",
       turnId: "user-1",
     });
     expect(pushed[2]).toMatchObject({
-      type: "assistant_delta",
-      sessionId: "session-1",
+      type: "assistant.delta",
+      threadId: "Thread-1",
       turnId: "user-1",
-      itemId: "session-1-assistant-1",
+      itemId: "Thread-1-assistant-1",
       payload: { text: "你好，我收到了。" },
     });
     expect(pushed[3]).toMatchObject({
-      type: "turn_completed",
-      sessionId: "session-1",
+      type: "turn.completed",
+      threadId: "Thread-1",
       turnId: "user-1",
       payload: { status: "completed" },
     });
     expect(pushed[4]).toMatchObject({
-      type: "session_status_changed",
-      sessionId: "session-1",
+      type: "thread.status.changed",
+      threadId: "Thread-1",
       payload: { value: "idle" },
     });
-    expect(await persistence.getMessages("session-1")).toEqual([
+    expect(await persistence.getMessages("Thread-1")).toEqual([
       {
         role: "user",
         content: "第一句",
@@ -145,15 +145,15 @@ describe("SessionRuntimeOrchestrator", () => {
     ]);
   });
 
-  it("passes current session history and run options into runtime on later turns", async () => {
+  it("passes current thread history and run options into runtime on later turns", async () => {
     const runtimeCalls: AgentMessage[][] = [];
     const seenRunOptions: Array<Record<string, unknown> | undefined> = [];
     const replies = ["第一轮回复", "第二轮回复"];
-    const persistence = new SessionPersistence(
-      new InMemorySessionStore(),
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
       () => "2026-05-11T00:00:00.000Z",
     );
-    const orchestrator = new SessionRuntimeOrchestrator(
+    const orchestrator = new ThreadRuntimeOrchestrator(
       {
         async runWithMessages(
           messages: AgentMessage[],
@@ -178,13 +178,13 @@ describe("SessionRuntimeOrchestrator", () => {
       () => "2026-05-11T00:00:00.000Z",
     );
 
-    await persistence.ensureSession("session-2");
+    await persistence.ensureThread("Thread-2");
     await orchestrator.handleUserMessage(
-      createUserMessage("session-2", "第一句", "user-1"),
+      createUserMessage("Thread-2", "第一句", "user-1"),
       () => {},
     );
     await orchestrator.handleUserMessage(
-      createUserMessage("session-2", "第二句", "user-2"),
+      createUserMessage("Thread-2", "第二句", "user-2"),
       () => {},
     );
 
@@ -210,9 +210,9 @@ describe("SessionRuntimeOrchestrator", () => {
         },
       ],
     ]);
-    expect(seenRunOptions.map((options) => options?.sessionId)).toEqual([
-      "session-2",
-      "session-2",
+    expect(seenRunOptions.map((options) => options?.threadId)).toEqual([
+      "Thread-2",
+      "Thread-2",
     ]);
     expect(seenRunOptions.every((options) => options?.signal instanceof AbortSignal)).toBe(true);
   });
@@ -220,11 +220,11 @@ describe("SessionRuntimeOrchestrator", () => {
   it("waits for pending summaries before passing history into runtime", async () => {
     const runtimeCalls: AgentMessage[][] = [];
     const order: string[] = [];
-    const persistence = new SessionPersistence(
-      new InMemorySessionStore(),
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
       () => "2026-05-11T00:00:00.000Z",
     );
-    const orchestrator = new SessionRuntimeOrchestrator(
+    const orchestrator = new ThreadRuntimeOrchestrator(
       {
         async waitForPendingSummaries(messages: AgentMessage[] = []) {
           order.push("summary");
@@ -238,14 +238,14 @@ describe("SessionRuntimeOrchestrator", () => {
       },
       persistence,
       () => "2026-05-11T00:00:00.000Z",
-      (sessionId) => {
-        order.push(`refresh:${sessionId}`);
+      (threadId) => {
+        order.push(`refresh:${threadId}`);
       },
     );
 
-    await persistence.ensureSession("session-summary");
+    await persistence.ensureThread("Thread-summary");
     await orchestrator.handleUserMessage(
-      createUserMessage("session-summary", "第一句", "user-1"),
+      createUserMessage("Thread-summary", "第一句", "user-1"),
       () => {},
     );
 
@@ -255,18 +255,18 @@ describe("SessionRuntimeOrchestrator", () => {
         { role: "system", content: "summary ready" },
       ],
     ]);
-    expect(order).toEqual(["refresh:session-summary", "summary", "runtime"]);
+    expect(order).toEqual(["refresh:Thread-summary", "summary", "runtime"]);
   });
 
   it("passes image attachments to runtime as multimodal content while persisting stubs", async () => {
     const runtimeCalls: AgentMessage[][] = [];
     const blobStore = new MemoryBlobStore();
-    const persistence = new SessionPersistence(
-      new InMemorySessionStore(),
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
       () => "2026-05-11T00:00:00.000Z",
       blobStore,
     );
-    const orchestrator = new SessionRuntimeOrchestrator(
+    const orchestrator = new ThreadRuntimeOrchestrator(
       {
         async runWithMessages(messages: AgentMessage[]) {
           runtimeCalls.push(messages.map((message) => ({ ...message })));
@@ -277,10 +277,10 @@ describe("SessionRuntimeOrchestrator", () => {
       () => "2026-05-11T00:00:00.000Z",
     );
 
-    await persistence.ensureSession("session-image");
+    await persistence.ensureThread("Thread-image");
     await orchestrator.handleUserMessage(
       {
-        ...createUserMessage("session-image", "描述图片", "user-1"),
+        ...createUserMessage("Thread-image", "描述图片", "user-1"),
         payload: {
           text: "描述图片",
           attachments: [
@@ -307,7 +307,7 @@ describe("SessionRuntimeOrchestrator", () => {
         },
       ],
     ]);
-    expect(await persistence.getMessages("session-image")).toEqual([
+    expect(await persistence.getMessages("Thread-image")).toEqual([
       {
         role: "user",
         content:
@@ -317,13 +317,13 @@ describe("SessionRuntimeOrchestrator", () => {
   });
 
   it("translates tool events into tool frames and records audit events", async () => {
-    const pushed: SessionEvent[] = [];
-    const store = new InMemorySessionStore();
-    const persistence = new SessionPersistence(
+    const pushed: ThreadNotification[] = [];
+    const store = new InMemoryThreadStore();
+    const persistence = new ThreadPersistence(
       store,
       () => "2026-05-17T00:00:00.000Z",
     );
-    const orchestrator = new SessionRuntimeOrchestrator(
+    const orchestrator = new ThreadRuntimeOrchestrator(
       {
         async runWithMessages(messages: AgentMessage[], onEvent) {
           onEvent({
@@ -364,35 +364,35 @@ describe("SessionRuntimeOrchestrator", () => {
       () => "2026-05-17T00:00:00.000Z",
     );
 
-    await persistence.ensureSession("session-tool");
+    await persistence.ensureThread("Thread-tool");
     await orchestrator.handleUserMessage(
-      createUserMessage("session-tool", "读取文件", "user-1"),
+      createUserMessage("Thread-tool", "读取文件", "user-1"),
       (message) => pushed.push(message),
     );
 
     expectTypes(pushed, [
-      "user_message_recorded",
-      "turn_started",
-      "tool_started",
-      "tool_finished",
-      "turn_completed",
-      "session_status_changed",
+      "user.message.recorded",
+      "turn.started",
+      "tool.started",
+      "tool.finished",
+      "turn.completed",
+      "thread.status.changed",
     ]);
     expect(pushed[2]).toMatchObject({
-      type: "tool_started",
-      sessionId: "session-tool",
+      type: "tool.started",
+      threadId: "Thread-tool",
       turnId: "user-1",
-      itemId: "session-tool-tc-1",
+      itemId: "Thread-tool-tc-1",
       payload: {
         name: "file.read",
         input: { path: "/tmp/test.txt" },
       },
     });
     expect(pushed[3]).toMatchObject({
-      type: "tool_finished",
-      sessionId: "session-tool",
+      type: "tool.finished",
+      threadId: "Thread-tool",
       turnId: "user-1",
-      itemId: "session-tool-tc-1",
+      itemId: "Thread-tool-tc-1",
       payload: {
         name: "file.read",
         output: "file contents here",
@@ -400,8 +400,8 @@ describe("SessionRuntimeOrchestrator", () => {
         durationMs: 12,
       },
     });
-    const session = await persistence.getSession("session-tool");
-    expect(session?.events).toEqual([
+    const Thread = await persistence.getThread("Thread-tool");
+    expect(Thread?.events).toEqual([
       {
         type: "tool_call",
         timestamp: "2026-05-17T00:00:00.000Z",
@@ -421,13 +421,13 @@ describe("SessionRuntimeOrchestrator", () => {
   });
 
   it("keeps assistant turn completion separate from later tool running frames", async () => {
-    const pushed: SessionEvent[] = [];
-    const store = new InMemorySessionStore();
-    const persistence = new SessionPersistence(
+    const pushed: ThreadNotification[] = [];
+    const store = new InMemoryThreadStore();
+    const persistence = new ThreadPersistence(
       store,
       () => "2026-05-22T00:00:00.000Z",
     );
-    const orchestrator = new SessionRuntimeOrchestrator(
+    const orchestrator = new ThreadRuntimeOrchestrator(
       {
         async runWithMessages(messages: AgentMessage[], onEvent) {
           onEvent({
@@ -498,27 +498,27 @@ describe("SessionRuntimeOrchestrator", () => {
       () => "2026-05-22T00:00:00.000Z",
     );
 
-    await persistence.ensureSession("session-tool-running");
+    await persistence.ensureThread("Thread-tool-running");
     await orchestrator.handleUserMessage(
-      createUserMessage("session-tool-running", "列出工作区", "user-1"),
+      createUserMessage("Thread-tool-running", "列出工作区", "user-1"),
       (message) => pushed.push(message),
     );
 
     expectTypes(pushed, [
-      "user_message_recorded",
-      "turn_started",
-      "tool_started",
-      "tool_finished",
-      "assistant_delta",
-      "turn_completed",
-      "session_status_changed",
+      "user.message.recorded",
+      "turn.started",
+      "tool.started",
+      "tool.finished",
+      "assistant.delta",
+      "turn.completed",
+      "thread.status.changed",
     ]);
     expect(pushed[2]).toMatchObject({
-      type: "tool_started",
+      type: "tool.started",
       payload: { name: "workspace.list", input: {} },
     });
     expect(pushed[3]).toMatchObject({
-      type: "tool_finished",
+      type: "tool.finished",
       payload: {
         name: "workspace.list",
         output: "[]",
@@ -527,17 +527,17 @@ describe("SessionRuntimeOrchestrator", () => {
       },
     });
     expect(pushed[4]).toMatchObject({
-      type: "assistant_delta",
-      itemId: "session-tool-running-assistant-2",
+      type: "assistant.delta",
+      itemId: "Thread-tool-running-assistant-2",
       payload: { text: "done" },
     });
-    expect(pushed.some((message) => message.type === "session_error")).toBe(false);
+    expect(pushed.some((message) => message.type === "thread.error")).toBe(false);
   });
 
   it("aborts the active run and ignores later assistant/tool output", async () => {
-    const pushed: SessionEvent[] = [];
-    const store = new InMemorySessionStore();
-    const persistence = new SessionPersistence(
+    const pushed: ThreadNotification[] = [];
+    const store = new InMemoryThreadStore();
+    const persistence = new ThreadPersistence(
       store,
       () => "2026-05-17T00:00:00.000Z",
     );
@@ -545,7 +545,7 @@ describe("SessionRuntimeOrchestrator", () => {
     let emitLateEvent: ((event: AgentRuntimeEvent) => void) | undefined;
     let finishRun: ((result: { messages: AgentMessage[] }) => void) | undefined;
     const runStarted = Promise.withResolvers<void>();
-    const orchestrator = new SessionRuntimeOrchestrator(
+    const orchestrator = new ThreadRuntimeOrchestrator(
       {
         runWithMessages(messages, onEvent, runOptions) {
           runtimeSignal = runOptions?.signal;
@@ -560,14 +560,14 @@ describe("SessionRuntimeOrchestrator", () => {
       () => "2026-05-17T00:00:00.000Z",
     );
 
-    await persistence.ensureSession("session-interrupt");
+    await persistence.ensureThread("Thread-interrupt");
     const runPromise = orchestrator.handleUserMessage(
-      createUserMessage("session-interrupt", "停止这轮", "user-1"),
+      createUserMessage("Thread-interrupt", "停止这轮", "user-1"),
       (message) => pushed.push(message),
     );
     await runStarted.promise;
 
-    orchestrator.interruptSession("session-interrupt", (message) => pushed.push(message));
+    orchestrator.interruptThread("Thread-interrupt", (message) => pushed.push(message));
     emitLateEvent?.({
       type: "assistant_message_delta",
       messageId: "assistant-1",
@@ -592,26 +592,26 @@ describe("SessionRuntimeOrchestrator", () => {
 
     expect(runtimeSignal?.aborted).toBe(true);
     expectTypes(pushed, [
-      "user_message_recorded",
-      "turn_started",
-      "turn_completed",
-      "session_status_changed",
+      "user.message.recorded",
+      "turn.started",
+      "turn.completed",
+      "thread.status.changed",
     ]);
     expect(pushed[2]).toMatchObject({
-      type: "turn_completed",
-      sessionId: "session-interrupt",
+      type: "turn.completed",
+      threadId: "Thread-interrupt",
       turnId: "user-1",
       payload: { status: "interrupted" },
     });
     expect(pushed[3]).toMatchObject({
-      type: "session_status_changed",
-      sessionId: "session-interrupt",
+      type: "thread.status.changed",
+      threadId: "Thread-interrupt",
       payload: { value: "interrupted" },
     });
-    expect(await persistence.getMessages("session-interrupt")).toEqual([
+    expect(await persistence.getMessages("Thread-interrupt")).toEqual([
       { role: "user", content: "停止这轮" },
     ]);
-    expect((await persistence.getSession("session-interrupt"))?.events).toEqual([
+    expect((await persistence.getThread("Thread-interrupt"))?.events).toEqual([
       {
         type: "error",
         timestamp: "2026-05-17T00:00:00.000Z",
@@ -621,15 +621,15 @@ describe("SessionRuntimeOrchestrator", () => {
     ]);
   });
 
-  it("reports running sessions and waits for interrupt cleanup", async () => {
-    const pushed: SessionEvent[] = [];
-    const persistence = new SessionPersistence(
-      new InMemorySessionStore(),
+  it("reports running threads and waits for interrupt cleanup", async () => {
+    const pushed: ThreadNotification[] = [];
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
       () => "2026-05-20T00:00:00.000Z",
     );
     let finishRun: ((result: { messages: AgentMessage[] }) => void) | undefined;
     const runStarted = Promise.withResolvers<void>();
-    const orchestrator = new SessionRuntimeOrchestrator(
+    const orchestrator = new ThreadRuntimeOrchestrator(
       {
         runWithMessages(_messages, _onEvent, runOptions) {
           runOptions?.signal.addEventListener("abort", () => {
@@ -650,22 +650,22 @@ describe("SessionRuntimeOrchestrator", () => {
       () => "2026-05-20T00:00:00.000Z",
     );
 
-    await persistence.ensureSession("session-delete-running");
+    await persistence.ensureThread("Thread-delete-running");
     const runPromise = orchestrator.handleUserMessage(
-      createUserMessage("session-delete-running", "删除中", "user-1"),
+      createUserMessage("Thread-delete-running", "删除中", "user-1"),
       (message) => pushed.push(message),
     );
     await runStarted.promise;
 
-    expect(orchestrator.isSessionRunning("session-delete-running")).toBe(true);
-    await orchestrator.interruptAndWait("session-delete-running", (message) => pushed.push(message));
+    expect(orchestrator.isThreadRunning("Thread-delete-running")).toBe(true);
+    await orchestrator.interruptAndWait("Thread-delete-running", (message) => pushed.push(message));
     await runPromise;
 
-    expect(orchestrator.isSessionRunning("session-delete-running")).toBe(false);
-    expect(await persistence.getMessages("session-delete-running")).toEqual([
+    expect(orchestrator.isThreadRunning("Thread-delete-running")).toBe(false);
+    expect(await persistence.getMessages("Thread-delete-running")).toEqual([
       { role: "user", content: "删除中" },
     ]);
-    expect((await persistence.getSession("session-delete-running"))?.events).toEqual([
+    expect((await persistence.getThread("Thread-delete-running"))?.events).toEqual([
       {
         type: "error",
         timestamp: "2026-05-20T00:00:00.000Z",
@@ -674,32 +674,32 @@ describe("SessionRuntimeOrchestrator", () => {
       },
     ]);
     expectTypes(pushed, [
-      "user_message_recorded",
-      "turn_started",
-      "turn_completed",
-      "session_status_changed",
+      "user.message.recorded",
+      "turn.started",
+      "turn.completed",
+      "thread.status.changed",
     ]);
     expect(pushed[2]).toMatchObject({
-      type: "turn_completed",
-      sessionId: "session-delete-running",
+      type: "turn.completed",
+      threadId: "Thread-delete-running",
       turnId: "user-1",
       payload: { status: "interrupted" },
     });
     expect(pushed[3]).toMatchObject({
-      type: "session_status_changed",
-      sessionId: "session-delete-running",
+      type: "thread.status.changed",
+      threadId: "Thread-delete-running",
       payload: { value: "interrupted" },
     });
   });
 
   it("times out interrupt cleanup when the runtime ignores abort", async () => {
-    const pushed: SessionEvent[] = [];
-    const persistence = new SessionPersistence(
-      new InMemorySessionStore(),
+    const pushed: ThreadNotification[] = [];
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
       () => "2026-05-22T00:00:00.000Z",
     );
     const runStarted = Promise.withResolvers<void>();
-    const orchestrator = new SessionRuntimeOrchestrator(
+    const orchestrator = new ThreadRuntimeOrchestrator(
       {
         runWithMessages() {
           runStarted.resolve();
@@ -712,40 +712,40 @@ describe("SessionRuntimeOrchestrator", () => {
       { interruptWaitTimeoutMs: 20, interruptPollIntervalMs: 1 },
     );
 
-    await persistence.ensureSession("session-stubborn-runtime");
+    await persistence.ensureThread("Thread-stubborn-runtime");
     void orchestrator.handleUserMessage(
-      createUserMessage("session-stubborn-runtime", "删除中", "user-1"),
+      createUserMessage("Thread-stubborn-runtime", "删除中", "user-1"),
       (message) => pushed.push(message),
     );
     await runStarted.promise;
 
-    expect(orchestrator.isSessionRunning("session-stubborn-runtime")).toBe(true);
+    expect(orchestrator.isThreadRunning("Thread-stubborn-runtime")).toBe(true);
     const outcome = await Promise.race([
-      orchestrator.interruptAndWait("session-stubborn-runtime", (message) => pushed.push(message))
+      orchestrator.interruptAndWait("Thread-stubborn-runtime", (message) => pushed.push(message))
         .then(() => "resolved"),
       new Promise((resolve) => setTimeout(() => resolve("timed-out"), 100)),
     ]);
 
     expect(outcome).toBe("resolved");
-    expect(orchestrator.isSessionRunning("session-stubborn-runtime")).toBe(false);
+    expect(orchestrator.isThreadRunning("Thread-stubborn-runtime")).toBe(false);
     expectTypes(pushed, [
-      "user_message_recorded",
-      "turn_started",
-      "turn_completed",
-      "session_status_changed",
+      "user.message.recorded",
+      "turn.started",
+      "turn.completed",
+      "thread.status.changed",
     ]);
     expect(pushed[2]).toMatchObject({
-      type: "turn_completed",
-      sessionId: "session-stubborn-runtime",
+      type: "turn.completed",
+      threadId: "Thread-stubborn-runtime",
       turnId: "user-1",
       payload: { status: "interrupted" },
     });
     expect(pushed[3]).toMatchObject({
-      type: "session_status_changed",
-      sessionId: "session-stubborn-runtime",
+      type: "thread.status.changed",
+      threadId: "Thread-stubborn-runtime",
       payload: { value: "interrupted" },
     });
-    expect((await persistence.getSession("session-stubborn-runtime"))?.events).toEqual([
+    expect((await persistence.getThread("Thread-stubborn-runtime"))?.events).toEqual([
       {
         type: "error",
         timestamp: "2026-05-22T00:00:00.000Z",
@@ -756,14 +756,14 @@ describe("SessionRuntimeOrchestrator", () => {
   });
 
   it("records interrupted instead of runtime error when an aborted run rejects without AbortError", async () => {
-    const pushed: SessionEvent[] = [];
-    const persistence = new SessionPersistence(
-      new InMemorySessionStore(),
+    const pushed: ThreadNotification[] = [];
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
       () => "2026-05-22T00:00:00.000Z",
     );
     const runStarted = Promise.withResolvers<void>();
     let rejectRun: ((error: Error) => void) | undefined;
-    const orchestrator = new SessionRuntimeOrchestrator(
+    const orchestrator = new ThreadRuntimeOrchestrator(
       {
         runWithMessages(_messages, _onEvent, runOptions) {
           runOptions?.signal.addEventListener("abort", () => {
@@ -781,37 +781,37 @@ describe("SessionRuntimeOrchestrator", () => {
       { interruptWaitTimeoutMs: 20, interruptPollIntervalMs: 1 },
     );
 
-    await persistence.ensureSession("session-non-abort-reject");
+    await persistence.ensureThread("Thread-non-abort-reject");
     const runPromise = orchestrator.handleUserMessage(
-      createUserMessage("session-non-abort-reject", "停止这轮", "user-1"),
+      createUserMessage("Thread-non-abort-reject", "停止这轮", "user-1"),
       (message) => pushed.push(message),
     );
     await runStarted.promise;
 
     await orchestrator.interruptAndWait(
-      "session-non-abort-reject",
+      "Thread-non-abort-reject",
       (message) => pushed.push(message),
     );
     await runPromise;
 
     expectTypes(pushed, [
-      "user_message_recorded",
-      "turn_started",
-      "turn_completed",
-      "session_status_changed",
+      "user.message.recorded",
+      "turn.started",
+      "turn.completed",
+      "thread.status.changed",
     ]);
     expect(pushed[2]).toMatchObject({
-      type: "turn_completed",
-      sessionId: "session-non-abort-reject",
+      type: "turn.completed",
+      threadId: "Thread-non-abort-reject",
       turnId: "user-1",
       payload: { status: "interrupted" },
     });
     expect(pushed[3]).toMatchObject({
-      type: "session_status_changed",
-      sessionId: "session-non-abort-reject",
+      type: "thread.status.changed",
+      threadId: "Thread-non-abort-reject",
       payload: { value: "interrupted" },
     });
-    expect((await persistence.getSession("session-non-abort-reject"))?.events).toEqual([
+    expect((await persistence.getThread("Thread-non-abort-reject"))?.events).toEqual([
       {
         type: "error",
         timestamp: "2026-05-22T00:00:00.000Z",
@@ -823,12 +823,12 @@ describe("SessionRuntimeOrchestrator", () => {
 
   it("pushes and records an error when runtime execution fails", async () => {
 
-    const pushed: SessionEvent[] = [];
-    const persistence = new SessionPersistence(
-      new InMemorySessionStore(),
+    const pushed: ThreadNotification[] = [];
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
       () => "2026-05-11T00:00:00.000Z",
     );
-    const orchestrator = new SessionRuntimeOrchestrator(
+    const orchestrator = new ThreadRuntimeOrchestrator(
       {
         async runWithMessages() {
           throw new Error("Missing apiKey in ~/.spotAgent/settings.json. 请先在设置页完成模型配置。");
@@ -838,40 +838,40 @@ describe("SessionRuntimeOrchestrator", () => {
       () => "2026-05-11T00:00:00.000Z",
     );
 
-    await persistence.ensureSession("session-4");
+    await persistence.ensureThread("Thread-4");
     await orchestrator.handleUserMessage(
-      createUserMessage("session-4", "你好", "user-1"),
+      createUserMessage("Thread-4", "你好", "user-1"),
       (message) => pushed.push(message),
     );
 
     expectTypes(pushed, [
-      "user_message_recorded",
-      "turn_started",
-      "session_error",
-      "turn_completed",
-      "session_status_changed",
+      "user.message.recorded",
+      "turn.started",
+      "thread.error",
+      "turn.completed",
+      "thread.status.changed",
     ]);
     expect(pushed[2]).toMatchObject({
-      type: "session_error",
-      sessionId: "session-4",
+      type: "thread.error",
+      threadId: "Thread-4",
       payload: {
         message: "Missing apiKey in ~/.spotAgent/settings.json. 请先在设置页完成模型配置。",
       },
     });
     expect(pushed[3]).toMatchObject({
-      type: "turn_completed",
-      sessionId: "session-4",
+      type: "turn.completed",
+      threadId: "Thread-4",
       turnId: "user-1",
       payload: { status: "failed" },
     });
     expect(pushed[4]).toMatchObject({
-      type: "session_status_changed",
-      sessionId: "session-4",
+      type: "thread.status.changed",
+      threadId: "Thread-4",
       payload: { value: "failed" },
     });
-    const session = await persistence.getSession("session-4");
-    expect(session?.messages).toEqual([{ role: "user", content: "你好" }]);
-    expect(session?.events).toEqual([
+    const Thread = await persistence.getThread("Thread-4");
+    expect(Thread?.messages).toEqual([{ role: "user", content: "你好" }]);
+    expect(Thread?.events).toEqual([
       {
         type: "error",
         timestamp: "2026-05-11T00:00:00.000Z",
@@ -881,14 +881,14 @@ describe("SessionRuntimeOrchestrator", () => {
   });
 });
 
-describe("SessionRuntimeOrchestrator activation hook", () => {
-  it("invokes beforeRun with the session id before runtime.runWithMessages", async () => {
+describe("ThreadRuntimeOrchestrator activation hook", () => {
+  it("invokes beforeRun with the thread id before runtime.runWithMessages", async () => {
     const calls: string[] = [];
-    const persistence = new SessionPersistence(
-      new InMemorySessionStore(),
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
       () => "2026-05-23T00:00:00.000Z",
     );
-    const orchestrator = new SessionRuntimeOrchestrator(
+    const orchestrator = new ThreadRuntimeOrchestrator(
       {
         async runWithMessages(messages: AgentMessage[]) {
           calls.push("runWithMessages");
@@ -897,55 +897,55 @@ describe("SessionRuntimeOrchestrator activation hook", () => {
       },
       persistence,
       () => "2026-05-23T00:00:00.000Z",
-      async (sessionId) => {
-        calls.push(`before:${sessionId}`);
+      async (threadId) => {
+        calls.push(`before:${threadId}`);
       },
     );
 
-    await persistence.ensureSession("s1");
+    await persistence.ensureThread("s1");
     await orchestrator.handleUserMessage(
       createUserMessage("s1", "hi", "user-1"),
       () => {},
     );
 
-    // beforeRun must fire before runWithMessages, and receive the correct sessionId
+    // beforeRun must fire before runWithMessages, and receive the correct threadId
     expect(calls[0]).toBe("before:s1");
     expect(calls[1]).toBe("runWithMessages");
     expect(calls).toEqual(["before:s1", "runWithMessages"]);
   });
 
-  it("resolves an isolated runtime for each session run", async () => {
+  it("resolves an isolated runtime for each thread run", async () => {
     const calls: string[] = [];
-    const persistence = new SessionPersistence(
-      new InMemorySessionStore(),
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
       () => "2026-05-24T00:00:00.000Z",
     );
-    const orchestrator = new SessionRuntimeOrchestrator(
-      (sessionId) => {
-        calls.push(`runtime:${sessionId}`);
+    const orchestrator = new ThreadRuntimeOrchestrator(
+      (threadId) => {
+        calls.push(`runtime:${threadId}`);
         return {
           async waitForPendingSummaries() {
-            calls.push(`summary:${sessionId}`);
+            calls.push(`summary:${threadId}`);
           },
           async runWithMessages(
             messages: AgentMessage[],
             _onEvent,
             runOptions,
           ) {
-            calls.push(`run:${sessionId}:${runOptions?.sessionId}`);
+            calls.push(`run:${threadId}:${runOptions?.threadId}`);
             return { messages, bubbles: [] };
           },
         };
       },
       persistence,
       () => "2026-05-24T00:00:00.000Z",
-      (sessionId) => {
-        calls.push(`before:${sessionId}`);
+      (threadId) => {
+        calls.push(`before:${threadId}`);
       },
     );
 
-    await persistence.ensureSession("s1");
-    await persistence.ensureSession("s2");
+    await persistence.ensureThread("s1");
+    await persistence.ensureThread("s2");
     await orchestrator.handleUserMessage(
       createUserMessage("s1", "one", "user-1"),
       () => {},

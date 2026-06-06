@@ -2,11 +2,11 @@ import type { AgentMessage } from "@handagent/core/runtime/AgentMessage.ts";
 import type { BlobStore } from "@handagent/core/blob/BlobStore.ts";
 import { FilesystemBlobStore } from "@handagent/core/blob/FilesystemBlobStore.ts";
 import type {
-  PersistedSession,
-  SessionActionBinding,
-  SessionEvent,
-  SessionStore,
-  SessionSummary,
+  PersistedThread,
+  ThreadActionBinding,
+  ThreadAuditEvent,
+  ThreadStore,
+  ThreadSummary,
 } from "@handagent/core/storage/index.ts";
 import {
   agentMessagesToConversation,
@@ -14,50 +14,50 @@ import {
   deriveTitle,
 } from "../protocol/MessageTranslator.ts";
 
-export class SessionPersistence {
+export class ThreadPersistence {
   constructor(
-    private readonly store: SessionStore,
+    private readonly store: ThreadStore,
     private readonly now: () => string = () => new Date().toISOString(),
     private readonly blobStore: BlobStore = new FilesystemBlobStore(),
   ) {}
 
-  async createSession(
-    title?: string,
-    actionBinding?: SessionActionBinding,
+  async createThread(
+    preview?: string,
+    actionBinding?: ThreadActionBinding,
     workspaceId?: string | null,
-  ): Promise<PersistedSession> {
-    const id = generateSessionId();
-    return this.store.create({ id, title, createdAt: this.now(), workspaceId, actionBinding });
+  ): Promise<PersistedThread> {
+    const id = generateThreadId();
+    return this.store.create({ id, preview, createdAt: this.now(), workspaceId, actionBinding });
   }
 
-  async deleteSession(sessionId: string): Promise<void> {
-    return this.store.delete(sessionId);
+  async deleteThread(threadId: string): Promise<void> {
+    return this.store.delete(threadId);
   }
 
-  async renameSession(sessionId: string, title: string): Promise<void> {
-    return this.store.updateTitle(sessionId, title);
+  async renameThread(threadId: string, preview: string): Promise<void> {
+    return this.store.updatePreview(threadId, preview, this.now());
   }
 
-  async listSessions(): Promise<SessionSummary[]> {
+  async listThreads(): Promise<ThreadSummary[]> {
     return this.store.list();
   }
 
-  async getSession(sessionId: string): Promise<PersistedSession | null> {
-    return this.store.get(sessionId);
+  async getThread(threadId: string): Promise<PersistedThread | null> {
+    return this.store.get(threadId);
   }
 
-  async ensureSession(sessionId: string): Promise<void> {
-    const existing = await this.store.get(sessionId);
+  async ensureThread(threadId: string): Promise<void> {
+    const existing = await this.store.get(threadId);
     if (existing) return;
 
     await this.store.create({
-      id: sessionId,
+      id: threadId,
       createdAt: this.now(),
     });
   }
 
   async persistUserMessage(
-    sessionId: string,
+    threadId: string,
     text: string,
     attachments?: Parameters<typeof composeUserContent>[1],
   ): Promise<void> {
@@ -65,51 +65,51 @@ export class SessionPersistence {
       role: "user",
       content: await composeUserContent(text, attachments, this.blobStore),
     };
-    await this.store.appendMessages(sessionId, [userMessage], this.now());
+    await this.store.appendMessages(threadId, [userMessage], this.now());
   }
 
-  async autoTitle(sessionId: string, text: string): Promise<void> {
-    const session = await this.store.get(sessionId);
-    if (!session) return;
-    if (session.metadata.title || session.messages.length !== 1) return;
+  async autoTitle(threadId: string, text: string): Promise<void> {
+    const thread = await this.store.get(threadId);
+    if (!thread) return;
+    if (thread.metadata.preview || thread.messages.length !== 1) return;
 
-    await this.store.updateTitle(sessionId, deriveTitle(text));
+    await this.store.updatePreview(threadId, deriveTitle(text), this.now());
   }
 
-  async getMessages(sessionId: string): Promise<AgentMessage[]> {
-    const session = await this.store.get(sessionId);
-    return session?.messages ?? [];
+  async getMessages(threadId: string): Promise<AgentMessage[]> {
+    const Thread = await this.store.get(threadId);
+    return Thread?.messages ?? [];
   }
 
-  async getConversationMessages(sessionId: string) {
-    const messages = await this.getMessages(sessionId);
+  async getConversationMessages(threadId: string) {
+    const messages = await this.getMessages(threadId);
     return agentMessagesToConversation(messages);
   }
 
   async recoverIncompleteTurnForSnapshot(
-    sessionId: string,
+    threadId: string,
     timestamp = this.now(),
   ): Promise<"failed" | "interrupted" | null> {
-    const session = await this.store.get(sessionId);
-    if (!session || !isIncompleteTurn(session.messages)) {
+    const thread = await this.store.get(threadId);
+    if (!thread || !isIncompleteTurn(thread.messages)) {
       return null;
     }
 
-    const lastError = [...session.events]
+    const lastError = [...thread.events]
       .reverse()
       .find(
         (event) =>
           event.type === "error" &&
-          event.timestamp.localeCompare(session.metadata.updatedAt) >= 0,
+          event.timestamp.localeCompare(thread.metadata.updatedAt) >= 0,
       );
     if (lastError?.code === RUN_INTERRUPTED_CODE) {
       return "interrupted";
     }
     if (lastError) {
       await this.store.setMessages(
-        sessionId,
+        threadId,
         [
-          ...session.messages,
+          ...thread.messages,
           {
             role: "assistant",
             content: lastError.message,
@@ -121,9 +121,9 @@ export class SessionPersistence {
     }
 
     await this.store.setMessages(
-      sessionId,
+      threadId,
       [
-        ...session.messages,
+        ...thread.messages,
         {
           role: "assistant",
           content: RUN_LOST_AFTER_RESTART_MESSAGE,
@@ -132,7 +132,7 @@ export class SessionPersistence {
       timestamp,
     );
 
-    await this.store.appendEvents(sessionId, [
+    await this.store.appendEvents(threadId, [
       {
         type: "error",
         timestamp,
@@ -145,24 +145,24 @@ export class SessionPersistence {
   }
 
   async persistRunResult(
-    sessionId: string,
+    threadId: string,
     messages: AgentMessage[],
-    events: SessionEvent[],
+    events: ThreadAuditEvent[],
   ): Promise<void> {
-    await this.store.setMessages(sessionId, messages, this.now());
+    await this.store.setMessages(threadId, messages, this.now());
     if (events.length > 0) {
-      await this.store.appendEvents(sessionId, events);
+      await this.store.appendEvents(threadId, events);
     }
   }
 
-  async persistError(sessionId: string, errorMessage: string, code?: string): Promise<void> {
-    const event: SessionEvent = {
+  async persistError(threadId: string, errorMessage: string, code?: string): Promise<void> {
+    const event: ThreadAuditEvent = {
       type: "error",
       timestamp: this.now(),
       message: errorMessage,
       ...(code ? { code } : {}),
     };
-    await this.store.appendEvents(sessionId, [
+    await this.store.appendEvents(threadId, [
       event,
     ]);
   }
@@ -173,8 +173,8 @@ export const RUN_INTERRUPTED_MESSAGE = "本轮运行已中断。";
 export const RUN_LOST_AFTER_RESTART_CODE = "run_lost_after_restart";
 export const RUN_LOST_AFTER_RESTART_MESSAGE = "本轮运行因 agent-server 重启而中断，请重新发送请求。";
 
-function generateSessionId(): string {
-  return `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+function generateThreadId(): string {
+  return `thread-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function isIncompleteTurn(messages: AgentMessage[]): boolean {
