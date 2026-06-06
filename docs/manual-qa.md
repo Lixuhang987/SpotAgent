@@ -30,6 +30,8 @@
 
 ## agent-server 源码目录重构 smoke（P2）
 
+最近阻塞记录：2026-06-06 在 `main` 分支完成基线验证：`bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build` 均通过；随后使用 `bash ./scripts/package-app.sh --mock-llm` 打包启动。已验证 `HandAgentRuntimeMode.json` 为 `{"llmMode":"mock"}`，`ps -o pid,ppid,command -p <agent-server-pid>` 显示 agent-server 命令路径指向 `apps/agent-server/src/server/server.ts`，普通 prompt `QA smoke [mock:assistant-ok] 2026-06-06` 可打开 SessionWindow 并在 `~/.spotAgent/sessions/session-1780739178062-ysugm5.json` 落盘 user / assistant。继续在同一 session 提交 `QA workspace ask [mock:workspace-ask] 2026-06-06` 时，因 `MockLLMClient` 会被历史 `[mock:assistant-ok]` trigger 截走，未能出现 workspace 选择气泡；该缺陷已记录到 [bugs.md](./bugs.md)。QA 后已退出 `HandAgentDesktop`，`lsof -nP -iTCP:4317` 确认无监听进程残留。
+
 1. 从当前 worktree 执行 `bash ./scripts/swiftw run HandAgentDesktop`。
 1. 确认 desktop 成功派生 agent-server，`ps -o pid,ppid,command -p <agent-server-pid>` 中命令路径指向 `apps/agent-server/src/server/server.ts`。
 1. 提交一个普通文本 prompt，确认 SessionWindow 能收到 assistant 回复或明确的模型配置错误气泡，不出现 `agent-server` 入口文件缺失。

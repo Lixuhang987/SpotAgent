@@ -2,7 +2,7 @@
 
 本文记录当前已知但尚未修复的 bug。功能待办继续放在 [TODO.md](/Users/mu9/proj/handAgent/docs/TODO.md)
 
-最后核对日期：2026-05-24。
+最后核对日期：2026-06-06。
 
 ## 修 bug 约束
 
@@ -30,6 +30,22 @@
 ---
 
 ## 当前 bug
+
+### `MockLLMClient` 在同一 session 中会被历史 mock trigger 截走后续场景
+
+- **严重级别**：P2
+- **发现日期**：2026-06-06
+- **基线结果**：`bash ./scripts/test.sh` 通过；`bash ./scripts/swiftw test` 通过；`bash ./scripts/swiftw build` 通过；`bash ./scripts/package-app.sh --mock-llm` 通过。
+- **复现步骤**：
+  1. 在 `/Users/mu9/proj/handAgent` 的 `main` 分支打包并启动 mock LLM App：`bash ./scripts/package-app.sh --mock-llm`、`open dist/HandAgentDesktop.app`。
+  1. 用原生快捷键事件 `osascript -e 'tell application "System Events" to key code 49 using {command down, shift down}'` 打开 PromptPanel。
+  1. 新建 session，提交 `QA smoke [mock:assistant-ok] 2026-06-06`。
+  1. 在同一 session 的 composer 中继续提交 `QA workspace ask [mock:workspace-ask] 2026-06-06`。
+- **实际结果**：第二轮没有触发 `workspace.askUser`，SessionWindow 未出现 workspace 选择气泡；session 文件追加的仍是 `Mock assistant response: main chain is reachable.`。
+- **期望结果**：第二轮应按最新用户输入中的 `[mock:workspace-ask]` 触发 `workspace.askUser`，并把 `workspace_ask` 只回到当前 session 对应 tab。
+- **证据**：`~/.spotAgent/sessions/session-1780739178062-ysugm5.json` 中先记录 user `QA smoke [mock:assistant-ok] 2026-06-06` 与 assistant `Mock assistant response: main chain is reachable.`，随后第二轮 user `QA workspace ask [mock:workspace-ask] 2026-06-06` 后仍记录 assistant `Mock assistant response: main chain is reachable.`，`events` 仍为空；Computer Use 观察到 SessionWindow 未出现 workspace 选择气泡。
+- **初步调用链 / 根因边界**：`MockLLMClient.findScenario()` 通过 `userMessageTexts(messages)` 扫描整个会话历史，并按 `mockLLMScenarios` 列表顺序返回第一个匹配场景；因为 `[mock:assistant-ok]` 位于场景列表前面，后续同 session 中的 `[mock:workspace-ask]` 被历史首轮输入截走。问题边界在 mock LLM 场景选择逻辑，不是 PromptPanel、SessionWindow、agent-server 入口或持久化链路。
+- **清理状态**：QA 后已退出 `HandAgentDesktop`，`lsof -nP -iTCP:4317` 确认无监听进程残留。
 
 ### `AI SDK stream finished without assistant content or tool calls`
 
