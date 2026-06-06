@@ -133,11 +133,17 @@ button {
   height: 100vh;
   background: #22211f;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    "toolbar"
+    "error"
+    "main"
+    "composer";
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   overflow: hidden;
 }
 
 .thread-toolbar {
+  grid-area: toolbar;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
@@ -216,6 +222,7 @@ button {
 }
 
 .window-error {
+  grid-area: error;
   margin: 10px 12px 0;
   border-radius: 8px;
   padding: 8px 10px;
@@ -224,6 +231,15 @@ button {
 .thread-error {
   border-radius: 8px;
   padding: 10px 12px;
+}
+
+.thread-main-region {
+  grid-area: main;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .message-list {
@@ -332,6 +348,7 @@ button {
 }
 
 .composer {
+  grid-area: composer;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;

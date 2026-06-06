@@ -2,10 +2,12 @@ import { useState } from "react";
 
 export function Composer({
   disabled,
+  stopDisabled,
   onSubmit,
   onStop,
 }: {
   disabled: boolean;
+  stopDisabled: boolean;
   onSubmit(text: string): void;
   onStop(): void;
 }) {
@@ -32,7 +34,7 @@ export function Composer({
       />
       <div className="composer-actions">
         <button type="submit" disabled={disabled}>发送</button>
-        <button type="button" onClick={onStop}>停止</button>
+        <button type="button" disabled={stopDisabled} onClick={onStop}>停止</button>
       </div>
     </form>
   );

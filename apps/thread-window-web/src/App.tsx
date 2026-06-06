@@ -51,12 +51,13 @@ export function App() {
     });
     clientRef.current = socket;
     socket.connect();
-    installInitialPromptReceiver((payload) => {
+    const disposeInitialPromptReceiver = installInitialPromptReceiver((payload) => {
       createThreadWindowStore.getState().enqueueInitialPrompt(payload);
-      socket.startInitialPrompt(payload);
+      clientRef.current?.startInitialPrompt(payload);
     });
 
     return () => {
+      disposeInitialPromptReceiver();
       socket.disconnect();
       if (clientRef.current === socket) {
         clientRef.current = null;
@@ -98,32 +99,38 @@ export function App() {
 
         {activeTab ? (
           <>
-            <MessageList messages={activeTab.messages} errorMessage={activeTab.errorMessage} />
-            <RequestPanels
-              permissionRequests={activeTab.permissionRequests}
-              workspaceRequests={activeTab.workspaceRequests}
-              onAnswerPermission={(requestId, decision) => {
-                clientRef.current?.sendRaw(encodePermissionAnswer({
-                  requestId,
-                  timestamp: now(),
-                  decision,
-                  scope: "once",
-                }));
-                createThreadWindowStore.getState().resolvePermissionRequest(requestId);
-              }}
-              onAnswerWorkspace={(requestId, workspaceId) => {
-                clientRef.current?.sendRaw(encodeWorkspaceAnswer({
-                  requestId,
-                  timestamp: now(),
-                  ...(workspaceId ? { workspaceId } : { cancelled: true }),
-                }));
-                createThreadWindowStore.getState().resolveWorkspaceRequest(requestId);
-              }}
-            />
+            <div className="thread-main-region">
+              <MessageList messages={activeTab.messages} errorMessage={activeTab.errorMessage} />
+              <RequestPanels
+                permissionRequests={activeTab.permissionRequests}
+                workspaceRequests={activeTab.workspaceRequests}
+                onAnswerPermission={(requestId, decision) => {
+                  clientRef.current?.sendRaw(encodePermissionAnswer({
+                    requestId,
+                    timestamp: now(),
+                    decision,
+                    scope: "thread",
+                  }));
+                  createThreadWindowStore.getState().resolvePermissionRequest(requestId);
+                }}
+                onAnswerWorkspace={(requestId, workspaceId) => {
+                  clientRef.current?.sendRaw(encodeWorkspaceAnswer({
+                    requestId,
+                    timestamp: now(),
+                    ...(workspaceId ? { workspaceId } : { cancelled: true }),
+                  }));
+                  createThreadWindowStore.getState().resolveWorkspaceRequest(requestId);
+                }}
+              />
+            </div>
             <Composer
               disabled={state.connectionState !== "connected" || activeTab.status === "running"}
+              stopDisabled={state.connectionState !== "connected" || activeTab.status !== "running"}
               onSubmit={(text) => clientRef.current?.startTurn(activeTab.threadId, text)}
               onStop={() => {
+                if (state.connectionState !== "connected" || activeTab.status !== "running") {
+                  return;
+                }
                 clientRef.current?.sendRaw(encodeTurnInterrupt({
                   threadId: activeTab.threadId,
                   commandId: id("interrupt"),
