@@ -19,8 +19,8 @@ final class ThreadWindowViewModel {
     var noticeMessage: String? { store.state.noticeMessage }
 
     @ObservationIgnored private let store: StoreOf<ThreadWindowFeature>
-    @ObservationIgnored private let sendCommand: (ThreadProtocolClient.Command) -> Void
-    @ObservationIgnored private let sendResponse: (ThreadProtocolClient.Response) -> Void
+    @ObservationIgnored private let sendCommand: (ThreadWindowCommand) -> Void
+    @ObservationIgnored private let sendResponse: (ThreadWindowResponse) -> Void
     @ObservationIgnored private let subscribeToThreadEvents: ThreadEventSubscriber
     @ObservationIgnored private let onTabStateChanged: @MainActor (ThreadTabViewModel) -> Void
     @ObservationIgnored private let onTabClosed: @MainActor (ThreadTabViewModel) -> Void
@@ -37,8 +37,8 @@ final class ThreadWindowViewModel {
         store: StoreOf<ThreadWindowFeature>? = nil,
         subscribeToThreadEvents: @escaping ThreadEventSubscriber,
         subscribeToGlobalEvents: @escaping GlobalEventSubscriber,
-        sendCommand: @escaping (ThreadProtocolClient.Command) -> Void,
-        sendResponse: @escaping (ThreadProtocolClient.Response) -> Void,
+        sendCommand: @escaping (ThreadWindowCommand) -> Void,
+        sendResponse: @escaping (ThreadWindowResponse) -> Void,
         onTabStateChanged: @escaping @MainActor (ThreadTabViewModel) -> Void = { _ in },
         onTabClosed: @escaping @MainActor (ThreadTabViewModel) -> Void = { _ in }
     ) {

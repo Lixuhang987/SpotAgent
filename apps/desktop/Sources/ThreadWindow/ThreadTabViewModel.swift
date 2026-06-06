@@ -28,8 +28,8 @@ final class ThreadTabViewModel: Identifiable {
     }
 
     @ObservationIgnored private let store: StoreOf<ThreadFeature>
-    @ObservationIgnored private let sendCommand: (ThreadProtocolClient.Command) -> Void
-    @ObservationIgnored private let sendResponse: (ThreadProtocolClient.Response) -> Void
+    @ObservationIgnored private let sendCommand: (ThreadWindowCommand) -> Void
+    @ObservationIgnored private let sendResponse: (ThreadWindowResponse) -> Void
     @ObservationIgnored private let subscribeToEvents: (
         String,
         @escaping (ThreadEvent) -> Void
@@ -43,8 +43,8 @@ final class ThreadTabViewModel: Identifiable {
         threadID: String,
         store: StoreOf<ThreadFeature>? = nil,
         subscribeToEvents: @escaping (String, @escaping (ThreadEvent) -> Void) -> ThreadEventBus<ThreadEvent>.Subscription,
-        sendCommand: @escaping (ThreadProtocolClient.Command) -> Void,
-        sendResponse: @escaping (ThreadProtocolClient.Response) -> Void,
+        sendCommand: @escaping (ThreadWindowCommand) -> Void,
+        sendResponse: @escaping (ThreadWindowResponse) -> Void,
         copyMessageText: @escaping @MainActor (String) -> Void = { text in
             ThreadMessageClipboard.copy(text)
         },
@@ -166,8 +166,8 @@ final class ThreadTabViewModel: Identifiable {
         ISO8601DateFormatter().string(from: Date())
     }
 
-    private func permissionScope(from rawValue: String?) -> ThreadProtocolClient.PermissionScope? {
+    private func permissionScope(from rawValue: String?) -> ThreadWindowPermissionScope? {
         guard let rawValue else { return nil }
-        return ThreadProtocolClient.PermissionScope(rawValue: rawValue)
+        return ThreadWindowPermissionScope(rawValue: rawValue)
     }
 }

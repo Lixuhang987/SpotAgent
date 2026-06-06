@@ -4,8 +4,8 @@ import XCTest
 final class ThreadWindowViewModelTests: XCTestCase {
     @MainActor
     private func makeModel(
-        commandSink: UnsafeMutablePointer<[ThreadProtocolClient.Command]>? = nil,
-        responseSink: UnsafeMutablePointer<[ThreadProtocolClient.Response]>? = nil,
+        commandSink: UnsafeMutablePointer<[ThreadWindowCommand]>? = nil,
+        responseSink: UnsafeMutablePointer<[ThreadWindowResponse]>? = nil,
         onTabClosed: @escaping @MainActor (ThreadTabViewModel) -> Void = { _ in }
     ) -> (ThreadWindowViewModel, ThreadEventBus<ThreadEvent>) {
         let bus = ThreadEventBus<ThreadEvent>()
@@ -29,7 +29,7 @@ final class ThreadWindowViewModelTests: XCTestCase {
 
     @MainActor
     func testInitializesHistoryListRequestWhenWindowModelIsCreated() {
-        var commands: [ThreadProtocolClient.Command] = []
+        var commands: [ThreadWindowCommand] = []
         _ = withUnsafeMutablePointer(to: &commands) { pointer in
             makeModel(commandSink: pointer)
         }
@@ -41,7 +41,7 @@ final class ThreadWindowViewModelTests: XCTestCase {
 
     @MainActor
     func testCreateThreadResponseOpensTabAndRefreshesHistoryList() {
-        var commands: [ThreadProtocolClient.Command] = []
+        var commands: [ThreadWindowCommand] = []
         let (model, bus) = withUnsafeMutablePointer(to: &commands) { pointer in
             makeModel(commandSink: pointer)
         }
@@ -63,7 +63,7 @@ final class ThreadWindowViewModelTests: XCTestCase {
 
     @MainActor
     func testSuccessfulDeleteThreadResponseClosesOpenRunningTabAndRefreshesHistoryList() {
-        var commands: [ThreadProtocolClient.Command] = []
+        var commands: [ThreadWindowCommand] = []
         var closedThreadIDs: [String] = []
         let (model, bus) = withUnsafeMutablePointer(to: &commands) { pointer in
             makeModel(commandSink: pointer, onTabClosed: { tab in
@@ -88,7 +88,7 @@ final class ThreadWindowViewModelTests: XCTestCase {
 
     @MainActor
     func testNonDeletedDeleteThreadResponseKeepsOpenTabAndRefreshesHistoryList() {
-        var commands: [ThreadProtocolClient.Command] = []
+        var commands: [ThreadWindowCommand] = []
         var closedThreadIDs: [String] = []
         let (model, bus) = withUnsafeMutablePointer(to: &commands) { pointer in
             makeModel(commandSink: pointer, onTabClosed: { tab in
@@ -166,7 +166,7 @@ final class ThreadWindowViewModelTests: XCTestCase {
 
     @MainActor
     func testComposerSubmitFromEmptyWorkspaceCreatesTabThenSendsPromptThroughSharedConnection() {
-        var commands: [ThreadProtocolClient.Command] = []
+        var commands: [ThreadWindowCommand] = []
         let (model, bus) = withUnsafeMutablePointer(to: &commands) { pointer in
             makeModel(commandSink: pointer)
         }
@@ -201,7 +201,7 @@ final class ThreadWindowViewModelTests: XCTestCase {
 
     @MainActor
     func testCreateNewThreadSendsWorkspaceId() {
-        var commands: [ThreadProtocolClient.Command] = []
+        var commands: [ThreadWindowCommand] = []
         let (model, _) = withUnsafeMutablePointer(to: &commands) { pointer in
             makeModel(commandSink: pointer)
         }
@@ -216,7 +216,7 @@ final class ThreadWindowViewModelTests: XCTestCase {
 
     @MainActor
     func testPromptPanelInitialSubmitCreatesNewThreadEvenWhenATabIsActive() {
-        var commands: [ThreadProtocolClient.Command] = []
+        var commands: [ThreadWindowCommand] = []
         let (model, bus) = withUnsafeMutablePointer(to: &commands) { pointer in
             makeModel(commandSink: pointer)
         }
@@ -244,7 +244,7 @@ final class ThreadWindowViewModelTests: XCTestCase {
 
     @MainActor
     func testConsecutiveInitialPromptsAreMatchedToTheirCreateThreadResponses() {
-        var commands: [ThreadProtocolClient.Command] = []
+        var commands: [ThreadWindowCommand] = []
         let (model, bus) = withUnsafeMutablePointer(to: &commands) { pointer in
             makeModel(commandSink: pointer)
         }
@@ -267,7 +267,7 @@ final class ThreadWindowViewModelTests: XCTestCase {
 
     @MainActor
     func testCreateThreadFailureClearsOnlyMatchingPendingInitialPrompt() {
-        var commands: [ThreadProtocolClient.Command] = []
+        var commands: [ThreadWindowCommand] = []
         let (model, bus) = withUnsafeMutablePointer(to: &commands) { pointer in
             makeModel(commandSink: pointer)
         }

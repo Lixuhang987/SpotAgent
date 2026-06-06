@@ -5,8 +5,8 @@ final class ThreadTabViewModelTests: XCTestCase {
     @MainActor
     private func makeTab(
         threadID: String = "thread-1",
-        sentCommands: UnsafeMutablePointer<[ThreadProtocolClient.Command]>? = nil,
-        sentResponses: UnsafeMutablePointer<[ThreadProtocolClient.Response]>? = nil,
+        sentCommands: UnsafeMutablePointer<[ThreadWindowCommand]>? = nil,
+        sentResponses: UnsafeMutablePointer<[ThreadWindowResponse]>? = nil,
         copyMessageText: @escaping @MainActor (String) -> Void = { _ in },
         onStateChanged: @escaping @MainActor (ThreadTabViewModel) -> Void = { _ in }
     ) -> ThreadTabViewModel {
@@ -330,7 +330,7 @@ final class ThreadTabViewModelTests: XCTestCase {
 
     @MainActor
     func testSendPromptUsesSharedCommandPath() {
-        var commands: [ThreadProtocolClient.Command] = []
+        var commands: [ThreadWindowCommand] = []
         let tab = withUnsafeMutablePointer(to: &commands) { pointer in
             makeTab(sentCommands: pointer)
         }

@@ -124,7 +124,7 @@ final class ThreadWindowLifecycle {
         return model
     }
 
-    private func send(_ command: ThreadProtocolClient.Command) {
+    private func send(_ command: ThreadWindowCommand) {
         switch command {
         case let .threadStart(commandId, timestamp, workspaceId, actionBinding):
             appServer.startThread(
@@ -152,14 +152,14 @@ final class ThreadWindowLifecycle {
         }
     }
 
-    private func send(_ response: ThreadProtocolClient.Response) {
+    private func send(_ response: ThreadWindowResponse) {
         switch response {
         case let .permissionAnswered(requestId, timestamp, decision, scope, reason):
             appServer.answerPermission(
                 requestId: requestId,
                 timestamp: timestamp,
-                decision: decision,
-                scope: scope,
+                decision: ThreadProtocolClient.PermissionDecision(rawValue: decision.rawValue) ?? .deny,
+                scope: scope.flatMap { ThreadProtocolClient.PermissionScope(rawValue: $0.rawValue) },
                 reason: reason
             )
         case let .workspaceAnswered(requestId, timestamp, workspaceId, cancelled):

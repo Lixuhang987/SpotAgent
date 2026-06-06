@@ -17,6 +17,7 @@ ThreadWindow 是全局唯一的 thread 工作区：左侧是历史 thread 列表
 | `EventStore.swift` | thread 运行缓存：消息、连接提示、权限请求、workspace 请求、本地待确认 turn |
 | `ThreadFeature.swift` | TCA thread reducer：消费本地操作与 `ThreadEvent`，更新 `ThreadState + EventStore` |
 | `ThreadWindowFeature.swift` | TCA window reducer：管理 tabs、active tab、历史列表、删除确认、连接状态和启动中 prompt |
+| `ThreadWindowCommands.swift` | ThreadWindow 本地语义命令 / 回执类型；Lifecycle 将其映射到 AppServer 语义方法 |
 | `ThreadWindowViewModel.swift` | SwiftUI / AppKit 生命周期适配层：持有 `StoreOf<ThreadWindowFeature>`，负责订阅事件、发送窗口级 command、创建 tab adapter |
 | `ThreadTabViewModel.swift` | 单 tab 适配层：持有 `StoreOf<ThreadFeature>`，负责 `turn.start` / `turn.interrupt`、回执和事件订阅 |
 | `ThreadRunStatus.swift` | UI 内部运行态枚举；协议边界字符串归一化为 `idle / running / failed / interrupted` |
