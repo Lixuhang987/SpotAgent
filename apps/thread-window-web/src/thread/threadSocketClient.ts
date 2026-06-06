@@ -13,6 +13,7 @@ import {
 export type ConnectionState = "disconnected" | "connecting" | "connected" | "reconnecting";
 
 type WebSocketLike = {
+  readyState: number;
   onopen: (() => void) | null;
   onclose: (() => void) | null;
   onmessage: ((event: { data: string }) => void) | null;
@@ -22,10 +23,14 @@ type WebSocketLike = {
 
 type WebSocketConstructor = new (url: string) => WebSocketLike;
 
+const WS_CONNECTING = 0;
+const WS_OPEN = 1;
+
 export class ThreadSocketClient {
   private socket: WebSocketLike | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private manuallyClosed = false;
+  private outboundQueue: string[] = [];
   private readonly pendingInitialPrompts = new Map<string, InitialPromptPayload>();
 
   constructor(private readonly options: {
@@ -42,6 +47,9 @@ export class ThreadSocketClient {
 
   connect(): void {
     this.manuallyClosed = false;
+    if (this.hasActiveSocket()) {
+      return;
+    }
     this.openSocket(this.socket ? "reconnecting" : "connecting");
   }
 
@@ -51,13 +59,18 @@ export class ThreadSocketClient {
       clearTimeout(this.reconnectTimer);
     }
     this.reconnectTimer = null;
+    this.outboundQueue = [];
     this.socket?.close();
     this.socket = null;
     this.options.onConnectionState("disconnected");
   }
 
   sendRaw(message: string): void {
-    this.socket?.send(message);
+    if (this.socket?.readyState === WS_OPEN) {
+      this.socket.send(message);
+      return;
+    }
+    this.outboundQueue.push(message);
   }
 
   listThreads(): void {
@@ -76,6 +89,9 @@ export class ThreadSocketClient {
   }
 
   startInitialPrompt(prompt: InitialPromptPayload): void {
+    if (this.pendingInitialPrompts.has(prompt.clientRequestId)) {
+      throw new Error(`Initial prompt ${prompt.clientRequestId} is already pending`);
+    }
     this.pendingInitialPrompts.set(prompt.clientRequestId, prompt);
     this.sendRaw(encodeThreadStart({
       commandId: prompt.clientRequestId,
@@ -101,12 +117,20 @@ export class ThreadSocketClient {
 
   private openSocket(state: ConnectionState): void {
     const WebSocketImpl = this.options.WebSocketImpl ?? (WebSocket as unknown as WebSocketConstructor);
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+    }
+    this.reconnectTimer = null;
     this.options.onConnectionState(state);
     const socket = new WebSocketImpl(this.options.url);
     this.socket = socket;
 
     socket.onopen = () => {
+      if (socket !== this.socket) {
+        return;
+      }
       this.options.onConnectionState("connected");
+      this.flushOutboundQueue(socket);
       this.listThreads();
       for (const threadId of this.options.getOpenThreadIds()) {
         this.resumeThread(threadId);
@@ -114,7 +138,10 @@ export class ThreadSocketClient {
     };
 
     socket.onclose = () => {
-      if (this.manuallyClosed) {
+      if (socket !== this.socket || this.manuallyClosed) {
+        return;
+      }
+      if (this.reconnectTimer) {
         return;
       }
       this.options.onConnectionState("reconnecting");
@@ -124,6 +151,9 @@ export class ThreadSocketClient {
     };
 
     socket.onmessage = (event: { data: string }) => {
+      if (socket !== this.socket) {
+        return;
+      }
       let value: unknown;
       try {
         value = JSON.parse(event.data) as unknown;
@@ -141,6 +171,13 @@ export class ThreadSocketClient {
   }
 
   private handleNotificationSideEffects(notification: ThreadNotification): void {
+    if (notification.type === "thread.error") {
+      if (notification.commandId) {
+        this.pendingInitialPrompts.delete(notification.commandId);
+      }
+      return;
+    }
+
     if (notification.type !== "thread.started" || !notification.commandId) {
       return;
     }
@@ -153,6 +190,19 @@ export class ThreadSocketClient {
     this.pendingInitialPrompts.delete(notification.commandId);
     this.resumeThread(notification.threadId);
     this.startTurn(notification.threadId, pending.text, pending.attachments);
+  }
+
+  private hasActiveSocket(): boolean {
+    return this.socket?.readyState === WS_CONNECTING || this.socket?.readyState === WS_OPEN;
+  }
+
+  private flushOutboundQueue(socket: WebSocketLike): void {
+    while (this.outboundQueue.length > 0 && socket === this.socket && socket.readyState === WS_OPEN) {
+      const message = this.outboundQueue.shift();
+      if (message) {
+        socket.send(message);
+      }
+    }
   }
 
   private now(): string {
