@@ -6,6 +6,7 @@ BUNDLE_ID="com.yourname.HandAgentDesktop"
 BUILD_DIR="${HANDAGENT_PACKAGE_BUILD_DIR:-.build/release}"
 DIST_DIR="${HANDAGENT_PACKAGE_DIST_DIR:-dist}"
 APP_DIR="$DIST_DIR/$APP_NAME.app"
+WEB_DIST_DIR="${HANDAGENT_THREAD_WINDOW_WEB_DIST_DIR:-apps/thread-window-web/dist}"
 SWIFT_BIN="${HANDAGENT_PACKAGE_SWIFT_BIN:-swift}"
 CODESIGN_BIN="${HANDAGENT_PACKAGE_CODESIGN_BIN:-codesign}"
 CODESIGN_IDENTITY="${HANDAGENT_PACKAGE_CODESIGN_IDENTITY:--}"
@@ -46,8 +47,18 @@ rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS"
 mkdir -p "$APP_DIR/Contents/Resources"
 
+if [[ ! -f "$WEB_DIST_DIR/index.html" ]]; then
+  printf 'Missing ThreadWindow web build: %s/index.html\n' "$WEB_DIST_DIR" >&2
+  printf 'Run pnpm --filter @handagent/thread-window-web build or set HANDAGENT_THREAD_WINDOW_WEB_DIST_DIR.\n' >&2
+  exit 1
+fi
+
 cp "$BUILD_DIR/$APP_NAME" "$APP_DIR/Contents/MacOS/$APP_NAME"
 chmod +x "$APP_DIR/Contents/MacOS/$APP_NAME"
+
+rm -rf "$APP_DIR/Contents/Resources/ThreadWindowWeb"
+mkdir -p "$APP_DIR/Contents/Resources/ThreadWindowWeb"
+cp -R "$WEB_DIST_DIR"/. "$APP_DIR/Contents/Resources/ThreadWindowWeb/"
 
 cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
