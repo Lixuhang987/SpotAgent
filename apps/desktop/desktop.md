@@ -117,7 +117,7 @@ sequenceDiagram
   Window->>Conn: AppServer 持有的进程级唯一共享连接
   Conn->>Server: ThreadCommand / ClientResponse / PlatformBridgeMessage
   Server-->>Conn: ThreadNotification / ServerRequest / PlatformBridgeMessage
-  Conn-->>Bus: ThreadProtocolClient 解码后按 threadId 分发
+  Conn-->>Bus: AppServerClient 解码后按 threadId 分发
   Bus-->>Window: ThreadWindowViewModel / ThreadTabViewModel 订阅消费
 ```
 
@@ -156,5 +156,5 @@ sequenceDiagram
 - node 子进程 stdout/stderr 通过 Pipe 捕获但未暴露 UI（仅防 fd 泄漏）。
 - 设置窗口与 Thread 窗口共享 `AppActivationPolicyCoordinator`，全部关闭后 app 切回 `.accessory`。
 - desktop 主 thread 链路由 `AppServer` 持有进程级唯一 `AppServerConnection`。`ThreadWindow` 通过 `ThreadEventBus` 按 `threadId` 分发事件，tab 不再各自持有主 socket。
-- `ThreadProtocolClient` 负责共享连接上的 command / notification / request / response 编解码；`ThreadWindowViewModel` / `ThreadTabViewModel` 只围绕恢复、发命令、发回执和本地 UI 状态工作。
+- `AppServerClient` 负责共享连接上的 command / notification / request / response 编解码；`ThreadWindowViewModel` / `ThreadTabViewModel` 只围绕恢复、触发 AppServer 语义命令/回执和本地 UI 状态工作。
 - `PlatformBridgeService` 不另建连接；`AppServerClient` 在共享连接上发送 `platform_bridge_hello`，并把 `platform_request` 分派给它处理。

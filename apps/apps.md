@@ -29,7 +29,7 @@ flowchart LR
 
 - 用户提交 prompt 后，`AppCoordinator` 创建或聚焦 `ThreadWindow`。
 - `AppServer` 为 desktop 进程维护唯一 thread WebSocket；`ThreadWindowLifecycle` 通过 `ThreadEventBus` 按 `threadId` 分发 notification / request。
-- `ThreadProtocolClient` 通过共享连接发送 `ThreadCommand` / `ClientResponse`，由后端 `ThreadCommandRouter` 路由并交给 `ThreadRuntimeOrchestrator` 驱动 `AgentRuntime`。
+- `AppServer` 暴露 thread / turn 语义方法，`AppServerClient` 在共享连接上编码 `ThreadCommand` / `ClientResponse`，由后端 `ThreadCommandRouter` 路由并交给 `ThreadRuntimeOrchestrator` 驱动 `AgentRuntime`。
 - ThreadWindow 左侧历史列表读取 `~/.spotAgent/threads/`，用于搜索、预览、恢复和删除持久化 thread。
 
 ### 3. 平台能力反向 IPC

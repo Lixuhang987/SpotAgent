@@ -124,13 +124,12 @@ final class NopAppServer: AppServerManaging {
     var onAvailabilityChange: ((Bool) -> Void)?
     var onFatalError: ((String) -> Void)?
     var onThreadConnectionStateChange: ((AppServerConnectionState) -> Void)?
-    var onThreadMessage: ((String) -> Void)?
+    var onInboundMessage: ((ThreadProtocolClient.InboundMessage) -> Void)?
 
     func start() {}
     func stop() {}
     func connectThreadClient() {}
     func disconnectThreadClient() {}
-    func sendThreadMessage(_ text: String) {}
 }
 
 @MainActor

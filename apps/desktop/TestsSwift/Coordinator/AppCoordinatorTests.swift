@@ -73,12 +73,11 @@ final class AppCoordinatorTests: XCTestCase {
             var onAvailabilityChange: ((Bool) -> Void)?
             var onFatalError: ((String) -> Void)?
             var onThreadConnectionStateChange: ((AppServerConnectionState) -> Void)?
-            var onThreadMessage: ((String) -> Void)?
+            var onInboundMessage: ((ThreadProtocolClient.InboundMessage) -> Void)?
             func start() {}
             func stop() {}
             func connectThreadClient() {}
             func disconnectThreadClient() {}
-            func sendThreadMessage(_ text: String) {}
         }
         let stub = StubAppServer()
         let services = AppServices(
@@ -137,13 +136,12 @@ final class AppCoordinatorTests: XCTestCase {
             var onAvailabilityChange: ((Bool) -> Void)?
             var onFatalError: ((String) -> Void)?
             var onThreadConnectionStateChange: ((AppServerConnectionState) -> Void)?
-            var onThreadMessage: ((String) -> Void)?
+            var onInboundMessage: ((ThreadProtocolClient.InboundMessage) -> Void)?
             var startCount = 0
             func start() { startCount += 1 }
             func stop() {}
             func connectThreadClient() {}
             func disconnectThreadClient() {}
-            func sendThreadMessage(_ text: String) {}
         }
         let stub = StubAppServer()
         let services = AppServices(

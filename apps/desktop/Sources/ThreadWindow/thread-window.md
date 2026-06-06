@@ -1,6 +1,6 @@
 # ThreadWindow 模块
 
-ThreadWindow 是全局唯一的 thread 工作区：左侧是历史 thread 列表，右侧是 tab 化 thread 区域。Window 管理历史、tabs 和 active tab；desktop 进程内主路径是 `AppServer` 持有的进程级唯一 `AppServerConnection`，再通过 `ThreadEventBus` 按 `threadId` 把事件分发到各 tab。
+ThreadWindow 是全局唯一的 thread 工作区：左侧是历史 thread 列表，右侧是 tab 化 thread 区域。Window 管理历史、tabs 和 active tab；desktop 进程内主路径通过 `AppServer` 的 thread / turn 语义接口发送命令，入站消息由 `AppServerClient` 解码后再通过 `ThreadEventBus` 按 `threadId` 分发到各 tab。
 
 ## 文件
 
@@ -20,7 +20,6 @@ ThreadWindow 是全局唯一的 thread 工作区：左侧是历史 thread 列表
 | `ThreadWindowViewModel.swift` | SwiftUI / AppKit 生命周期适配层：持有 `StoreOf<ThreadWindowFeature>`，负责订阅事件、发送窗口级 command、创建 tab adapter |
 | `ThreadTabViewModel.swift` | 单 tab 适配层：持有 `StoreOf<ThreadFeature>`，负责 `turn.start` / `turn.interrupt`、回执和事件订阅 |
 | `ThreadRunStatus.swift` | UI 内部运行态枚举；协议边界字符串归一化为 `idle / running / failed / interrupted` |
-| `ThreadProtocolClient.swift` | Thread/Turn dotted protocol 编解码 |
 | `ThreadEventTypes.swift` | UI 本地事件模型 |
 | `ThreadModels.swift` | 消息、附件、权限请求和 workspace 请求模型 |
 | `ThreadStyles.swift` | `MessageBubbleModifier` |
@@ -31,13 +30,13 @@ ThreadWindow 是全局唯一的 thread 工作区：左侧是历史 thread 列表
 Coordinator.handleSubmitPrompt
   └─ ThreadWindowLifecycle.ensureWindow()
      └─ 创建/聚焦全局 ThreadWindow
-     └─ 创建唯一 AppServerConnection + ThreadEventBus
-     └─ 共享连接建立后发送 thread.list
+     └─ 复用 AppServer 共享连接 + ThreadEventBus
+     └─ 共享连接建立后调用 AppServer.listThreads
      └─ ThreadWindowViewModel.createTabWithInitialPrompt(...)
-        └─ 共享连接发送 thread.start
+        └─ AppServer.startThread
         └─ 收到 thread.started：创建 tab 并发送 thread.resume
-        └─ 新 tab 通过共享连接发送 turn.start
-        └─ ThreadProtocolClient 解码 notification / request
+        └─ 新 tab 通过 AppServer.startTurn 发送首轮 turn
+        └─ AppServerClient 解码 notification / request
         └─ ThreadEventBus 按 threadId 分发到对应 tab
 
 左侧历史项点击
@@ -106,7 +105,7 @@ Desktop 回执：
 - `thread.listed` 由窗口级 view model 消费，刷新左侧历史列表。
 - `thread.deleted(status: "deleted")` 触发历史列表刷新，并同步关闭同 `threadID` 的已打开 tab。
 - `thread.error` 既可能是全局错误，也可能按 `threadId` 路由到 tab。
-- `user.message.recorded`、`turn.started`、`assistant.delta`、`tool.started`、`tool.finished`、`turn.completed`、`thread.status.changed`、`thread.snapshot`、`permission.requested`、`workspace.requested`、`connectionState` 都先经过共享连接和 `ThreadProtocolClient` 解码，再由 `ThreadEventBus` 分发给对应 tab。
+- `user.message.recorded`、`turn.started`、`assistant.delta`、`tool.started`、`tool.finished`、`turn.completed`、`thread.status.changed`、`thread.snapshot`、`permission.requested`、`workspace.requested`、`connectionState` 都先经过共享连接和 `AppServerClient` 解码，再由 `ThreadEventBus` 分发给对应 tab。
 - `turn.completed(status: "completed")` 与随后到达的 `thread.status.changed(value: "idle")` 会在 UI 内归一化为 `ThreadRunStatus.idle`。
 - `tool.started`、待处理中的 `permission.requested` / `workspace.requested`，以及运行中的连接状态都可能让 tab 恢复或保持 `running`。
 
@@ -114,7 +113,7 @@ Desktop 回执：
 
 - `ThreadFeature.State.thread` 是 thread 配置快照；`ThreadFeature.State.events` 是运行期事件缓存。
 - `ThreadWindowFeature.State` 是窗口级状态源，包含历史列表、打开的 thread state、active tab、删除确认、notice 和共享连接状态。
-- `ThreadWindowViewModel` / `ThreadTabViewModel` 是 SwiftUI 观察和 AppKit 生命周期适配层；它们通过 TCA `Store` 暴露派生属性，并负责不可放进 reducer 的副作用：发送 WebSocket command / response、订阅 `ThreadEventBus`、复制剪贴板、同步 `ThreadRegistry`。
+- `ThreadWindowViewModel` / `ThreadTabViewModel` 是 SwiftUI 观察和 AppKit 生命周期适配层；它们通过 TCA `Store` 暴露派生属性，并负责不可放进 reducer 的副作用：触发 AppServer 语义命令 / 回执、订阅 `ThreadEventBus`、复制剪贴板、同步 `ThreadRegistry`。
 
 ## 断线重连
 
@@ -129,6 +128,6 @@ Desktop 回执：
 - View 只读 `ThreadWindowViewModel` / `ThreadTabViewModel` 暴露的派生状态，不直接调连接或协议编解码。
 - 新增 thread 级状态优先放入 `ThreadState` 或 `EventStore`，再由 `ThreadFeature` 更新；新增窗口级状态放入 `ThreadWindowFeature.State`。
 - 不要重新引入独立历史窗口；历史列表属于全局 ThreadWindow。
-- 新事件类型必须先在 agent-server 与 Swift `ThreadProtocolClient` 同步定义，再加到对应 view model 的 `handle(_:)`。
+- 新事件类型必须先在 agent-server 与 Swift `AppServerClient` / `ThreadProtocolClient` 同步定义，再加到对应 view model 的 `handle(_:)`。
 - 历史删除必须确认；任何 UI 入口删除持久化 thread 前都先进入待确认状态。
-- 测试：[ThreadWindowViewTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/ThreadWindow/ThreadWindowViewTests.swift)、[ThreadTabViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/ThreadWindow/ThreadTabViewModelTests.swift)、[ThreadWindowViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/ThreadWindow/ThreadWindowViewModelTests.swift)、[ThreadProtocolClientTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/ThreadWindow/ThreadProtocolClientTests.swift)。
+- 测试：[ThreadWindowViewTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/ThreadWindow/ThreadWindowViewTests.swift)、[ThreadTabViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/ThreadWindow/ThreadTabViewModelTests.swift)、[ThreadWindowViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/ThreadWindow/ThreadWindowViewModelTests.swift)、[ThreadProtocolClientTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/AppServices/AgentServer/ThreadProtocolClientTests.swift)。

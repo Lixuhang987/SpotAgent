@@ -69,7 +69,7 @@ final class ThreadWindowLifecycle {
         viewModel = nil
         appServer.disconnectThreadClient()
         appServer.onThreadConnectionStateChange = nil
-        appServer.onThreadMessage = nil
+        appServer.onInboundMessage = nil
         sharedEventBus = nil
         if window != nil {
             window = nil
@@ -93,12 +93,10 @@ final class ThreadWindowLifecycle {
                 eventBus.subscribeGlobal(handler: handler)
             },
             sendCommand: { [weak self] command in
-                guard let text = try? ThreadProtocolClient.encode(command: command) else { return }
-                self?.appServer.sendThreadMessage(text)
+                self?.send(command)
             },
             sendResponse: { [weak self] response in
-                guard let text = try? ThreadProtocolClient.encode(response: response) else { return }
-                self?.appServer.sendThreadMessage(text)
+                self?.send(response)
             },
             onTabStateChanged: { [weak self] tab in
                 self?.syncSummary(from: tab, windowIsOpen: true)
@@ -110,8 +108,7 @@ final class ThreadWindowLifecycle {
         appServer.onThreadConnectionStateChange = { [weak model] state in
             model?.handleConnectionState(state.asThreadConnectionState)
         }
-        appServer.onThreadMessage = { [weak eventBus] text in
-            guard let inbound = try? ThreadProtocolClient.decodeInboundMessage(from: text) else { return }
+        appServer.onInboundMessage = { [weak eventBus] inbound in
             publishInboundMessage(inbound, on: eventBus)
         }
         appServer.connectThreadClient()
@@ -125,6 +122,54 @@ final class ThreadWindowLifecycle {
             setActivationPolicy(activationPolicy.policyAfterUpdatingOpenThreadWindows(by: 1))
         }
         return model
+    }
+
+    private func send(_ command: ThreadProtocolClient.Command) {
+        switch command {
+        case let .threadStart(commandId, timestamp, workspaceId, actionBinding):
+            appServer.startThread(
+                commandId: commandId,
+                timestamp: timestamp,
+                workspaceId: workspaceId,
+                actionBinding: actionBinding
+            )
+        case let .threadResume(threadId, commandId, timestamp):
+            appServer.resumeThread(threadId: threadId, commandId: commandId, timestamp: timestamp)
+        case let .turnStart(threadId, commandId, timestamp, text, attachments):
+            appServer.startTurn(
+                threadId: threadId,
+                commandId: commandId,
+                timestamp: timestamp,
+                text: text,
+                attachments: attachments
+            )
+        case let .turnInterrupt(threadId, commandId, timestamp):
+            appServer.interruptTurn(threadId: threadId, commandId: commandId, timestamp: timestamp)
+        case let .threadList(commandId, timestamp):
+            appServer.listThreads(commandId: commandId, timestamp: timestamp)
+        case let .threadDelete(commandId, timestamp, targetThreadId):
+            appServer.deleteThread(commandId: commandId, timestamp: timestamp, targetThreadId: targetThreadId)
+        }
+    }
+
+    private func send(_ response: ThreadProtocolClient.Response) {
+        switch response {
+        case let .permissionAnswered(requestId, timestamp, decision, scope, reason):
+            appServer.answerPermission(
+                requestId: requestId,
+                timestamp: timestamp,
+                decision: decision,
+                scope: scope,
+                reason: reason
+            )
+        case let .workspaceAnswered(requestId, timestamp, workspaceId, cancelled):
+            appServer.answerWorkspace(
+                requestId: requestId,
+                timestamp: timestamp,
+                workspaceId: workspaceId,
+                cancelled: cancelled
+            )
+        }
     }
 
     private func syncSummary(from tab: ThreadTabViewModel, windowIsOpen: Bool) {

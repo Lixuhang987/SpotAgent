@@ -29,7 +29,7 @@ captureRegion 热键
             └─ error(message)   → PromptPanelController.appendAttachment(.selectionError(...))
 ```
 
-附件提交后由 Coordinator 翻译为 `UserMessageAttachmentPayload`（`textSelection` / `image`），通过 `ThreadProtocolClient` 走 `turn.start.payload.attachments` 发到 agent-server。
+附件提交后由 Coordinator 翻译为 `UserMessageAttachmentPayload`（`textSelection` / `image`），通过 `AppServer.startTurn` 走 `turn.start.payload.attachments` 发到 agent-server。
 
 ## 设计备注
 

@@ -8,13 +8,56 @@ protocol AppServerManaging: AnyObject {
     var onAvailabilityChange: ((Bool) -> Void)? { get set }
     var onFatalError: ((String) -> Void)? { get set }
     var onThreadConnectionStateChange: ((AppServerConnectionState) -> Void)? { get set }
-    var onThreadMessage: ((String) -> Void)? { get set }
+    var onInboundMessage: ((ThreadProtocolClient.InboundMessage) -> Void)? { get set }
 
     func start()
     func stop()
     func connectThreadClient()
     func disconnectThreadClient()
-    func sendThreadMessage(_ text: String)
+    func startThread(commandId: String, timestamp: String, workspaceId: String?, actionBinding: ActionBindingPayload?)
+    func resumeThread(threadId: String, commandId: String, timestamp: String)
+    func listThreads(commandId: String, timestamp: String)
+    func deleteThread(commandId: String, timestamp: String, targetThreadId: String)
+    func startTurn(
+        threadId: String,
+        commandId: String,
+        timestamp: String,
+        text: String,
+        attachments: [UserMessageAttachmentPayload]
+    )
+    func interruptTurn(threadId: String, commandId: String, timestamp: String)
+    func answerPermission(
+        requestId: String,
+        timestamp: String,
+        decision: ThreadProtocolClient.PermissionDecision,
+        scope: ThreadProtocolClient.PermissionScope?,
+        reason: String?
+    )
+    func answerWorkspace(requestId: String, timestamp: String, workspaceId: String?, cancelled: Bool?)
+}
+
+@MainActor
+extension AppServerManaging {
+    func startThread(commandId: String, timestamp: String, workspaceId: String?, actionBinding: ActionBindingPayload?) {}
+    func resumeThread(threadId: String, commandId: String, timestamp: String) {}
+    func listThreads(commandId: String, timestamp: String) {}
+    func deleteThread(commandId: String, timestamp: String, targetThreadId: String) {}
+    func startTurn(
+        threadId: String,
+        commandId: String,
+        timestamp: String,
+        text: String,
+        attachments: [UserMessageAttachmentPayload]
+    ) {}
+    func interruptTurn(threadId: String, commandId: String, timestamp: String) {}
+    func answerPermission(
+        requestId: String,
+        timestamp: String,
+        decision: ThreadProtocolClient.PermissionDecision,
+        scope: ThreadProtocolClient.PermissionScope?,
+        reason: String?
+    ) {}
+    func answerWorkspace(requestId: String, timestamp: String, workspaceId: String?, cancelled: Bool?) {}
 }
 
 @MainActor
@@ -43,8 +86,8 @@ final class AppServer: AppServerManaging {
         didSet { client.onStateChange = onThreadConnectionStateChange }
     }
 
-    var onThreadMessage: ((String) -> Void)? {
-        didSet { client.onTextMessage = onThreadMessage }
+    var onInboundMessage: ((ThreadProtocolClient.InboundMessage) -> Void)? {
+        didSet { client.onInboundMessage = onInboundMessage }
     }
 
     init(
@@ -79,15 +122,81 @@ final class AppServer: AppServerManaging {
         client.disconnect()
     }
 
-    func sendThreadMessage(_ text: String) {
-        client.send(text: text)
+    func startThread(commandId: String, timestamp: String, workspaceId: String?, actionBinding: ActionBindingPayload?) {
+        client.send(command: .threadStart(
+            commandId: commandId,
+            timestamp: timestamp,
+            workspaceId: workspaceId,
+            actionBinding: actionBinding
+        ))
+    }
+
+    func resumeThread(threadId: String, commandId: String, timestamp: String) {
+        client.send(command: .threadResume(threadId: threadId, commandId: commandId, timestamp: timestamp))
+    }
+
+    func listThreads(commandId: String, timestamp: String) {
+        client.send(command: .threadList(commandId: commandId, timestamp: timestamp))
+    }
+
+    func deleteThread(commandId: String, timestamp: String, targetThreadId: String) {
+        client.send(command: .threadDelete(
+            commandId: commandId,
+            timestamp: timestamp,
+            targetThreadId: targetThreadId
+        ))
+    }
+
+    func startTurn(
+        threadId: String,
+        commandId: String,
+        timestamp: String,
+        text: String,
+        attachments: [UserMessageAttachmentPayload]
+    ) {
+        client.send(command: .turnStart(
+            threadId: threadId,
+            commandId: commandId,
+            timestamp: timestamp,
+            text: text,
+            attachments: attachments
+        ))
+    }
+
+    func interruptTurn(threadId: String, commandId: String, timestamp: String) {
+        client.send(command: .turnInterrupt(threadId: threadId, commandId: commandId, timestamp: timestamp))
+    }
+
+    func answerPermission(
+        requestId: String,
+        timestamp: String,
+        decision: ThreadProtocolClient.PermissionDecision,
+        scope: ThreadProtocolClient.PermissionScope?,
+        reason: String?
+    ) {
+        client.send(response: .permissionAnswered(
+            requestId: requestId,
+            timestamp: timestamp,
+            decision: decision,
+            scope: scope,
+            reason: reason
+        ))
+    }
+
+    func answerWorkspace(requestId: String, timestamp: String, workspaceId: String?, cancelled: Bool?) {
+        client.send(response: .workspaceAnswered(
+            requestId: requestId,
+            timestamp: timestamp,
+            workspaceId: workspaceId,
+            cancelled: cancelled
+        ))
     }
 }
 
 @MainActor
 final class AppServerClient {
     var onStateChange: ((AppServerConnectionState) -> Void)?
-    var onTextMessage: ((String) -> Void)?
+    var onInboundMessage: ((ThreadProtocolClient.InboundMessage) -> Void)?
 
     private let connection: AppServerConnection
     private let platformBridge: PlatformBridgeService?
@@ -126,7 +235,13 @@ final class AppServerClient {
         connection.disconnect()
     }
 
-    func send(text: String) {
+    func send(command: ThreadProtocolClient.Command) {
+        guard let text = try? ThreadProtocolClient.encode(command: command) else { return }
+        connection.send(text: text)
+    }
+
+    func send(response: ThreadProtocolClient.Response) {
+        guard let text = try? ThreadProtocolClient.encode(response: response) else { return }
         connection.send(text: text)
     }
 
@@ -138,7 +253,8 @@ final class AppServerClient {
             return
         }
 
-        onTextMessage?(text)
+        guard let inbound = try? ThreadProtocolClient.decodeInboundMessage(from: text) else { return }
+        onInboundMessage?(inbound)
     }
 
     private func sendPlatformHello() {

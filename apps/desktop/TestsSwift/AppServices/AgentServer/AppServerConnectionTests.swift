@@ -104,8 +104,8 @@ final class AppServerClientTests: XCTestCase {
             connection: connection,
             platformBridge: PlatformBridgeService(provider: provider)
         )
-        var threadMessages: [String] = []
-        client.onTextMessage = { threadMessages.append($0) }
+        var inboundMessages: [ThreadProtocolClient.InboundMessage] = []
+        client.onInboundMessage = { inboundMessages.append($0) }
 
         client.connect()
         transport.tasks[0].succeedReceive(
@@ -125,7 +125,7 @@ final class AppServerClientTests: XCTestCase {
         )
         await Task.yield()
 
-        XCTAssertEqual(threadMessages, [])
+        XCTAssertEqual(inboundMessages, [])
         XCTAssertEqual(provider.calls.map(\.method), ["clipboard.read"])
         let response = transport.tasks[0].sentObjects[1]
         XCTAssertEqual(response["channel"] as? String, "platform")
@@ -133,7 +133,7 @@ final class AppServerClientTests: XCTestCase {
         XCTAssertNil(response["threadId"])
     }
 
-    func testThreadMessageIsForwardedToThreadHandler() async {
+    func testThreadMessageIsDecodedAndForwardedToInboundHandler() async {
         let transport = RecordingAppServerConnectionTransport()
         let connection = AppServerConnection(
             serverURL: URL(string: "ws://127.0.0.1:4317/api/thread")!,
@@ -144,14 +144,54 @@ final class AppServerClientTests: XCTestCase {
             connection: connection,
             platformBridge: PlatformBridgeService(provider: RecordingAppServerClientPlatformProvider())
         )
-        var threadMessages: [String] = []
-        client.onTextMessage = { threadMessages.append($0) }
+        var inboundMessages: [ThreadProtocolClient.InboundMessage] = []
+        client.onInboundMessage = { inboundMessages.append($0) }
 
         client.connect()
-        transport.tasks[0].succeedReceive(#"{"type":"notification","threadId":"t1"}"#)
+        transport.tasks[0].succeedReceive(
+            """
+            {
+              "type": "thread.started",
+              "threadId": "thread-1",
+              "notificationId": "n1",
+              "commandId": "cmd-1",
+              "timestamp": "2026-06-06T00:00:00Z",
+              "payload": {
+                "preview": "hello"
+              }
+            }
+            """
+        )
         await Task.yield()
 
-        XCTAssertEqual(threadMessages, [#"{"type":"notification","threadId":"t1"}"#])
+        XCTAssertEqual(inboundMessages.count, 1)
+        guard case .notification(.threadStarted(let value)) = inboundMessages[0] else {
+            XCTFail("Expected thread.started")
+            return
+        }
+        XCTAssertEqual(value.threadId, "thread-1")
+        XCTAssertEqual(value.commandId, "cmd-1")
+    }
+
+    func testSendCommandEncodesThreadProtocolBeforeWritingToSocket() async throws {
+        let transport = RecordingAppServerConnectionTransport()
+        let connection = AppServerConnection(
+            serverURL: URL(string: "ws://127.0.0.1:4317/api/thread")!,
+            transport: transport,
+            reconnectDelay: 0
+        )
+        let client = AppServerClient(connection: connection)
+
+        client.connect()
+        await Task.yield()
+        client.send(command: .threadList(
+            commandId: "cmd-list",
+            timestamp: "2026-06-06T00:00:00Z"
+        ))
+
+        let object = try XCTUnwrap(transport.tasks[0].sentObjects.last)
+        XCTAssertEqual(object["type"] as? String, "thread.list")
+        XCTAssertEqual(object["commandId"] as? String, "cmd-list")
     }
 }
 
