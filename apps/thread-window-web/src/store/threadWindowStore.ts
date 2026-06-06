@@ -48,10 +48,12 @@ export type ThreadTabState = {
 
 export type ThreadWindowState = {
   connectionState: ConnectionState;
+  windowErrorMessage: string | null;
   history: ThreadListEntry[];
   tabs: Record<string, ThreadTabState>;
   activeTabId: string | null;
   pendingInitialPrompts: Record<string, InitialPromptPayload>;
+  processedNotificationIds: Record<string, true>;
   setConnectionState(state: ConnectionState): void;
   enqueueInitialPrompt(prompt: InitialPromptPayload): void;
   openHistoryThread(threadId: string): void;
@@ -77,10 +79,12 @@ function emptyTab(threadId: string, title: string | null = null): ThreadTabState
 
 export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
   connectionState: "disconnected",
+  windowErrorMessage: null,
   history: [],
   tabs: {},
   activeTabId: null,
   pendingInitialPrompts: {},
+  processedNotificationIds: {},
 
   setConnectionState(state) {
     set({ connectionState: state });
@@ -128,6 +132,7 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
     set(produce<ThreadWindowState>((draft) => {
       switch (notification.type) {
         case "thread.started": {
+          draft.processedNotificationIds[notification.notificationId] = true;
           const prompt = notification.commandId
             ? draft.pendingInitialPrompts[notification.commandId]
             : undefined;
@@ -141,6 +146,7 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
         }
 
         case "thread.snapshot": {
+          draft.processedNotificationIds[notification.notificationId] = true;
           const tab = draft.tabs[notification.threadId] ??= emptyTab(notification.threadId);
           tab.status = notification.payload.status;
           tab.messages = notification.payload.messages.map((message) => ({
@@ -168,6 +174,7 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
         }
 
         case "user.message.recorded": {
+          draft.processedNotificationIds[notification.notificationId] = true;
           const tab = draft.tabs[notification.threadId] ??= emptyTab(notification.threadId);
           tab.messages = tab.messages.filter((message) => !message.pending);
           tab.messages.push({
@@ -179,12 +186,17 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
         }
 
         case "turn.started": {
+          draft.processedNotificationIds[notification.notificationId] = true;
           const tab = draft.tabs[notification.threadId] ??= emptyTab(notification.threadId);
           tab.status = "running";
           break;
         }
 
         case "assistant.delta": {
+          if (draft.processedNotificationIds[notification.notificationId]) {
+            break;
+          }
+          draft.processedNotificationIds[notification.notificationId] = true;
           const tab = draft.tabs[notification.threadId] ??= emptyTab(notification.threadId);
           const existing = tab.messages.find((message) => message.id === notification.itemId);
           if (existing) {
@@ -200,6 +212,7 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
         }
 
         case "tool.started": {
+          draft.processedNotificationIds[notification.notificationId] = true;
           const tab = draft.tabs[notification.threadId] ??= emptyTab(notification.threadId);
           tab.messages.push({
             id: notification.itemId,
@@ -212,6 +225,7 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
         }
 
         case "tool.finished": {
+          draft.processedNotificationIds[notification.notificationId] = true;
           const tab = draft.tabs[notification.threadId] ??= emptyTab(notification.threadId);
           const existing = tab.messages.find((message) => message.id === notification.itemId);
           if (existing) {
@@ -231,6 +245,7 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
         }
 
         case "turn.completed": {
+          draft.processedNotificationIds[notification.notificationId] = true;
           const tab = draft.tabs[notification.threadId] ??= emptyTab(notification.threadId);
           tab.status = notification.payload.status === "completed" ? "idle" : notification.payload.status;
           tab.pendingInitialPrompt = null;
@@ -238,16 +253,22 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
         }
 
         case "thread.status.changed": {
+          draft.processedNotificationIds[notification.notificationId] = true;
           const tab = draft.tabs[notification.threadId] ??= emptyTab(notification.threadId);
           tab.status = notification.payload.value;
           break;
         }
 
         case "thread.listed":
+          draft.processedNotificationIds[notification.notificationId] = true;
           draft.history = notification.payload.threads;
           break;
 
         case "thread.deleted":
+          draft.processedNotificationIds[notification.notificationId] = true;
+          if (notification.payload.status !== "deleted") {
+            break;
+          }
           draft.history = draft.history.filter((item) => item.id !== notification.payload.targetThreadId);
           delete draft.tabs[notification.payload.targetThreadId];
           if (draft.activeTabId === notification.payload.targetThreadId) {
@@ -256,10 +277,16 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
           break;
 
         case "thread.error": {
+          draft.processedNotificationIds[notification.notificationId] = true;
+          if (notification.commandId) {
+            delete draft.pendingInitialPrompts[notification.commandId];
+          }
           if (notification.threadId) {
             const tab = draft.tabs[notification.threadId] ??= emptyTab(notification.threadId);
             tab.errorMessage = notification.payload.message;
             tab.status = "failed";
+          } else {
+            draft.windowErrorMessage = notification.payload.message;
           }
           break;
         }

@@ -154,27 +154,107 @@ export function isThreadNotification(value: unknown): value is ThreadNotificatio
   if (!isRecord(value) || typeof value.type !== "string") {
     return false;
   }
-  return [
-    "thread.started",
-    "thread.snapshot",
-    "user.message.recorded",
-    "turn.started",
-    "assistant.delta",
-    "tool.started",
-    "tool.finished",
-    "turn.completed",
-    "thread.status.changed",
-    "thread.listed",
-    "thread.deleted",
-    "thread.error",
-  ].includes(value.type);
+
+  switch (value.type) {
+    case "thread.started":
+      return hasNotificationBase(value)
+        && hasThreadId(value)
+        && isRecord(value.payload)
+        && isOptionalString(value.commandId)
+        && isNullableString(value.payload.preview);
+    case "thread.snapshot":
+      return hasNotificationBase(value)
+        && hasThreadId(value)
+        && isRecord(value.payload)
+        && isOptionalString(value.commandId);
+    case "user.message.recorded":
+      return hasNotificationBase(value)
+        && hasThreadId(value)
+        && isRecord(value.payload)
+        && typeof value.payload.messageId === "string"
+        && typeof value.payload.text === "string";
+    case "turn.started":
+      return hasNotificationBase(value)
+        && hasThreadId(value)
+        && typeof value.turnId === "string"
+        && isRecord(value.payload);
+    case "assistant.delta":
+      return hasNotificationBase(value)
+        && hasThreadId(value)
+        && typeof value.turnId === "string"
+        && typeof value.itemId === "string"
+        && isRecord(value.payload)
+        && typeof value.payload.text === "string";
+    case "tool.started":
+      return hasNotificationBase(value)
+        && hasThreadId(value)
+        && typeof value.turnId === "string"
+        && typeof value.itemId === "string"
+        && isRecord(value.payload)
+        && typeof value.payload.name === "string"
+        && isRecord(value.payload.input);
+    case "tool.finished":
+      return hasNotificationBase(value)
+        && hasThreadId(value)
+        && typeof value.turnId === "string"
+        && typeof value.itemId === "string"
+        && isRecord(value.payload)
+        && typeof value.payload.name === "string"
+        && typeof value.payload.status === "string"
+        && typeof value.payload.output === "string";
+    case "turn.completed":
+      return hasNotificationBase(value)
+        && hasThreadId(value)
+        && typeof value.turnId === "string"
+        && isRecord(value.payload)
+        && typeof value.payload.status === "string";
+    case "thread.status.changed":
+      return hasNotificationBase(value)
+        && hasThreadId(value)
+        && isRecord(value.payload)
+        && typeof value.payload.value === "string";
+    case "thread.listed":
+      return hasNotificationBase(value)
+        && isRecord(value.payload)
+        && isOptionalString(value.commandId)
+        && Array.isArray(value.payload.threads);
+    case "thread.deleted":
+      return hasNotificationBase(value)
+        && isRecord(value.payload)
+        && isOptionalString(value.commandId)
+        && typeof value.payload.targetThreadId === "string"
+        && typeof value.payload.status === "string";
+    case "thread.error":
+      return hasNotificationBase(value)
+        && isRecord(value.payload)
+        && isOptionalString(value.threadId)
+        && isOptionalString(value.commandId)
+        && typeof value.payload.message === "string";
+    default:
+      return false;
+  }
 }
 
 export function isServerRequest(value: unknown): value is ServerRequest {
   if (!isRecord(value) || typeof value.type !== "string") {
     return false;
   }
-  return value.type === "permission.requested" || value.type === "workspace.requested";
+
+  switch (value.type) {
+    case "permission.requested":
+      return hasServerRequestBase(value)
+        && isRecord(value.payload)
+        && typeof value.payload.toolName === "string"
+        && typeof value.payload.toolCallId === "string"
+        && isRecord(value.payload.arguments);
+    case "workspace.requested":
+      return hasServerRequestBase(value)
+        && isRecord(value.payload)
+        && typeof value.payload.prompt === "string"
+        && Array.isArray(value.payload.candidates);
+    default:
+      return false;
+  }
 }
 
 function encode(value: ThreadCommand | ClientResponse): string {
@@ -183,4 +263,27 @@ function encode(value: ThreadCommand | ClientResponse): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function hasNotificationBase(value: Record<string, unknown>): boolean {
+  return typeof value.notificationId === "string"
+    && typeof value.timestamp === "string";
+}
+
+function hasServerRequestBase(value: Record<string, unknown>): boolean {
+  return typeof value.requestId === "string"
+    && typeof value.threadId === "string"
+    && typeof value.timestamp === "string";
+}
+
+function hasThreadId(value: Record<string, unknown>): boolean {
+  return typeof value.threadId === "string";
+}
+
+function isOptionalString(value: unknown): boolean {
+  return value === undefined || typeof value === "string";
+}
+
+function isNullableString(value: unknown): boolean {
+  return value === null || typeof value === "string";
 }

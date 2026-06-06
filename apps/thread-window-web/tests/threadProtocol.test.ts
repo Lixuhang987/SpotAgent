@@ -58,6 +58,9 @@ describe("thread protocol helpers", () => {
   });
 
   it("guards inbound notifications and requests", () => {
+    expect(isThreadNotification({ type: "assistant.delta" })).toBe(false);
+    expect(isServerRequest({ type: "permission.requested" })).toBe(false);
+
     expect(isThreadNotification({
       type: "assistant.delta",
       threadId: "thread-1",

@@ -85,6 +85,85 @@ describe("threadWindowStore", () => {
     expect(store.getState().tabs["thread-1"].messages[0].text).toBe("hello");
   });
 
+  it("does not append duplicate assistant delta notifications", () => {
+    const store = createThreadWindowStore;
+    store.getState().openHistoryThread("thread-1");
+
+    const notification = {
+      type: "assistant.delta" as const,
+      threadId: "thread-1",
+      notificationId: "n3",
+      turnId: "turn-1",
+      itemId: "assistant-1",
+      timestamp,
+      payload: { text: "hel" },
+    };
+
+    store.getState().handleNotification(notification);
+    store.getState().handleNotification(notification);
+
+    expect(store.getState().tabs["thread-1"].messages[0].text).toBe("hel");
+  });
+
+  it("only removes history and tabs when delete status is deleted", () => {
+    const store = createThreadWindowStore;
+    store.setState({
+      history: [{
+        id: "thread-1",
+        preview: "hello",
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        messageCount: 1,
+      }],
+    });
+    store.getState().openHistoryThread("thread-1");
+
+    store.getState().handleNotification({
+      type: "thread.deleted",
+      notificationId: "n-delete-1",
+      commandId: "delete-1",
+      timestamp,
+      payload: { targetThreadId: "thread-1", status: "not_found" },
+    });
+
+    expect(store.getState().history.map((item) => item.id)).toEqual(["thread-1"]);
+    expect(store.getState().tabs["thread-1"]).toBeDefined();
+    expect(store.getState().activeTabId).toBe("thread-1");
+
+    store.getState().handleNotification({
+      type: "thread.deleted",
+      notificationId: "n-delete-2",
+      commandId: "delete-2",
+      timestamp,
+      payload: { targetThreadId: "thread-1", status: "deleted" },
+    });
+
+    expect(store.getState().history).toEqual([]);
+    expect(store.getState().tabs["thread-1"]).toBeUndefined();
+    expect(store.getState().activeTabId).toBeNull();
+  });
+
+  it("clears pending initial prompt and exposes window error when thread error has only commandId", () => {
+    const store = createThreadWindowStore;
+    store.getState().enqueueInitialPrompt({
+      clientRequestId: "prompt-1",
+      text: "hello",
+      attachments: [],
+      actionBinding: null,
+    });
+
+    store.getState().handleNotification({
+      type: "thread.error",
+      notificationId: "n-error-1",
+      commandId: "prompt-1",
+      timestamp,
+      payload: { message: "failed before thread creation" },
+    });
+
+    expect(store.getState().pendingInitialPrompts["prompt-1"]).toBeUndefined();
+    expect(store.getState().windowErrorMessage).toBe("failed before thread creation");
+  });
+
   it("stores permission and workspace requests by thread", () => {
     const store = createThreadWindowStore;
     store.getState().openHistoryThread("thread-1");
