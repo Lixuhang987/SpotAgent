@@ -52,6 +52,7 @@ final class AppServices {
     let threadHistoryStore: ThreadHistoryStore
     let actionManifestStore: ActionManifestStore
     let appServerURL: URL
+    let platformServerURL: URL
     let hotkeyRegistrar: any HotkeyRegistering
     let threadWindowPresenter: any ThreadWindowPresenting
     let settingsWindowPresenter: any SettingsWindowPresenting
@@ -66,6 +67,7 @@ final class AppServices {
         threadHistoryStore: ThreadHistoryStore = ThreadHistoryStore(),
         actionManifestStore: ActionManifestStore = ActionManifestStore(),
         appServerURL: URL = URL(string: "ws://127.0.0.1:4317/api/thread")!,
+        platformServerURL: URL = URL(string: "ws://127.0.0.1:4317/api/platform")!,
         hotkeyRegistrar: any HotkeyRegistering = ProductionHotkeyRegistrar(),
         threadWindowPresenter: any ThreadWindowPresenting = ProductionThreadWindowPresenter(),
         settingsWindowPresenter: any SettingsWindowPresenting = ProductionSettingsWindowPresenter(),
@@ -77,8 +79,8 @@ final class AppServices {
     ) {
         self.appServer = appServer ?? AppServer(
             agentServer: AgentServerService(),
-            client: AppServerClient(
-                connection: AppServerConnection(serverURL: appServerURL),
+            platformClient: PlatformBridgeConnectionClient(
+                connection: AppServerConnection(serverURL: platformServerURL),
                 platformBridge: PlatformBridgeService()
             )
         )
@@ -87,6 +89,7 @@ final class AppServices {
         self.threadHistoryStore = threadHistoryStore
         self.actionManifestStore = actionManifestStore
         self.appServerURL = appServerURL
+        self.platformServerURL = platformServerURL
         self.hotkeyRegistrar = hotkeyRegistrar
         self.threadWindowPresenter = threadWindowPresenter
         self.settingsWindowPresenter = settingsWindowPresenter
@@ -106,6 +109,7 @@ final class AppServices {
             appServer: NopAppServer(),
             actionManifestStore: actionManifestStore,
             appServerURL: URL(string: "ws://127.0.0.1:0/noop")!,
+            platformServerURL: URL(string: "ws://127.0.0.1:0/noop-platform")!,
             hotkeyRegistrar: NopHotkeyRegistrar(),
             threadWindowPresenter: NopThreadWindowPresenter(),
             settingsWindowPresenter: settingsWindowPresenter,
@@ -118,38 +122,13 @@ final class AppServices {
 
 @MainActor
 final class NopAppServer: AppServerManaging {
-    var threadConnectionState: AppServerConnectionState = .disconnected
     var isAvailable = true
     var startupErrorMessage: String?
     var onAvailabilityChange: ((Bool) -> Void)?
     var onFatalError: ((String) -> Void)?
-    var onThreadConnectionStateChange: ((AppServerConnectionState) -> Void)?
-    var onThreadEvent: ((AppServerThreadEvent) -> Void)?
 
     func start() {}
     func stop() {}
-    func connectThreadClient() {}
-    func disconnectThreadClient() {}
-    func startThread(commandId: String, timestamp: String, workspaceId: String?, actionBinding: ActionBindingPayload?) {}
-    func resumeThread(threadId: String, commandId: String, timestamp: String) {}
-    func listThreads(commandId: String, timestamp: String) {}
-    func deleteThread(commandId: String, timestamp: String, targetThreadId: String) {}
-    func startTurn(
-        threadId: String,
-        commandId: String,
-        timestamp: String,
-        text: String,
-        attachments: [UserMessageAttachmentPayload]
-    ) {}
-    func interruptTurn(threadId: String, commandId: String, timestamp: String) {}
-    func answerPermission(
-        requestId: String,
-        timestamp: String,
-        decision: AppServerPermissionDecision,
-        scope: AppServerPermissionScope?,
-        reason: String?
-    ) {}
-    func answerWorkspace(requestId: String, timestamp: String, workspaceId: String?, cancelled: Bool?) {}
 }
 
 @MainActor
