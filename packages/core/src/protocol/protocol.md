@@ -1,33 +1,33 @@
 # protocol
 
-`packages/core/src/protocol` 定义 desktop、app-server、core 之间的跨进程协议边界。当前主路径是三层单向流转：
+`packages/core/src/protocol` 定义 desktop、app-server、core 之间的跨进程协议边界。新主路径统一使用 `Thread` / `Turn` 语义：
 
-- desktop 只提交 `SessionCommand`，并回覆 `ClientResponse`
-- app-server / core 只向 desktop 推送 `SessionEvent`，并在需要用户决定时发 `ServerRequest`
-- 平台 RPC 独立于会话主路径，继续走 `PlatformBridgeMessage`
+- desktop 只提交 `ThreadCommand`，并回覆 `ClientResponse`
+- app-server / core 只向 desktop 推送 `ThreadNotification`，并在需要用户决定时发 `ServerRequest`
+- 平台 RPC 独立于 thread 主路径，继续走 `PlatformBridgeMessage`
 
-旧 `SessionMessage` 仍保留在仓库里，仅用于迁移兼容，不再代表当前主协议。
+旧 `Session*` 文件只允许作为本重构分支内的迁移残留存在，后续 agent-server / Swift 切到 Thread 后必须删除，不作为兼容层保留。
 
 ## 文件
 
 | 文件 | 职责 |
 |------|------|
-| `SessionCommand.ts` | 新命令协议：`session_create` / `session_subscribe` / `turn_start` / `turn_interrupt` / `sessions_list` / `session_delete` |
-| `SessionEvent.ts` | 新事件协议：`session_created` / `session_snapshot` / `turn_started` / `assistant_delta` / `tool_started` / `turn_completed` 等 |
-| `ServerRequest.ts` | 新待回执请求：`permission_ask` / `workspace_ask` |
-| `ClientResponse.ts` | 新回执协议：`permission_answer` / `workspace_answer` |
-| `SessionProtocolShared.ts` | 共享类型：`RunStatus` / `SessionListEntry` / `WorkspaceAskCandidate` / `UserMessageAttachment` |
-| `SessionMessage.ts` | 旧单 union 协议；仅迁移兼容 |
+| `ThreadCommand.ts` | 最小命令协议：`thread.start` / `thread.resume` / `thread.list` / `thread.delete` / `turn.start` / `turn.interrupt` |
+| `ThreadNotification.ts` | 通知协议：`thread.started` / `thread.snapshot` / `assistant.delta` / `tool.started` / `turn.completed` 等 |
+| `ServerRequest.ts` | 待回执请求：`permission.requested` / `workspace.requested`，按 `threadId` 路由 |
+| `ClientResponse.ts` | 回执协议：`permission.answered` / `workspace.answered` |
+| `ThreadProtocolShared.ts` | 共享类型：`RunStatus` / `ThreadListEntry` / `WorkspaceAskCandidate` / `ThreadAttachment` |
+| `Session*` | 迁移残留；Task 2+ 完成后删除 |
 | `PlatformBridgeMessage.ts` | `PlatformBridgeMessage`（平台反向 RPC 帧）/ `PlatformResponsePayload` |
 
 ## 单向边界
 
 ```mermaid
 flowchart LR
-  A[desktop] -->|SessionCommand| B[app-server]
-  B -->|submit| C[core AgentSessionHandle]
-  C -->|SessionEvent| B
-  B -->|SessionEvent| A
+  A[desktop] -->|ThreadCommand| B[app-server]
+  B -->|submit| C[core runtime]
+  C -->|ThreadNotification| B
+  B -->|ThreadNotification| A
   B -->|ServerRequest| A
   A -->|ClientResponse| B
   B -->|PlatformBridgeMessage| A
@@ -39,54 +39,53 @@ flowchart LR
 
 ## 主协议分类
 
-### `SessionCommand`
+### `ThreadCommand`
 
-- `session_create`
-- `session_subscribe`
-- `session_unsubscribe`
-- `turn_start`
-- `turn_interrupt`
-- `sessions_list`
-- `session_delete`
+- `thread.start`
+- `thread.resume`
+- `thread.list`
+- `thread.delete`
+- `turn.start`
+- `turn.interrupt`
 
-### `SessionEvent`
+### `ThreadNotification`
 
-- `session_created`
-- `session_snapshot`
-- `user_message_recorded`
-- `turn_started`
-- `assistant_delta`
-- `tool_started`
-- `tool_finished`
-- `turn_completed`
-- `session_status_changed`
-- `sessions_listed`
-- `session_deleted`
-- `session_error`
+- `thread.started`
+- `thread.snapshot`
+- `user.message.recorded`
+- `turn.started`
+- `assistant.delta`
+- `tool.started`
+- `tool.finished`
+- `turn.completed`
+- `thread.status.changed`
+- `thread.listed`
+- `thread.deleted`
+- `thread.error`
 
 ### `ServerRequest` / `ClientResponse`
 
-- `permission_ask` <-> `permission_answer`
-- `workspace_ask` <-> `workspace_answer`
+- `permission.requested` <-> `permission.answered`
+- `workspace.requested` <-> `workspace.answered`
 
-这两组消息只用于“server 发起问题，等待 UI 回执”的少量交互，不承担普通会话流。
+这两组消息只用于“server 发起问题，等待 UI 回执”的少量交互，不承担普通 thread 流。
 
-## 单连接订阅模型
+## 单连接恢复模型
 
 - desktop 进程固定只有一条到 `app-server` 的长连接。
-- tab 打开时发送 `session_subscribe(sessionId)`，关闭时发送 `session_unsubscribe(sessionId)`。
-- `session_subscribe` 的结果是 `session_snapshot`，不是新建 socket，也不是额外握手通道。
-- 所有 `SessionEvent` 与 `ServerRequest` 都带 `sessionId`，由 desktop 本地总线按会话分发。
+- thread 打开或重连时发送 `thread.resume(threadId)`。
+- `thread.resume` 的结果是 `thread.snapshot`，不是新建 socket，也不是额外握手通道。
+- 所有 `ThreadNotification` 与 `ServerRequest` 都带 `threadId`，由 desktop 本地 store 按 thread 分发。
 
 ## core 侧消费方式
 
-- `AgentSessionHandle.submit(command)` 当前只消费 runtime 相关命令：`turn_start`、`turn_interrupt`。
-- `AgentSessionHandle.nextEvent()` 顺序吐出 `SessionEvent`，由 app-server 转发给 desktop。
-- `AgentRuntimeEvent` 到 `SessionEvent` 的归一化在 core 内完成，app-server 不再把 runtime 内部事件直接暴露给 UI。
+- 新主路径由 agent-server 的 thread runtime 编排 `AgentRuntime`，对外只暴露 `ThreadNotification`。
+- 旧 `AgentSessionHandle` 仍是迁移残留，Task 2+ 中会被 Thread 命名替换或删除。
+- `AgentRuntimeEvent` 到 `ThreadNotification` 的归一化由 app-server thread 层维护，避免 runtime 内部事件直接暴露给 UI。
 
-## 兼容层：`SessionMessage`
+## 迁移残留：`SessionMessage`
 
-迁移完成前，旧 `SessionMessage` 仍存在，供旧链路兼容。它不再是当前推荐的协议模型。
+迁移完成前，旧 `SessionMessage` 仍存在以便后续任务逐步删除旧链路。最终状态不保留 `SessionMessage` 兼容层。
 
 ### 旧消息分类
 

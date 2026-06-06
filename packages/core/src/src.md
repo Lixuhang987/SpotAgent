@@ -9,18 +9,18 @@
 | 子模块 | 子文档 | 一句话职责 |
 |------|------|------|
 | `runtime/` | [runtime/runtime.md](/Users/mu9/proj/handAgent/packages/core/src/runtime/runtime.md) | LLM/tool 主循环、消息模型、ToolCallEnvelope |
-| `actions/` | [actions/actions.md](/Users/mu9/proj/handAgent/packages/core/src/actions/actions.md) | Action manifest 与 session binding 解析 |
+| `actions/` | [actions/actions.md](/Users/mu9/proj/handAgent/packages/core/src/actions/actions.md) | Action manifest 与 thread binding 解析 |
 | `blob/` | [blob/blob.md](/Users/mu9/proj/handAgent/packages/core/src/blob/blob.md) | 大段上下文内容的本地 Blob 持久化与 summary 元数据 |
 | `llm/` | [llm/llm.md](/Users/mu9/proj/handAgent/packages/core/src/llm/llm.md) | LLMClient 抽象 + Vercel AI SDK 适配 |
 | `mcp/` | [mcp/mcp.md](/Users/mu9/proj/handAgent/packages/core/src/mcp/mcp.md) | 标准 MCP client 与 MCP tool adapter |
 | `tools/` | [tools/tools.md](/Users/mu9/proj/handAgent/packages/core/src/tools/tools.md) | AgentTool 协议 + 11 个 builtin tool + 注册组合根 |
 | `platform/` | [platform/platform.md](/Users/mu9/proj/handAgent/packages/core/src/platform/platform.md) | PlatformAdapter / PlatformBridge / Remote+Offline 实现 |
 | `permission/` | [permission/permission.md](/Users/mu9/proj/handAgent/packages/core/src/permission/permission.md) | 权限策略接口 + 三档记忆持久化 |
-| `storage/` | [storage/storage.md](/Users/mu9/proj/handAgent/packages/core/src/storage/storage.md) | PersistedSession 模型 + 内存 / 文件实现 |
+| `storage/` | [storage/storage.md](/Users/mu9/proj/handAgent/packages/core/src/storage/storage.md) | PersistedThread 模型 + 内存 / 文件实现 |
 | `workspace/` | [workspace/workspace.md](/Users/mu9/proj/handAgent/packages/core/src/workspace/workspace.md) | 显式 workspace 沙箱 + 默认播种 |
 | `config/` | [config/config.md](/Users/mu9/proj/handAgent/packages/core/src/config/config.md) | settings.json 模型与 tool 设置解析 |
 | `logging/` | [logging/logging.md](/Users/mu9/proj/handAgent/packages/core/src/logging/logging.md) | LLM 网络日志 JSONL 落盘 |
-| `protocol/` | [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md) | desktop ↔ app-server 单向会话协议（四类 session 消息 + PlatformBridgeMessage） |
+| `protocol/` | [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md) | desktop ↔ app-server Thread/Turn 协议（command / notification / request / response + PlatformBridgeMessage） |
 | `conversation/` | [conversation/conversation.md](/Users/mu9/proj/handAgent/packages/core/src/conversation/conversation.md) | UI / 持久化用 ConversationMessage 模型 |
 | `selection/` | [selection/selection.md](/Users/mu9/proj/handAgent/packages/core/src/selection/selection.md) | 用户主动选区抽象 |
 
@@ -68,13 +68,13 @@ plugin action 绑定的外部能力不由 core tools 目录加载私有插件进
 
 ### 6. 持久化阶段
 
-- `SessionStore`（生产 `FileSessionStore`）按 `~/.spotAgent/sessions/<id>.json` 写每会话一份 `PersistedSession`：metadata / messages / events。
+- `ThreadStore`（生产 `FileThreadStore`）目标按 `~/.spotAgent/threads/<id>.json` 写每个 thread 一份 `PersistedThread`：metadata / messages / events。
 - `events` 是审计视图（tool_call / tool_result / permission_request / error），与 `messages` 解耦。
 
 ### 7. 跨进程协议
 
-- desktop 与 app-server 走 `ws://127.0.0.1:4317/api/session`；会话主路径拆为 `SessionCommand`、`SessionEvent`、`ServerRequest`、`ClientResponse` 四类消息。
-- `SessionCommand` 只表示 UI 主动提交的命令；`SessionEvent` 只表示 server/core 向 UI 推送的结果事件。
+- desktop 与 app-server 走统一 WebSocket；Thread 主路径拆为 `ThreadCommand`、`ThreadNotification`、`ServerRequest`、`ClientResponse` 四类消息。
+- `ThreadCommand` 只表示 UI 主动提交的命令；`ThreadNotification` 只表示 server/core 向 UI 推送的结果通知。
 - `ServerRequest` / `ClientResponse` 只覆盖少量“server 提问，UI 回执”的交互，如权限审批与 workspace 选择。
 - 平台反向 IPC 不并入 session 主协议，继续走独立 `PlatformBridgeMessage`，通过 `channel: "platform"` 分流。
 - 字段说明详见 [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md)。

@@ -2,7 +2,7 @@
 
 ## 目录职责
 
-`packages/core` 是跨平台 Agent Core，负责会话建模、消息结构、LLM/tool 循环、tool 注册与平台抽象。
+`packages/core` 是跨平台 Agent Core，负责 Thread 建模、消息结构、LLM/tool 循环、tool 注册与平台抽象。
 
 TypeScript workspace 包名为 `@handagent/core`。应用层代码应通过 `@handagent/core/<subpath>` 引用本包导出的 `src/` 子路径，不使用跨包相对路径 reach into core。
 
@@ -21,11 +21,11 @@ TypeScript workspace 包名为 `@handagent/core`。应用层代码应通过 `@ha
 | `tools/` | AgentTool 协议、ToolRegistry、11 个 builtin tool | [tools/tools.md](/Users/mu9/proj/handAgent/packages/core/src/tools/tools.md) |
 | `platform/` | PlatformAdapter / PlatformBridge / RemotePlatformAdapter / OfflinePlatformAdapter | [platform/platform.md](/Users/mu9/proj/handAgent/packages/core/src/platform/platform.md) |
 | `permission/` | 权限策略接口与文件持久化实现 | [permission/permission.md](/Users/mu9/proj/handAgent/packages/core/src/permission/permission.md) |
-| `storage/` | PersistedSession / SessionStore / 内存与文件实现 | [storage/storage.md](/Users/mu9/proj/handAgent/packages/core/src/storage/storage.md) |
+| `storage/` | PersistedThread / ThreadStore / 内存与文件实现 | [storage/storage.md](/Users/mu9/proj/handAgent/packages/core/src/storage/storage.md) |
 | `workspace/` | Workspace 注册表与文件沙箱根目录 | [workspace/workspace.md](/Users/mu9/proj/handAgent/packages/core/src/workspace/workspace.md) |
 | `config/` | settings.json 解析（model / tools） | [config/config.md](/Users/mu9/proj/handAgent/packages/core/src/config/config.md) |
 | `logging/` | NetworkLogger 与 fetch 包装，落 JSONL 到 `~/.spotAgent/log/` | [logging/logging.md](/Users/mu9/proj/handAgent/packages/core/src/logging/logging.md) |
-| `protocol/` | desktop ↔ app-server 会话协议：`SessionCommand` / `SessionEvent` / `ServerRequest` / `ClientResponse` + `PlatformBridgeMessage` | [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md) |
+| `protocol/` | desktop ↔ app-server Thread/Turn 协议：`ThreadCommand` / `ThreadNotification` / `ServerRequest` / `ClientResponse` + `PlatformBridgeMessage` | [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md) |
 | `conversation/` | UI / 持久化用 ConversationMessage 模型 | [conversation/conversation.md](/Users/mu9/proj/handAgent/packages/core/src/conversation/conversation.md) |
 | `selection/` | 用户主动选区抽象 | [selection/selection.md](/Users/mu9/proj/handAgent/packages/core/src/selection/selection.md) |
 
@@ -33,12 +33,12 @@ TypeScript workspace 包名为 `@handagent/core`。应用层代码应通过 `@ha
 
 ```mermaid
 flowchart TD
-  A[desktop 提交 SessionCommand] --> B[app-server 路由命令]
-  B --> C[core AgentSessionHandle.submit]
+  A[desktop 提交 ThreadCommand] --> B[app-server 路由命令]
+  B --> C[core AgentRuntime]
   C --> D[AgentRuntime.runWithMessages]
   D --> E[LLMClient.stream]
   E --> F{toolCalls?}
-  F -- 否 --> G[AgentSessionHandle 输出 SessionEvent]
+  F -- 否 --> G[app-server 输出 ThreadNotification]
   F -- 是 --> H[ToolRegistry.get]
   H --> I[AgentTool.call]
   I --> J[tool result -> AgentMessage(tool)]
@@ -99,20 +99,20 @@ flowchart TD
 
 ### 持久化与权限
 
-- `PersistedSession` / `SessionMetadata` / `SessionEvent`
-- `SessionStore`（接口）+ `InMemorySessionStore` + `FileSessionStore`
+- `PersistedThread` / `ThreadMetadata` / `ThreadAuditEvent`
+- `ThreadStore`（接口）+ `InMemoryThreadStore` + `FileThreadStore`
 - `Workspace` / `WorkspaceRegistry` + `FileWorkspaceRegistry`
 - `PermissionPolicy` / `PermissionDecision` / `PermissionResolution` / `PermissionScope`
 - `FilePermissionPolicy`（持久化到 `~/.spotAgent/permissions.json`）
 
 ### 跨进程协议
 
-- `SessionCommand`（desktop -> app-server 命令）
-- `SessionEvent`（app-server/core -> desktop 事件）
+- `ThreadCommand`（desktop -> app-server 命令）
+- `ThreadNotification`（app-server/core -> desktop 通知）
 - `ServerRequest`（app-server/core -> desktop 的待回执请求）
 - `ClientResponse`（desktop -> app-server 的请求回执）
 - `PlatformBridgeMessage` / `PlatformResponsePayload`
-- `UserMessageAttachment` / `SessionListEntry`
+- `ThreadAttachment` / `ThreadListEntry`
 - `ConversationMessage` / `ConversationMessageStatus` / `ToolMessageStatus`
 
 ## 目录级职责边界
@@ -126,7 +126,7 @@ flowchart TD
 - `workspace` 只管沙箱根目录，不暴露绝对路径给 LLM。
 - `config` 仅同步读取 `~/.spotAgent/settings.json`，无监听器、无缓存。
 - `logging` 仅写网络日志，不参与产品决策。
-- `protocol` 仅定义跨进程消息形状；会话主路径以四类单向消息建模，TS / Swift 双侧据此对齐。
+- `protocol` 仅定义跨进程消息形状；Thread 主路径以命令、通知、server request、client response 四类单向消息建模，TS / Swift 双侧据此对齐。
 - `conversation` 是 UI/持久化消息模型，与 LLM 面向的 `AgentMessage` 解耦。
 - `selection` 只定义用户选区抽象，不做宿主编排。
 
