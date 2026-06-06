@@ -11,9 +11,14 @@ final class ThreadTabViewModelTests: XCTestCase {
         onStateChanged: @escaping @MainActor (ThreadTabViewModel) -> Void = { _ in }
     ) -> ThreadTabViewModel {
         let bus = ThreadEventBus<ThreadEvent>()
+        var state = ThreadFeature.State(threadID: threadID)
         return ThreadTabViewModel(
             tabID: "tab-1",
             threadID: threadID,
+            readState: { state },
+            sendAction: { action in
+                ThreadFeature.apply(action, to: &state)
+            },
             subscribeToEvents: { id, handler in
                 bus.subscribe(threadID: id, handler: handler)
             },

@@ -8,26 +8,27 @@ final class ThreadTabViewModel: Identifiable {
     let tabID: String
     let threadID: String
 
-    var messages: [ThreadBubble] { store.state.events.messages }
-    var status: ThreadRunStatus { store.state.thread.status }
-    var error: String? { store.state.events.errorMessage }
+    var messages: [ThreadBubble] { state?.events.messages ?? [] }
+    var status: ThreadRunStatus { state?.thread.status ?? .failed }
+    var error: String? { state?.events.errorMessage }
     var pendingPermissionRequests: [ThreadPermissionRequest] {
-        store.state.events.pendingPermissionRequests
+        state?.events.pendingPermissionRequests ?? []
     }
     var pendingWorkspaceAskRequests: [ThreadWorkspaceAskRequest] {
-        store.state.events.pendingWorkspaceAskRequests
+        state?.events.pendingWorkspaceAskRequests ?? []
     }
-    var connectionState: ThreadConnectionState { store.state.events.connectionState }
-    var connectionMessage: String? { store.state.events.connectionMessage }
-    var isInvalid: Bool { store.state.thread.isInvalid }
-    var invalidReason: String? { store.state.thread.invalidReason }
+    var connectionState: ThreadConnectionState { state?.events.connectionState ?? .disconnected }
+    var connectionMessage: String? { state?.events.connectionMessage }
+    var isInvalid: Bool { state?.thread.isInvalid ?? true }
+    var invalidReason: String? { state?.thread.invalidReason }
 
     var canSendPrompt: Bool { connectionState == .connected && !isInvalid }
     var visibleWorkspaceAskRequest: ThreadWorkspaceAskRequest? {
-        store.state.events.visibleWorkspaceAskRequest
+        state?.events.visibleWorkspaceAskRequest
     }
 
-    @ObservationIgnored private let store: StoreOf<ThreadFeature>
+    @ObservationIgnored private let readState: () -> ThreadFeature.State?
+    @ObservationIgnored private let sendAction: (ThreadFeature.Action) -> Void
     @ObservationIgnored private let sendCommand: (ThreadWindowCommand) -> Void
     @ObservationIgnored private let sendResponse: (ThreadWindowResponse) -> Void
     @ObservationIgnored private let subscribeToEvents: (
@@ -41,7 +42,8 @@ final class ThreadTabViewModel: Identifiable {
     init(
         tabID: String,
         threadID: String,
-        store: StoreOf<ThreadFeature>? = nil,
+        readState: @escaping () -> ThreadFeature.State?,
+        sendAction: @escaping (ThreadFeature.Action) -> Void,
         subscribeToEvents: @escaping (String, @escaping (ThreadEvent) -> Void) -> ThreadEventBus<ThreadEvent>.Subscription,
         sendCommand: @escaping (ThreadWindowCommand) -> Void,
         sendResponse: @escaping (ThreadWindowResponse) -> Void,
@@ -53,9 +55,8 @@ final class ThreadTabViewModel: Identifiable {
         self.id = tabID
         self.tabID = tabID
         self.threadID = threadID
-        self.store = store ?? Store(initialState: ThreadFeature.State(threadID: threadID)) {
-            ThreadFeature()
-        }
+        self.readState = readState
+        self.sendAction = sendAction
         self.sendCommand = sendCommand
         self.sendResponse = sendResponse
         self.subscribeToEvents = subscribeToEvents
@@ -97,7 +98,7 @@ final class ThreadTabViewModel: Identifiable {
 
         let messageID = UUID().uuidString
         let timestamp = Self.timestamp()
-        store.send(.localUserMessage(
+        sendAction(.localUserMessage(
             messageID: messageID,
             text: trimmedText,
             attachments: attachments
@@ -114,7 +115,7 @@ final class ThreadTabViewModel: Identifiable {
 
     func stop() {
         guard status.isRunning else { return }
-        store.send(.interruptRequested)
+        sendAction(.interruptRequested)
         sendCommand(.turnInterrupt(
             threadId: threadID,
             commandId: UUID().uuidString,
@@ -138,7 +139,7 @@ final class ThreadTabViewModel: Identifiable {
             scope: permissionScope(from: scope),
             reason: nil
         ))
-        store.send(.permissionResolved(requestID: requestId))
+        sendAction(.permissionResolved(requestID: requestId))
     }
 
     func resolveWorkspaceAsk(requestId: String, workspaceId: String?) {
@@ -148,11 +149,11 @@ final class ThreadTabViewModel: Identifiable {
             workspaceId: workspaceId,
             cancelled: workspaceId == nil
         ))
-        store.send(.workspaceResolved(requestID: requestId))
+        sendAction(.workspaceResolved(requestID: requestId))
     }
 
     func handle(_ event: ThreadEvent) {
-        store.send(.event(event))
+        sendAction(.event(event))
 
         switch event {
         case .connectionState, .threadStarted, .threadDeleted, .threadList, .threadLoaded:
@@ -164,6 +165,10 @@ final class ThreadTabViewModel: Identifiable {
 
     private static func timestamp() -> String {
         ISO8601DateFormatter().string(from: Date())
+    }
+
+    private var state: ThreadFeature.State? {
+        readState()
     }
 
     private func permissionScope(from rawValue: String?) -> ThreadWindowPermissionScope? {

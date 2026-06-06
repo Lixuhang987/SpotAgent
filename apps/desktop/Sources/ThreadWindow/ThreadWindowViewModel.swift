@@ -12,7 +12,10 @@ final class ThreadWindowViewModel {
         @escaping (ThreadEvent) -> Void
     ) -> ThreadEventBus<ThreadEvent>.Subscription
 
-    private(set) var tabs: [ThreadTabViewModel] = []
+    var tabs: [ThreadTabViewModel] {
+        reconcileTabAdapters()
+        return store.state.tabs.map { tabAdapter(for: $0.id) }
+    }
     var activeTabID: String? { store.state.activeTabID }
     var historyList: [ThreadListItem] { store.state.threadList }
     var pendingHistoryDeletionID: String? { store.state.pendingHistoryDeletionID }
@@ -25,12 +28,12 @@ final class ThreadWindowViewModel {
     @ObservationIgnored private let onTabStateChanged: @MainActor (ThreadTabViewModel) -> Void
     @ObservationIgnored private let onTabClosed: @MainActor (ThreadTabViewModel) -> Void
     @ObservationIgnored private var windowEventSubscription: ThreadEventBus<ThreadEvent>.Subscription?
-    @ObservationIgnored private var sharedConnectionState: ThreadConnectionState = .disconnected
-    @ObservationIgnored private var hasEstablishedSharedConnection = false
+    @ObservationIgnored private var tabAdapters: [String: ThreadTabViewModel] = [:]
 
     var activeTab: ThreadTabViewModel? {
         guard let activeTabID else { return nil }
-        return tabs.first { $0.tabID == activeTabID }
+        guard store.state.tabs.contains(where: { $0.id == activeTabID }) else { return nil }
+        return tabAdapter(for: activeTabID)
     }
 
     init(
@@ -61,29 +64,26 @@ final class ThreadWindowViewModel {
     }
 
     func openHistoryThread(_ threadID: String) {
-        if let existing = tabs.first(where: { $0.threadID == threadID }) {
-            store.send(.activateTab(existing.tabID))
+        if store.state.tabs.contains(where: { $0.thread.id == threadID }) {
+            store.send(.activateTab(threadID))
             return
         }
 
         store.send(.openHistoryThread(threadID))
-        let tab = makeTab(threadID: threadID)
-        tabs.append(tab)
-        tab.setConnectionState(sharedConnectionState)
-        tab.open()
+        tabAdapter(for: threadID).open()
     }
 
     func activateTab(_ tabID: String) {
-        guard tabs.contains(where: { $0.tabID == tabID }) else { return }
+        guard store.state.tabs.contains(where: { $0.id == tabID }) else { return }
         store.send(.activateTab(tabID))
     }
 
     func closeTab(_ tabID: String) {
-        guard let index = tabs.firstIndex(where: { $0.tabID == tabID }) else { return }
-        let closingTab = tabs[index]
+        guard store.state.tabs.contains(where: { $0.id == tabID }) else { return }
+        let closingTab = tabAdapter(for: tabID)
         closingTab.disconnect()
         onTabClosed(closingTab)
-        tabs.remove(at: index)
+        tabAdapters[tabID] = nil
         store.send(.closeTab(tabID))
     }
 
@@ -160,15 +160,13 @@ final class ThreadWindowViewModel {
     }
 
     func handleConnectionState(_ state: ThreadConnectionState) {
-        sharedConnectionState = state
-        tabs.forEach { $0.setConnectionState(state) }
+        let shouldResubscribe = state == .connected && store.state.hasEstablishedSharedConnection
         store.send(.connectionStateChanged(state))
 
         guard state == .connected else { return }
-        if hasEstablishedSharedConnection {
+        if shouldResubscribe {
             tabs.forEach { $0.resubscribe() }
         }
-        hasEstablishedSharedConnection = true
         refreshHistory()
     }
 
@@ -179,7 +177,10 @@ final class ThreadWindowViewModel {
         if let invalidActive = activeTab, invalidActive.isInvalid {
             store.send(.setNotice(invalidActive.invalidReason))
         }
-        tabs.removeAll { $0.isInvalid }
+        invalidTabs.forEach { tab in
+            tab.disconnect()
+            tabAdapters[tab.tabID] = nil
+        }
         store.send(.pruneInvalidTabs)
     }
 
@@ -187,19 +188,31 @@ final class ThreadWindowViewModel {
         switch event {
         case .threadStarted(let threadID, _, let responseMessageID):
             let pendingPrompt = store.state.pendingStartedThreadPrompts[responseMessageID]
+            let wasOpen = store.state.tabs.contains { $0.thread.id == threadID }
             store.send(.windowEvent(event))
-            openHistoryThread(threadID)
+            if !wasOpen {
+                tabAdapter(for: threadID).open()
+            }
             if let pendingPrompt,
                activeTab?.threadID == threadID {
-                activeTab?.sendPrompt(pendingPrompt.text, attachments: pendingPrompt.attachments)
+                sendCommand(.turnStart(
+                    threadId: threadID,
+                    commandId: pendingPrompt.messageID,
+                    timestamp: Self.timestamp(),
+                    text: pendingPrompt.text,
+                    attachments: pendingPrompt.attachments
+                ))
             }
             refreshHistory()
 
         case .threadDeleted(let targetThreadID, let status):
             store.send(.windowEvent(event))
             if status == "deleted",
-               let tab = tabs.first(where: { $0.threadID == targetThreadID }) {
-                closeTab(tab.tabID)
+               tabAdapters[targetThreadID] != nil {
+                let tab = tabAdapter(for: targetThreadID)
+                tab.disconnect()
+                onTabClosed(tab)
+                tabAdapters[targetThreadID] = nil
             }
             refreshHistory()
 
@@ -211,14 +224,20 @@ final class ThreadWindowViewModel {
         }
     }
 
-    private func makeTab(threadID: String) -> ThreadTabViewModel {
-        let tabStore = Store(initialState: ThreadFeature.State(threadID: threadID)) {
-            ThreadFeature()
+    private func tabAdapter(for threadID: String) -> ThreadTabViewModel {
+        if let adapter = tabAdapters[threadID] {
+            return adapter
         }
-        return ThreadTabViewModel(
+
+        let adapter = ThreadTabViewModel(
             tabID: threadID,
             threadID: threadID,
-            store: tabStore,
+            readState: { [weak self] in
+                self?.store.state.tabs.first { $0.id == threadID }
+            },
+            sendAction: { [weak self] action in
+                self?.store.send(.tab(id: threadID, action))
+            },
             subscribeToEvents: { [weak self] threadID, handler in
                 guard let self else {
                     fatalError("ThreadWindowViewModel released before subscribing to thread events")
@@ -237,6 +256,16 @@ final class ThreadWindowViewModel {
                 self.pruneInvalidTabs()
             }
         )
+        tabAdapters[threadID] = adapter
+        return adapter
+    }
+
+    private func reconcileTabAdapters() {
+        let liveIDs = Set(store.state.tabs.map(\.id))
+        for id in tabAdapters.keys where !liveIDs.contains(id) {
+            tabAdapters[id]?.disconnect()
+            tabAdapters[id] = nil
+        }
     }
 
     private static func timestamp() -> String {

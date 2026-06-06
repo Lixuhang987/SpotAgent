@@ -19,7 +19,7 @@ ThreadWindow 是全局唯一的 thread 工作区：左侧是历史 thread 列表
 | `ThreadWindowFeature.swift` | TCA window reducer：管理 tabs、active tab、历史列表、删除确认、连接状态和启动中 prompt |
 | `ThreadWindowCommands.swift` | ThreadWindow 本地语义命令 / 回执类型；Lifecycle 将其映射到 AppServer 语义方法 |
 | `ThreadWindowViewModel.swift` | SwiftUI / AppKit 生命周期适配层：持有 `StoreOf<ThreadWindowFeature>`，负责订阅事件、发送窗口级 command、创建 tab adapter |
-| `ThreadTabViewModel.swift` | 单 tab 适配层：持有 `StoreOf<ThreadFeature>`，负责 `turn.start` / `turn.interrupt`、回执和事件订阅 |
+| `ThreadTabViewModel.swift` | 单 tab 适配层：从父 `ThreadWindowFeature.State.tabs` 读取状态并派发 `ThreadFeature.Action`，负责 `turn.start` / `turn.interrupt`、回执和事件订阅 |
 | `ThreadRunStatus.swift` | UI 内部运行态枚举；协议边界字符串归一化为 `idle / running / failed / interrupted` |
 | `ThreadEventTypes.swift` | UI 本地事件模型 |
 | `ThreadModels.swift` | 消息、附件、权限请求和 workspace 请求模型 |
@@ -114,7 +114,7 @@ Desktop 回执：
 
 - `ThreadFeature.State.thread` 是 thread 配置快照；`ThreadFeature.State.events` 是运行期事件缓存。
 - `ThreadWindowFeature.State` 是窗口级状态源，包含历史列表、打开的 thread state、active tab、删除确认、notice 和共享连接状态。
-- `ThreadWindowViewModel` / `ThreadTabViewModel` 是 SwiftUI 观察和 AppKit 生命周期适配层；它们通过 TCA `Store` 暴露派生属性，并负责不可放进 reducer 的副作用：触发 AppServer 语义命令 / 回执、订阅 `ThreadEventBus`、复制剪贴板、同步 `ThreadRegistry`。
+- `ThreadWindowViewModel` / `ThreadTabViewModel` 是 SwiftUI 观察和 AppKit 生命周期适配层；业务状态只落在 TCA `Store`。tab adapter 只缓存订阅与副作用闭包，通过父 store 读 `ThreadFeature.State` 并派发 `ThreadFeature.Action`，负责触发 AppServer 语义命令 / 回执、订阅 `ThreadEventBus`、复制剪贴板、同步 `ThreadRegistry`。
 
 ## 断线重连
 
