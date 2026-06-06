@@ -31,24 +31,6 @@
 
 ## 当前 bug
 
-### SessionWindow 多轮普通 assistant 消息渲染顺序错误
-
-- **严重级别**：P2
-- **发现日期**：2026-06-06
-- **复现步骤**：
-  1. 在 `main` 分支使用 `bash ./scripts/package-app.sh --mock-llm` 打包并启动 `dist/HandAgentDesktop.app`。
-  1. 打开 SessionWindow，在 tab B 发送 `QA route B [mock:assistant-ok] ROUTE_B_20260606`。
-  1. 在同一 tab 继续发送 `QA route B followup [mock:assistant-ok] ROUTE_B_FOLLOW_20260606`。
-  1. 切换到其他历史会话后再切回该会话，观察消息区。
-- **实际结果**：UI 将两条 assistant 文本连在同一个左侧文本块中显示为 `Mock assistant response: main chain is reachable.Mock assistant response: main chain is reachable.`，并且该 assistant 文本块位于第二条 user bubble 之前。
-- **期望结果**：消息区应按 session 持久化顺序渲染为 `user1 -> assistant1 -> user2 -> assistant2`，两条 assistant 消息不应无间隔拼接，也不应越过第二条 user 消息。
-- **证据**：
-  - `~/.spotAgent/sessions/session-1780743882633-z6cq7j.json` 中 `messages` 顺序为 `user(QA route B...)`、`assistant(Mock assistant response...)`、`user(QA route B followup...)`、`assistant(Mock assistant response...)`，`events: []`，未混入 tab A 的 `workspace.askUser` 事件。
-  - Computer Use 观察到消息区文本为 `QA route B [mock:assistant-ok] ROUTE_B_20260606 Mock assistant response: main chain is reachable.Mock assistant response: main chain is reachable.`，下一条可见文本才是 `QA route B followup [mock:assistant-ok] ROUTE_B_FOLLOW_20260606`。
-  - 同时 `lsof -nP -iTCP:4317` 显示 desktop 到 agent-server 仍只有两条 established 连接：platform bridge 与共享 session connection，未随 tab 数增加。
-- **初步调用链 / 根因边界**：agent-server 持久化顺序正确，session 路由未串到 tab A；问题边界收敛在 desktop 侧 `session_snapshot` / 本地 message state 到 SwiftUI 消息列表渲染之间。
-- **基线与清理状态**：发现前已完成 `bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build` 基线验证；发现时 `HandAgentDesktop` 与 agent-server 仍保持运行，用于后续修复复测。
-
 ### `AI SDK stream finished without assistant content or tool calls`
 
 - **严重级别**：P1

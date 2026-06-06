@@ -817,3 +817,13 @@
 - **验证过程**：复用 `session-1780741750422-gycv3b` 实机链路，在同一 session 第二轮提交 `QA workspace ask after fix [mock:workspace-ask] 2026-06-06`，完成一次用户输入内的 assistant tool call、`workspace.askUser` 工具执行、tool result 回灌与最终 assistant 回复。随后运行 `pnpm vitest run --exclude '.worktrees/**' packages/core/tests/runtime/agent-runtime.test.ts apps/agent-server/tests/session/SessionRuntimeOrchestrator.test.ts`，确认 runtime 循环、session history、turn 事件和 summary 等相关回归测试通过。
 - **证据**：`~/.spotAgent/sessions/session-1780741750422-gycv3b.json` 中第二轮 user message 后仅作为一次运行完成：assistant tool call `mock-workspace-ask-1`、tool result `{"workspaceId":"qa-workspace"}`、最终 assistant `Mock workspace.askUser completed.` 均落在同一 session；定向测试结果为 2 个 test files、28 tests 全部通过；`rg -n "maxTurns|AgentRuntime exceeded maxTimes" packages apps docs -g '!docs/archive.md' -g '!.worktrees/**'` 只命中 runtime 实现与对应测试，未发现 `maxTurns` 残留。
 - **结论**：通过。一次用户输入内的多轮 LLM/tool 循环仍按产品语义归为一个 turn，runtime 上限错误文案为 `AgentRuntime exceeded maxTimes: <n>`。
+
+### 已修复：SessionWindow 多轮普通 assistant 消息渲染顺序错误
+
+- **验证日期**：2026-06-06
+- **验证环境**：mock-llm / `dist/HandAgentDesktop.app` / `main` 分支 / macOS 15+
+- **缺陷现象**：同一 session 连续两轮 `[mock:assistant-ok]` 后，实时 UI 曾把两条 assistant 文本拼接到同一个左侧文本块，并把第二条 assistant 显示在第二条 user 之前。
+- **修复内容**：`apps/agent-server/src/protocol/MessageTranslator.ts` 将 `assistant_delta.itemId` 从 `${sessionId}-${event.messageId}` 改为 `${sessionId}-${turnId}-${event.messageId}`。原因是 `AgentRuntime` 的 assistant `messageId` 只在单次 run 内递增，后续 turn 会重新出现 `assistant-1`；拼入 `turnId` 后 desktop `ForEach(messages)` 的 identity 跨轮唯一。
+- **验证过程**：在 main 上执行 `bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build` 均通过；重新 `bash ./scripts/package-app.sh --mock-llm` 并启动 App，提交 `QA order fix first [mock:assistant-ok] ORDER_FIX_A_20260606`，随后同 tab 提交 `QA order fix second [mock:assistant-ok] ORDER_FIX_B_20260606`。
+- **证据**：Computer Use 观察到 UI 顺序为第一条 user、第一条 assistant、第二条 user、第二条 assistant；`~/.spotAgent/sessions/session-1780744892022-0l1uzs.json` 中 `messages` 为 4 条，顺序同上，`events: []`；`lsof -nP -iTCP:4317` 显示仍只有 platform bridge 与共享 session connection 两条 established 连接。
+- **结论**：通过。已从 `docs/bugs.md` 当前 bug 中移除。
