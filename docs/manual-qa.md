@@ -22,9 +22,13 @@
 
 最近阻塞记录：2026-05-24 复查 `~/.spotAgent/settings.json`，当前 `llm.provider` 为 `openai-compatible`，`llm.api` 为 `responses`，`llm.model` 为 `gpt-5.4`，`llm.baseUrl` 为 `http://127.0.0.1:8317/v1`，API key 仅属于 OpenAI 兼容配置；环境变量中没有 `ANTHROPIC_API_KEY` 或 `CLAUDE_API_KEY`，仅有 `ANTHROPIC_BASE_URL`。配置文件没有可用的 Anthropic key 或 Anthropic 模型；在没有用户提供真实 Anthropic 配置前，不能验证 Anthropic streaming 与 tool call 回灌，本项不归档为通过。
 
+最近阻塞记录：2026-06-06 复查 `~/.spotAgent/settings.json`，当前仍为 `llm.provider = "openai-compatible"`、`llm.api = "responses"`、`llm.model = "gpt-5.4"`、`llm.baseUrl = "http://127.0.0.1:8090/v1"`，不是 Anthropic provider 配置。环境中存在 `ANTHROPIC_AUTH_TOKEN` 与 `ANTHROPIC_BASE_URL`，但生产路径 `SettingsBackedLLMClient` / `LLMClientFactory` 只读取 settings 文件中的 `llm.provider`、`llm.apiKey`、`llm.baseUrl` 与 `llm.model`，不会自动把 `ANTHROPIC_AUTH_TOKEN` 当作 Anthropic API key 使用；在未将 settings 明确配置为 Anthropic provider、Anthropic 模型和对应 key 前，本项仍不能归档为通过。
+
 ## 懒加载工具激活（P1）
 
 最近阻塞记录：2026-05-24 使用真实 LLM 模式重试 `HANDAGENT_LAZY_TOOL_QA_20260524`。首轮已验证 `use_tools` 激活后会调到真实工具链；在允许 `screen.capture` / `accessibility.snapshot` 之前，工具先被判定为拒绝。随后在权限弹窗中选择 `始终允许` 再重试 `HANDAGENT_LAZY_TOOL_QA_20260524_RETRY`，SessionWindow 已显示 `window.list` 与 `screen.capture` 的工具结果，但最终仍落到 UI 告警 `AI SDK stream finished without assistant content or tool calls.`，对应 session `session-1779601103378-sa0wyo` 也记录了同名 error 事件，因此本项当前仍不能归档为通过。
+
+最近阻塞记录：2026-06-06 复查当前 bug 清单，`docs/bugs.md` 仍保留 P1 缺陷 `AI SDK stream finished without assistant content or tool calls`。该缺陷正覆盖本项场景 2–4 的真实 provider 工具调用收尾链路：工具结果已能进入 SessionWindow，但最终 assistant 总结无法稳定产生。因此在该 P1 缺陷修复前，本项仍不能归档为通过。
 
 最近阻塞记录：2026-05-23 在 `main` 合并 `feat/lazy-tool-activation` 后完成基线验证：`bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build` 均通过。实机 QA 先用 `bash ./scripts/package-app.sh --mock-llm` 验证 App 可打包启动，但 mock LLM 不写真实 network log，也不会生成 `use_tools` 激活调用，因此不能作为本项通过证据。随后使用 settings/真实 LLM 模式重新打包启动，`session-1779550406952-0hxdoo` 的纯聊天首轮请求成功返回，网络日志 `/Users/mu9/.spotAgent/log/2026-05-23/network-001.jsonl` 显示请求体 `tools` 只包含 `use_tools`，且 session 只有 user/assistant 消息，没有 tool message。继续在同一 session 发送 `Please read my screen. HANDAGENT_LAZY_TOOL_QA_20260523` 后，日志写入第二轮 request，`tools` 仍只包含 `use_tools`，但超过 1 分钟没有对应 response 行，session 文件仍只有 3 条消息且 `events: []`。因此场景 1 的“纯聊天不激活真实工具”已有证据，场景 2–4 受真实 LLM 流未返回阻塞，暂不能归档通过。QA 后已停止 `HandAgentDesktop`，`agent-server` 随父进程退出。
 
