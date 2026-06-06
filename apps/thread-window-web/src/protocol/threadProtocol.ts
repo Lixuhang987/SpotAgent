@@ -166,7 +166,9 @@ export function isThreadNotification(value: unknown): value is ThreadNotificatio
       return hasNotificationBase(value)
         && hasThreadId(value)
         && isRecord(value.payload)
-        && isOptionalString(value.commandId);
+        && isOptionalString(value.commandId)
+        && Array.isArray(value.payload.messages)
+        && isRunStatus(value.payload.status);
     case "user.message.recorded":
       return hasNotificationBase(value)
         && hasThreadId(value)
@@ -200,19 +202,19 @@ export function isThreadNotification(value: unknown): value is ThreadNotificatio
         && typeof value.itemId === "string"
         && isRecord(value.payload)
         && typeof value.payload.name === "string"
-        && typeof value.payload.status === "string"
+        && isToolFinishedStatus(value.payload.status)
         && typeof value.payload.output === "string";
     case "turn.completed":
       return hasNotificationBase(value)
         && hasThreadId(value)
         && typeof value.turnId === "string"
         && isRecord(value.payload)
-        && typeof value.payload.status === "string";
+        && isTurnCompletedStatus(value.payload.status);
     case "thread.status.changed":
       return hasNotificationBase(value)
         && hasThreadId(value)
         && isRecord(value.payload)
-        && typeof value.payload.value === "string";
+        && isRunStatus(value.payload.value);
     case "thread.listed":
       return hasNotificationBase(value)
         && isRecord(value.payload)
@@ -223,7 +225,7 @@ export function isThreadNotification(value: unknown): value is ThreadNotificatio
         && isRecord(value.payload)
         && isOptionalString(value.commandId)
         && typeof value.payload.targetThreadId === "string"
-        && typeof value.payload.status === "string";
+        && isThreadDeletedStatus(value.payload.status);
     case "thread.error":
       return hasNotificationBase(value)
         && isRecord(value.payload)
@@ -286,4 +288,25 @@ function isOptionalString(value: unknown): boolean {
 
 function isNullableString(value: unknown): boolean {
   return value === null || typeof value === "string";
+}
+
+function isRunStatus(value: unknown): boolean {
+  return value === "idle"
+    || value === "running"
+    || value === "failed"
+    || value === "interrupted";
+}
+
+function isTurnCompletedStatus(value: unknown): boolean {
+  return value === "completed"
+    || value === "interrupted"
+    || value === "failed";
+}
+
+function isThreadDeletedStatus(value: unknown): boolean {
+  return value === "deleted" || value === "not_found";
+}
+
+function isToolFinishedStatus(value: unknown): boolean {
+  return value === "completed" || value === "failed";
 }

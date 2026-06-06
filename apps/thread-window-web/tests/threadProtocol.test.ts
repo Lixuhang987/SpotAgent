@@ -79,4 +79,77 @@ describe("thread protocol helpers", () => {
       payload: { prompt: "Pick", candidates: [] },
     })).toBe(true);
   });
+
+  it("rejects malformed thread snapshot notifications", () => {
+    const baseSnapshot = {
+      type: "thread.snapshot",
+      threadId: "thread-1",
+      notificationId: "n-snapshot",
+      timestamp: "2026-06-06T00:00:06.000Z",
+    };
+
+    expect(isThreadNotification({
+      ...baseSnapshot,
+      payload: {},
+    })).toBe(false);
+
+    expect(isThreadNotification({
+      ...baseSnapshot,
+      payload: {
+        messages: [],
+        status: "paused",
+      },
+    })).toBe(false);
+
+    expect(isThreadNotification({
+      ...baseSnapshot,
+      payload: {
+        messages: [],
+        status: "running",
+      },
+    })).toBe(true);
+  });
+
+  it("rejects notification payloads with invalid status values", () => {
+    const base = {
+      threadId: "thread-1",
+      notificationId: "n-status",
+      timestamp: "2026-06-06T00:00:07.000Z",
+    };
+
+    expect(isThreadNotification({
+      ...base,
+      type: "thread.status.changed",
+      payload: { value: "paused" },
+    })).toBe(false);
+
+    expect(isThreadNotification({
+      ...base,
+      type: "turn.completed",
+      turnId: "turn-1",
+      payload: { status: "running" },
+    })).toBe(false);
+
+    expect(isThreadNotification({
+      type: "thread.deleted",
+      notificationId: "n-deleted",
+      timestamp: "2026-06-06T00:00:08.000Z",
+      payload: {
+        targetThreadId: "thread-1",
+        status: "archived",
+      },
+    })).toBe(false);
+
+    expect(isThreadNotification({
+      ...base,
+      type: "tool.finished",
+      turnId: "turn-1",
+      itemId: "tool-1",
+      payload: {
+        name: "read_file",
+        status: "cancelled",
+        output: "stopped",
+      },
+    })).toBe(false);
+  });
 });
