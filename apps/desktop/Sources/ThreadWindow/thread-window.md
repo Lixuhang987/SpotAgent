@@ -13,8 +13,12 @@ ThreadWindow 是全局唯一的 thread 工作区：左侧是历史 thread 列表
 | `ThreadContentView.swift` | 消息滚动区、消息气泡、复制入口、附件行与错误内联面板 |
 | `ThreadMessageClipboard.swift` | 消息级复制 helper |
 | `ThreadRequestBubbleViews.swift` | `permission.requested` 与 `workspace.requested` 的内联回执面板 |
-| `ThreadWindowViewModel.swift` | 窗口级状态：历史、tabs、active tab、删除确认；负责创建/激活/关闭 tab 和发送窗口级 command |
-| `ThreadTabViewModel.swift` | 单 tab 状态：`threadID`、消息、运行态、连接态、权限请求、workspace 请求；负责 `turn.start` / `turn.interrupt` 和回执 |
+| `ThreadState.swift` | thread 配置快照：`threadId`、运行态、失效原因等稳定状态 |
+| `EventStore.swift` | thread 运行缓存：消息、连接提示、权限请求、workspace 请求、本地待确认 turn |
+| `ThreadFeature.swift` | TCA thread reducer：消费本地操作与 `ThreadEvent`，更新 `ThreadState + EventStore` |
+| `ThreadWindowFeature.swift` | TCA window reducer：管理 tabs、active tab、历史列表、删除确认、连接状态和启动中 prompt |
+| `ThreadWindowViewModel.swift` | SwiftUI / AppKit 生命周期适配层：持有 `StoreOf<ThreadWindowFeature>`，负责订阅事件、发送窗口级 command、创建 tab adapter |
+| `ThreadTabViewModel.swift` | 单 tab 适配层：持有 `StoreOf<ThreadFeature>`，负责 `turn.start` / `turn.interrupt`、回执和事件订阅 |
 | `ThreadRunStatus.swift` | UI 内部运行态枚举；协议边界字符串归一化为 `idle / running / failed / interrupted` |
 | `ThreadProtocolClient.swift` | Thread/Turn dotted protocol 编解码 |
 | `ThreadEventTypes.swift` | UI 本地事件模型 |
@@ -106,6 +110,12 @@ Desktop 回执：
 - `turn.completed(status: "completed")` 与随后到达的 `thread.status.changed(value: "idle")` 会在 UI 内归一化为 `ThreadRunStatus.idle`。
 - `tool.started`、待处理中的 `permission.requested` / `workspace.requested`，以及运行中的连接状态都可能让 tab 恢复或保持 `running`。
 
+## Store 边界
+
+- `ThreadFeature.State.thread` 是 thread 配置快照；`ThreadFeature.State.events` 是运行期事件缓存。
+- `ThreadWindowFeature.State` 是窗口级状态源，包含历史列表、打开的 thread state、active tab、删除确认、notice 和共享连接状态。
+- `ThreadWindowViewModel` / `ThreadTabViewModel` 是 SwiftUI 观察和 AppKit 生命周期适配层；它们通过 TCA `Store` 暴露派生属性，并负责不可放进 reducer 的副作用：发送 WebSocket command / response、订阅 `ThreadEventBus`、复制剪贴板、同步 `ThreadRegistry`。
+
 ## 断线重连
 
 - 共享连接建立后，window 会刷新一次历史列表。
@@ -116,8 +126,8 @@ Desktop 回执：
 
 ## 编辑此目录的约束
 
-- View 只读 `ThreadWindowViewModel` / `ThreadTabViewModel` 状态，不直接调连接或协议编解码。
-- 新增 thread 级状态优先放入 `ThreadTabViewModel`；新增窗口级状态才放入 `ThreadWindowViewModel`。
+- View 只读 `ThreadWindowViewModel` / `ThreadTabViewModel` 暴露的派生状态，不直接调连接或协议编解码。
+- 新增 thread 级状态优先放入 `ThreadState` 或 `EventStore`，再由 `ThreadFeature` 更新；新增窗口级状态放入 `ThreadWindowFeature.State`。
 - 不要重新引入独立历史窗口；历史列表属于全局 ThreadWindow。
 - 新事件类型必须先在 agent-server 与 Swift `ThreadProtocolClient` 同步定义，再加到对应 view model 的 `handle(_:)`。
 - 历史删除必须确认；任何 UI 入口删除持久化 thread 前都先进入待确认状态。

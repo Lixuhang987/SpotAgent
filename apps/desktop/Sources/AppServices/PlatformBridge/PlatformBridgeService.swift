@@ -1,74 +1,18 @@
 import Foundation
 
 @MainActor
-protocol PlatformBridgeRunning: AnyObject {
-    func start()
-    func stop()
-}
+final class PlatformBridgeService {
+    typealias Send = (String) -> Void
 
-@MainActor
-protocol PlatformBridgeSocketTransport {
-    func makeWebSocketTask(with url: URL) -> any AppServerWebSocketTask
-}
-
-@MainActor
-final class URLSessionPlatformBridgeTransport: PlatformBridgeSocketTransport {
-    private let urlClient: URLSession
-
-    init(urlClient: URLSession = .shared) {
-        self.urlClient = urlClient
-    }
-
-    func makeWebSocketTask(with url: URL) -> any AppServerWebSocketTask {
-        urlClient.webSocketTask(with: url)
-    }
-}
-
-@MainActor
-final class PlatformBridgeService: PlatformBridgeRunning {
-    private let serverURL: URL
-    private let transport: PlatformBridgeSocketTransport
     private let provider: PlatformProvider
-    private let decoder = JSONDecoder()
-    private let encoder = JSONEncoder()
-
-    private var socketTask: (any AppServerWebSocketTask)?
-    private var reconnectWorkItem: DispatchWorkItem?
-    private var stopped = false
 
     init(
-        serverURL: URL,
-        provider: PlatformProvider = MacPlatformProvider(),
-        transport: PlatformBridgeSocketTransport = URLSessionPlatformBridgeTransport()
+        provider: PlatformProvider = MacPlatformProvider()
     ) {
-        self.serverURL = serverURL
         self.provider = provider
-        self.transport = transport
     }
 
-    func start() {
-        stopped = false
-        connect()
-    }
-
-    func stop() {
-        stopped = true
-        reconnectWorkItem?.cancel()
-        reconnectWorkItem = nil
-        socketTask?.cancel(with: .goingAway, reason: nil)
-        socketTask = nil
-    }
-
-    private func connect() {
-        guard !stopped, socketTask == nil else { return }
-        let task = transport.makeWebSocketTask(with: serverURL)
-        socketTask = task
-        task.resume()
-        sendHello(on: task)
-        receiveNext()
-    }
-
-    private func sendHello(on task: any AppServerWebSocketTask) {
+    func makeHelloMessage() -> String {
         let envelope: [String: Any] = [
             "channel": "platform",
             "type": "platform_bridge_hello",
@@ -76,35 +20,10 @@ final class PlatformBridgeService: PlatformBridgeRunning {
             "timestamp": Self.timestamp(),
             "payload": ["agent": "macos-desktop"],
         ]
-        sendJSON(envelope, on: task)
+        return encodeJSON(envelope)
     }
 
-    private func receiveNext() {
-        guard let task = socketTask else { return }
-        task.receive { [weak self] result in
-            guard let self else { return }
-            switch result {
-            case .failure:
-                Task { @MainActor in self.handleDisconnect() }
-            case .success(let message):
-                let raw: String? = {
-                    switch message {
-                    case .string(let s): return s
-                    case .data(let d): return String(data: d, encoding: .utf8)
-                    @unknown default: return nil
-                    }
-                }()
-                Task { @MainActor in
-                    if let raw {
-                        await self.handleIncoming(raw: raw)
-                    }
-                    self.receiveNext()
-                }
-            }
-        }
-    }
-
-    private func handleIncoming(raw: String) async {
+    func handleIncoming(raw: String, send: @escaping Send) async {
         guard let data = raw.data(using: .utf8) else { return }
         guard let envelope = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return
@@ -124,7 +43,12 @@ final class PlatformBridgeService: PlatformBridgeRunning {
         let args = payload["args"]
         do {
             let result = try await provider.handle(method: method, args: args)
-            sendResponse(requestId: requestId, status: "ok", payload: ["result": result as Any?])
+            sendResponse(
+                requestId: requestId,
+                status: "ok",
+                payload: ["result": result as Any?],
+                send: send
+            )
         } catch let bridgeError as PlatformBridgeError {
             sendResponse(
                 requestId: requestId,
@@ -132,19 +56,25 @@ final class PlatformBridgeService: PlatformBridgeRunning {
                 payload: [
                     "message": bridgeError.message,
                     "code": bridgeError.code,
-                ]
+                ],
+                send: send
             )
         } catch {
             sendResponse(
                 requestId: requestId,
                 status: "error",
-                payload: ["message": error.localizedDescription]
+                payload: ["message": error.localizedDescription],
+                send: send
             )
         }
     }
 
-    private func sendResponse(requestId: String, status: String, payload: [String: Any?]) {
-        guard let task = socketTask else { return }
+    private func sendResponse(
+        requestId: String,
+        status: String,
+        payload: [String: Any?],
+        send: Send
+    ) {
         var responsePayload: [String: Any] = [
             "requestId": requestId,
             "status": status,
@@ -159,27 +89,17 @@ final class PlatformBridgeService: PlatformBridgeRunning {
             "timestamp": Self.timestamp(),
             "payload": responsePayload,
         ]
-        sendJSON(envelope, on: task)
+        send(encodeJSON(envelope))
     }
 
-    private func sendJSON(_ object: [String: Any], on task: any AppServerWebSocketTask) {
+    private func encodeJSON(_ object: [String: Any]) -> String {
         guard
             let data = try? JSONSerialization.data(withJSONObject: object, options: []),
             let string = String(data: data, encoding: .utf8)
         else {
-            return
+            return "{}"
         }
-        task.send(.string(string)) { _ in }
-    }
-
-    private func handleDisconnect() {
-        socketTask = nil
-        guard !stopped else { return }
-        let work = DispatchWorkItem { [weak self] in
-            Task { @MainActor in self?.connect() }
-        }
-        reconnectWorkItem = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0, execute: work)
+        return string
     }
 
     private static func timestamp() -> String {

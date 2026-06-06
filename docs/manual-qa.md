@@ -45,6 +45,14 @@
 1. 在 thread A 触发一次需要 permission 或 workspace 选择的工具场景，确认 `permission.requested` / `workspace.requested` 只回到当前 `threadId` 对应视图，不会串到其他 thread。
 1. 在 agent-server 运行中手动重启 desktop 或 kill `agent-server` 后恢复，确认共享连接会自动重连、历史会刷新、已打开 thread 会重新恢复并继续可用。
 
+## AppServer 共享 PlatformBridge smoke（P2）
+
+1. 从当前 worktree 执行 `bash ./scripts/swiftw run HandAgentDesktop`。
+1. 确认 desktop 启动 agent-server 后，只建立一条到 `ws://127.0.0.1:4317/api/thread` 的 WebSocket。
+1. 触发一次需要平台能力的 tool，例如 `clipboard.read`、`app.frontmost`、`screen.capture` 或 `accessibility.snapshot`。
+1. 确认 agent-server 收到 `platform_bridge_hello` 后能发出 `platform_request`，desktop 通过同一连接回写 `platform_response`，没有新建第二条 platform WebSocket。
+1. 同时保持一个 thread 正在 streaming，确认 `assistant.delta` / `tool.finished` / `platform_response` 不互相串线。
+
 ## Thread 历史路径与状态气泡 smoke（P2）
 
 1. 提交一个普通 prompt，确认本轮历史写入 `~/.spotAgent/threads/<threadId>.json`，不会写入旧历史目录。

@@ -16,7 +16,7 @@
 
 | 桥 | 请求来源 | 回流消息 | 默认超时 | 绑定粒度 |
 |------|------|------|------|------|
-| `WebSocketPlatformBridge` | core `RemotePlatformAdapter` | `platform_response` | `call()` 入参默认 15s | 当前 platform socket |
+| `WebSocketPlatformBridge` | core `RemotePlatformAdapter` | `platform_response` | `call()` 入参默认 15s | 当前发送 `platform_bridge_hello` 的共享 socket |
 | `ThreadPermissionBridge` | core `FilePermissionPolicy.ask` | `permission.answered` | 60s | 当前 thread 绑定连接 |
 | `ThreadWorkspaceAskBridge` | builtin `workspace.askUser` | `workspace.answered` | 60s | 当前 thread 绑定连接，且同 thread 串行 |
 
@@ -38,7 +38,7 @@ attach(send: Send): BridgeToken {
 }
 ```
 
-新的 platform socket 会替换旧 socket，并让旧 token 下的 pending request 以 offline 失败。旧 socket 晚到的 response 因 token 不匹配会被忽略。
+新的 `platform_bridge_hello` 会替换旧 platform 绑定，并让旧 token 下的 pending request 以 offline 失败。旧 socket 晚到的 response 因 token 不匹配会被忽略。
 
 ### 权限审批绑定到 thread
 

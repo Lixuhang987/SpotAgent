@@ -23,7 +23,7 @@
 flowchart TD
   A[apps/desktop<br/>macOS 宿主与 SwiftUI 交互壳] --> B[apps/agent-server<br/>本地 thread 桥与 runtime 驱动]
   B --> C[packages/core<br/>thread、turn、消息、LLM/tool 循环]
-  A -->|PlatformBridge 反向 IPC| C
+  A -->|同一 WebSocket 承载 PlatformBridgeMessage| B
 ```
 
 ### 分层职责
@@ -169,7 +169,7 @@ flowchart TD
 - 桌面端通过 agent-server 的 thread 协议读取同一目录，为 ThreadWindow 左侧历史列表提供恢复和删除入口；恢复同一 `threadId` 时优先激活已有 tab，未打开时创建新 tab 并等待 `thread.snapshot` 恢复。
 - `packages/core` 已经定义完整的 tool、platform DTO。
 - macOS 平台能力由 `apps/desktop` 内的 `MacPlatformProvider` 实现：剪贴板（`NSPasteboard`）、App 列表与前台 App（`NSWorkspace`）、窗口列表（`CGWindowListCopyWindowInfo`）、屏幕截图（`ScreenCaptureKit` + `SCScreenshotManager`，支持 display / window / region 三种 target）、OCR（Vision）与 Accessibility snapshot / action。
-- 桌面 App 通过 `PlatformBridgeService` 与 `agent-server` 维护一条独立 WebSocket 反向通道，core 侧通过 `RemotePlatformAdapter` 调用平台能力。
+- 桌面 App 通过 `AppServerClient` 的共享 `AppServerConnection` 发送 `platform_bridge_hello`，并把 `channel: "platform"` 的 `platform_request` 分派给独立的 `PlatformBridgeService`；`PlatformBridgeService` 只处理平台请求和 `platform_response` 编码，不再维护平行 WebSocket。
 - ThreadWindow 已有共享连接断线自动重连、历史刷新与 tab 重新恢复逻辑；仍需实机验证 agent-server 重启后的 `thread.snapshot` 恢复体验。
 - 图片 attachment 会落 Blob/Stub；agent-server 在 runtime 前把 image STUB 展开为多模态 image part，LLM 是否能理解图片取决于当前 provider capability。
 

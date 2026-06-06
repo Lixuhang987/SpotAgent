@@ -14,9 +14,8 @@
 ```mermaid
 flowchart LR
   A[apps/desktop<br/>macOS 宿主] -->|ThreadCommand / ClientResponse / PlatformBridgeMessage WS| B[apps/agent-server<br/>本地 thread 桥]
-  B -->|ThreadNotification / ServerRequest| A
+  B -->|ThreadNotification / ServerRequest / PlatformBridgeMessage| A
   B --> C[packages/core<br/>runtime / tool / LLM]
-  A -->|PlatformBridge 反向 IPC| B
 ```
 
 ## 本层核心流转
@@ -36,7 +35,7 @@ flowchart LR
 ### 3. 平台能力反向 IPC
 
 - `agent-server` 通过 `RemotePlatformAdapter` 调 `PlatformBridge.call`。
-- 桌面端 `PlatformBridgeService` 监听独立 WebSocket，把 `platform_request` 派发给 `MacPlatformProvider`。
+- 桌面端 `AppServerClient` 在共享 WebSocket 上接收 `platform_request`，交给 `PlatformBridgeService` 派发给 `MacPlatformProvider`，再通过同一连接回写 `platform_response`。
 
 ### 4. 状态反馈
 

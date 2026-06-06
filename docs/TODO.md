@@ -12,13 +12,21 @@
 
 ## thread / turn 破坏性重构遗留
 
-- Store 层仍需继续切到完整 TCA 模型：`Store / State / Action / Reducer`，拆分 thread 配置快照与运行缓存 `EventStore`。
 - 对齐 codex 更完整 thread / turn 语义：
-  - thread archive 与 delete 的最终产品选择。
-  - thread title / preview 更新策略。
+  - `thread.archive` / `thread.unarchive`：本轮已选择 `thread.delete` 作为最小可用删除语义，归档能力后续单独设计。
+  - `thread.read`：按 threadId 拉取完整 thread 快照或分页读取历史。
+  - `thread.fork`：从指定消息或 turn 分叉新 thread。
+  - `thread.rollback`：回滚到指定消息或 turn，并明确持久化与 UI 展示规则。
+  - thread metadata 更新：标题、preview、workspace、action binding 等字段的更新命令与通知。
+  - thread settings 更新与通知：模型、工具范围、运行参数等 thread 级配置变更。
+  - goal / budget：目标状态、预算、用量统计及 UI 呈现。
+  - realtime：语音、低延迟流式输入输出或实时通道。
+  - codex-style `item.*`：细粒度 item 生命周期、局部更新、折叠与重放语义。
+  - archived/list/search：归档 thread 的列表、搜索、恢复和删除管理。
   - thread-level event replay、notification 去重与 request 生命周期。
   - 子 agent / 多 turn 并行语义。
 - 补一轮端到端实机验证：thread 创建、thread 恢复、thread 列表、thread 删除、turn 中断、permission / workspace 回流。
+- 补一轮端到端实机验证：共享 `AppServerConnection` 上同时承载 thread/turn 主协议和 `PlatformBridgeMessage`，确认 platform request 不再创建第二条 WebSocket。
 
 ---
 

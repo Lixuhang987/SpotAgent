@@ -77,8 +77,10 @@ final class AppServices {
     ) {
         self.appServer = appServer ?? AppServer(
             agentServer: AgentServerService(),
-            client: AppServerClient(connection: AppServerConnection(serverURL: appServerURL)),
-            platformBridge: PlatformBridgeService(serverURL: appServerURL)
+            client: AppServerClient(
+                connection: AppServerConnection(serverURL: appServerURL),
+                platformBridge: PlatformBridgeService()
+            )
         )
         self.threadRegistry = threadRegistry
         self.settingsStore = settingsStore

@@ -9,6 +9,7 @@
 | `AgentServerService.swift` | 定位仓库根目录与 Node.js，启动 / 停止 agent-server 子进程；记录启动错误 |
 | `AgentServerRuntimeMode.swift` | 读取 bundle resource marker 与环境变量，决定 agent-server 子进程是否注入 `HANDAGENT_LLM_MODE=mock` |
 | `AppServerConnection.swift` | desktop 进程唯一 WebSocket 连接：处理 connect / reconnect / receive loop / 原始文本收发 |
+| `AppServer.swift` | AppServer 宿主内核与 AppServerClient：启动子进程、持有共享连接、发送 platform hello、分派 thread 文本帧与 platform request |
 | `ThreadEventBus.swift` | 共享连接上的本地事件分发器：按 `threadId` 把协议消息分给对应 tab，并保留全局广播入口 |
 
 ## 职责
@@ -42,5 +43,5 @@
 
 - [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 在 `bootstrap()` 调 `start()`，在 `shutdown()` 调 `stop()`；订阅 `onAvailabilityChange` 与 `onFatalError`。
 - [ThreadWindow](/Users/mu9/proj/handAgent/apps/desktop/Sources/ThreadWindow/thread-window.md) 通过 `AppServer` 维护 desktop 唯一一条 thread WebSocket 连接；断线重连后由 window 重新拉历史，并让各 tab 重发 `thread.resume` 获取 `thread.snapshot`。
-- [PlatformBridge](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/PlatformBridge/platform-bridge.md) 走同一端口的反向 WebSocket。
+- [PlatformBridge](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/PlatformBridge/platform-bridge.md) 走同一条 `AppServerConnection`，通过 `channel: "platform"` 与 thread / turn 主协议分派。
 - 启动错误传递给 `AgentServerHealth`，由 Coordinator 阻止 PromptPanel 提交并在需要时展示原生 fatal alert。
