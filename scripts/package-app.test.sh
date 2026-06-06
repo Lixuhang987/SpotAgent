@@ -8,6 +8,7 @@ FAKE_BIN_DIR="$TEST_TMP_DIR/bin"
 BUILD_DIR="$TEST_TMP_DIR/build/release"
 DIST_DIR="$TEST_TMP_DIR/dist"
 WEB_DIST_DIR="$TEST_TMP_DIR/thread-window-web-dist"
+PACKAGE_ROOT_DIR="$TEST_TMP_DIR/package-root"
 LOG_FILE="$TEST_TMP_DIR/calls.log"
 
 cleanup() {
@@ -15,7 +16,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-mkdir -p "$FAKE_BIN_DIR" "$BUILD_DIR" "$WEB_DIST_DIR"
+mkdir -p "$FAKE_BIN_DIR" "$BUILD_DIR" "$WEB_DIST_DIR" "$PACKAGE_ROOT_DIR"
 
 cat >"$WEB_DIST_DIR/index.html" <<'HTML'
 <!doctype html>
@@ -45,6 +46,17 @@ printf 'codesign:%s\n' "$*" >>"$HANDAGENT_PACKAGE_LOG_FILE"
 EOF
 chmod +x "$FAKE_BIN_DIR/codesign"
 
+cat >"$FAKE_BIN_DIR/pnpm" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'pnpm:%s\n' "$*" >>"$HANDAGENT_PACKAGE_LOG_FILE"
+mkdir -p "$HANDAGENT_PACKAGE_ROOT_DIR/apps/thread-window-web/dist"
+cat >"$HANDAGENT_PACKAGE_ROOT_DIR/apps/thread-window-web/dist/index.html" <<'HTML'
+<!doctype html><html><body>built web</body></html>
+HTML
+EOF
+chmod +x "$FAKE_BIN_DIR/pnpm"
+
 HANDAGENT_PACKAGE_SWIFT_BIN="$FAKE_BIN_DIR/swift" \
 HANDAGENT_PACKAGE_CODESIGN_BIN="$FAKE_BIN_DIR/codesign" \
 HANDAGENT_PACKAGE_BUILD_DIR="$BUILD_DIR" \
@@ -67,18 +79,20 @@ grep -q 'codesign:--force --deep --sign - --requirements =designated => identifi
 rm -rf "$DIST_DIR"
 : >"$LOG_FILE"
 
+PATH="$FAKE_BIN_DIR:$PATH" \
 HANDAGENT_PACKAGE_SWIFT_BIN="$FAKE_BIN_DIR/swift" \
 HANDAGENT_PACKAGE_CODESIGN_BIN="$FAKE_BIN_DIR/codesign" \
 HANDAGENT_PACKAGE_BUILD_DIR="$BUILD_DIR" \
 HANDAGENT_PACKAGE_DIST_DIR="$DIST_DIR" \
-HANDAGENT_THREAD_WINDOW_WEB_DIST_DIR="$WEB_DIST_DIR" \
+HANDAGENT_PACKAGE_ROOT_DIR="$PACKAGE_ROOT_DIR" \
 HANDAGENT_PACKAGE_LOG_FILE="$LOG_FILE" \
 "$ROOT_DIR/scripts/package-app.sh" >/dev/null
 
 test -x "$APP_DIR/Contents/MacOS/HandAgentDesktop"
 test ! -f "$MARKER_FILE"
 test -f "$APP_DIR/Contents/Resources/ThreadWindowWeb/index.html"
-grep -q 'mock web' "$APP_DIR/Contents/Resources/ThreadWindowWeb/index.html"
+grep -q 'built web' "$APP_DIR/Contents/Resources/ThreadWindowWeb/index.html"
+grep -q 'pnpm:--filter handagent-thread-window-web build' "$LOG_FILE"
 grep -q 'swift:build -c release --product HandAgentDesktop' "$LOG_FILE"
 grep -q 'codesign:--force --deep --sign - --requirements =designated => identifier "com.yourname.HandAgentDesktop"' "$LOG_FILE"
 

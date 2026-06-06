@@ -3,9 +3,29 @@ import Foundation
 @MainActor
 final class ThreadWindowWebHost {
     struct InitialPromptPayload: Encodable, Equatable {
+        let clientRequestId: String
         let text: String
         let attachments: [UserMessageAttachmentPayload]
         let actionBinding: ActionBindingPayload?
+
+        enum CodingKeys: String, CodingKey {
+            case clientRequestId
+            case text
+            case attachments
+            case actionBinding
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(clientRequestId, forKey: .clientRequestId)
+            try container.encode(text, forKey: .text)
+            try container.encode(attachments, forKey: .attachments)
+            if let actionBinding {
+                try container.encode(actionBinding, forKey: .actionBinding)
+            } else {
+                try container.encodeNil(forKey: .actionBinding)
+            }
+        }
     }
 
     let threadWebSocketURL: URL
@@ -24,9 +44,9 @@ final class ThreadWindowWebHost {
             let data = try? JSONEncoder().encode(config),
             let json = String(data: data, encoding: .utf8)
         else {
-            return "window.__HANDAGENT_CONFIG__ = {};"
+            return "window.handAgentThreadWindowConfig = {};"
         }
-        return "window.__HANDAGENT_CONFIG__ = \(json);"
+        return "window.handAgentThreadWindowConfig = \(json);"
     }
 
     init(threadWebSocketURL: URL, webAppURL: URL) {
@@ -37,6 +57,7 @@ final class ThreadWindowWebHost {
     func enqueue(initialPrompt prompt: PromptSubmission) {
         pendingInitialPrompts.append(
             InitialPromptPayload(
+                clientRequestId: UUID().uuidString,
                 text: prompt.composed,
                 attachments: prompt.socketAttachments,
                 actionBinding: prompt.actionBinding

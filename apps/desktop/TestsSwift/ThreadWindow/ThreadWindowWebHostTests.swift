@@ -3,7 +3,7 @@ import XCTest
 
 @MainActor
 final class ThreadWindowWebHostTests: XCTestCase {
-    func testConfigurationScriptExposesThreadAndPlatformURLs() throws {
+    func testConfigurationScriptExposesThreadWebSocketURLForReactConfig() throws {
         let host = ThreadWindowWebHost(
             threadWebSocketURL: URL(string: "ws://127.0.0.1:4317/api/thread")!,
             webAppURL: URL(fileURLWithPath: "/tmp/index.html")
@@ -11,7 +11,7 @@ final class ThreadWindowWebHostTests: XCTestCase {
 
         let script = host.configurationScript
 
-        XCTAssertTrue(script.contains("window.__HANDAGENT_CONFIG__"))
+        XCTAssertTrue(script.contains("window.handAgentThreadWindowConfig"))
         XCTAssertTrue(script.contains(#""threadWebSocketURL":"ws:\/\/127.0.0.1:4317\/api\/thread""#))
     }
 
@@ -46,8 +46,27 @@ final class ThreadWindowWebHostTests: XCTestCase {
         host.enqueue(initialPrompt: prompt)
 
         let payload = try XCTUnwrap(host.drainInitialPrompts().first)
+        XCTAssertFalse(payload.clientRequestId.isEmpty)
         XCTAssertEqual(payload.text, "hello")
         XCTAssertEqual(payload.attachments, [.textSelection(id: "selection-1", text: "selected")])
         XCTAssertEqual(payload.actionBinding, ActionBindingPayload(pluginId: "plugin-a", promptName: "prompt-a"))
+    }
+
+    func testInitialPromptPayloadEncodesReactRequiredFields() throws {
+        let host = ThreadWindowWebHost(
+            threadWebSocketURL: URL(string: "ws://127.0.0.1:4317/api/thread")!,
+            webAppURL: URL(fileURLWithPath: "/tmp/index.html")
+        )
+        let prompt = try XCTUnwrap(PromptSubmission.compose(draft: "hello", attachments: []))
+
+        host.enqueue(initialPrompt: prompt)
+
+        let payload = try XCTUnwrap(host.drainInitialPrompts().first)
+        let data = try JSONEncoder().encode(payload)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertFalse(try XCTUnwrap(json["clientRequestId"] as? String).isEmpty)
+        XCTAssertEqual(json["text"] as? String, "hello")
+        XCTAssertTrue(json["attachments"] is [Any])
+        XCTAssertTrue(json["actionBinding"] is NSNull)
     }
 }

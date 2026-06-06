@@ -3,10 +3,11 @@ set -euo pipefail
 
 APP_NAME="HandAgentDesktop"
 BUNDLE_ID="com.yourname.HandAgentDesktop"
+ROOT_DIR="${HANDAGENT_PACKAGE_ROOT_DIR:-.}"
 BUILD_DIR="${HANDAGENT_PACKAGE_BUILD_DIR:-.build/release}"
 DIST_DIR="${HANDAGENT_PACKAGE_DIST_DIR:-dist}"
 APP_DIR="$DIST_DIR/$APP_NAME.app"
-WEB_DIST_DIR="${HANDAGENT_THREAD_WINDOW_WEB_DIST_DIR:-apps/thread-window-web/dist}"
+WEB_DIST_DIR="${HANDAGENT_THREAD_WINDOW_WEB_DIST_DIR:-$ROOT_DIR/apps/thread-window-web/dist}"
 SWIFT_BIN="${HANDAGENT_PACKAGE_SWIFT_BIN:-swift}"
 CODESIGN_BIN="${HANDAGENT_PACKAGE_CODESIGN_BIN:-codesign}"
 CODESIGN_IDENTITY="${HANDAGENT_PACKAGE_CODESIGN_IDENTITY:--}"
@@ -37,6 +38,10 @@ done
 
 tmp_log="$(mktemp -t "package-app.XXXXXX")"
 trap 'rm -f "$tmp_log"' EXIT
+
+if [[ -z "${HANDAGENT_THREAD_WINDOW_WEB_DIST_DIR:-}" ]]; then
+  (cd "$ROOT_DIR" && pnpm --filter handagent-thread-window-web build)
+fi
 
 if ! "$SWIFT_BIN" build -c release --product "$APP_NAME" >"$tmp_log" 2>&1; then
   cat "$tmp_log"

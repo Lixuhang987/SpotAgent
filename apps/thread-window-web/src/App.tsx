@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Composer } from "./components/Composer.tsx";
 import { HistorySidebar } from "./components/HistorySidebar.tsx";
 import { MessageList } from "./components/MessageList.tsx";
@@ -40,6 +40,7 @@ export function App() {
   const tabs = Object.values(state.tabs);
   const activeTab = state.activeTabId ? state.tabs[state.activeTabId] : null;
   const clientRef = useRef<ThreadSocketClient | null>(null);
+  const [deleteTargetThreadId, setDeleteTargetThreadId] = useState<string | null>(null);
 
   useEffect(() => {
     const socket = new ThreadSocketClient({
@@ -75,11 +76,7 @@ export function App() {
           clientRef.current?.resumeThread(threadId);
         }}
         onDeleteThread={(threadId) => {
-          clientRef.current?.sendRaw(encodeThreadDelete({
-            commandId: id("delete"),
-            timestamp: now(),
-            targetThreadId: threadId,
-          }));
+          setDeleteTargetThreadId(threadId);
         }}
       />
       <section className="thread-workspace" aria-label="Thread workspace">
@@ -142,6 +139,32 @@ export function App() {
         ) : (
           <div className="thread-empty-state">准备开始</div>
         )}
+        {deleteTargetThreadId ? (
+          <div className="delete-confirmation" role="dialog" aria-modal="true" aria-label="Delete thread">
+            <div className="delete-confirmation-body">
+              <strong>删除这个 thread？</strong>
+              <p>历史记录会从本地持久化中移除。</p>
+              <div className="request-actions">
+                <button
+                  type="button"
+                  onClick={() => {
+                    clientRef.current?.sendRaw(encodeThreadDelete({
+                      commandId: id("delete"),
+                      timestamp: now(),
+                      targetThreadId: deleteTargetThreadId,
+                    }));
+                    setDeleteTargetThreadId(null);
+                  }}
+                >
+                  删除
+                </button>
+                <button type="button" onClick={() => setDeleteTargetThreadId(null)}>
+                  取消
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </section>
     </main>
   );
