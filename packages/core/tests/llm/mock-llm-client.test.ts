@@ -380,6 +380,33 @@ describe("MockLLMClient", () => {
     });
   });
 
+  it("prefers the latest user message when multiple mock triggers exist in one session", async () => {
+    const client = new MockLLMClient();
+
+    await expect(
+      client.complete(
+        [
+          { role: "user", content: "first turn [mock:assistant-ok]" },
+          { role: "assistant", content: "Mock assistant response: main chain is reachable." },
+          { role: "user", content: "second turn [mock:workspace-ask]" },
+        ],
+        [],
+      ),
+    ).resolves.toMatchObject({
+      message: { role: "assistant", content: "" },
+      toolCalls: [
+        {
+          id: "mock-workspace-ask-1",
+          name: "workspace.askUser",
+          arguments: {
+            prompt: "请选择 QA 要写入的 workspace",
+            candidateIds: ["qa-workspace", "tmp"],
+          },
+        },
+      ],
+    });
+  });
+
   it("drives AgentRuntime through tool call, tool result, and final assistant answer", async () => {
     const tool = new FakeFileWriteTool();
     const runtime = new AgentRuntime(

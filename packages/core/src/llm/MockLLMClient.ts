@@ -452,7 +452,19 @@ function findScenario(
   scenarios: MockLLMScenario[],
 ): MockLLMScenario | undefined {
   const userTexts = userMessageTexts(messages);
+  const latestUserText = userTexts.at(-1);
+  if (latestUserText) {
+    const latestScenario = findScenarioInTexts([latestUserText], scenarios);
+    if (latestScenario) return latestScenario;
+  }
 
+  return findScenarioInTexts(userTexts.slice(0, -1), scenarios);
+}
+
+function findScenarioInTexts(
+  userTexts: string[],
+  scenarios: MockLLMScenario[],
+): MockLLMScenario | undefined {
   return scenarios.find((scenario) =>
     scenario.triggers.some((trigger) =>
       userTexts.some((text) => text.includes(trigger)),
