@@ -16,6 +16,7 @@ import { ThreadCommandRouter } from "../../src/thread/ThreadCommandRouter.ts";
 import { ThreadNotificationPublisher } from "../../src/thread/ThreadNotificationPublisher.ts";
 import { ThreadWorkspaceAskBridge } from "../../src/bridges/ThreadWorkspaceAskBridge.ts";
 import {
+  attachPlatformSocketHandlers,
   attachThreadSocketHandlers,
   createMCPClientFromConfig,
   resolveLLMMode,
@@ -372,34 +373,39 @@ describe("attachThreadSocketHandlers", () => {
     ]);
   });
 
-  it("detaches bridge sockets with the token returned by attach", async () => {
-    const firstSocket = new FakeSocket();
-    const secondSocket = new FakeSocket();
-    const firstDeps = makeHandlerDependencies();
-    const secondDeps = makeHandlerDependencies();
+  it("ignores platform bridge messages on the thread socket", async () => {
+    const socket = new FakeSocket();
+    const { commandRouter, eventPublisher } = makeHandlerDependencies();
+
+    attachThreadSocketHandlers(socket as never, {
+      commandRouter,
+      eventPublisher,
+    });
+
+    await emitMessage(socket, platformHello("bridge-1"));
+    socket.emit("close");
+
+    expect(commandRouter.receive).not.toHaveBeenCalled();
+    expect(socket.sent).toEqual([]);
+  });
+
+  it("detaches platform sockets without interrupting thread runs", async () => {
+    const socket = new FakeSocket();
     const bridge = {
-      attach: vi.fn().mockReturnValueOnce(101).mockReturnValueOnce(102),
+      attach: vi.fn().mockReturnValue(501),
       detach: vi.fn(),
       handleResponse: vi.fn(),
     };
 
-    attachThreadSocketHandlers(firstSocket as never, {
-      ...firstDeps,
-      bridge: bridge as never,
-    });
-    attachThreadSocketHandlers(secondSocket as never, {
-      ...secondDeps,
+    attachPlatformSocketHandlers(socket as never, {
       bridge: bridge as never,
     });
 
-    await emitMessage(firstSocket, platformHello("bridge-1"));
-    await emitMessage(secondSocket, platformHello("bridge-2"));
+    await emitMessage(socket, platformHello("bridge-1"));
+    socket.emit("close");
 
-    firstSocket.emit("close");
-    secondSocket.emit("close");
-
-    expect(bridge.detach).toHaveBeenCalledWith(101);
-    expect(bridge.detach).toHaveBeenCalledWith(102);
+    expect(bridge.attach).toHaveBeenCalledWith(expect.any(Function));
+    expect(bridge.detach).toHaveBeenCalledWith(501);
   });
 });
 

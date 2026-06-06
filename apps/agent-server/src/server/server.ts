@@ -35,10 +35,8 @@ type ThreadSocket = {
   on(event: "close", listener: () => void): void;
 };
 
-type SocketMessage =
-  | PlatformBridgeMessage
-  | ThreadCommand
-  | ClientResponse;
+type ThreadSocketMessage = ThreadCommand | ClientResponse;
+type PlatformSocketMessage = PlatformBridgeMessage;
 
 let nextConnectionId = 0;
 
@@ -47,42 +45,27 @@ export function attachThreadSocketHandlers(
   {
     commandRouter,
     eventPublisher,
-    bridge,
     permissionBridge,
     permissionPolicy,
     workspaceAskBridge,
   }: {
     commandRouter: ThreadCommandRouter;
     eventPublisher: ThreadNotificationPublisher;
-    bridge?: WebSocketPlatformBridge;
     permissionBridge?: ThreadPermissionBridge;
     permissionPolicy?: FilePermissionPolicy;
     workspaceAskBridge?: ThreadWorkspaceAskBridge;
   },
 ): void {
   const connectionId = `connection-${++nextConnectionId}`;
-  let bridgeToken: BridgeToken | null = null;
   const boundThreads = new Map<string, ThreadBindingToken>();
   const workspaceAskBoundThreads = new Map<string, ThreadBindingToken>();
   const sendPublished = (outgoing: ThreadNotification | ServerRequest) => {
     socket.send(JSON.stringify(outgoing));
   };
-  const sendPlatform = (outgoing: PlatformBridgeMessage) => {
-    socket.send(JSON.stringify(outgoing));
-  };
   eventPublisher?.attachConnection(connectionId, sendPublished);
 
   socket.on("message", async (raw) => {
-    const message = JSON.parse(raw.toString()) as SocketMessage;
-
-    if (isPlatformBridgeMessage(message)) {
-      if (message.type === "platform_bridge_hello" && bridge) {
-        bridgeToken = bridge.attach(sendPlatform);
-      } else if (message.type === "platform_response") {
-        bridge?.handleResponse(message.payload, bridgeToken);
-      }
-      return;
-    }
+    const message = JSON.parse(raw.toString()) as ThreadSocketMessage;
 
     if (isClientResponse(message)) {
       if (message.type === "permission.answered" && permissionBridge) {
@@ -130,9 +113,6 @@ export function attachThreadSocketHandlers(
 
   socket.on("close", () => {
     eventPublisher.detachConnection(connectionId);
-    if (bridgeToken !== null && bridge) {
-      bridge.detach(bridgeToken);
-    }
     for (const [threadId, token] of boundThreads) {
       const unbound = permissionBridge?.unbindThread(threadId, token) ?? false;
       if (unbound) {
@@ -148,11 +128,44 @@ export function attachThreadSocketHandlers(
   });
 }
 
-function isPlatformBridgeMessage(message: SocketMessage): message is PlatformBridgeMessage {
-  return "channel" in message && message.channel === "platform";
+export function attachPlatformSocketHandlers(
+  socket: ThreadSocket,
+  {
+    bridge,
+  }: {
+    bridge?: WebSocketPlatformBridge;
+  },
+): void {
+  let bridgeToken: BridgeToken | null = null;
+  const sendPlatform = (outgoing: PlatformBridgeMessage) => {
+    socket.send(JSON.stringify(outgoing));
+  };
+
+  socket.on("message", (raw) => {
+    const message = JSON.parse(raw.toString()) as PlatformSocketMessage;
+    if (!isPlatformBridgeMessage(message)) {
+      return;
+    }
+
+    if (message.type === "platform_bridge_hello" && bridge) {
+      bridgeToken = bridge.attach(sendPlatform);
+    } else if (message.type === "platform_response") {
+      bridge?.handleResponse(message.payload, bridgeToken);
+    }
+  });
+
+  socket.on("close", () => {
+    if (bridgeToken !== null && bridge) {
+      bridge.detach(bridgeToken);
+    }
+  });
 }
 
-function isThreadCommand(message: SocketMessage): message is ThreadCommand {
+function isPlatformBridgeMessage(message: unknown): message is PlatformBridgeMessage {
+  return isRecord(message) && message.channel === "platform";
+}
+
+function isThreadCommand(message: ThreadSocketMessage): message is ThreadCommand {
   return [
     "thread.start",
     "thread.resume",
@@ -163,8 +176,12 @@ function isThreadCommand(message: SocketMessage): message is ThreadCommand {
   ].includes((message as { type?: string }).type ?? "");
 }
 
-function isClientResponse(message: SocketMessage): message is ClientResponse {
+function isClientResponse(message: ThreadSocketMessage): message is ClientResponse {
   return message.type === "permission.answered" || message.type === "workspace.answered";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 function threadIdFromRequestId(requestId: string): string {
@@ -192,11 +209,16 @@ export async function startServer({
   const { WebSocketServer } = await import("ws");
   const wss = new WebSocketServer({ port });
 
-  wss.on("connection", (socket) => {
+  wss.on("connection", (socket, request) => {
+    const path = request.url?.split("?")[0] ?? "/api/thread";
+    if (path === "/api/platform") {
+      attachPlatformSocketHandlers(socket, { bridge });
+      return;
+    }
+
     attachThreadSocketHandlers(socket, {
       commandRouter,
       eventPublisher,
-      bridge,
       permissionBridge,
       permissionPolicy,
       workspaceAskBridge,
