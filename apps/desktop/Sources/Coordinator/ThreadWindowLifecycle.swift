@@ -69,7 +69,7 @@ final class ThreadWindowLifecycle {
         viewModel = nil
         appServer.disconnectThreadClient()
         appServer.onThreadConnectionStateChange = nil
-        appServer.onInboundMessage = nil
+        appServer.onThreadEvent = nil
         sharedEventBus = nil
         if window != nil {
             window = nil
@@ -108,8 +108,8 @@ final class ThreadWindowLifecycle {
         appServer.onThreadConnectionStateChange = { [weak model] state in
             model?.handleConnectionState(state.asThreadConnectionState)
         }
-        appServer.onInboundMessage = { [weak eventBus] inbound in
-            publishInboundMessage(inbound, on: eventBus)
+        appServer.onThreadEvent = { [weak eventBus] event in
+            publishAppServerThreadEvent(event, on: eventBus)
         }
         appServer.connectThreadClient()
 
@@ -158,8 +158,8 @@ final class ThreadWindowLifecycle {
             appServer.answerPermission(
                 requestId: requestId,
                 timestamp: timestamp,
-                decision: ThreadProtocolClient.PermissionDecision(rawValue: decision.rawValue) ?? .deny,
-                scope: scope.flatMap { ThreadProtocolClient.PermissionScope(rawValue: $0.rawValue) },
+                decision: AppServerPermissionDecision(rawValue: decision.rawValue) ?? .deny,
+                scope: scope.flatMap { AppServerPermissionScope(rawValue: $0.rawValue) },
                 reason: reason
             )
         case let .workspaceAnswered(requestId, timestamp, workspaceId, cancelled):
@@ -208,153 +208,16 @@ private extension AppServerConnectionState {
 }
 
 @MainActor
-private func publishInboundMessage(
-    _ inbound: ThreadProtocolClient.InboundMessage,
+private func publishAppServerThreadEvent(
+    _ event: AppServerThreadEvent,
     on eventBus: ThreadEventBus<ThreadEvent>?
 ) {
     guard let eventBus else { return }
 
-    switch inbound {
-    case .notification(let event):
-        routeProtocolEvent(event, on: eventBus)
-    case .request(let request):
-        let translated = translateProtocolRequest(request)
-        switch request {
-        case .permissionRequested(let ask):
-            eventBus.publish(translated, to: ask.threadId)
-        case .workspaceRequested(let ask):
-            eventBus.publish(translated, to: ask.threadId)
-        }
-    }
-}
-
-@MainActor
-private func routeProtocolEvent(
-    _ event: ThreadProtocolClient.Notification,
-    on eventBus: ThreadEventBus<ThreadEvent>
-) {
     switch event {
-    case .threadStarted:
-        eventBus.publishGlobal(translateProtocolEvent(event))
-    case .threadSnapshot(let value):
-        eventBus.publish(translateProtocolEvent(event), to: value.threadId)
-    case .userMessageRecorded(let value):
-        eventBus.publish(translateProtocolEvent(event), to: value.threadId)
-    case .turnStarted(let value):
-        eventBus.publish(translateProtocolEvent(event), to: value.threadId)
-    case .assistantDelta(let value):
-        eventBus.publish(translateProtocolEvent(event), to: value.threadId)
-    case .toolStarted(let value):
-        eventBus.publish(translateProtocolEvent(event), to: value.threadId)
-    case .toolFinished(let value):
-        eventBus.publish(translateProtocolEvent(event), to: value.threadId)
-    case .turnCompleted(let value):
-        eventBus.publish(translateProtocolEvent(event), to: value.threadId)
-    case .threadStatusChanged(let value):
-        eventBus.publish(translateProtocolEvent(event), to: value.threadId)
-    case .threadListed, .threadDeleted:
-        eventBus.publishGlobal(translateProtocolEvent(event))
-    case .threadError(let value):
-        if let threadId = value.threadId {
-            eventBus.publish(translateProtocolEvent(event), to: threadId)
-        } else {
-            eventBus.publishGlobal(translateProtocolEvent(event))
-        }
-    }
-}
-
-@MainActor
-private func translateProtocolEvent(_ event: ThreadProtocolClient.Notification) -> ThreadEvent {
-    switch event {
-    case .threadStarted(let value):
-        return .threadStarted(
-            threadID: value.threadId,
-            title: value.preview,
-            responseMessageID: value.commandId ?? ""
-        )
-    case .threadSnapshot(let value):
-        return .threadSnapshot(
-            messages: value.messages,
-            status: value.status.rawValue
-        )
-    case .userMessageRecorded(let value):
-        return .userMessage(
-            messageID: value.messageId,
-            text: value.text,
-            timestamp: value.timestamp
-        )
-    case .turnStarted:
-        return .status(value: ThreadRunStatus.running.rawValue)
-    case .assistantDelta(let value):
-        return .assistantMessageDelta(
-            messageID: value.itemId,
-            text: value.text,
-            timestamp: value.timestamp
-        )
-    case .toolStarted(let value):
-        return .toolMessage(
-            messageID: value.itemId,
-            name: value.name,
-            text: value.inputJSON,
-            status: "running",
-            timestamp: value.timestamp
-        )
-    case .toolFinished(let value):
-        return .toolMessage(
-            messageID: value.itemId,
-            name: value.name,
-            text: value.output,
-            status: value.status.rawValue,
-            timestamp: value.timestamp
-        )
-    case .turnCompleted(let value):
-        return .status(value: value.status.rawValue)
-    case .threadStatusChanged(let value):
-        return .status(value: value.status.rawValue)
-    case .threadListed(let value):
-        return .threadList(threads: value.threads)
-    case .threadDeleted(let value):
-        return .threadDeleted(
-            targetThreadID: value.targetThreadId,
-            status: value.status
-        )
-    case .threadError(let value):
-        if value.threadId == nil, let commandId = value.commandId {
-            return .threadStartFailed(
-                reason: value.code ?? "invalid_request",
-                message: value.message,
-                responseMessageID: commandId
-            )
-        }
-        if value.code == "not_found" {
-            return .threadOpenFailed(
-                reason: value.code ?? "not_found",
-                message: value.message
-            )
-        }
-        return .error(
-            messageID: value.notificationId,
-            message: value.message,
-            timestamp: value.timestamp
-        )
-    }
-}
-
-@MainActor
-private func translateProtocolRequest(_ request: ThreadProtocolClient.Request) -> ThreadEvent {
-    switch request {
-    case .permissionRequested(let value):
-        return .permissionRequest(
-            requestId: value.requestId,
-            toolName: value.toolName,
-            toolCallId: value.toolCallId,
-            argumentsJSON: value.argumentsJSON
-        )
-    case .workspaceRequested(let value):
-        return .workspaceAskRequest(
-            requestId: value.requestId,
-            prompt: value.prompt,
-            candidates: value.candidates
-        )
+    case .global(let threadEvent):
+        eventBus.publishGlobal(threadEvent)
+    case let .thread(threadId, threadEvent):
+        eventBus.publish(threadEvent, to: threadId)
     }
 }

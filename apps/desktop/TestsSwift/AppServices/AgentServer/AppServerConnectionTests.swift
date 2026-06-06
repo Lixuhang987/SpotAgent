@@ -69,6 +69,43 @@ final class AppServerConnectionTests: XCTestCase {
 }
 
 @MainActor
+final class AppServerTests: XCTestCase {
+    func testAppServerConvertsProtocolTurnStartedIntoThreadEvent() async {
+        let transport = RecordingAppServerConnectionTransport()
+        let connection = AppServerConnection(
+            serverURL: URL(string: "ws://127.0.0.1:4317/api/thread")!,
+            transport: transport,
+            reconnectDelay: 0
+        )
+        let appServer = AppServer(
+            agentServer: RecordingAgentServerStarter(),
+            client: AppServerClient(connection: connection)
+        )
+        var events: [AppServerThreadEvent] = []
+        appServer.onThreadEvent = { events.append($0) }
+
+        appServer.connectThreadClient()
+        transport.tasks[0].succeedReceive(
+            """
+            {
+              "type": "turn.started",
+              "threadId": "thread-1",
+              "notificationId": "n1",
+              "turnId": "turn-1",
+              "timestamp": "2026-06-06T00:00:00Z",
+              "payload": {}
+            }
+            """
+        )
+        await Task.yield()
+
+        XCTAssertEqual(events, [
+            .thread(threadId: "thread-1", .turnStarted(turnID: "turn-1"))
+        ])
+    }
+}
+
+@MainActor
 final class AppServerClientTests: XCTestCase {
     func testConnectSendsPlatformHelloThroughSharedConnection() async {
         let transport = RecordingAppServerConnectionTransport()
@@ -193,6 +230,18 @@ final class AppServerClientTests: XCTestCase {
         XCTAssertEqual(object["type"] as? String, "thread.list")
         XCTAssertEqual(object["commandId"] as? String, "cmd-list")
     }
+}
+
+@MainActor
+private final class RecordingAgentServerStarter: AgentServerStarting {
+    var lastStartupError: String?
+    var fatalErrorMessage: String?
+    var isAvailable = true
+    var onAvailabilityChange: ((Bool) -> Void)?
+    var onFatalError: ((String) -> Void)?
+
+    func start() throws {}
+    func stop() {}
 }
 
 private final class RecordingAppServerConnectionTransport: AppServerConnectionTransport {

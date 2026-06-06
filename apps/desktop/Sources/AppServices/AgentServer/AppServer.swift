@@ -8,7 +8,7 @@ protocol AppServerManaging: AnyObject {
     var onAvailabilityChange: ((Bool) -> Void)? { get set }
     var onFatalError: ((String) -> Void)? { get set }
     var onThreadConnectionStateChange: ((AppServerConnectionState) -> Void)? { get set }
-    var onInboundMessage: ((ThreadProtocolClient.InboundMessage) -> Void)? { get set }
+    var onThreadEvent: ((AppServerThreadEvent) -> Void)? { get set }
 
     func start()
     func stop()
@@ -29,11 +29,27 @@ protocol AppServerManaging: AnyObject {
     func answerPermission(
         requestId: String,
         timestamp: String,
-        decision: ThreadProtocolClient.PermissionDecision,
-        scope: ThreadProtocolClient.PermissionScope?,
+        decision: AppServerPermissionDecision,
+        scope: AppServerPermissionScope?,
         reason: String?
     )
     func answerWorkspace(requestId: String, timestamp: String, workspaceId: String?, cancelled: Bool?)
+}
+
+enum AppServerThreadEvent: Equatable {
+    case global(ThreadEvent)
+    case thread(threadId: String, ThreadEvent)
+}
+
+enum AppServerPermissionDecision: String, Equatable {
+    case allow
+    case deny
+}
+
+enum AppServerPermissionScope: String, Equatable {
+    case once
+    case thread
+    case always
 }
 
 @MainActor
@@ -62,9 +78,7 @@ final class AppServer: AppServerManaging {
         didSet { client.onStateChange = onThreadConnectionStateChange }
     }
 
-    var onInboundMessage: ((ThreadProtocolClient.InboundMessage) -> Void)? {
-        didSet { client.onInboundMessage = onInboundMessage }
-    }
+    var onThreadEvent: ((AppServerThreadEvent) -> Void)?
 
     init(
         agentServer: any AgentServerStarting,
@@ -72,6 +86,9 @@ final class AppServer: AppServerManaging {
     ) {
         self.agentServer = agentServer
         self.client = client
+        self.client.onInboundMessage = { [weak self] inbound in
+            self?.handleInboundMessage(inbound)
+        }
     }
 
     func start() {
@@ -146,15 +163,15 @@ final class AppServer: AppServerManaging {
     func answerPermission(
         requestId: String,
         timestamp: String,
-        decision: ThreadProtocolClient.PermissionDecision,
-        scope: ThreadProtocolClient.PermissionScope?,
+        decision: AppServerPermissionDecision,
+        scope: AppServerPermissionScope?,
         reason: String?
     ) {
         client.send(response: .permissionAnswered(
             requestId: requestId,
             timestamp: timestamp,
-            decision: decision,
-            scope: scope,
+            decision: ThreadProtocolClient.PermissionDecision(rawValue: decision.rawValue) ?? .deny,
+            scope: scope.flatMap { ThreadProtocolClient.PermissionScope(rawValue: $0.rawValue) },
             reason: reason
         ))
     }
@@ -166,6 +183,15 @@ final class AppServer: AppServerManaging {
             workspaceId: workspaceId,
             cancelled: cancelled
         ))
+    }
+
+    private func handleInboundMessage(_ inbound: ThreadProtocolClient.InboundMessage) {
+        switch inbound {
+        case .notification(let event):
+            onThreadEvent?(routeProtocolEvent(event))
+        case .request(let request):
+            onThreadEvent?(routeProtocolRequest(request))
+        }
     }
 }
 
@@ -245,5 +271,137 @@ final class AppServerClient {
         }
         return envelope["channel"] as? String == "platform"
             && envelope["type"] as? String == "platform_request"
+    }
+}
+
+@MainActor
+private func routeProtocolEvent(_ event: ThreadProtocolClient.Notification) -> AppServerThreadEvent {
+    let translated = translateProtocolEvent(event)
+    switch event {
+    case .threadStarted, .threadListed, .threadDeleted:
+        return .global(translated)
+    case .threadSnapshot(let value):
+        return .thread(threadId: value.threadId, translated)
+    case .userMessageRecorded(let value):
+        return .thread(threadId: value.threadId, translated)
+    case .turnStarted(let value):
+        return .thread(threadId: value.threadId, translated)
+    case .assistantDelta(let value):
+        return .thread(threadId: value.threadId, translated)
+    case .toolStarted(let value):
+        return .thread(threadId: value.threadId, translated)
+    case .toolFinished(let value):
+        return .thread(threadId: value.threadId, translated)
+    case .turnCompleted(let value):
+        return .thread(threadId: value.threadId, translated)
+    case .threadStatusChanged(let value):
+        return .thread(threadId: value.threadId, translated)
+    case .threadError(let value):
+        if let threadId = value.threadId {
+            return .thread(threadId: threadId, translated)
+        }
+        return .global(translated)
+    }
+}
+
+@MainActor
+private func routeProtocolRequest(_ request: ThreadProtocolClient.Request) -> AppServerThreadEvent {
+    switch request {
+    case .permissionRequested(let value):
+        return .thread(
+            threadId: value.threadId,
+            .permissionRequest(
+                requestId: value.requestId,
+                toolName: value.toolName,
+                toolCallId: value.toolCallId,
+                argumentsJSON: value.argumentsJSON
+            )
+        )
+    case .workspaceRequested(let value):
+        return .thread(
+            threadId: value.threadId,
+            .workspaceAskRequest(
+                requestId: value.requestId,
+                prompt: value.prompt,
+                candidates: value.candidates
+            )
+        )
+    }
+}
+
+@MainActor
+private func translateProtocolEvent(_ event: ThreadProtocolClient.Notification) -> ThreadEvent {
+    switch event {
+    case .threadStarted(let value):
+        return .threadStarted(
+            threadID: value.threadId,
+            title: value.preview,
+            responseMessageID: value.commandId ?? ""
+        )
+    case .threadSnapshot(let value):
+        return .threadSnapshot(
+            messages: value.messages,
+            status: value.status.rawValue
+        )
+    case .userMessageRecorded(let value):
+        return .userMessage(
+            messageID: value.messageId,
+            text: value.text,
+            timestamp: value.timestamp
+        )
+    case .turnStarted(let value):
+        return .turnStarted(turnID: value.turnId)
+    case .assistantDelta(let value):
+        return .assistantMessageDelta(
+            messageID: value.itemId,
+            text: value.text,
+            timestamp: value.timestamp
+        )
+    case .toolStarted(let value):
+        return .toolMessage(
+            messageID: value.itemId,
+            name: value.name,
+            text: value.inputJSON,
+            status: "running",
+            timestamp: value.timestamp
+        )
+    case .toolFinished(let value):
+        return .toolMessage(
+            messageID: value.itemId,
+            name: value.name,
+            text: value.output,
+            status: value.status.rawValue,
+            timestamp: value.timestamp
+        )
+    case .turnCompleted(let value):
+        return .turnCompleted(turnID: value.turnId, status: value.status.rawValue)
+    case .threadStatusChanged(let value):
+        return .status(value: value.status.rawValue)
+    case .threadListed(let value):
+        return .threadList(threads: value.threads)
+    case .threadDeleted(let value):
+        return .threadDeleted(
+            targetThreadID: value.targetThreadId,
+            status: value.status
+        )
+    case .threadError(let value):
+        if value.threadId == nil, let commandId = value.commandId {
+            return .threadStartFailed(
+                reason: value.code ?? "invalid_request",
+                message: value.message,
+                responseMessageID: commandId
+            )
+        }
+        if value.code == "not_found" {
+            return .threadOpenFailed(
+                reason: value.code ?? "not_found",
+                message: value.message
+            )
+        }
+        return .error(
+            messageID: value.notificationId,
+            message: value.message,
+            timestamp: value.timestamp
+        )
     }
 }

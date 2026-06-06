@@ -2,28 +2,28 @@
 
 ## 背景
 
-当前 macOS 宿主层把 agent-server 进程管理、WebSocket 连接、协议编解码、事件分发、线程运行缓存、平台桥接处理分别散落在以下对象中：
+当前 macOS 宿主层把 agent-server 进程管理、WebSocket 连接、协议编解码、事件分发、线程运行缓存、平台桥接处理分别散落在多个旧主路径对象中：
 
 - `AgentServerService`
 - `AppServerConnection`
-- `SessionProtocolClient`
-- `SessionEventBus`
-- `SessionWindowLifecycle`
+- 旧协议客户端
+- 旧事件分发总线
+- 旧窗口生命周期控制器
 - `PlatformBridgeService`
-- `SessionWindowViewModel`
-- `SessionTabViewModel`
+- 旧窗口级 ViewModel
+- 旧 tab 级 ViewModel
 
 这套结构有三个直接问题：
 
-1. `SessionWindowLifecycle` 同时承担窗口生命周期、协议路由、连接状态同步和事件翻译，职责过重。
-2. `SessionWindowViewModel` / `SessionTabViewModel` 既保存 UI 状态，又保存线程运行缓存，还直接持有协议发送逻辑，边界不清晰。
-3. 宿主层对外暴露的主语义仍是 `session_*`，与目标中的 `thread / turn` 语义不一致，也不利于后续对齐 codex 的线程模型。
+1. 旧窗口生命周期控制器同时承担窗口生命周期、协议路由、连接状态同步和事件翻译，职责过重。
+2. 旧窗口级 / tab 级 ViewModel 既保存 UI 状态，又保存线程运行缓存，还直接持有协议发送逻辑，边界不清晰。
+3. 宿主层对外暴露的主语义与目标中的 `thread / turn` 语义不一致，也不利于后续对齐 codex 的线程模型。
 
-本次重构的目标不是在旧结构外再包一层，而是**做一次明确的破坏性重构**：以前后端统一 `Thread` 为唯一主命名，建立新的宿主内核、协议和 store 模型，最终删除旧 `session_*` 主路径，不保留长期兼容实现，也不在新代码中保留 `Session` 语义命名。
+本次重构的目标不是在旧结构外再包一层，而是**做一次明确的破坏性重构**：以前后端统一 `Thread` 为唯一主命名，建立新的宿主内核、协议和 store 模型，最终删除旧主路径，不保留长期兼容实现，也不在新代码中保留旧语义命名。
 
 ## 本次硬约束
 
-- 前端与后端统一以 `Thread` 命名主语义；新代码中不再新增 `Session*` 语义类型、协议类型或 store 类型。
+- 前端与后端统一以 `Thread` 命名主语义；新代码中不再新增旧命名的语义类型、协议类型或 store 类型。
 - 这是一次破坏性重构，最终状态**不兼容旧实现**；允许分支内短暂中间态，但合入前必须全面切换到新代码。
 - `PlatformBridgeService` 保持独立对象，但归属于统一的 `AppServer` 宿主内核，不再维护平行的宿主语义体系。
 - Swift 前端状态统一迁移到 `swift-composable-architecture`（TCA）模型：`Store / State / Action / Reducer`。
@@ -36,7 +36,7 @@
 
 - Swift 宿主统一 `AppServer` 对象。
 - Swift 宿主统一 `AppServerClient` 原始协议客户端。
-- `apps/agent-server` 与 `packages/core` 主协议从 `session_*` 切换为最小 `thread / turn` 语义。
+- `apps/agent-server` 与 `packages/core` 主协议切换为最小 `thread / turn` 语义。
 - Swift 宿主 store 切换到 TCA。
 - 线程状态拆分为 `ThreadState` 与 `EventStore`。
 - `PlatformBridgeService` 改为订阅统一连接体系中的平台请求流。
@@ -93,7 +93,7 @@
 
 缺点：
 
-- 会做两次迁移：先把旧 `session_*` 语义包进 TCA，再拆成 `thread / turn`。
+- 会做两次迁移：先把旧主语义包进 TCA，再拆成 `thread / turn`。
 - 与本次“统一 `AppServer` + 统一 Thread 语义”的目标不一致。
 
 ### 结论
@@ -229,11 +229,11 @@ flowchart LR
 
 ## 现有字段迁移
 
-### 从 `SessionTabViewModel` 迁移
+### 从旧 tab ViewModel 迁移
 
 迁入 `ThreadState`：
 
-- `sessionID` -> `threadId`
+- 旧线程标识 -> `threadId`
 - 稳定状态快照
 - `isInvalid`
 - `invalidReason`
@@ -247,7 +247,7 @@ flowchart LR
 - `pendingLocalTurnStartIndex`
 - 与运行相关的连接态展示字段
 
-### 从 `SessionWindowViewModel` 迁移
+### 从旧窗口 ViewModel 迁移
 
 迁入 `ThreadWindowDomain.State`：
 
@@ -257,9 +257,9 @@ flowchart LR
 - `pendingHistoryDeletionID`
 - `noticeMessage`
 
-### 从 `SessionRegistry` 迁移
+### 从旧摘要注册表迁移
 
-现有 `SessionSummary` 不再作为独立主状态维护，而是改为从 `ThreadState + EventStore` 派生得到的线程摘要视图。
+旧摘要对象不再作为独立主状态维护，而是改为从 `ThreadState + EventStore` 派生得到的线程摘要视图。
 
 ## 最小 `thread / turn` 主协议
 
@@ -276,17 +276,6 @@ flowchart LR
 
 1. 现有产品语义和 UI 入口已经是“删除历史会话”，直接映射成本最低。
 2. `archive` 会引入新的生命周期状态、列表过滤和恢复语义，不适合本次最小可用目标。
-
-## 协议映射
-
-旧语义到新语义的映射如下：
-
-- `session_create` -> `thread.start`
-- `session_subscribe` -> `thread.resume`
-- `sessions_list` -> `thread.list`
-- `session_delete` -> `thread.delete`
-- `turn_start` -> `turn.start`
-- `turn_interrupt` -> `turn.interrupt`
 
 ## notification 与 server request
 
@@ -335,7 +324,7 @@ flowchart LR
 
 ### `apps/agent-server`
 
-- `SessionCommandRouter`、publisher、bridge 路径统一改名并改语义。
+- 旧 command router、publisher、bridge 路径统一改名并改语义。
 - 线程恢复主入口改为 `thread.resume`。
 - 线程列表与线程删除主入口改为 `thread.list` / `thread.delete`。
 - `permission`、`workspace`、`platform` 桥接仍保留，但统一挂接在新的协议体系下。
@@ -344,12 +333,12 @@ flowchart LR
 
 这是一次破坏性重构，最终状态必须满足以下要求：
 
-- `SessionProtocolClient` 不再是主链路协议客户端。
+- 旧协议客户端不再是主链路协议客户端。
 - `AppServerConnection` 不再是主链路连接抽象。
-- `SessionEventBus` 不再承担主事件分发。
-- `SessionWindowViewModel` / `SessionTabViewModel` 不再承担主业务状态。
-- `LegacySessionSocketClient` 不再保留为主路径兼容层。
-- 新增业务功能不得继续加在旧 `Session*` 主路径对象上，也不得在新代码中重新引入 `Session` 语义命名。
+- 旧事件总线不再承担主事件分发。
+- 旧窗口级 / tab 级 ViewModel 不再承担主业务状态。
+- 旧 socket client 不再保留为主路径兼容层。
+- 新增业务功能不得继续加在旧主路径对象上，也不得在新代码中重新引入旧语义命名。
 
 允许在分支中间提交里短暂并存旧对象，但合入前必须：
 
@@ -374,7 +363,7 @@ flowchart LR
 
 ### 阶段 3：删除旧主路径
 
-- 删除或降级旧 `Session*` 主链路对象。
+- 删除或降级旧主链路对象。
 - 清理旧测试与旧文档。
 - 保证最终构建产物只依赖新的 `Thread` 主路径。
 
@@ -433,7 +422,7 @@ flowchart LR
 - `apps/desktop/Sources/AppServices/app-services.md`
 - `apps/desktop/Sources/AppServices/AgentServer/agent-server.md`
 - `apps/desktop/Sources/AppServices/PlatformBridge/platform-bridge.md`
-- `apps/desktop/Sources/SessionWindow/session-window.md`
+- `apps/desktop/Sources/ThreadWindow/thread-window.md`
 - `packages/core/src/protocol/protocol.md`
 - `apps/agent-server/agent-server.md`
 - `docs/manual-qa.md`
@@ -461,6 +450,6 @@ flowchart LR
 2. Swift 主 store 完全基于 TCA。
 3. 主协议命名统一为 `thread / turn`。
 4. `PlatformBridgeService` 成为统一连接体系中的独立平台请求处理器。
-5. 前后端新代码不再保留 `Session` 主语义命名，旧 `session_*` 主路径不再作为运行时主实现存在。
+5. 前后端新代码不再保留旧主语义命名，旧主路径不再作为运行时主实现存在。
 6. 最小 `thread.start / resume / list / delete` 与 `turn.start / interrupt` 全链路可用。
 7. 所有缺失的 codex 语义明确写入 `docs/TODO.md`，不在实现中隐式留坑。

@@ -24,16 +24,13 @@
   - codex-style `item.*`：细粒度 item 生命周期、局部更新、折叠与重放语义。
   - archived/list/search：归档 thread 的列表、搜索、恢复和删除管理。
   - thread-level event replay、notification 去重与 request 生命周期。
+  - auth refresh request / response：server 触发鉴权刷新、desktop 回执结果的 `ServerRequest` / `ClientResponse` 语义。
   - 子 agent / 多 turn 并行语义。
+  - run hooks 输入记录：把输入写进 thread 历史，并触发用户配置的 Hooks，例如审计、提示注入。
+  - 历史保存顺序：明确 thread history 初始输入、hook 注入内容与后续消息的持久化顺序。
+  - MCP server 激活来源：plugin 除了用户显式指定，也支持由 skill 声明启用。
 - 补一轮端到端实机验证：thread 创建、thread 恢复、thread 列表、thread 删除、turn 中断、permission / workspace 回流。
 - 补一轮端到端实机验证：共享 `AppServerConnection` 上同时承载 thread/turn 主协议和 `PlatformBridgeMessage`，确认 platform request 不再创建第二条 WebSocket。
-
----
-
-run_hooks_and_record_inputs(...)：把输入写进 thread 历史，并触发用户配置的 Hooks（例如审计、提示注入）。
-history最后还是最开始保存
-
-mcpserver（plugin）除了用户显示指定，也支持在skill里启用
 
 ---
 

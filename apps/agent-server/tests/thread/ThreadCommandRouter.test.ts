@@ -167,6 +167,48 @@ describe("ThreadCommandRouter", () => {
     ]);
   });
 
+  it("emits thread.error to the requesting connection when turn.start targets a missing thread", async () => {
+    const publisher = new ThreadNotificationPublisher();
+    const first: ThreadNotification[] = [];
+    const second: ThreadNotification[] = [];
+    publisher.attachConnection("c1", (event) => first.push(event as ThreadNotification));
+    publisher.attachConnection("c2", (event) => second.push(event as ThreadNotification));
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
+      () => "2026-06-04T00:00:00.000Z",
+    );
+    const orchestrator = {
+      handleUserMessage: vi.fn(async () => {}),
+    };
+    const router = new ThreadCommandRouter(
+      orchestrator,
+      persistence,
+      publisher,
+      () => "2026-06-04T00:00:00.000Z",
+    );
+
+    await router.receive(
+      {
+        type: "turn.start",
+        threadId: "missing-thread",
+        commandId: "turn-1",
+        timestamp: "2026-06-04T00:00:00.000Z",
+        payload: { text: "hi" },
+      },
+      "c1",
+    );
+
+    expect(orchestrator.handleUserMessage).not.toHaveBeenCalled();
+    expect(first).toHaveLength(1);
+    expect(first[0]).toMatchObject({
+      type: "thread.error",
+      threadId: "missing-thread",
+      commandId: "turn-1",
+      payload: { code: "thread_not_found" },
+    });
+    expect(second).toEqual([]);
+  });
+
   it("lists threads and emits thread.listed only to the requesting connection", async () => {
     const publisher = new ThreadNotificationPublisher();
     const first: string[] = [];

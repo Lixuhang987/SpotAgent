@@ -25,13 +25,11 @@ final class ThreadWindowLifecycleTests: XCTestCase {
             return XCTFail("expected startThread")
         }
 
-        appServer.onInboundMessage?(.notification(.threadStarted(.init(
-            threadId: "thread-1",
-            notificationId: "n1",
-            commandId: commandId,
-            timestamp: "2026-06-06T00:00:00Z",
-            preview: "hello"
-        ))))
+        appServer.onThreadEvent?(.global(.threadStarted(
+            threadID: "thread-1",
+            title: "hello",
+            responseMessageID: commandId
+        )))
 
         XCTAssertTrue(appServer.calls.contains(.resumeThread("thread-1")))
         XCTAssertTrue(appServer.calls.contains(.startTurn(threadId: "thread-1", text: "hello")))
@@ -53,7 +51,7 @@ private final class RecordingLifecycleAppServer: AppServerManaging {
     var onAvailabilityChange: ((Bool) -> Void)?
     var onFatalError: ((String) -> Void)?
     var onThreadConnectionStateChange: ((AppServerConnectionState) -> Void)?
-    var onInboundMessage: ((ThreadProtocolClient.InboundMessage) -> Void)?
+    var onThreadEvent: ((AppServerThreadEvent) -> Void)?
     private(set) var connectionCount = 0
     private(set) var calls: [Call] = []
 
@@ -101,8 +99,8 @@ private final class RecordingLifecycleAppServer: AppServerManaging {
     func answerPermission(
         requestId: String,
         timestamp: String,
-        decision: ThreadProtocolClient.PermissionDecision,
-        scope: ThreadProtocolClient.PermissionScope?,
+        decision: AppServerPermissionDecision,
+        scope: AppServerPermissionScope?,
         reason: String?
     ) {}
 

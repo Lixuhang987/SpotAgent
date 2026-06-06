@@ -132,6 +132,17 @@ struct ThreadFeature {
             )
             state.thread.status = .running
 
+        case .turnStarted(let turnID):
+            state.thread.status = .running
+            state.events.errorMessage = nil
+            state.events.activeTurnID = turnID
+
+        case .turnCompleted(let turnID, let status):
+            state.thread.status = .fromProtocolStatus(status)
+            if state.events.activeTurnID == turnID {
+                state.events.activeTurnID = nil
+            }
+
         case .connectionState(let connectionState):
             state.events.connectionState = connectionState
             switch connectionState {

@@ -55,7 +55,7 @@ export class ThreadCommandRouter {
       case "thread.resume":
         return this.handleResumeThread(command, connectionId);
       case "turn.start":
-        return this.handleTurnStart(command);
+        return this.handleTurnStart(command, connectionId);
       case "turn.interrupt":
         this.interruptThread(command.threadId);
         return;
@@ -107,12 +107,12 @@ export class ThreadCommandRouter {
       }
     }
 
-    const Thread = await this.persistence.createThread(
+    const thread = await this.persistence.createThread(
       undefined,
       actionBinding,
       command.payload.workspaceId,
     );
-    const threadId = Thread.metadata.id;
+    const threadId = thread.metadata.id;
     this.publisher.subscribe(connectionId, threadId);
     this.publisher.publishToConnection(connectionId, {
       type: "thread.started",
@@ -120,7 +120,7 @@ export class ThreadCommandRouter {
       notificationId: this.makeNotificationId(),
       commandId: command.commandId,
       timestamp: this.now(),
-      payload: { preview: Thread.metadata.preview ?? null },
+      payload: { preview: thread.metadata.preview ?? null },
     });
   }
 

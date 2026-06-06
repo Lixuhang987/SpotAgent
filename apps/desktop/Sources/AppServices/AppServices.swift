@@ -124,7 +124,7 @@ final class NopAppServer: AppServerManaging {
     var onAvailabilityChange: ((Bool) -> Void)?
     var onFatalError: ((String) -> Void)?
     var onThreadConnectionStateChange: ((AppServerConnectionState) -> Void)?
-    var onInboundMessage: ((ThreadProtocolClient.InboundMessage) -> Void)?
+    var onThreadEvent: ((AppServerThreadEvent) -> Void)?
 
     func start() {}
     func stop() {}
@@ -145,8 +145,8 @@ final class NopAppServer: AppServerManaging {
     func answerPermission(
         requestId: String,
         timestamp: String,
-        decision: ThreadProtocolClient.PermissionDecision,
-        scope: ThreadProtocolClient.PermissionScope?,
+        decision: AppServerPermissionDecision,
+        scope: AppServerPermissionScope?,
         reason: String?
     ) {}
     func answerWorkspace(requestId: String, timestamp: String, workspaceId: String?, cancelled: Bool?) {}

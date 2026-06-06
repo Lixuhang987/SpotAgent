@@ -30,6 +30,8 @@ enum ThreadEvent: Equatable {
     case toolMessage(messageID: String, name: String, text: String, status: String, timestamp: String)
     case permissionRequest(requestId: String, toolName: String, toolCallId: String?, argumentsJSON: String)
     case workspaceAskRequest(requestId: String, prompt: String, candidates: [WorkspaceAskCandidate])
+    case turnStarted(turnID: String)
+    case turnCompleted(turnID: String, status: String)
     case status(value: String)
     case error(messageID: String, message: String, timestamp: String)
     case threadSnapshot(messages: [ThreadBubble], status: String)

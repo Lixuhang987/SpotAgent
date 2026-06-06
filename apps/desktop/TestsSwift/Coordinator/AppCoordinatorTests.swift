@@ -73,7 +73,7 @@ final class AppCoordinatorTests: XCTestCase {
             var onAvailabilityChange: ((Bool) -> Void)?
             var onFatalError: ((String) -> Void)?
             var onThreadConnectionStateChange: ((AppServerConnectionState) -> Void)?
-            var onInboundMessage: ((ThreadProtocolClient.InboundMessage) -> Void)?
+            var onThreadEvent: ((AppServerThreadEvent) -> Void)?
             func start() {}
             func stop() {}
             func connectThreadClient() {}
@@ -93,8 +93,8 @@ final class AppCoordinatorTests: XCTestCase {
             func answerPermission(
                 requestId: String,
                 timestamp: String,
-                decision: ThreadProtocolClient.PermissionDecision,
-                scope: ThreadProtocolClient.PermissionScope?,
+                decision: AppServerPermissionDecision,
+                scope: AppServerPermissionScope?,
                 reason: String?
             ) {}
             func answerWorkspace(requestId: String, timestamp: String, workspaceId: String?, cancelled: Bool?) {}
@@ -156,7 +156,7 @@ final class AppCoordinatorTests: XCTestCase {
             var onAvailabilityChange: ((Bool) -> Void)?
             var onFatalError: ((String) -> Void)?
             var onThreadConnectionStateChange: ((AppServerConnectionState) -> Void)?
-            var onInboundMessage: ((ThreadProtocolClient.InboundMessage) -> Void)?
+            var onThreadEvent: ((AppServerThreadEvent) -> Void)?
             var startCount = 0
             func start() { startCount += 1 }
             func stop() {}
@@ -177,8 +177,8 @@ final class AppCoordinatorTests: XCTestCase {
             func answerPermission(
                 requestId: String,
                 timestamp: String,
-                decision: ThreadProtocolClient.PermissionDecision,
-                scope: ThreadProtocolClient.PermissionScope?,
+                decision: AppServerPermissionDecision,
+                scope: AppServerPermissionScope?,
                 reason: String?
             ) {}
             func answerWorkspace(requestId: String, timestamp: String, workspaceId: String?, cancelled: Bool?) {}

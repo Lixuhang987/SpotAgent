@@ -41,4 +41,21 @@ final class ThreadFeatureTests: XCTestCase {
         XCTAssertEqual(store.state.events.pendingPermissionRequests.map(\.id), ["req-1"])
         XCTAssertEqual(store.state.thread.status, .running)
     }
+
+    @MainActor
+    func testTurnLifecycleCachesActiveTurnIDInEventStore() {
+        let store = Store(initialState: ThreadFeature.State(threadID: "thread-1")) {
+            ThreadFeature()
+        }
+
+        store.send(.event(.turnStarted(turnID: "turn-1")))
+
+        XCTAssertEqual(store.state.events.activeTurnID, "turn-1")
+        XCTAssertEqual(store.state.thread.status, .running)
+
+        store.send(.event(.turnCompleted(turnID: "turn-1", status: "completed")))
+
+        XCTAssertNil(store.state.events.activeTurnID)
+        XCTAssertEqual(store.state.thread.status, .idle)
+    }
 }

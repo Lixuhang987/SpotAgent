@@ -68,7 +68,7 @@ flowchart TD
   - `prompt: string`
   - `selectedText: string | null`
 - `ThreadAttachment`（agent-server WS 协议）
-  - `{ kind: "text-selection"; id; text }`
+  - `{ kind: "text_selection"; id; text }`
   - `{ kind: "image"; id; mimeType; base64 }`
 - `PromptAttachmentResult`（desktop 内部）：5 case 详见 [PromptPanel](/Users/mu9/proj/handAgent/apps/desktop/Sources/PromptPanel/prompt-panel.md)。
 
