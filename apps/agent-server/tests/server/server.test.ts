@@ -1,4 +1,6 @@
-import { EventEmitter } from "node:events";
+import { EventEmitter, once } from "node:events";
+import type { AddressInfo } from "node:net";
+import { WebSocket } from "ws";
 import { describe, expect, it, vi } from "vitest";
 import type { AgentMessage } from "@handagent/core/runtime/AgentMessage.ts";
 import type { AgentRuntimeEvent } from "@handagent/core/runtime/AgentRuntime.ts";
@@ -20,6 +22,7 @@ import {
   attachThreadSocketHandlers,
   createMCPClientFromConfig,
   resolveLLMMode,
+  startServer,
 } from "../../src/server/server.ts";
 
 class FakeSocket extends EventEmitter {
@@ -101,6 +104,14 @@ function makeHandlerDependencies(options: {
 
 function lastSent<T>(socket: FakeSocket): T {
   return JSON.parse(socket.sent.at(-1) ?? "null") as T;
+}
+
+async function waitForClose(socket: WebSocket, timeoutMs = 250): Promise<boolean> {
+  const close = once(socket, "close").then(() => true);
+  const timeout = new Promise<boolean>((resolve) => {
+    setTimeout(() => resolve(false), timeoutMs);
+  });
+  return Promise.race([close, timeout]);
 }
 
 describe("attachThreadSocketHandlers", () => {
@@ -459,6 +470,60 @@ describe("attachThreadSocketHandlers", () => {
 
     expect(bridge.attach).toHaveBeenCalledTimes(1);
   });
+});
+
+describe("startServer", () => {
+  it.each(["/api/unknown", "/"])(
+    "closes sockets on %s without attaching thread or platform handlers",
+    async (path) => {
+      const commandRouter = {
+        receive: vi.fn(async () => {}),
+        interruptThread: vi.fn(),
+        handleResponse: vi.fn(),
+      } as unknown as ThreadCommandRouter;
+      const eventPublisher = {
+        attachConnection: vi.fn(),
+        detachConnection: vi.fn(),
+        subscribe: vi.fn(),
+        publishToConnection: vi.fn(),
+      } as unknown as ThreadNotificationPublisher;
+      const bridge = {
+        attach: vi.fn(),
+        detach: vi.fn(),
+        handleResponse: vi.fn(),
+      };
+      const server = await startServer({
+        commandRouter,
+        eventPublisher,
+        bridge: bridge as never,
+        port: 0,
+      });
+      const address = server.address() as AddressInfo;
+      const socket = new WebSocket(`ws://127.0.0.1:${address.port}${path}`);
+
+      try {
+        await once(socket, "open");
+        socket.send(JSON.stringify(turnStart("Thread-A", "should not route")));
+        socket.send(JSON.stringify(platformHello("bridge-1")));
+
+        const closed = await waitForClose(socket);
+
+        expect(closed).toBe(true);
+        expect(eventPublisher.attachConnection).not.toHaveBeenCalled();
+        expect(commandRouter.receive).not.toHaveBeenCalled();
+        expect(bridge.attach).not.toHaveBeenCalled();
+      } finally {
+        if (
+          socket.readyState === WebSocket.OPEN ||
+          socket.readyState === WebSocket.CONNECTING
+        ) {
+          socket.terminate();
+        }
+        server.close();
+        await once(server, "close");
+      }
+    },
+  );
 });
 
 describe("resolveLLMMode", () => {

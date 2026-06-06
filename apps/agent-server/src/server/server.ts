@@ -221,19 +221,24 @@ export async function startServer({
   const wss = new WebSocketServer({ port });
 
   wss.on("connection", (socket, request) => {
-    const path = request.url?.split("?")[0] ?? "/api/thread";
+    const path = request.url?.split("?")[0];
     if (path === "/api/platform") {
       attachPlatformSocketHandlers(socket, { bridge });
       return;
     }
 
-    attachThreadSocketHandlers(socket, {
-      commandRouter,
-      eventPublisher,
-      permissionBridge,
-      permissionPolicy,
-      workspaceAskBridge,
-    });
+    if (path === "/api/thread") {
+      attachThreadSocketHandlers(socket, {
+        commandRouter,
+        eventPublisher,
+        permissionBridge,
+        permissionPolicy,
+        workspaceAskBridge,
+      });
+      return;
+    }
+
+    socket.close();
   });
 
   return wss;
