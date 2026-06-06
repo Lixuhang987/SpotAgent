@@ -1,10 +1,10 @@
-# ThreadWindow WebView React 迁移实施计划
+# ThreadWindow WebView React Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 将 SwiftUI/TCA ThreadWindow 替换为 `WKWebView` 承载的 React ThreadWindow，并把 agent-server 的 thread 与 platform WebSocket 拆成两条连接。
 
-**Architecture:** agent-server 暴露 `/api/thread` 给 React 持有 thread UI 状态，暴露 `/api/platform` 给 Swift 持有原生 platform RPC。新增 `apps/thread-window-web` 使用 React + Vite + Zustand + immer，直接连接 `/api/thread`。Swift 只负责进程健康、`NSWindow/WKWebView` 生命周期、PromptPanel 初始 prompt 派发和 `/api/platform`。
+**Architecture:** agent-server 暴露 `/api/thread` 给 React 持有 thread UI 状态，暴露 `/api/platform` 给 Swift 持有原生 platform RPC。新增 `apps/thread-window-web` 使用 React + Vite + `zustand + immer` 作为唯一状态源，socket client 只负责收发与重连，组件只派发明确 action，不直接操作 WebSocket。Swift 只负责进程健康、`NSWindow/WKWebView` 生命周期、PromptPanel 初始 prompt 派发和 `/api/platform`。首版不做 `StatusBubble` 摘要同步。
 
 **Tech Stack:** TypeScript, Vitest, React 19, Vite, Zustand, immer, WebSocket, Swift 6, SwiftUI, WebKit, XCTest.
 
@@ -87,7 +87,9 @@
 
 ---
 
-## Task 1: 按路径拆分 agent-server WebSocket handler
+## Tasks
+
+### Task 1: 按路径拆分 agent-server WebSocket handler
 
 **Files:**
 - Modify: `apps/agent-server/src/server/server.ts`
@@ -245,23 +247,28 @@ export function attachPlatformSocketHandlers(
 
 ```typescript
   wss.on("connection", (socket, request) => {
-    const path = request.url?.split("?")[0] ?? "/api/thread";
+    const path = request.url?.split("?")[0];
     if (path === "/api/platform") {
       attachPlatformSocketHandlers(socket, { bridge });
       return;
     }
 
-    attachThreadSocketHandlers(socket, {
-      commandRouter,
-      eventPublisher,
-      permissionBridge,
-      permissionPolicy,
-      workspaceAskBridge,
-    });
+    if (path === "/api/thread") {
+      attachThreadSocketHandlers(socket, {
+        commandRouter,
+        eventPublisher,
+        permissionBridge,
+        permissionPolicy,
+        workspaceAskBridge,
+      });
+      return;
+    }
+
+    socket.close();
   });
 ```
 
-本任务内保留 `/api/thread` 作为默认 fallback，便于现有测试和旧客户端在同一提交内逐步迁移。不要再把 `bridge` 传给 `attachThreadSocketHandlers`。
+本任务不保留旧共享连接兼容层。若测试未传 request URL，应显式补为 `/api/thread`，避免 server 逻辑靠 fallback 维持旧客户端行为。不要再把 `bridge` 传给 `attachThreadSocketHandlers`。
 
 - [ ] **Step 5: 运行聚焦 server 测试**
 
@@ -284,7 +291,7 @@ git commit -m "refactor: split thread and platform websocket handlers"
 
 ---
 
-## Task 2: 搭建 React ThreadWindow 包和构建接线
+### Task 2: 搭建 React ThreadWindow 包和构建接线
 
 **Files:**
 - Modify: `pnpm-workspace.yaml`
@@ -551,7 +558,7 @@ git commit -m "feat: scaffold threadwindow react package"
 
 ---
 
-## Task 3: 实现 React protocol helpers 和 Zustand store
+### Task 3: 实现 React protocol helpers 和 Zustand store
 
 **Files:**
 - Create: `apps/thread-window-web/src/protocol/threadProtocol.ts`
@@ -1245,7 +1252,7 @@ git commit -m "feat: add threadwindow web protocol store"
 
 ---
 
-## Task 4: 实现 React WebSocket client 和命令流
+### Task 4: 实现 React WebSocket client 和命令流
 
 **Files:**
 - Create: `apps/thread-window-web/src/thread/threadSocketClient.ts`
@@ -1580,7 +1587,7 @@ git commit -m "feat: add threadwindow web socket client"
 
 ---
 
-## Task 5: 基于 store 构建 React ThreadWindow UI
+### Task 5: 基于 store 构建 React ThreadWindow UI
 
 **Files:**
 - Modify: `apps/thread-window-web/src/App.tsx`
@@ -2013,7 +2020,7 @@ git commit -m "feat: build threadwindow react ui"
 
 ---
 
-## Task 6: 将 Swift AppServer 收缩为进程健康 + `/api/platform`
+### Task 6: 将 Swift AppServer 收缩为进程健康 + `/api/platform`
 
 **Files:**
 - Modify: `apps/desktop/Sources/AppServices/AgentServer/AppServer.swift`
@@ -2327,7 +2334,7 @@ git commit -m "refactor: move platform bridge to dedicated websocket"
 
 ---
 
-## Task 7: 新增 WKWebView host 并迁移 ThreadWindowLifecycle
+### Task 7: 新增 WKWebView host 并迁移 ThreadWindowLifecycle
 
 **Files:**
 - Modify: `apps/desktop/Sources/AppServices/AppServices.swift`
@@ -2762,9 +2769,11 @@ git commit -m "feat: host threadwindow in wkwebview"
 
 ---
 
-## Task 8: 删除旧 SwiftUI/TCA ThreadWindow 实现
+### Task 8: 删除旧 SwiftUI/TCA ThreadWindow 实现
 
 **Files:**
+保留：`apps/desktop/Sources/ThreadWindow/UserMessageAttachmentPayload.swift`，仍作为 Swift 注入初始 prompt 的 attachment payload DTO。
+
 - Delete: `apps/desktop/Sources/ThreadWindow/EventStore.swift`
 - Delete: `apps/desktop/Sources/ThreadWindow/MarkdownMessageView.swift`
 - Delete: `apps/desktop/Sources/ThreadWindow/ThreadContentView.swift`
@@ -2852,7 +2861,7 @@ git commit -m "refactor: remove swift threadwindow implementation"
 
 ---
 
-## Task 9: 将 React build assets 打进 macOS app
+### Task 9: 将 React build assets 打进 macOS app
 
 **Files:**
 - Modify: `scripts/package-app.sh`
@@ -2944,7 +2953,7 @@ git commit -m "build: package threadwindow web assets"
 
 ---
 
-## Task 10: 更新文档和 manual QA
+### Task 10: 更新文档和 manual QA
 
 **Files:**
 - Modify: `handAgent.md`
@@ -3032,20 +3041,91 @@ pnpm --filter handagent-thread-window-web build
 
 Also update the old "单连接 thread 路由 smoke" wording so it no longer says desktop has one shared WebSocket; it should say React owns the one thread WebSocket for ThreadWindow.
 
-- [ ] **Step 4: 更新其余文档**
+- [ ] **Step 4: 更新 `handAgent.md` 主调用链路**
 
-按同一边界更新：
+将主调用链路改为 React 持有 thread UI 和 `/api/thread`，Swift 持有 `/api/platform`：
 
-- `handAgent.md`: diagram and "当前实现状态" say React owns ThreadWindow UI and `/api/thread`; Swift owns `/api/platform`.
-- `apps/desktop/desktop.md`: ThreadWindow section says WKWebView host, not SwiftUI/TCA UI.
-- `apps/desktop/Sources/ThreadWindow/thread-window.md`: document WebView host, initial prompt queue, React responsibilities.
-- `apps/desktop/Sources/AppServices/AgentServer/agent-server.md`: AppServer starts process and platform bridge; Swift no longer owns thread client.
-- `apps/desktop/Sources/AppServices/PlatformBridge/platform-bridge.md`: platform bridge uses `/api/platform`.
-- `apps/agent-server/agent-server.md` and `apps/agent-server/src/server/server.md`: split socket paths.
-- `apps/agent-server/src/bridges/bridges.md`: WebSocketPlatformBridge binding belongs to `/api/platform`.
-- `packages/core/src/protocol/protocol.md`: update process boundary without changing DTO definitions.
+```mermaid
+flowchart TD
+  A[用户按下全局热键] --> B[Swift 宿主打开 PromptPanel]
+  B --> C[用户输入 prompt 并提交]
+  C --> D[Swift 创建 ThreadWindow WKWebView 并注入初始 prompt]
+  D --> E[React 连接 /api/thread 并发送 ThreadCommand]
+  E --> F[agent-server 接收 ThreadCommand]
+  F --> G[AgentRuntime 调用 LLMClient]
+  G --> H{是否返回 toolCalls}
+  H -- 否 --> I[React 渲染 assistant bubbles]
+  H -- 是 --> J[ToolRegistry 查找 tool]
+  J --> K[platform tool 经 /api/platform 请求 Swift]
+  K --> G
+```
 
-- [ ] **Step 5: 运行文档 grep 检查**
+同时删除或替换任何 “SwiftUI 渲染 assistant bubbles”、“AppServer 共享连接发送 ThreadCommand” 的当前实现描述。
+
+- [ ] **Step 5: 更新 desktop 文档**
+
+在 `apps/desktop/desktop.md` 中把 ThreadWindow 描述替换为：
+
+```markdown
+ThreadWindow 由 Swift `WKWebView` 承载 React 前端。Swift 只负责窗口生命周期、加载 web bundle、注入 `/api/thread` WebSocket URL 和初始 prompt；thread tabs、历史、消息、permission/workspace 请求面板和 composer 均由 React 管理。
+```
+
+在 `apps/desktop/Sources/ThreadWindow/thread-window.md` 中写明：
+
+```markdown
+# ThreadWindow
+
+该目录只保留 WKWebView host 相关 Swift 代码：
+
+- `ThreadWindowWebHost.swift`：保存 web app URL、`/api/thread` URL 和待注入的初始 prompt 队列。
+- `ThreadWindowWebView.swift`：创建 `WKWebView`，注入 `window.handAgentThreadWindowConfig`，页面加载完成后调用 `window.handAgentReceiveInitialPrompt(...)`。
+- `UserMessageAttachmentPayload.swift`：Swift 到 React 初始 prompt attachment DTO。
+
+ThreadWindow UI 状态不再由 SwiftUI/TCA 管理。React 前端位于 `apps/thread-window-web`，通过 `/api/thread` 直接收发 thread 协议。
+```
+
+- [ ] **Step 6: 更新 desktop AppServer 与 PlatformBridge 文档**
+
+在 `apps/desktop/Sources/AppServices/AgentServer/agent-server.md` 中明确：
+
+```markdown
+Swift `AppServer` 只负责启动/停止 agent-server 子进程、维护可用性状态，以及建立 `/api/platform` 连接。Swift 不再持有 `/api/thread` client，不发送 `ThreadCommand`，不解析 `ThreadNotification`。
+```
+
+在 `apps/desktop/Sources/AppServices/PlatformBridge/platform-bridge.md` 中明确：
+
+```markdown
+PlatformBridge 通过 `ws://127.0.0.1:4317/api/platform` 与 agent-server 通信。该连接只承载 `PlatformBridgeMessage`。ThreadWindow 的 `ThreadCommand` / `ClientResponse` / `ThreadNotification` 由 React 前端通过 `/api/thread` 处理。
+```
+
+删除旧的 “desktop 到 `/api/thread` 只有一条共享 WebSocket” 和 “PlatformBridgeService 不另建连接” 表述。
+
+- [ ] **Step 7: 更新 agent-server 文档**
+
+在 `apps/agent-server/agent-server.md` 和 `apps/agent-server/src/server/server.md` 中把 socket 边界写成：
+
+```markdown
+agent-server 暴露两条 WebSocket 路径：
+
+- `/api/thread`：面向 React ThreadWindow，接收 `ThreadCommand` / `ClientResponse`，发送 `ThreadNotification` / `ServerRequest`。
+- `/api/platform`：面向 Swift 宿主，接收和发送 `PlatformBridgeMessage`，用于平台 tool RPC。
+```
+
+在 `apps/agent-server/src/bridges/bridges.md` 中写明：
+
+```markdown
+`WebSocketPlatformBridge` 只绑定 `/api/platform` socket。它不挂载在 `/api/thread`，也不与 ThreadWindow UI 共享 WebSocket。
+```
+
+- [ ] **Step 8: 更新 core protocol 文档**
+
+在 `packages/core/src/protocol/protocol.md` 中只更新进程边界，不改 DTO 定义：
+
+```markdown
+DTO 仍按 thread 协议和 platform bridge 协议分层定义。迁移后，thread DTO 的浏览器端消费者是 `apps/thread-window-web`，platform bridge DTO 的桌面端消费者是 Swift `PlatformBridgeConnectionClient`。
+```
+
+- [ ] **Step 9: 运行文档 grep 检查**
 
 运行：
 
@@ -3055,7 +3135,7 @@ rg -n "共享连接|同一连接|只有一条到 `ws://127.0.0.1:4317/api/thread
 
 预期：no stale statements claiming platform bridge shares the thread socket. Mentions of historical SwiftUI/TCA are allowed only when clearly described as old implementation.
 
-- [ ] **Step 6: 提交**
+- [ ] **Step 10: 提交**
 
 运行：
 
@@ -3066,7 +3146,7 @@ git commit -m "docs: document threadwindow webview migration"
 
 ---
 
-## Task 11: 最终验证
+### Task 11: 最终验证
 
 **Files:**
 - 除非验证暴露问题，否则不修改源码。
@@ -3107,10 +3187,11 @@ test -f dist/HandAgentDesktop.app/Contents/Resources/ThreadWindowWeb/index.html
 
 - [ ] **Step 4: 提交验证修复**
 
-如果验证需要修复：
+如果验证失败，先按失败归属回到对应 Task 修改并提交；最终验证任务本身不要求固定提交。若只修验证阶段暴露的小范围问题，先用 `git status --short` 确认实际改动文件，再仅添加这些实际修改文件并提交：
 
 ```bash
-git add <changed-files>
+git status --short
+git add path/to/actual-changed-file
 git commit -m "fix: stabilize threadwindow webview verification"
 ```
 
