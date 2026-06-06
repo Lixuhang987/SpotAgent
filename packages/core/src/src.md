@@ -9,34 +9,32 @@
 | 子模块 | 子文档 | 一句话职责 |
 |------|------|------|
 | `runtime/` | [runtime/runtime.md](/Users/mu9/proj/handAgent/packages/core/src/runtime/runtime.md) | LLM/tool 主循环、消息模型、ToolCallEnvelope |
-| `actions/` | [actions/actions.md](/Users/mu9/proj/handAgent/packages/core/src/actions/actions.md) | Action manifest 与 session binding 解析 |
+| `actions/` | [actions/actions.md](/Users/mu9/proj/handAgent/packages/core/src/actions/actions.md) | Action manifest 与 thread binding 解析 |
 | `blob/` | [blob/blob.md](/Users/mu9/proj/handAgent/packages/core/src/blob/blob.md) | 大段上下文内容的本地 Blob 持久化与 summary 元数据 |
 | `llm/` | [llm/llm.md](/Users/mu9/proj/handAgent/packages/core/src/llm/llm.md) | LLMClient 抽象 + Vercel AI SDK 适配 |
 | `mcp/` | [mcp/mcp.md](/Users/mu9/proj/handAgent/packages/core/src/mcp/mcp.md) | 标准 MCP client 与 MCP tool adapter |
 | `tools/` | [tools/tools.md](/Users/mu9/proj/handAgent/packages/core/src/tools/tools.md) | AgentTool 协议 + 11 个 builtin tool + 注册组合根 |
 | `platform/` | [platform/platform.md](/Users/mu9/proj/handAgent/packages/core/src/platform/platform.md) | PlatformAdapter / PlatformBridge / Remote+Offline 实现 |
 | `permission/` | [permission/permission.md](/Users/mu9/proj/handAgent/packages/core/src/permission/permission.md) | 权限策略接口 + 三档记忆持久化 |
-| `storage/` | [storage/storage.md](/Users/mu9/proj/handAgent/packages/core/src/storage/storage.md) | PersistedSession 模型 + 内存 / 文件实现 |
+| `storage/` | [storage/storage.md](/Users/mu9/proj/handAgent/packages/core/src/storage/storage.md) | PersistedThread 模型 + 内存 / 文件实现 |
 | `workspace/` | [workspace/workspace.md](/Users/mu9/proj/handAgent/packages/core/src/workspace/workspace.md) | 显式 workspace 沙箱 + 默认播种 |
 | `config/` | [config/config.md](/Users/mu9/proj/handAgent/packages/core/src/config/config.md) | settings.json 模型与 tool 设置解析 |
 | `logging/` | [logging/logging.md](/Users/mu9/proj/handAgent/packages/core/src/logging/logging.md) | LLM 网络日志 JSONL 落盘 |
-| `protocol/` | [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md) | desktop ↔ app-server 单向会话协议（四类 session 消息 + PlatformBridgeMessage） |
+| `protocol/` | [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md) | desktop ↔ app-server Thread/Turn 协议（command / notification / request / response + PlatformBridgeMessage） |
 | `conversation/` | [conversation/conversation.md](/Users/mu9/proj/handAgent/packages/core/src/conversation/conversation.md) | UI / 持久化用 ConversationMessage 模型 |
 | `selection/` | [selection/selection.md](/Users/mu9/proj/handAgent/packages/core/src/selection/selection.md) | 用户主动选区抽象 |
 
 ## 关键数据流
 
-### 1. 会话阶段
+### 1. 输入阶段
 
-- `AgentSession.open(input)` 接收 `AgentSessionInput`
+- `AgentThread.open(input)` 接收 `AgentThreadInput`
 - 内部通过 `selectionTextFromResult()` 提取 `selectedText`
 - `buildInitialUserMessage()` 输出给 runtime 的首轮字符串
 
 ### 2. runtime 阶段
 
-- `AgentSessionHandle.submit(command)` 作为 core 对 app-server 暴露的会话入口，当前消费 `turn_start` / `turn_interrupt`
-- `AgentSessionHandle.nextEvent()` 作为事件消费出口，按顺序吐出 `SessionEvent`
-- handle 内部调用 `AgentRuntime.runWithMessages(messages, onEvent, {sessionId})`
+- 主路径由 agent-server 的 `ThreadRuntimeOrchestrator` 调 `AgentRuntime.runWithMessages(messages, onEvent, {threadId})`
 - 每轮先通过 `SystemPrompt` 把默认 system prompt sections 临时前置到 LLM 输入，再消费 `LLMClient.stream(llmMessages, registry.list(), {blobStore?})`
 - 处理 `toolCalls`：`PermissionPolicy.check` → ask / allow / deny → tool 调用 → 写 tool message
 - 详细流程图见 [runtime/runtime.md](/Users/mu9/proj/handAgent/packages/core/src/runtime/runtime.md)
@@ -56,27 +54,27 @@
 - 平台类（依赖 `PlatformAdapter`）：`clipboard.read`、`app.frontmost`、`window.list`、`screen.capture`、`ocr.read`、`accessibility.snapshot`、`accessibility.action`。
 - 工作区类（依赖 `WorkspaceRegistry`）：`workspace.list`、`workspace.askUser`、`file.read`、`file.write`。
 
-plugin action 绑定的外部能力不由 core tools 目录加载私有插件进程；agent-server 会按 session metadata 组合 builtin tools 与 MCP tools。skill action 不创建 session binding，只作为普通 prompt 进入 runtime。
+plugin action 绑定的外部能力不由 core tools 目录加载私有插件进程；agent-server 会按 thread metadata 组合 builtin tools 与 MCP tools。skill action 不创建 thread binding，只作为普通 prompt 进入 runtime。
 
 完整入参 / 实现位置见 [tools/tools.md](/Users/mu9/proj/handAgent/packages/core/src/tools/tools.md)。
 
 ### 5. 权限阶段
 
 - `AgentRuntime` 在 `tool.call` 前调 `PermissionPolicy.check`，进入 `ask` 时通过 `resolveAsk` 询问。
-- 生产路径由 agent-server 注入 `FilePermissionPolicy(askResolver = SessionPermissionBridge.ask)`，UI 在 SessionWindow 内联气泡。
-- 三档记忆：once / session / always；always 持久化到 `~/.spotAgent/permissions.json`。
+- 生产路径由 agent-server 注入 `FilePermissionPolicy(askResolver = ThreadPermissionBridge.ask)`，UI 在 thread 内联气泡。
+- 三档记忆：once / thread / always；always 持久化到 `~/.spotAgent/permissions.json`。
 
 ### 6. 持久化阶段
 
-- `SessionStore`（生产 `FileSessionStore`）按 `~/.spotAgent/sessions/<id>.json` 写每会话一份 `PersistedSession`：metadata / messages / events。
+- `ThreadStore`（生产 `FileThreadStore`）目标按 `~/.spotAgent/threads/<id>.json` 写每个 thread 一份 `PersistedThread`：metadata / messages / events。
 - `events` 是审计视图（tool_call / tool_result / permission_request / error），与 `messages` 解耦。
 
 ### 7. 跨进程协议
 
-- desktop 与 app-server 走 `ws://127.0.0.1:4317/api/session`；会话主路径拆为 `SessionCommand`、`SessionEvent`、`ServerRequest`、`ClientResponse` 四类消息。
-- `SessionCommand` 只表示 UI 主动提交的命令；`SessionEvent` 只表示 server/core 向 UI 推送的结果事件。
+- desktop 与 app-server 走统一 WebSocket；Thread 主路径拆为 `ThreadCommand`、`ThreadNotification`、`ServerRequest`、`ClientResponse` 四类消息。
+- `ThreadCommand` 只表示 UI 主动提交的命令；`ThreadNotification` 只表示 server/core 向 UI 推送的结果通知。
 - `ServerRequest` / `ClientResponse` 只覆盖少量“server 提问，UI 回执”的交互，如权限审批与 workspace 选择。
-- 平台反向 IPC 不并入 session 主协议，继续走独立 `PlatformBridgeMessage`，通过 `channel: "platform"` 分流。
+- 平台反向 IPC 不并入 thread 主协议，继续走独立 `PlatformBridgeMessage`，通过 `channel: "platform"` 分流。
 - 字段说明详见 [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md)。
 
 ## 当前实现特点与已知改进项
@@ -85,7 +83,7 @@ plugin action 绑定的外部能力不由 core tools 目录加载私有插件进
 - tool 结果统一序列化为字符串再回灌；`MAX_OUTPUT_BYTES = 8 KiB` 截断。
 - `VercelClient` 当前默认模型 `gpt-5-mini`。
 - user message 支持字符串或多模态 content parts；持久化层仍保存 STUB 文本，agent-server 在 runtime 前展开 image STUB。
-- `assistant_delta` 来自 `LLMStreamEvent.text_delta`，desktop UI 可逐段拼接 assistant 回复。
+- `assistant.delta` 来自 `LLMStreamEvent.text_delta`，desktop UI 可逐段拼接 assistant 回复。
 - 文件 tool 已使用 workspace 沙箱、basename symlink 拒绝、10 MiB 写入上限与原子写。
 - `FilePermissionPolicy.cache` 与 `FileWorkspaceRegistry.cache` 不启 watcher；每次公开读写入口前比较持久化文件 `mtimeMs + size`，检测到外部修改后重读，保证 Settings 或外部撤销权限后下一次 tool 调用可见。
 

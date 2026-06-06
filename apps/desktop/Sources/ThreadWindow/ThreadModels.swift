@@ -1,0 +1,204 @@
+import Foundation
+
+struct ThreadAttachmentSummary: Identifiable, Equatable {
+    let id: String
+    let kind: String
+    let title: String
+    let detail: String?
+}
+
+struct ThreadBubble: Identifiable, Equatable {
+    let id: String
+    let role: String
+    var text: String
+    var attachments: [ThreadAttachmentSummary] = []
+
+    var attachmentSummaryText: String? {
+        guard !attachments.isEmpty else { return nil }
+        let types = attachments.map(\.kind).joined(separator: " / ")
+        return "附件 ×\(attachments.count) · \(types)"
+    }
+
+    static func user(
+        id: String,
+        text: String,
+        attachments: [UserMessageAttachmentPayload]
+    ) -> ThreadBubble {
+        ThreadBubble(
+            id: id,
+            role: "user",
+            text: text,
+            attachments: attachments.enumerated().map { index, attachment in
+                ThreadAttachmentSummary(attachment: attachment, index: index)
+            }
+        )
+    }
+
+    func normalizedForDisplay() -> ThreadBubble {
+        guard role == "user", attachments.isEmpty else { return self }
+        let normalized = Self.normalizePersistedUserContent(text)
+        guard !normalized.attachments.isEmpty else { return self }
+        return ThreadBubble(
+            id: id,
+            role: role,
+            text: normalized.text,
+            attachments: normalized.attachments
+        )
+    }
+
+    private static func normalizePersistedUserContent(_ text: String) -> (
+        text: String,
+        attachments: [ThreadAttachmentSummary]
+    ) {
+        guard let firstMarker = nextPersistedAttachmentMarker(in: text, from: text.startIndex) else {
+            return (text, [])
+        }
+
+        let visibleText = String(text[..<firstMarker.range.lowerBound])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        var attachments: [ThreadAttachmentSummary] = []
+        var cursor = firstMarker
+
+        while true {
+            switch cursor.kind {
+            case .textSelection:
+                let contentStart = cursor.range.upperBound
+                let next = nextPersistedAttachmentMarker(in: text, from: contentStart)
+                let contentEnd = next?.range.lowerBound ?? text.endIndex
+                let selectionText = String(text[contentStart..<contentEnd])
+                attachments.append(
+                    ThreadAttachmentSummary(
+                        id: "persisted-text-selection-\(attachments.count)",
+                        kind: "text_selection",
+                        title: "文本选区",
+                        detail: Self.preview(selectionText)
+                    )
+                )
+                guard let next else { return (visibleText, attachments) }
+                cursor = next
+            case .imageStub:
+                let stubStart = text.index(cursor.range.lowerBound, offsetBy: 2)
+                guard let closeRange = text.range(of: "[/STUB]", range: cursor.range.upperBound..<text.endIndex) else {
+                    return (visibleText, attachments)
+                }
+                let stubRange = stubStart..<closeRange.upperBound
+                let stubText = String(text[stubRange])
+                if stubText.contains("kind=image") {
+                    attachments.append(
+                        ThreadAttachmentSummary(
+                            id: Self.stubAttribute("id", in: stubText) ?? "persisted-image-\(attachments.count)",
+                            kind: "image",
+                            title: "图片",
+                            detail: Self.imageStubDetail(from: stubText)
+                        )
+                    )
+                }
+                guard let next = nextPersistedAttachmentMarker(in: text, from: closeRange.upperBound) else {
+                    return (visibleText, attachments)
+                }
+                cursor = next
+            }
+        }
+    }
+
+    private enum PersistedAttachmentMarkerKind {
+        case textSelection
+        case imageStub
+    }
+
+    private struct PersistedAttachmentMarker {
+        let kind: PersistedAttachmentMarkerKind
+        let range: Range<String.Index>
+    }
+
+    private static func nextPersistedAttachmentMarker(
+        in text: String,
+        from index: String.Index
+    ) -> PersistedAttachmentMarker? {
+        let searchRange = index..<text.endIndex
+        let selectionRange = text.range(of: "\n\n[选区]\n", range: searchRange)
+        let imageRange = text.range(of: "\n\n[STUB ", range: searchRange)
+
+        switch (selectionRange, imageRange) {
+        case (nil, nil):
+            return nil
+        case (let selection?, nil):
+            return PersistedAttachmentMarker(kind: .textSelection, range: selection)
+        case (nil, let image?):
+            return PersistedAttachmentMarker(kind: .imageStub, range: image)
+        case (let selection?, let image?):
+            if selection.lowerBound < image.lowerBound {
+                return PersistedAttachmentMarker(kind: .textSelection, range: selection)
+            }
+            return PersistedAttachmentMarker(kind: .imageStub, range: image)
+        }
+    }
+
+    fileprivate static func preview(_ text: String) -> String? {
+        let lines = text.split(whereSeparator: \.isNewline)
+        let preview = lines.first.map(String.init) ?? text
+        let trimmed = preview.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if trimmed.count > 48 {
+            return String(trimmed.prefix(48)) + "…"
+        }
+        return trimmed
+    }
+
+    private static func stubAttribute(_ name: String, in stubText: String) -> String? {
+        guard let nameRange = stubText.range(of: "\(name)=") else { return nil }
+        var valueStart = nameRange.upperBound
+        if valueStart < stubText.endIndex, stubText[valueStart] == "\"" {
+            valueStart = stubText.index(after: valueStart)
+            guard let valueEnd = stubText[valueStart...].firstIndex(of: "\"") else { return nil }
+            return String(stubText[valueStart..<valueEnd])
+        }
+
+        let valueEnd = stubText[valueStart...].firstIndex { character in
+            character == " " || character == "]" || character.isNewline
+        } ?? stubText.endIndex
+        return String(stubText[valueStart..<valueEnd])
+    }
+
+    private static func imageStubDetail(from stubText: String) -> String? {
+        guard let size = stubAttribute("size", in: stubText), !size.isEmpty else {
+            return "STUB"
+        }
+        return "size \(size) bytes"
+    }
+}
+
+private extension ThreadAttachmentSummary {
+    init(attachment: UserMessageAttachmentPayload, index: Int) {
+        let id = attachment.id.isEmpty ? "\(attachment.kind.rawValue)-\(index)" : attachment.id
+        switch attachment.kind {
+        case .textSelection:
+            self.init(
+                id: id,
+                kind: attachment.kind.rawValue,
+                title: "文本选区",
+                detail: ThreadBubble.preview(attachment.text ?? "")
+            )
+        case .image:
+            self.init(
+                id: id,
+                kind: attachment.kind.rawValue,
+                title: "图片",
+                detail: attachment.mimeType ?? "image"
+            )
+        }
+    }
+}
+
+struct ThreadPermissionRequest: Identifiable, Equatable {
+    let id: String
+    let toolName: String
+    let toolCallId: String?
+    let argumentsJSON: String
+}
+
+struct ThreadWorkspaceAskRequest: Identifiable, Equatable {
+    let id: String
+    let prompt: String
+    let candidates: [WorkspaceAskCandidate]
+}

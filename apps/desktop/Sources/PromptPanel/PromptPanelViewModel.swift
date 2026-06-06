@@ -47,7 +47,7 @@ final class PromptPanelViewModel {
         onPreviewImage?(attachment)
     }
 
-    func resetForNewSession() {
+    func resetForNewThread() {
         draft = ""
         attachments = []
     }
@@ -72,7 +72,7 @@ final class PromptPanelViewModel {
         }
 
         onSubmit?(trimmed, validAttachments())
-        resetForNewSession()
+        resetForNewThread()
     }
 
     func selectAction(_ action: ActionDefinition) {
@@ -99,7 +99,7 @@ final class PromptPanelViewModel {
         case .appendPrompt:
             do {
                 onSubmit?(try parsed.renderedPrompt(), validAttachments())
-                resetForNewSession()
+                resetForNewThread()
             } catch ActionInvocationError.missingRequiredArgument(let name) {
                 submissionDisabledMessage = "缺少必填参数：\(name)"
             } catch {
@@ -109,7 +109,7 @@ final class PromptPanelViewModel {
             do {
                 let payload = ActionBindingPayload(pluginId: binding.pluginId, promptName: binding.promptName)
                 onSubmitAction?(try parsed.renderedPrompt(), payload, validAttachments())
-                resetForNewSession()
+                resetForNewThread()
             } catch ActionInvocationError.missingRequiredArgument(let name) {
                 submissionDisabledMessage = "缺少必填参数：\(name)"
             } catch {

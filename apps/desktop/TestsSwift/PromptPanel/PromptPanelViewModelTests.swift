@@ -7,7 +7,7 @@ final class PromptPanelViewModelTests: XCTestCase {
         let actions = makeTestActions()
         let vm = PromptPanelViewModel(actions: actions)
 
-        XCTAssertEqual(vm.filteredActions.map(\.id), ["new-session", "weather/current"])
+        XCTAssertEqual(vm.filteredActions.map(\.id), ["new-thread", "weather/current"])
     }
 
     @MainActor
@@ -26,10 +26,10 @@ final class PromptPanelViewModelTests: XCTestCase {
 
         vm.updateActions([
             ActionDefinition.skill(
-                id: "recent-session-1",
+                id: "recent-thread-1",
                 trigger: "history",
-                title: "最近会话：API 设计",
-                description: "session",
+                title: "最近Thread：API 设计",
+                description: "thread",
                 template: "{{query}}",
                 arguments: [
                     ActionArgumentDefinition(name: "query", description: nil, required: false)
@@ -40,7 +40,7 @@ final class PromptPanelViewModelTests: XCTestCase {
 
         vm.draft = "history"
 
-        XCTAssertEqual(vm.filteredActions.map(\.id), ["recent-session-1"])
+        XCTAssertEqual(vm.filteredActions.map(\.id), ["recent-thread-1"])
     }
 
     @MainActor
@@ -225,10 +225,10 @@ final class PromptPanelViewModelTests: XCTestCase {
     private func makeTestActions() -> [ActionDefinition] {
         [
             ActionDefinition.skill(
-                id: "new-session",
+                id: "new-thread",
                 trigger: "new",
-                title: "新建会话",
-                description: "session",
+                title: "新建Thread",
+                description: "thread",
                 template: "{{query}}",
                 arguments: [
                     ActionArgumentDefinition(name: "query", description: nil, required: false)

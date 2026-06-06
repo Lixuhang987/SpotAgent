@@ -1,16 +1,16 @@
 export type ClientResponse =
   | {
-      type: "permission_answer";
+      type: "permission.answered";
       requestId: string;
       timestamp: string;
       payload: {
         decision: "allow" | "deny";
-        scope?: "once" | "session" | "always";
+        scope?: "once" | "thread" | "always";
         reason?: string;
       };
     }
   | {
-      type: "workspace_answer";
+      type: "workspace.answered";
       requestId: string;
       timestamp: string;
       payload: {

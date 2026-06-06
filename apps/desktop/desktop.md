@@ -1,6 +1,6 @@
 # desktop
 
-`apps/desktop` 是 macOS 宿主层：应用生命周期、PromptPanel、全局唯一 SessionWindow、StatusBubble、Settings 与全局热键。
+`apps/desktop` 是 macOS 宿主层：应用生命周期、PromptPanel、全局唯一 ThreadWindow、StatusBubble、Settings 与全局热键。
 
 ## 架构红线（编辑此目录前必读）
 
@@ -14,7 +14,7 @@
 
 ### 2. 模块布局：View + ViewModel + Controller + Styles
 
-每个独立 UI 模块（PromptPanel / SessionWindow / StatusBubble / Settings）按四件套拆分：
+每个独立 UI 模块（PromptPanel / ThreadWindow / StatusBubble / Settings）按四件套拆分：
 
 - **View**：纯 SwiftUI，只读 ViewModel 状态、消费 `@Environment(\.appTheme)`，不直接调 `NSEvent` / `NSPanel` / 系统 API。
 - **ViewModel**：`@Observable` 状态机；不持有 `View` / `Color` / `Font`；跨模块意图通过闭包出口（`onSubmit` / `onTap` / `onHide`）暴露。
@@ -36,8 +36,8 @@
 
 ### 5. 输入边界（产品红线）
 
-- 只有用户主动输入和用户主动选区可以作为会话初始上下文；屏幕 / 窗口 / 文件 / 剪贴板 / App 状态一律通过 tool 按需读取。
-- 宿主层只通过 `WebSocket + SessionCommand / SessionEvent / ServerRequest / ClientResponse` 与 agent-server 通信；**不组装 LLM 消息、不读取 runtime 内部状态、不直接执行 tool 编排**。
+- 只有用户主动输入和用户主动选区可以作为 thread 初始上下文；屏幕 / 窗口 / 文件 / 剪贴板 / App 状态一律通过 tool 按需读取。
+- 宿主层只通过 `AppServer + WebSocket + ThreadCommand / ThreadNotification / ServerRequest / ClientResponse` 与 agent-server 通信；**不组装 LLM 消息、不读取 runtime 内部状态、不直接执行 tool 编排**。
 - 快捷键配置只保存在宿主层本地（UserDefaults，由 `KeyboardShortcuts` 库管理），不下沉到 runtime。
 
 ### 6. 点击区域：视觉边界 = 可交互边界
@@ -68,10 +68,10 @@
 - [Coordinator/](Sources/Coordinator/coordinator.md) — `AppCoordinator` 单向事件流
 - [Theme/](Sources/Theme/theme.md) — 视觉 token 与 Environment 注入
 - [PromptPanel/](Sources/PromptPanel/prompt-panel.md) — 命令面板 View+ViewModel+Controller+Styles
-- [SessionWindow/](Sources/SessionWindow/session-window.md) — 单窗口多 tab 会话工作区、历史侧栏、权限气泡与共享会话连接
+- [ThreadWindow/](Sources/ThreadWindow/thread-window.md) — 单窗口多 tab thread 工作区、历史侧栏、权限气泡与共享连接
 - [StatusBubble/](Sources/StatusBubble/status-bubble.md) — 右下角状态气泡
 - [Settings/](Sources/Settings/settings.md) — 设置窗口 Tab 容器（model / tools / permissions / shortcuts / workspaces）
-- [AppServices/](Sources/AppServices/app-services.md) — 跨模块共享服务（AgentServer / AgentSettings / Hotkey / Lifecycle / PlatformBridge / SelectionCapture / Session）
+- [AppServices/](Sources/AppServices/app-services.md) — 跨模块共享服务（AppServer / AgentSettings / Hotkey / Lifecycle / PlatformBridge / SelectionCapture / Thread）
 
 ## 入口与启动流程
 
@@ -103,9 +103,9 @@ sequenceDiagram
   participant Hotkey as KeyboardShortcuts
   participant Coord as AppCoordinator
   participant Panel as PromptPanel
-  participant Window as SessionWindow
+  participant Window as ThreadWindow
   participant Conn as AppServerConnection
-  participant Bus as SessionEventBus
+  participant Bus as ThreadEventBus
   participant Server as agent-server
 
   User->>Hotkey: 全局热键
@@ -113,20 +113,20 @@ sequenceDiagram
   Coord->>Panel: show()
   User->>Panel: 输入并提交
   Panel->>Coord: send(.submitPrompt)
-  Coord->>Window: NSWindow + SessionWindowLifecycle
-  Window->>Conn: 进程级唯一共享连接
-  Conn->>Server: WebSocket 文本帧
-  Server-->>Conn: command / event / request / response
-  Conn-->>Bus: SessionProtocolClient 解码后按 sessionId 分发
-  Bus-->>Window: SessionWindowViewModel / SessionTabViewModel 订阅消费
+  Coord->>Window: NSWindow + ThreadWindowLifecycle
+  Window->>Conn: AppServer 持有的进程级唯一共享连接
+  Conn->>Server: ThreadCommand / ClientResponse / PlatformBridgeMessage
+  Server-->>Conn: ThreadNotification / ServerRequest / PlatformBridgeMessage
+  Conn-->>Bus: AppServerClient 解码后按 threadId 分发
+  Bus-->>Window: ThreadWindowViewModel / ThreadTabViewModel 订阅消费
 ```
 
 ## 关键 DTO
 
-### `SessionSummary`（[Session](Sources/AppServices/Session/session.md)）
+### `ThreadSummary`（[Thread](Sources/AppServices/Thread/thread.md)）
 
-- `sessionId` / `isRunning` / `latestSummary` / `lastActiveAt` / `windowIsOpen`
-- 用途：聚合 StatusBubble 显示与会话回跳。
+- `threadId` / `isRunning` / `latestSummary` / `lastActiveAt` / `windowIsOpen`
+- 用途：聚合 StatusBubble 显示与 thread 回跳。
 
 ### `AgentSettings` 文件结构（[AgentSettings](Sources/AppServices/AgentSettings/agent-settings.md)）
 
@@ -147,14 +147,14 @@ sequenceDiagram
 - `.imageRegion(base64:mimeType:)`：用户区域截图（来自 `MacRegionCaptureProvider`，保留 `screencapture -i` 作为用户主动圈选入口）。
 - `.selectionError(message:)`：采集失败，UI 以禁用 chip + tooltip 反馈。
 
-`ActionDefinition` 是 PromptPanel 中由 manifest prompt 派生的 item 模型，包含 trigger、参数、可选 Action 全局快捷键、提交行为和可选 plugin binding。来源是 `~/.spotAgent/plugins/*/plugin.json` 的 `prompts[]`。参数统一使用 `[name: value]` 命名块；无参数 action 可以只输入 trigger。skill action 只提交渲染后的 prompt；plugin action 提交渲染后的 prompt 与 `{ pluginId, promptName }`，由 agent-server 重新校验并持久化 session 绑定，后续按 `mcpServerIds` 激活对应 MCP tool scope。
+`ActionDefinition` 是 PromptPanel 中由 manifest prompt 派生的 item 模型，包含 trigger、参数、可选 Action 全局快捷键、提交行为和可选 plugin binding。来源是 `~/.spotAgent/plugins/*/plugin.json` 的 `prompts[]`。参数统一使用 `[name: value]` 命名块；无参数 action 可以只输入 trigger。skill action 只提交渲染后的 prompt；plugin action 提交渲染后的 prompt 与 `{ pluginId, promptName }`，由 agent-server 重新校验并持久化 thread 绑定，后续按 `mcpServerIds` 激活对应 MCP tool scope。
 
 ## 注意事项
 
 - agent-server 是 desktop app fork 的长驻子进程，**修改 TS 源码必须重启 desktop app**，无 hot reload。
 - `AgentServerService` 已实现指数退避重启（最多 5 次），多次失败时通过 `onFatalError` 回调上抛 Coordinator 弹原生 alert（详见 [agent-server.md](Sources/AppServices/AgentServer/agent-server.md)）。
 - node 子进程 stdout/stderr 通过 Pipe 捕获但未暴露 UI（仅防 fd 泄漏）。
-- 设置窗口与 Session 窗口共享 `AppActivationPolicyCoordinator`，全部关闭后 app 切回 `.accessory`。
-- desktop 主会话链路是进程级唯一 `AppServerConnection`。`SessionWindow` 通过 `SessionEventBus` 按 `sessionId` 分发事件，tab 不再各自持有主 socket。
-- `SessionProtocolClient` 负责共享连接上的 command / event / request / response 编解码；`SessionWindowViewModel` / `SessionTabViewModel` 只围绕订阅、发命令、发回执和本地 UI 状态工作。
-- `LegacySessionSocketClient` 仅保留为兼容层，不是当前桌面端主路径。
+- 设置窗口与 Thread 窗口共享 `AppActivationPolicyCoordinator`，全部关闭后 app 切回 `.accessory`。
+- desktop 主 thread 链路由 `AppServer` 持有进程级唯一 `AppServerConnection`。`ThreadWindow` 通过 `ThreadEventBus` 按 `threadId` 分发事件，tab 不再各自持有主 socket。
+- `AppServerClient` 负责共享连接上的 command / notification / request / response 编解码；`ThreadWindowViewModel` / `ThreadTabViewModel` 只围绕恢复、触发 AppServer 语义命令/回执和本地 UI 状态工作。
+- `PlatformBridgeService` 不另建连接；`AppServerClient` 在共享连接上发送 `platform_bridge_hello`，并把 `platform_request` 分派给它处理。

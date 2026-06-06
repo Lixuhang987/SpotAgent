@@ -59,8 +59,8 @@
 flowchart TD
   A[用户按下全局热键] --> B[Swift 宿主打开 PromptPanel]
   B --> C[用户输入 prompt 并提交]
-  C --> D[Swift 创建 SessionWindow 与 WebSocket 客户端]
-  D --> E[agent-server 接收 SessionMessage]
+  C --> D[Swift 创建 ThreadWindow 并通过 AppServer 共享连接发送 ThreadCommand]
+  D --> E[agent-server 接收 ThreadCommand]
   E --> F[AgentRuntime 调用 LLMClient]
   F --> G{是否返回 toolCalls}
   G -- 否 --> H[SwiftUI 渲染 assistant bubbles]

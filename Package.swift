@@ -12,14 +12,16 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/sindresorhus/KeyboardShortcuts", from: "2.0.0"),
-        .package(url: "https://github.com/gonzalezreal/swift-markdown-ui", from: "2.4.1")
+        .package(url: "https://github.com/gonzalezreal/swift-markdown-ui", from: "2.4.1"),
+        .package(url: "https://github.com/pointfreeco/swift-composable-architecture", from: "1.22.0")
     ],
     targets: [
         .executableTarget(
             name: "HandAgentDesktop",
             dependencies: [
                 .product(name: "KeyboardShortcuts", package: "KeyboardShortcuts"),
-                .product(name: "MarkdownUI", package: "swift-markdown-ui")
+                .product(name: "MarkdownUI", package: "swift-markdown-ui"),
+                .product(name: "ComposableArchitecture", package: "swift-composable-architecture")
             ],
             path: "apps/desktop",
             exclude: ["TestsSwift", "desktop.md"]

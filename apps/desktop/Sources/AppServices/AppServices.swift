@@ -4,9 +4,9 @@ import KeyboardShortcuts
 import SwiftUI
 
 @MainActor
-protocol SessionWindowPresenting {
+protocol ThreadWindowPresenting {
     func present(
-        viewModel: SessionWindowViewModel,
+        viewModel: ThreadWindowViewModel,
         onClose: @escaping () -> Void
     ) -> NSWindow?
 }
@@ -46,32 +46,28 @@ protocol FatalAlertPresenting {
 
 @MainActor
 final class AppServices {
-    let agentServer: any AgentServerStarting
-    let sessionRegistry: SessionRegistry
+    let appServer: any AppServerManaging
+    let threadRegistry: ThreadRegistry
     let settingsStore: AgentSettingsStore
-    let sessionHistoryStore: SessionHistoryStore
+    let threadHistoryStore: ThreadHistoryStore
     let actionManifestStore: ActionManifestStore
-    let agentServerURL: URL
-    let platformBridgeFactory: @MainActor (URL) -> (any PlatformBridgeRunning)?
+    let appServerURL: URL
     let hotkeyRegistrar: any HotkeyRegistering
-    let sessionWindowPresenter: any SessionWindowPresenting
+    let threadWindowPresenter: any ThreadWindowPresenting
     let settingsWindowPresenter: any SettingsWindowPresenting
     let fatalAlertPresenter: any FatalAlertPresenting
     let setActivationPolicy: @MainActor (NSApplication.ActivationPolicy) -> Void
     let showsStatusBubble: Bool
 
     init(
-        agentServer: any AgentServerStarting = AgentServerService(),
-        sessionRegistry: SessionRegistry = SessionRegistry(),
+        appServer: (any AppServerManaging)? = nil,
+        threadRegistry: ThreadRegistry = ThreadRegistry(),
         settingsStore: AgentSettingsStore = AgentSettingsStore(),
-        sessionHistoryStore: SessionHistoryStore = SessionHistoryStore(),
+        threadHistoryStore: ThreadHistoryStore = ThreadHistoryStore(),
         actionManifestStore: ActionManifestStore = ActionManifestStore(),
-        agentServerURL: URL = URL(string: "ws://127.0.0.1:4317/api/session")!,
-        platformBridgeFactory: @escaping @MainActor (URL) -> (any PlatformBridgeRunning)? = { url in
-            PlatformBridgeService(serverURL: url)
-        },
+        appServerURL: URL = URL(string: "ws://127.0.0.1:4317/api/thread")!,
         hotkeyRegistrar: any HotkeyRegistering = ProductionHotkeyRegistrar(),
-        sessionWindowPresenter: any SessionWindowPresenting = ProductionSessionWindowPresenter(),
+        threadWindowPresenter: any ThreadWindowPresenting = ProductionThreadWindowPresenter(),
         settingsWindowPresenter: any SettingsWindowPresenting = ProductionSettingsWindowPresenter(),
         fatalAlertPresenter: any FatalAlertPresenting = ProductionFatalAlertPresenter(),
         setActivationPolicy: @escaping @MainActor (NSApplication.ActivationPolicy) -> Void = {
@@ -79,15 +75,20 @@ final class AppServices {
         },
         showsStatusBubble: Bool = true
     ) {
-        self.agentServer = agentServer
-        self.sessionRegistry = sessionRegistry
+        self.appServer = appServer ?? AppServer(
+            agentServer: AgentServerService(),
+            client: AppServerClient(
+                connection: AppServerConnection(serverURL: appServerURL),
+                platformBridge: PlatformBridgeService()
+            )
+        )
+        self.threadRegistry = threadRegistry
         self.settingsStore = settingsStore
-        self.sessionHistoryStore = sessionHistoryStore
+        self.threadHistoryStore = threadHistoryStore
         self.actionManifestStore = actionManifestStore
-        self.agentServerURL = agentServerURL
-        self.platformBridgeFactory = platformBridgeFactory
+        self.appServerURL = appServerURL
         self.hotkeyRegistrar = hotkeyRegistrar
-        self.sessionWindowPresenter = sessionWindowPresenter
+        self.threadWindowPresenter = threadWindowPresenter
         self.settingsWindowPresenter = settingsWindowPresenter
         self.fatalAlertPresenter = fatalAlertPresenter
         self.setActivationPolicy = setActivationPolicy
@@ -102,12 +103,11 @@ final class AppServices {
         )
     ) -> AppServices {
         AppServices(
-            agentServer: NopAgentServerService(),
+            appServer: NopAppServer(),
             actionManifestStore: actionManifestStore,
-            agentServerURL: URL(string: "ws://127.0.0.1:0/noop")!,
-            platformBridgeFactory: { _ in nil },
+            appServerURL: URL(string: "ws://127.0.0.1:0/noop")!,
             hotkeyRegistrar: NopHotkeyRegistrar(),
-            sessionWindowPresenter: NopSessionWindowPresenter(),
+            threadWindowPresenter: NopThreadWindowPresenter(),
             settingsWindowPresenter: settingsWindowPresenter,
             fatalAlertPresenter: NopFatalAlertPresenter(),
             setActivationPolicy: setActivationPolicy,
@@ -117,14 +117,39 @@ final class AppServices {
 }
 
 @MainActor
-final class NopAgentServerService: AgentServerStarting {
-    var lastStartupError: String?
-    var fatalErrorMessage: String?
-    var isAvailable = false
+final class NopAppServer: AppServerManaging {
+    var threadConnectionState: AppServerConnectionState = .disconnected
+    var isAvailable = true
+    var startupErrorMessage: String?
     var onAvailabilityChange: ((Bool) -> Void)?
     var onFatalError: ((String) -> Void)?
-    func start() throws {}
+    var onThreadConnectionStateChange: ((AppServerConnectionState) -> Void)?
+    var onThreadEvent: ((AppServerThreadEvent) -> Void)?
+
+    func start() {}
     func stop() {}
+    func connectThreadClient() {}
+    func disconnectThreadClient() {}
+    func startThread(commandId: String, timestamp: String, workspaceId: String?, actionBinding: ActionBindingPayload?) {}
+    func resumeThread(threadId: String, commandId: String, timestamp: String) {}
+    func listThreads(commandId: String, timestamp: String) {}
+    func deleteThread(commandId: String, timestamp: String, targetThreadId: String) {}
+    func startTurn(
+        threadId: String,
+        commandId: String,
+        timestamp: String,
+        text: String,
+        attachments: [UserMessageAttachmentPayload]
+    ) {}
+    func interruptTurn(threadId: String, commandId: String, timestamp: String) {}
+    func answerPermission(
+        requestId: String,
+        timestamp: String,
+        decision: AppServerPermissionDecision,
+        scope: AppServerPermissionScope?,
+        reason: String?
+    ) {}
+    func answerWorkspace(requestId: String, timestamp: String, workspaceId: String?, cancelled: Bool?) {}
 }
 
 @MainActor
@@ -141,10 +166,10 @@ final class NopHotkeyRegistrar: HotkeyRegistering {
 }
 
 @MainActor
-final class NopSessionWindowPresenter: SessionWindowPresenting {
-    private(set) var presentedViewModel: SessionWindowViewModel?
+final class NopThreadWindowPresenter: ThreadWindowPresenting {
+    private(set) var presentedViewModel: ThreadWindowViewModel?
 
-    func present(viewModel: SessionWindowViewModel, onClose: @escaping () -> Void) -> NSWindow? {
+    func present(viewModel: ThreadWindowViewModel, onClose: @escaping () -> Void) -> NSWindow? {
         presentedViewModel = viewModel
         return NSWindow()
     }

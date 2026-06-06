@@ -35,14 +35,14 @@ describe("FilePermissionPolicy", () => {
     expect(decision).toBe("ask");
   });
 
-  it("session-scope rule survives within instance but not across instances", async () => {
+  it("thread-scope rule survives within instance but not across instances", async () => {
     const policy = new FilePermissionPolicy({ filePath });
     const req = {
       toolName: "file.write",
       arguments: { workspaceId: "default", relativePath: "x.md" },
       toolCallId: "tc-1",
     };
-    await policy.remember(req, { decision: "allow", remember: "session" });
+    await policy.remember(req, { decision: "allow", remember: "thread" });
 
     expect(await policy.check(req)).toBe("allow");
 
@@ -135,50 +135,50 @@ describe("FilePermissionPolicy", () => {
     expect(resolution).toEqual({ decision: "deny", reason: "user clicked deny" });
   });
 
-  it("session-scope rules are isolated by sessionId", async () => {
+  it("thread-scope rules are isolated by threadId", async () => {
     const policy = new FilePermissionPolicy({ filePath });
     const baseArgs = { workspaceId: "default", relativePath: "secret.md" };
 
     const reqA = {
       toolName: "file.write",
       arguments: baseArgs,
-      sessionId: "session-A",
+      threadId: "thread-A",
       toolCallId: "tc-a",
     };
     const reqB = {
       toolName: "file.write",
       arguments: baseArgs,
-      sessionId: "session-B",
+      threadId: "thread-B",
       toolCallId: "tc-b",
     };
 
-    await policy.remember(reqA, { decision: "allow", remember: "session" });
+    await policy.remember(reqA, { decision: "allow", remember: "thread" });
 
     expect(await policy.check(reqA)).toBe("allow");
     expect(await policy.check(reqB)).toBe("ask");
   });
 
-  it("clearSessionRules removes only rules for the given sessionId", async () => {
+  it("clearThreadRules removes only rules for the given threadId", async () => {
     const policy = new FilePermissionPolicy({ filePath });
     const baseArgs = { workspaceId: "default", relativePath: "x.md" };
 
     const reqA = {
       toolName: "file.write",
       arguments: baseArgs,
-      sessionId: "session-A",
+      threadId: "thread-A",
       toolCallId: "tc-a",
     };
     const reqB = {
       toolName: "file.write",
       arguments: baseArgs,
-      sessionId: "session-B",
+      threadId: "thread-B",
       toolCallId: "tc-b",
     };
 
-    await policy.remember(reqA, { decision: "allow", remember: "session" });
-    await policy.remember(reqB, { decision: "deny", remember: "session" });
+    await policy.remember(reqA, { decision: "allow", remember: "thread" });
+    await policy.remember(reqB, { decision: "deny", remember: "thread" });
 
-    policy.clearSessionRules("session-A");
+    policy.clearThreadRules("thread-A");
 
     expect(await policy.check(reqA)).toBe("ask");
     expect(await policy.check(reqB)).toBe("deny");

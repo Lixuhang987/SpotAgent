@@ -10,7 +10,7 @@ const InputSchema = z.object({
 export type WorkspaceAskUserToolInput = z.infer<typeof InputSchema>;
 
 export type WorkspaceAskUserRequest = {
-  sessionId?: string;
+  threadId?: string;
   toolCallId?: string;
   prompt: string;
   candidates: WorkspaceSummary[];
@@ -50,7 +50,7 @@ export const WorkspaceAskUserTool = defineTool<
     }
 
     const result = await deps.askResolver({
-      sessionId: context.sessionId,
+      threadId: context.threadId,
       toolCallId: context.toolCallId,
       prompt: input.prompt,
       candidates,

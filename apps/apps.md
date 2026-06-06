@@ -7,16 +7,15 @@
 当前包含两个独立可执行单元：
 
 - [desktop/desktop.md](/Users/mu9/proj/handAgent/apps/desktop/desktop.md) —— macOS 宿主壳（Swift / SwiftUI）。
-- [agent-server/agent-server.md](/Users/mu9/proj/handAgent/apps/agent-server/agent-server.md) —— 本地 WebSocket 会话桥（Node / TypeScript），由 desktop 派生为子进程。
+- [agent-server/agent-server.md](/Users/mu9/proj/handAgent/apps/agent-server/agent-server.md) —— 本地 WebSocket thread 桥（Node / TypeScript），由 desktop 派生为子进程。
 
 ## 在整体架构中的位置
 
 ```mermaid
 flowchart LR
-  A[apps/desktop<br/>macOS 宿主] -->|SessionCommand / ClientResponse / PlatformBridgeMessage WS| B[apps/agent-server<br/>本地会话桥]
-  B -->|SessionEvent / ServerRequest| A
+  A[apps/desktop<br/>macOS 宿主] -->|ThreadCommand / ClientResponse / PlatformBridgeMessage WS| B[apps/agent-server<br/>本地 thread 桥]
+  B -->|ThreadNotification / ServerRequest / PlatformBridgeMessage| A
   B --> C[packages/core<br/>runtime / tool / LLM]
-  A -->|PlatformBridge 反向 IPC| B
 ```
 
 ## 本层核心流转
@@ -26,28 +25,28 @@ flowchart LR
 - 全局热键由 `KeyboardShortcuts` 库监听（命名表见 [Hotkey](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Hotkey/hotkey.md)），事件转发给 `AppCoordinator`。
 - `PromptPanelController` 负责打开输入面板、聚焦输入框、采集选区附件、提交 prompt。
 
-### 2. 会话交互
+### 2. Thread 交互
 
-- 用户提交 prompt 后，`AppCoordinator` 创建或聚焦 `SessionWindow`。
-- `SessionWindowLifecycle` 为 desktop 进程维护唯一 `AppServerConnection`；tab 通过 `SessionEventBus` 按 `sessionId` 订阅事件。
-- `SessionProtocolClient` 通过共享连接发送 `SessionCommand` / `ClientResponse`，由后端 `SessionCommandRouter` 路由并交给 `SessionRuntimeOrchestrator` 驱动 `AgentRuntime`。
-- SessionWindow 左侧历史列表读取 `~/.spotAgent/sessions/`，用于搜索、预览、恢复和删除持久化会话。
+- 用户提交 prompt 后，`AppCoordinator` 创建或聚焦 `ThreadWindow`。
+- `AppServer` 为 desktop 进程维护唯一 thread WebSocket；`ThreadWindowLifecycle` 通过 `ThreadEventBus` 按 `threadId` 分发 notification / request。
+- `AppServer` 暴露 thread / turn 语义方法，`AppServerClient` 在共享连接上编码 `ThreadCommand` / `ClientResponse`，由后端 `ThreadCommandRouter` 路由并交给 `ThreadRuntimeOrchestrator` 驱动 `AgentRuntime`。
+- ThreadWindow 左侧历史列表读取 `~/.spotAgent/threads/`，用于搜索、预览、恢复和删除持久化 thread。
 
 ### 3. 平台能力反向 IPC
 
 - `agent-server` 通过 `RemotePlatformAdapter` 调 `PlatformBridge.call`。
-- 桌面端 `PlatformBridgeService` 监听独立 WebSocket，把 `platform_request` 派发给 `MacPlatformProvider`。
+- 桌面端 `AppServerClient` 在共享 WebSocket 上接收 `platform_request`，交给 `PlatformBridgeService` 派发给 `MacPlatformProvider`，再通过同一连接回写 `platform_response`。
 
 ### 4. 状态反馈
 
-- `SessionRegistry` 聚合最近活跃会话。
+- `ThreadRegistry` 聚合最近活跃 thread。
 - `StatusBubbleController` 根据聚合结果回跳正在运行或最近活跃的窗口。
 
 ## 本层关键 DTO
 
 - `PromptAttachmentResult`（5 case：textSelection / selectionError / textToken / imageRegion / noAttachment）
-- `SessionSummary`
-- `SessionCommand` / `SessionEvent` / `ServerRequest` / `ClientResponse`
+- `ThreadSummary`
+- `ThreadCommand` / `ThreadNotification` / `ServerRequest` / `ClientResponse`
 - `PlatformBridgeMessage`（含 platform_bridge_hello / platform_request / platform_response）
 
 ## 近期重构经验
@@ -56,7 +55,7 @@ flowchart LR
 
 - Settings 模型页把 provider / API 选择从自绘 `HStack + Button` 改为系统 segmented `Picker`，API Key 输入改为 `SecureField`；Workspace 添加目录从直接创建 `NSOpenPanel` 改为 SwiftUI `fileImporter`。
 - Settings 容器把 tab 字符串收敛为 `SettingsTab` enum，并抽出 `SettingsListSection` 复用列表分割线逻辑，避免多个页面重复 `Array(enumerated())`。
-- SessionWindow 新增 `SessionRunStatus`，WebSocket 协议边界仍接收原始字符串，但进入 ViewModel 后立即归一化为枚举，UI 只用 `.isRunning` / `.rawValue`，避免散落比较 `"running"` / `"failed"`。
+- ThreadWindow 新增 `ThreadRunStatus`，WebSocket 协议边界仍接收原始字符串，但进入 ViewModel 后立即归一化为枚举，UI 只用 `.isRunning` / `.rawValue`，避免散落比较 `"running"` / `"failed"`。
 - Theme 环境值从手写 `EnvironmentKey` 改为 SwiftUI `@Entry`；StatusBubble 补了首次出现时 running 动画启动和 accessibility action。
 
 可复用经验：

@@ -59,7 +59,7 @@ export type AgentRuntimeEvent =
       toolCallId: string;
       toolName: string;
       decision: "allow" | "deny";
-      scope?: "once" | "session" | "always";
+      scope?: "once" | "thread" | "always";
       reason?: string;
     }
   | {
@@ -69,7 +69,7 @@ export type AgentRuntimeEvent =
     };
 
 export type AgentRuntimeRunOptions = {
-  sessionId?: string;
+  threadId?: string;
   signal?: AbortSignal;
 };
 
@@ -88,8 +88,8 @@ export class AgentRuntime {
   private readonly turnSummarizer?: TurnSummarizerLike;
   private readonly systemPromptSections: SystemPromptSection[];
   private pendingTurnSummary: Promise<void> = Promise.resolve();
-  private readonly onMetaToolActivate?: (sessionId: string) => Promise<void>;
-  private readonly isSessionActivated?: (sessionId: string) => boolean;
+  private readonly onMetaToolActivate?: (threadId: string) => Promise<void>;
+  private readonly isThreadActivated?: (threadId: string) => boolean;
 
   constructor(
     private readonly client: LLMClientLike,
@@ -100,8 +100,8 @@ export class AgentRuntime {
       blobStore?: BlobStore;
       turnSummarizer?: TurnSummarizerLike;
       systemPromptSections?: SystemPromptSection[];
-      onMetaToolActivate?: (sessionId: string) => Promise<void>;
-      isSessionActivated?: (sessionId: string) => boolean;
+      onMetaToolActivate?: (threadId: string) => Promise<void>;
+      isThreadActivated?: (threadId: string) => boolean;
     }
   ) {
     this.maxTimes = options?.maxTimes ?? 100;
@@ -110,7 +110,7 @@ export class AgentRuntime {
     this.turnSummarizer = options?.turnSummarizer;
     this.systemPromptSections = options?.systemPromptSections ?? buildDefaultSystemPromptSections();
     this.onMetaToolActivate = options?.onMetaToolActivate;
-    this.isSessionActivated = options?.isSessionActivated;
+    this.isThreadActivated = options?.isThreadActivated;
   }
 
   async run(userInput: string): Promise<AgentRunResult> {
@@ -228,7 +228,7 @@ export class AgentRuntime {
     runOptions: AgentRuntimeRunOptions;
   }): Promise<void> {
     const { tool, toolCall, messages, onEvent, runOptions } = input;
-    const { sessionId } = runOptions;
+    const { threadId } = runOptions;
     const startedAt = Date.now();
 
     throwIfAborted(runOptions.signal);
@@ -242,17 +242,17 @@ export class AgentRuntime {
 
     let content: string;
 
-    if (sessionId !== undefined && this.isSessionActivated?.(sessionId) === true) {
+    if (threadId !== undefined && this.isThreadActivated?.(threadId) === true) {
       // Already activated — return the already-active result without calling the tool
       content = META_TOOL_ALREADY_ACTIVE_RESULT;
     } else {
       // First activation: invoke the callback, then call the tool to get the result
-      if (sessionId !== undefined) {
-        await this.onMetaToolActivate?.(sessionId);
+      if (threadId !== undefined) {
+        await this.onMetaToolActivate?.(threadId);
       }
       throwIfAborted(runOptions.signal);
       const result = await tool.call(toolCall.arguments, {
-        sessionId,
+        threadId,
         toolCallId: toolCall.id,
       });
       throwIfAborted(runOptions.signal);
@@ -284,7 +284,7 @@ export class AgentRuntime {
     const permRequest = {
       toolName: toolCall.name,
       arguments: toolCall.arguments,
-      sessionId: runOptions.sessionId,
+      threadId: runOptions.threadId,
       toolCallId: toolCall.id,
     };
 
@@ -340,7 +340,7 @@ export class AgentRuntime {
 
     try {
       const result = await tool.call(toolCall.arguments, {
-        sessionId: runOptions.sessionId,
+        threadId: runOptions.threadId,
         toolCallId: toolCall.id,
       });
       throwIfAborted(runOptions.signal);

@@ -29,7 +29,7 @@ captureRegion 热键
             └─ error(message)   → PromptPanelController.appendAttachment(.selectionError(...))
 ```
 
-附件提交后由 Coordinator 翻译为 `UserMessageAttachmentPayload`（`textSelection` / `image`），通过 `SessionSocketClient` 走 `user_message.attachments` 发到 agent-server。
+附件提交后由 Coordinator 翻译为 `UserMessageAttachmentPayload`（`textSelection` / `image`），通过 `AppServer.startTurn` 走 `turn.start.payload.attachments` 发到 agent-server。
 
 ## 设计备注
 
@@ -39,7 +39,7 @@ captureRegion 热键
 - 两个 Provider 都是 `Sendable` 协议、可注入；测试用 stub 实现替代即可。
 - 临时文件失败不抛异常，统一映射成 `RegionCaptureResult.error`。
 - 文本选区路径 120ms 等待是经验值；过短会读不到剪贴板，过长用户能感知到延迟。
-- 选区 / 截图后不直接构造 `SessionMessage`，必须经 PromptPanel attachment chip 让用户确认或编辑后再提交，符合 AGENTS.md「只有用户主动输入可以作为初始上下文」的边界。
+- 选区 / 截图后不直接构造 thread 协议消息，必须经 PromptPanel attachment chip 让用户确认或编辑后再提交，符合 AGENTS.md「只有用户主动输入可以作为初始上下文」的边界。
 
 ## 编辑此目录的约束
 

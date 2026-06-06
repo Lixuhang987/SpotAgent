@@ -35,14 +35,14 @@ final class ProductionHotkeyRegistrar: HotkeyRegistering {
 }
 
 @MainActor
-final class ProductionSessionWindowPresenter: SessionWindowPresenting {
+final class ProductionThreadWindowPresenter: ThreadWindowPresenting {
     private var closeObservations: [ObjectIdentifier: WindowCloseObservation] = [:]
 
     func present(
-        viewModel: SessionWindowViewModel,
+        viewModel: ThreadWindowViewModel,
         onClose: @escaping () -> Void
     ) -> NSWindow? {
-        let hosting = NSHostingController(rootView: SessionWindowView(viewModel: viewModel))
+        let hosting = NSHostingController(rootView: ThreadWindowView(viewModel: viewModel))
         let window = NSWindow(contentViewController: hosting)
         window.title = "HandAgent"
         window.setContentSize(NSSize(width: 920, height: 640))

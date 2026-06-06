@@ -4,35 +4,35 @@ import XCTest
 
 final class AppActivationPolicyCoordinatorTests: XCTestCase {
     @MainActor
-    func testUsesAccessoryPolicyWithoutSessionWindows() {
+    func testUsesAccessoryPolicyWithoutThreadWindows() {
         let coordinator = AppActivationPolicyCoordinator()
 
         XCTAssertEqual(
-            coordinator.policyAfterUpdatingOpenSessionWindows(by: 0),
+            coordinator.policyAfterUpdatingOpenThreadWindows(by: 0),
             .accessory
         )
     }
 
     @MainActor
-    func testSwitchesToRegularPolicyWhenFirstSessionWindowOpens() {
+    func testSwitchesToRegularPolicyWhenFirstThreadWindowOpens() {
         let coordinator = AppActivationPolicyCoordinator()
 
-        _ = coordinator.policyAfterUpdatingOpenSessionWindows(by: 1)
+        _ = coordinator.policyAfterUpdatingOpenThreadWindows(by: 1)
 
         XCTAssertEqual(
-            coordinator.policyAfterUpdatingOpenSessionWindows(by: 0),
+            coordinator.policyAfterUpdatingOpenThreadWindows(by: 0),
             .regular
         )
     }
 
     @MainActor
-    func testReturnsToAccessoryPolicyWhenLastSessionWindowCloses() {
+    func testReturnsToAccessoryPolicyWhenLastThreadWindowCloses() {
         let coordinator = AppActivationPolicyCoordinator()
 
-        _ = coordinator.policyAfterUpdatingOpenSessionWindows(by: 1)
+        _ = coordinator.policyAfterUpdatingOpenThreadWindows(by: 1)
 
         XCTAssertEqual(
-            coordinator.policyAfterUpdatingOpenSessionWindows(by: -1),
+            coordinator.policyAfterUpdatingOpenThreadWindows(by: -1),
             .accessory
         )
     }
@@ -48,7 +48,7 @@ final class AppActivationPolicyCoordinatorTests: XCTestCase {
     }
 
     @MainActor
-    func testReturnsToAccessoryPolicyWhenSettingsWindowClosesWithoutSessions() {
+    func testReturnsToAccessoryPolicyWhenSettingsWindowClosesWithoutThreads() {
         let coordinator = AppActivationPolicyCoordinator()
 
         _ = coordinator.policyAfterUpdatingSettingsWindow(isOpen: true)

@@ -49,7 +49,7 @@ const result = await registerTools({
 this.cachedStamp = settingsStamp;
 ```
 
-`SettingsBackedToolRegistry` 持有一个长期存在的 `ToolRegistry`。刷新时调用 core `registerTools()` 原地替换 builtin tools；`actions/SessionScopedToolRegistry` 会在每轮 user message 前基于这个 builtin registry 重新组合 session 级工具表。
+`SettingsBackedToolRegistry` 持有一个长期存在的 `ToolRegistry`。刷新时调用 core `registerTools()` 原地替换 builtin tools；`actions/ThreadScopedToolRegistry` 会在每轮 user message 前基于这个 builtin registry 重新组合 thread 级工具表。
 
 ## 上下游关系
 

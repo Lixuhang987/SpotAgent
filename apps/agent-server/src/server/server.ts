@@ -3,9 +3,9 @@ import { pathToFileURL } from "node:url";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import type { PlatformBridgeMessage } from "@handagent/core/protocol/PlatformBridgeMessage.ts";
-import type { SessionCommand } from "@handagent/core/protocol/SessionCommand.ts";
+import type { ThreadCommand } from "@handagent/core/protocol/ThreadCommand.ts";
 import type { ClientResponse } from "@handagent/core/protocol/ClientResponse.ts";
-import type { SessionEvent } from "@handagent/core/protocol/SessionEvent.ts";
+import type { ThreadNotification } from "@handagent/core/protocol/ThreadNotification.ts";
 import type { ServerRequest } from "@handagent/core/protocol/ServerRequest.ts";
 import type { MCPClient } from "@handagent/core/mcp/MCPClient.ts";
 import type { MCPServerConfig } from "@handagent/core/mcp/MCPConfig.ts";
@@ -13,23 +13,23 @@ import type { PlatformAdapter } from "@handagent/core/platform/PlatformAdapter.t
 import { parseMCPConfig } from "@handagent/core/mcp/MCPConfig.ts";
 import type { AgentMessage } from "@handagent/core/runtime/AgentMessage.ts";
 import { META_TOOL_NAME } from "@handagent/core/tools/MetaToolUseTool.ts";
-import { SessionPersistence } from "../session/SessionPersistence.ts";
-import { SessionCommandRouter } from "../session/SessionCommandRouter.ts";
-import { SessionEventPublisher } from "../session/SessionEventPublisher.ts";
-import { SessionRuntimeOrchestrator } from "../session/SessionRuntimeOrchestrator.ts";
-import { FileSessionStore } from "@handagent/core/storage/index.ts";
+import { ThreadPersistence } from "../thread/ThreadPersistence.ts";
+import { ThreadCommandRouter } from "../thread/ThreadCommandRouter.ts";
+import { ThreadNotificationPublisher } from "../thread/ThreadNotificationPublisher.ts";
+import { ThreadRuntimeOrchestrator } from "../thread/ThreadRuntimeOrchestrator.ts";
+import { FileThreadStore } from "@handagent/core/storage/index.ts";
 import {
   WebSocketPlatformBridge,
   type BridgeToken,
 } from "../bridges/WebSocketPlatformBridge.ts";
 import {
-  SessionPermissionBridge,
-  type SessionBindingToken,
-} from "../bridges/SessionPermissionBridge.ts";
-import { SessionWorkspaceAskBridge } from "../bridges/SessionWorkspaceAskBridge.ts";
+  ThreadPermissionBridge,
+  type ThreadBindingToken,
+} from "../bridges/ThreadPermissionBridge.ts";
+import { ThreadWorkspaceAskBridge } from "../bridges/ThreadWorkspaceAskBridge.ts";
 import type { FilePermissionPolicy } from "@handagent/core/permission/FilePermissionPolicy.ts";
 
-type SessionSocket = {
+type ThreadSocket = {
   send(data: string): void;
   on(event: "message", listener: (raw: { toString(): string }) => void): void;
   on(event: "close", listener: () => void): void;
@@ -37,13 +37,13 @@ type SessionSocket = {
 
 type SocketMessage =
   | PlatformBridgeMessage
-  | SessionCommand
+  | ThreadCommand
   | ClientResponse;
 
 let nextConnectionId = 0;
 
-export function attachSessionSocketHandlers(
-  socket: SessionSocket,
+export function attachThreadSocketHandlers(
+  socket: ThreadSocket,
   {
     commandRouter,
     eventPublisher,
@@ -52,19 +52,19 @@ export function attachSessionSocketHandlers(
     permissionPolicy,
     workspaceAskBridge,
   }: {
-    commandRouter: SessionCommandRouter;
-    eventPublisher: SessionEventPublisher;
+    commandRouter: ThreadCommandRouter;
+    eventPublisher: ThreadNotificationPublisher;
     bridge?: WebSocketPlatformBridge;
-    permissionBridge?: SessionPermissionBridge;
+    permissionBridge?: ThreadPermissionBridge;
     permissionPolicy?: FilePermissionPolicy;
-    workspaceAskBridge?: SessionWorkspaceAskBridge;
+    workspaceAskBridge?: ThreadWorkspaceAskBridge;
   },
 ): void {
   const connectionId = `connection-${++nextConnectionId}`;
   let bridgeToken: BridgeToken | null = null;
-  const boundSessions = new Map<string, SessionBindingToken>();
-  const workspaceAskBoundSessions = new Map<string, SessionBindingToken>();
-  const sendPublished = (outgoing: SessionEvent | ServerRequest) => {
+  const boundThreads = new Map<string, ThreadBindingToken>();
+  const workspaceAskBoundThreads = new Map<string, ThreadBindingToken>();
+  const sendPublished = (outgoing: ThreadNotification | ServerRequest) => {
     socket.send(JSON.stringify(outgoing));
   };
   const sendPlatform = (outgoing: PlatformBridgeMessage) => {
@@ -85,15 +85,15 @@ export function attachSessionSocketHandlers(
     }
 
     if (isClientResponse(message)) {
-      if (message.type === "permission_answer" && permissionBridge) {
-        const token = boundSessions.get(sessionIdFromRequestId(message.requestId));
+      if (message.type === "permission.answered" && permissionBridge) {
+        const token = boundThreads.get(threadIdFromRequestId(message.requestId));
         if (token !== undefined) {
           permissionBridge.handleResponse(message, token);
         }
         return;
       }
-      if (message.type === "workspace_answer" && workspaceAskBridge) {
-        const token = workspaceAskBoundSessions.get(sessionIdFromRequestId(message.requestId));
+      if (message.type === "workspace.answered" && workspaceAskBridge) {
+        const token = workspaceAskBoundThreads.get(threadIdFromRequestId(message.requestId));
         if (token !== undefined) {
           workspaceAskBridge.handleResponse(message, token);
         }
@@ -103,37 +103,25 @@ export function attachSessionSocketHandlers(
       return;
     }
 
-    if (isSessionCommand(message)) {
-      if ("sessionId" in message && typeof message.sessionId === "string") {
-        eventPublisher.subscribe(connectionId, message.sessionId);
+    if (isThreadCommand(message)) {
+      if ("threadId" in message && typeof message.threadId === "string") {
+        eventPublisher.subscribe(connectionId, message.threadId);
       }
-      if (message.type === "turn_start") {
-        if (permissionBridge && !boundSessions.has(message.sessionId)) {
-          const token = permissionBridge.bindSession(
-            message.sessionId,
+      if (message.type === "turn.start") {
+        if (permissionBridge && !boundThreads.has(message.threadId)) {
+          const token = permissionBridge.bindThread(
+            message.threadId,
             (request) => eventPublisher.publishToConnection(connectionId, request),
           );
-          boundSessions.set(message.sessionId, token);
+          boundThreads.set(message.threadId, token);
         }
-        if (workspaceAskBridge && !workspaceAskBoundSessions.has(message.sessionId)) {
-          const token = workspaceAskBridge.bindSession(
-            message.sessionId,
+        if (workspaceAskBridge && !workspaceAskBoundThreads.has(message.threadId)) {
+          const token = workspaceAskBridge.bindThread(
+            message.threadId,
             (request) => eventPublisher.publishToConnection(connectionId, request),
           );
-          workspaceAskBoundSessions.set(message.sessionId, token);
+          workspaceAskBoundThreads.set(message.threadId, token);
         }
-      }
-      if (message.type === "session_unsubscribe") {
-        maybeUnbindSessionOwner(
-          message.sessionId,
-          boundSessions,
-          workspaceAskBoundSessions,
-          permissionBridge,
-          permissionPolicy,
-          workspaceAskBridge,
-          commandRouter,
-          connectionId,
-        );
       }
       await commandRouter.receive(message, connectionId);
       return;
@@ -145,18 +133,18 @@ export function attachSessionSocketHandlers(
     if (bridgeToken !== null && bridge) {
       bridge.detach(bridgeToken);
     }
-    for (const [sessionId, token] of boundSessions) {
-      const unbound = permissionBridge?.unbindSession(sessionId, token) ?? false;
+    for (const [threadId, token] of boundThreads) {
+      const unbound = permissionBridge?.unbindThread(threadId, token) ?? false;
       if (unbound) {
-        commandRouter.interruptSession(sessionId);
-        permissionPolicy?.clearSessionRules(sessionId);
+        commandRouter.interruptThread(threadId);
+        clearThreadPermissionRules(permissionPolicy, threadId);
       }
     }
-    for (const [sessionId, token] of workspaceAskBoundSessions) {
-      workspaceAskBridge?.unbindSession(sessionId, token);
+    for (const [threadId, token] of workspaceAskBoundThreads) {
+      workspaceAskBridge?.unbindThread(threadId, token);
     }
-    boundSessions.clear();
-    workspaceAskBoundSessions.clear();
+    boundThreads.clear();
+    workspaceAskBoundThreads.clear();
   });
 }
 
@@ -164,23 +152,22 @@ function isPlatformBridgeMessage(message: SocketMessage): message is PlatformBri
   return "channel" in message && message.channel === "platform";
 }
 
-function isSessionCommand(message: SocketMessage): message is SessionCommand {
+function isThreadCommand(message: SocketMessage): message is ThreadCommand {
   return [
-    "session_create",
-    "session_subscribe",
-    "session_unsubscribe",
-    "turn_start",
-    "turn_interrupt",
-    "sessions_list",
-    "session_delete",
+    "thread.start",
+    "thread.resume",
+    "thread.list",
+    "thread.delete",
+    "turn.start",
+    "turn.interrupt",
   ].includes((message as { type?: string }).type ?? "");
 }
 
 function isClientResponse(message: SocketMessage): message is ClientResponse {
-  return message.type === "permission_answer" || message.type === "workspace_answer";
+  return message.type === "permission.answered" || message.type === "workspace.answered";
 }
 
-function sessionIdFromRequestId(requestId: string): string {
+function threadIdFromRequestId(requestId: string): string {
   const separator = requestId.lastIndexOf(":");
   return separator === -1 ? requestId : requestId.slice(0, separator);
 }
@@ -194,19 +181,19 @@ export async function startServer({
   workspaceAskBridge,
   port = 4317,
 }: {
-  commandRouter: SessionCommandRouter;
-  eventPublisher: SessionEventPublisher;
+  commandRouter: ThreadCommandRouter;
+  eventPublisher: ThreadNotificationPublisher;
   bridge?: WebSocketPlatformBridge;
-  permissionBridge?: SessionPermissionBridge;
+  permissionBridge?: ThreadPermissionBridge;
   permissionPolicy?: FilePermissionPolicy;
-  workspaceAskBridge?: SessionWorkspaceAskBridge;
+  workspaceAskBridge?: ThreadWorkspaceAskBridge;
   port?: number;
 }) {
   const { WebSocketServer } = await import("ws");
   const wss = new WebSocketServer({ port });
 
   wss.on("connection", (socket) => {
-    attachSessionSocketHandlers(socket, {
+    attachThreadSocketHandlers(socket, {
       commandRouter,
       eventPublisher,
       bridge,
@@ -227,7 +214,7 @@ export async function startDefaultServer(port = 4317) {
     { FilePermissionPolicy },
     { SettingsBackedLLMClient },
     { SettingsBackedToolRegistry },
-    { SessionScopedToolRegistry },
+    { ThreadScopedToolRegistry },
     { ActionBindingResolver },
     { MCPServerRegistry },
     { StdioMCPClient },
@@ -244,7 +231,7 @@ export async function startDefaultServer(port = 4317) {
     import("@handagent/core/permission/FilePermissionPolicy.ts"),
     import("../settings/SettingsBackedLLMClient.ts"),
     import("../settings/SettingsBackedToolRegistry.ts"),
-    import("../actions/SessionScopedToolRegistry.ts"),
+    import("../actions/ThreadScopedToolRegistry.ts"),
     import("../actions/ActionBindingResolver.ts"),
     import("../actions/MCPServerRegistry.ts"),
     import("@handagent/core/mcp/StdioMCPClient.ts"),
@@ -257,7 +244,7 @@ export async function startDefaultServer(port = 4317) {
   ]);
 
   const paths = resolveServerPaths();
-  const store = new FileSessionStore(paths.sessionsDir);
+  const store = new FileThreadStore(paths.threadsDir);
   const networkLogger = new FileNetworkLogger({ baseDir: paths.logDir });
   const blobStore = new FilesystemBlobStore({ rootPath: paths.blobsDir });
   const mcpConfig = await readMCPConfig(paths.mcpConfigPath);
@@ -270,7 +257,7 @@ export async function startDefaultServer(port = 4317) {
   await workspaceRegistry.getDefault();
 
   const platformBridge = new WebSocketPlatformBridge();
-  const workspaceAskBridge = new SessionWorkspaceAskBridge();
+  const workspaceAskBridge = new ThreadWorkspaceAskBridge();
   const platform = new RemotePlatformAdapter({ bridge: platformBridge });
   const toolRegistry = new SettingsBackedToolRegistry({
     platform,
@@ -296,7 +283,7 @@ export async function startDefaultServer(port = 4317) {
     },
   });
   const globalMcpServerIds = [...mcpServers.keys()];
-  const sessionScopedTools = new SessionScopedToolRegistry(
+  const threadScopedTools = new ThreadScopedToolRegistry(
     {
       builtinRegistry: toolRegistry.registry,
       globalMcpServerIds,
@@ -308,7 +295,7 @@ export async function startDefaultServer(port = 4317) {
     },
   );
 
-  const permissionBridge = new SessionPermissionBridge();
+  const permissionBridge = new ThreadPermissionBridge();
   const permissionPolicy = new FilePermissionPolicy({
     filePath: paths.permissionsPath,
     askResolver: permissionBridge.ask,
@@ -325,57 +312,57 @@ export async function startDefaultServer(port = 4317) {
     });
   console.log(`[agent-server] llm mode: ${llmMode}`);
 
-  const runtimeBySession = new Map<string, InstanceType<typeof AgentRuntime>>();
-  const runtimeForSession = (sessionId: string) => {
-    let runtime = runtimeBySession.get(sessionId);
+  const runtimeByThread = new Map<string, InstanceType<typeof AgentRuntime>>();
+  const runtimeForThread = (threadId: string) => {
+    let runtime = runtimeByThread.get(threadId);
     if (!runtime) {
-      runtime = new AgentRuntime(llmClient, sessionScopedTools.registryForSession(sessionId), {
+      runtime = new AgentRuntime(llmClient, threadScopedTools.registryForThread(threadId), {
         permissionPolicy,
         blobStore,
         turnSummarizer: summarizer,
-        onMetaToolActivate: async (activeSessionId) => {
-          await sessionScopedTools.activate(activeSessionId);
+        onMetaToolActivate: async (activeThreadId) => {
+          await threadScopedTools.activate(activeThreadId);
         },
-        isSessionActivated: (activeSessionId) => sessionScopedTools.isActivated(activeSessionId),
+        isThreadActivated: (activeThreadId) => threadScopedTools.isActivated(activeThreadId),
       });
-      runtimeBySession.set(sessionId, runtime);
+      runtimeByThread.set(threadId, runtime);
     }
     return runtime;
   };
-  const persistence = new SessionPersistence(store, undefined, blobStore);
-  const orchestrator = new SessionRuntimeOrchestrator(
-    runtimeForSession,
+  const persistence = new ThreadPersistence(store, undefined, blobStore);
+  const orchestrator = new ThreadRuntimeOrchestrator(
+    runtimeForThread,
     persistence,
     undefined,
-    async (sessionId) => {
+    async (threadId) => {
       await toolRegistry.refresh();
-      const session = await persistence.getSession(sessionId);
-      const binding = session?.metadata.actionBinding;
+      const thread = await persistence.getThread(threadId);
+      const binding = thread?.metadata.actionBinding;
 
-      if (!sessionScopedTools.isActivated(sessionId)) {
+      if (!threadScopedTools.isActivated(threadId)) {
         if (binding) {
-          await sessionScopedTools.activate(sessionId);
+          await threadScopedTools.activate(threadId);
         } else {
-          const history = await persistence.getMessages(sessionId);
+          const history = await persistence.getMessages(threadId);
           if (historyShowsToolsActivated(history)) {
-            await sessionScopedTools.activate(sessionId);
+            await threadScopedTools.activate(threadId);
           }
         }
       }
 
-      await sessionScopedTools.refreshForSession(sessionId, binding);
+      await threadScopedTools.refreshForThread(threadId, binding);
     },
   );
-  const eventPublisher = new SessionEventPublisher();
-  const commandRouter = new SessionCommandRouter(
+  const eventPublisher = new ThreadNotificationPublisher();
+  const commandRouter = new ThreadCommandRouter(
     orchestrator,
     persistence,
     eventPublisher,
     undefined,
     new ActionBindingResolver({ pluginsDir: paths.pluginsDir }),
-    (sessionId) => {
-      sessionScopedTools.forgetSession(sessionId);
-      runtimeBySession.delete(sessionId);
+    (threadId) => {
+      threadScopedTools.forgetThread(threadId);
+      runtimeByThread.delete(threadId);
     },
   );
 
@@ -392,7 +379,7 @@ export async function startDefaultServer(port = 4317) {
 
 interface ServerPaths {
   spotDir: string;
-  sessionsDir: string;
+  threadsDir: string;
   logDir: string;
   blobsDir: string;
   pluginsDir: string;
@@ -406,7 +393,7 @@ function resolveServerPaths(): ServerPaths {
   const spotDir = join(homedir(), ".spotAgent");
   return {
     spotDir,
-    sessionsDir: join(spotDir, "sessions"),
+    threadsDir: join(spotDir, "threads"),
     logDir: join(spotDir, "log"),
     blobsDir: join(spotDir, "blobs"),
     pluginsDir: join(spotDir, "plugins"),
@@ -483,31 +470,38 @@ function historyShowsToolsActivated(messages: readonly AgentMessage[]): boolean 
   return messages.some((m) => m.role === "tool" && m.name === META_TOOL_NAME);
 }
 
-function maybeUnbindSessionOwner(
-  sessionId: string,
-  boundSessions: Map<string, SessionBindingToken>,
-  workspaceAskBoundSessions: Map<string, SessionBindingToken>,
-  permissionBridge: SessionPermissionBridge | undefined,
+function maybeUnbindThreadOwner(
+  threadId: string,
+  boundThreads: Map<string, ThreadBindingToken>,
+  workspaceAskBoundThreads: Map<string, ThreadBindingToken>,
+  permissionBridge: ThreadPermissionBridge | undefined,
   permissionPolicy: FilePermissionPolicy | undefined,
-  workspaceAskBridge: SessionWorkspaceAskBridge | undefined,
-  commandRouter: SessionCommandRouter,
+  workspaceAskBridge: ThreadWorkspaceAskBridge | undefined,
+  commandRouter: ThreadCommandRouter,
   _connectionId: string,
 ): void {
-  const permissionToken = boundSessions.get(sessionId);
+  const permissionToken = boundThreads.get(threadId);
   if (permissionToken !== undefined) {
-    const unbound = permissionBridge?.unbindSession(sessionId, permissionToken) ?? false;
+    const unbound = permissionBridge?.unbindThread(threadId, permissionToken) ?? false;
     if (unbound) {
-      commandRouter.interruptSession(sessionId);
-      permissionPolicy?.clearSessionRules(sessionId);
+      commandRouter.interruptThread(threadId);
+      clearThreadPermissionRules(permissionPolicy, threadId);
     }
-    boundSessions.delete(sessionId);
+    boundThreads.delete(threadId);
   }
 
-  const workspaceToken = workspaceAskBoundSessions.get(sessionId);
+  const workspaceToken = workspaceAskBoundThreads.get(threadId);
   if (workspaceToken !== undefined) {
-    workspaceAskBridge?.unbindSession(sessionId, workspaceToken);
-    workspaceAskBoundSessions.delete(sessionId);
+    workspaceAskBridge?.unbindThread(threadId, workspaceToken);
+    workspaceAskBoundThreads.delete(threadId);
   }
+}
+
+function clearThreadPermissionRules(
+  permissionPolicy: FilePermissionPolicy | undefined,
+  threadId: string,
+): void {
+  permissionPolicy?.clearThreadRules(threadId);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

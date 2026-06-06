@@ -2,11 +2,11 @@ import AppKit
 
 @MainActor
 final class AppActivationPolicyCoordinator {
-    private var openSessionWindowCount = 0
+    private var openThreadWindowCount = 0
     private var isSettingsWindowOpen = false
 
-    func policyAfterUpdatingOpenSessionWindows(by delta: Int) -> NSApplication.ActivationPolicy {
-        openSessionWindowCount = max(0, openSessionWindowCount + delta)
+    func policyAfterUpdatingOpenThreadWindows(by delta: Int) -> NSApplication.ActivationPolicy {
+        openThreadWindowCount = max(0, openThreadWindowCount + delta)
         return currentPolicy()
     }
 
@@ -16,6 +16,6 @@ final class AppActivationPolicyCoordinator {
     }
 
     private func currentPolicy() -> NSApplication.ActivationPolicy {
-        (openSessionWindowCount > 0 || isSettingsWindowOpen) ? .regular : .accessory
+        (openThreadWindowCount > 0 || isSettingsWindowOpen) ? .regular : .accessory
     }
 }

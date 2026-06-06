@@ -1,6 +1,6 @@
 # PromptPanel 模块
 
-全局热键唤起的命令面板：输入普通 prompt，或通过 `ActionDefinition` trigger 渲染 prompt template 并创建新 session；其中 plugin action 会额外绑定 MCP tools。架构是 **View + ViewModel + Controller + Styles** 四件套。
+全局热键唤起的命令面板：输入普通 prompt，或通过 `ActionDefinition` trigger 渲染 prompt template 并创建新 thread；其中 plugin action 会额外绑定 MCP tools。架构是 **View + ViewModel + Controller + Styles** 四件套。
 
 ## 文件
 
@@ -29,7 +29,7 @@ Coordinator
 Hotkey → Coordinator.send(.togglePromptPanel) → Controller.toggle()
                                               └─ 显示时 ViewModel.focusSeed += 1（驱动 View 重新聚焦输入框）
 ActionShortcut → Coordinator.performActionShortcut(ActionDefinition)
-              ├─ 无必填参数 skill/plugin：直接渲染并创建 session
+              ├─ 无必填参数 skill/plugin：直接渲染并创建 thread
               └─ 有必填参数 skill/plugin：打开 PromptPanel 并预填 `trigger [arg: ]`
 键盘事件 → NSEvent 局部监听 → ESC 隐藏
 AgentServerHealth.onAvailabilityChange → Controller.setSubmissionEnabled(...)
@@ -38,22 +38,22 @@ AgentServerHealth.onAvailabilityChange → Controller.setSubmissionEnabled(...)
 
 `ActionDefinition` 是 PromptPanel 中由 manifest prompt 派生的可选择 action item，类似 Raycast item。当前来源包括：
 
-- skill action：manifest prompt 显式 `kind: "skill"`，提交时只把渲染后的 prompt 作为普通 prompt 创建新 session。
-- plugin action：manifest prompt 默认 `kind` 为 `"plugin"`，提交时渲染 prompt，并携带 `{ pluginId, promptName }` 创建新 session；agent-server 会重新读取 manifest 校验并激活对应 MCP tool scope。
+- skill action：manifest prompt 显式 `kind: "skill"`，提交时只把渲染后的 prompt 作为普通 prompt 创建新 thread。
+- plugin action：manifest prompt 默认 `kind` 为 `"plugin"`，提交时渲染 prompt，并携带 `{ pluginId, promptName }` 创建新 thread；agent-server 会重新读取 manifest 校验并激活对应 MCP tool scope。
 
 Action prompt 的参数与提交流程：
 
 1. `ActionInvocation.parse` 用 trigger 匹配 `ActionDefinition`，参数只接受 `[name: value]` 命名块，例如 `r [code: let x = 1] [focus: risk]`。
 2. 参数值可以为空，例如 `r [code: ]`；没有参数的 action 可只输入 trigger，例如 `weather`。
 3. Desktop 本地渲染 `template`。skill action 只提交渲染后的 prompt；plugin action 同时发送 `{ pluginId, promptName }` 作为 `actionBinding`。
-4. Coordinator 通过 `create_session_request` 强制创建新 session；Action prompt 不会写入当前 active tab。
-5. agent-server 重新读取同一 plugin manifest 校验绑定，并把 manifest 中的 `mcpServerIds` 持久化到 session metadata。
+4. Coordinator 通过 `thread.start` 强制创建新 thread；Action prompt 不会写入当前 active tab。
+5. agent-server 重新读取同一 plugin manifest 校验绑定，并把 manifest 中的 `mcpServerIds` 持久化到 thread metadata。
 
 ## 编辑此目录的约束
 
 - **View 只读 ViewModel**：不要让 View 直接调 `NSEvent` / `NSPanel` / `KeyboardShortcuts.*` API，键盘与窗口副作用全部在 Controller。
 - **ViewModel 不持有 SwiftUI 类型**：不要让 `@Observable` class 引入 `View` / `Color` / `Font`；只暴露 plain Swift 状态与回调。
-- **Controller 是窗口管理 + 事件监听层**：不直接写消息循环或会话逻辑，所有跨模块意图通过 `onSubmit` / `onSubmitAction` / `onOpenSettings` 闭包出口给 Coordinator。全局快捷键注册由 [Hotkey](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Hotkey/hotkey.md) 承接，不在 PromptPanel 内直接绑定 `KeyboardShortcuts`。
+- **Controller 是窗口管理 + 事件监听层**：不直接写消息循环或 thread/turn 逻辑，所有跨模块意图通过 `onSubmit` / `onSubmitAction` / `onOpenSettings` 闭包出口给 Coordinator。全局快捷键注册由 [Hotkey](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Hotkey/hotkey.md) 承接，不在 PromptPanel 内直接绑定 `KeyboardShortcuts`。
 - **Action 全局快捷键**：每个 `ActionDefinition` 通过 `shortcutName = "action.<id>"` 获得可配置全局快捷键名；plugin manifest 可通过 prompt 级 `globalShortcut` 声明默认值，用户改过后不覆盖。
 - **动态 action 刷新**：Controller 可多次 `register(actions:)`；首次创建 ViewModel，后续只刷新 ViewModel action 列表。Coordinator 同步刷新 Action 全局快捷键注册。新增动态 action 不要覆盖已有用户自定义快捷键。
 - **Styles 抽取阈值**：跨 View 复用的样式才放 `PromptPanelStyles.swift`；一次性样式写在 View 里，避免 ViewModifier 爆炸。
@@ -65,6 +65,6 @@ Action prompt 的参数与提交流程：
 ## 与其他模块的关系
 
 - 由 [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 持有并注入 actions。
-- 提交 prompt 后由 Coordinator 聚焦或创建全局 [SessionWindow](/Users/mu9/proj/handAgent/apps/desktop/Sources/SessionWindow/session-window.md)，再由窗口模型创建新的会话 tab；当前 active tab 不会接收 PromptPanel 的初始提交。
+- 提交 prompt 后由 Coordinator 聚焦或创建全局 [ThreadWindow](/Users/mu9/proj/handAgent/apps/desktop/Sources/ThreadWindow/thread-window.md)，再由窗口模型创建新的 thread tab；当前 active tab 不会接收 PromptPanel 的初始提交。
 - [AgentServer](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/AgentServer/agent-server.md) 可用性变化会同步到 `setSubmissionEnabled`，避免重启期间提交新 prompt。
 - 全局热键来自 [AppServices/Hotkey](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Hotkey/hotkey.md)。

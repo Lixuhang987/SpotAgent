@@ -2,13 +2,13 @@
 
 ## 目录职责
 
-`server/` 是 agent-server 的进程入口与组合根。它负责启动 WebSocketServer、给每条 socket 挂上平台消息、会话命令、客户端响应三类处理器，并把 core 与本目录其他模块组装成生产运行图。
+`server/` 是 agent-server 的进程入口与组合根。它负责启动 WebSocketServer、给每条 socket 挂上平台消息、thread / turn 命令、客户端响应三类处理器，并把 core 与本目录其他模块组装成生产运行图。
 
 ## 文件
 
 | 文件 | 职责 |
 |------|------|
-| `server.ts` | 暴露 `attachSessionSocketHandlers`、`startServer`、`handleSocketMessage`、`startDefaultServer`；解析 `~/.spotAgent` 路径；读取 MCP 配置；按配置创建 MCP client；作为 `node ... src/server/server.ts` 的可执行入口 |
+| `server.ts` | 暴露 `attachThreadSocketHandlers`、`startServer`、`startDefaultServer`；解析 `~/.spotAgent` 路径；读取 MCP 配置；按配置创建 MCP client；作为 `node ... src/server/server.ts` 的可执行入口 |
 
 ## 运行入口
 
@@ -37,56 +37,56 @@ if (isPlatformBridgeMessage(message)) {
 
 这段逻辑先把 `channel: "platform"` 的消息从其他顶层消息中剥离。`platform_bridge_hello` 会为当前 socket 生成 fencing token；之后的 `platform_response` 必须带着这条 socket 当前 token 才能唤醒 pending request，避免旧 socket 的晚到响应污染新连接。
 
-当前 server 顶层只接收三类消息：
+按最小协议约束，server 顶层只接收三类消息：
 
 - `PlatformBridgeMessage`：平台桥接 hello / response。
-- `ClientResponse`：desktop 对 `permission_ask`、`workspace_ask` 的回答。
-- `SessionCommand`：会话创建、订阅、取消订阅、开跑、中断、列出、删除。
+- `ClientResponse`：desktop 对 `permission.answered`、`workspace.answered` 的回答。
+- `ThreadCommand`：`thread.start`、`thread.resume`、`thread.list`、`thread.delete`、`turn.start`、`turn.interrupt`。
 
-### 会话绑定、订阅与关闭清理
+### thread 绑定与关闭清理
 
 ```ts
-if (message.type === "turn_start") {
-  if (permissionBridge && !boundSessions.has(message.sessionId)) {
-    boundSessions.set(
-      message.sessionId,
-      permissionBridge.bindSession(message.sessionId, sendSession),
+if (message.type === "turn.start") {
+  if (permissionBridge && !boundThreads.has(message.threadId)) {
+    boundThreads.set(
+      message.threadId,
+      permissionBridge.bindThread(message.threadId, sendThread),
     );
   }
 }
 ```
 
-`turn_start` 是 permission / workspace 回流的绑定时机。`attachSessionSocketHandlers` 同时会在带 `sessionId` 的 `SessionCommand` 到达时自动订阅当前连接；`session_unsubscribe` 会移除订阅，并尝试解绑该连接持有的 permission / workspace token。socket close 时会按 token 解绑，旧 socket 只能取消自己 token 下的 pending 请求；如果同一 session 已经被新 socket 绑定，旧 socket close 不会清掉新绑定。
+`turn.start` 是 permission / workspace 回流的绑定时机。当前连接在收到带 `threadId` 的命令后会建立该 thread 的通知路由。socket close 时会按 token 解绑，旧 socket 只能取消自己 token 下的 pending 请求；如果同一 thread 已被新 socket 绑定，旧 socket close 不会清掉新绑定。
 
-`SessionEventPublisher` 负责 `connectionId -> subscribed sessionIds` 映射，所以一条 desktop 连接可以同时订阅多个 session，并靠 `session_snapshot` 恢复各自状态。
+`ThreadNotificationPublisher` 负责 `connectionId -> subscribed threadIds` 映射，所以一条 desktop 连接可以同时接收多个 thread 的通知，并靠 `thread.snapshot` 恢复各自状态。
 
 ### 组合根
 
 ```ts
-const runtimeForSession = (sessionId: string) => {
-  let runtime = runtimeBySession.get(sessionId);
+const runtimeForThread = (threadId: string) => {
+  let runtime = runtimeByThread.get(threadId);
   if (!runtime) {
-    runtime = new AgentRuntime(llmClient, sessionScopedTools.registryForSession(sessionId), {
+    runtime = new AgentRuntime(llmClient, threadScopedTools.registryForThread(threadId), {
       permissionPolicy,
       blobStore,
       turnSummarizer: summarizer,
-      onMetaToolActivate: async (activeSessionId) => {
-        await sessionScopedTools.activate(activeSessionId);
+      onMetaToolActivate: async (activeThreadId) => {
+        await threadScopedTools.activate(activeThreadId);
       },
     });
-    runtimeBySession.set(sessionId, runtime);
+    runtimeByThread.set(threadId, runtime);
   }
   return runtime;
 };
 ```
 
-`startDefaultServer` 按 session 缓存 `AgentRuntime`，让每个 session 拥有独立的 tool registry 与激活状态。这里是 core `AgentRuntime`、settings client、MCP 工具表、权限策略和 BlobStore 的汇合点。
+`startDefaultServer` 按 thread 缓存 `AgentRuntime`，让每个 thread 拥有独立的 tool registry 与激活状态。这里是 core `AgentRuntime`、settings client、MCP 工具表、权限策略和 BlobStore 的汇合点。
 
 ## 路径约定
 
 `resolveServerPaths()` 集中生成以下路径：
 
-- `~/.spotAgent/sessions/`：会话 JSON。
+- `~/.spotAgent/threads/`：thread JSON。
 - `~/.spotAgent/blobs/`：图片附件和大段 tool 输出。
 - `~/.spotAgent/log/`：LLM 网络日志。
 - `~/.spotAgent/plugins/`：plugin manifest。
@@ -97,10 +97,10 @@ const runtimeForSession = (sessionId: string) => {
 ## 编辑约束
 
 - 新增长驻依赖时放进 `startDefaultServer`，保持 `startServer` 只接收已注入对象，方便单元测试。
-- 新增 socket 顶层分支前先判断它是否属于 `PlatformBridgeMessage`、`ClientResponse` 或 `SessionCommand`；不要再扩散旧 union。
-- 不在本目录写业务翻译逻辑；runtime event 翻译归 `protocol/`，会话状态归 `session/`，工具/MCP 归 `actions/`。
+- 新增 socket 顶层分支前先判断它是否属于 `PlatformBridgeMessage`、`ClientResponse` 或 `ThreadCommand`；不要再扩散旧 union。
+- 不在本目录写业务翻译逻辑；runtime event 翻译归 `protocol/`，thread 状态归 `thread/`，工具 / MCP 归 `actions/`。
 
 ## 下一步阅读
 
-- 会话路由：[session/session.md](/Users/mu9/proj/handAgent/apps/agent-server/src/session/session.md)
+- thread 路由：[thread/thread.md](/Users/mu9/proj/handAgent/apps/agent-server/src/thread/thread.md)
 - 桥接 token 细节：[bridges/bridges.md](/Users/mu9/proj/handAgent/apps/agent-server/src/bridges/bridges.md)

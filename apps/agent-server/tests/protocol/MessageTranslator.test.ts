@@ -7,14 +7,14 @@ import {
   deriveTitle,
   toAuditEvent,
   toErrorMessage,
-  toSessionEvent,
+  toThreadNotification,
 } from "../../src/protocol/MessageTranslator.ts";
 
 describe("MessageTranslator", () => {
-  it("translates assistant runtime events into session frames", () => {
+  it("translates assistant runtime events into thread notifications", () => {
     expect(
-      toSessionEvent(
-        "session-1",
+      toThreadNotification(
+        "Thread-1",
         "turn-1",
         {
           type: "assistant_message_delta",
@@ -24,19 +24,19 @@ describe("MessageTranslator", () => {
         "2026-05-18T00:00:00.000Z",
       ),
     ).toEqual({
-      type: "assistant_delta",
-      sessionId: "session-1",
-      eventId: "session-1-assistant-1-2026-05-18T00:00:00.000Z-delta",
+      type: "assistant.delta",
+      threadId: "Thread-1",
+      notificationId: "Thread-1-assistant-1-2026-05-18T00:00:00.000Z-delta",
       turnId: "turn-1",
-      itemId: "session-1-turn-1-assistant-1",
+      itemId: "Thread-1-turn-1-assistant-1",
       timestamp: "2026-05-18T00:00:00.000Z",
       payload: { text: "你好" },
     });
   });
 
   it("keeps assistant item ids unique across turns with repeated runtime message ids", () => {
-    const first = toSessionEvent(
-      "session-1",
+    const first = toThreadNotification(
+      "Thread-repeat",
       "turn-a",
       {
         type: "assistant_message_delta",
@@ -45,8 +45,8 @@ describe("MessageTranslator", () => {
       },
       "2026-06-06T00:00:00.000Z",
     );
-    const second = toSessionEvent(
-      "session-1",
+    const second = toThreadNotification(
+      "Thread-repeat",
       "turn-b",
       {
         type: "assistant_message_delta",
@@ -56,17 +56,17 @@ describe("MessageTranslator", () => {
       "2026-06-06T00:00:01.000Z",
     );
 
-    expect(first?.type).toBe("assistant_delta");
-    expect(second?.type).toBe("assistant_delta");
-    expect(first?.itemId).toBe("session-1-turn-a-assistant-1");
-    expect(second?.itemId).toBe("session-1-turn-b-assistant-1");
+    expect(first?.type).toBe("assistant.delta");
+    expect(second?.type).toBe("assistant.delta");
+    expect(first?.itemId).toBe("Thread-repeat-turn-a-assistant-1");
+    expect(second?.itemId).toBe("Thread-repeat-turn-b-assistant-1");
     expect(first?.itemId).not.toBe(second?.itemId);
   });
 
-  it("translates tool call and result events into tool_message frames", () => {
+  it("translates tool call and result events into tool notifications", () => {
     expect(
-      toSessionEvent(
-        "session-tool",
+      toThreadNotification(
+        "Thread-tool",
         "turn-tool",
         {
           type: "tool_call",
@@ -77,17 +77,17 @@ describe("MessageTranslator", () => {
         "2026-05-18T00:00:00.000Z",
       ),
     ).toEqual({
-      type: "tool_started",
-      sessionId: "session-tool",
-      eventId: "session-tool-tc-1-2026-05-18T00:00:00.000Z-start",
+      type: "tool.started",
+      threadId: "Thread-tool",
+      notificationId: "Thread-tool-tc-1-2026-05-18T00:00:00.000Z-start",
       turnId: "turn-tool",
-      itemId: "session-tool-tc-1",
+      itemId: "Thread-tool-tc-1",
       timestamp: "2026-05-18T00:00:00.000Z",
       payload: { name: "clipboard.read", input: {} },
     });
     expect(
-      toSessionEvent(
-        "session-tool",
+      toThreadNotification(
+        "Thread-tool",
         "turn-tool",
         {
           type: "tool_result",
@@ -100,11 +100,11 @@ describe("MessageTranslator", () => {
         "2026-05-18T00:00:00.000Z",
       ),
     ).toEqual({
-      type: "tool_finished",
-      sessionId: "session-tool",
-      eventId: "session-tool-tc-1-2026-05-18T00:00:00.000Z-finish",
+      type: "tool.finished",
+      threadId: "Thread-tool",
+      notificationId: "Thread-tool-tc-1-2026-05-18T00:00:00.000Z-finish",
       turnId: "turn-tool",
-      itemId: "session-tool-tc-1",
+      itemId: "Thread-tool-tc-1",
       timestamp: "2026-05-18T00:00:00.000Z",
       payload: {
         name: "clipboard.read",
@@ -140,7 +140,7 @@ describe("MessageTranslator", () => {
           toolCallId: "tc-1",
           toolName: "file.read",
           decision: "deny",
-          scope: "session",
+          scope: "Thread",
           reason: "No",
         },
         "2026-05-17T00:00:00.000Z",

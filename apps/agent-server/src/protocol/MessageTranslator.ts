@@ -1,44 +1,44 @@
 import type { AgentMessage } from "@handagent/core/runtime/AgentMessage.ts";
 import type { AgentRuntimeEvent } from "@handagent/core/runtime/AgentRuntime.ts";
-import type { SessionEvent } from "@handagent/core/protocol/SessionEvent.ts";
-import type { UserMessageAttachment } from "@handagent/core/protocol/SessionProtocolShared.ts";
+import type { ThreadNotification } from "@handagent/core/protocol/ThreadNotification.ts";
+import type { ThreadAttachment } from "@handagent/core/protocol/ThreadProtocolShared.ts";
 import type { ConversationMessage } from "@handagent/core/conversation/ConversationMessage.ts";
-import type { SessionEvent as AuditSessionEvent } from "@handagent/core/storage/index.ts";
+import type { ThreadAuditEvent } from "@handagent/core/storage/index.ts";
 import type { BlobStore } from "@handagent/core/blob/BlobStore.ts";
 import { parseStub, renderStub } from "@handagent/core/runtime/Stub.ts";
 
-export function toSessionEvent(
-  sessionId: string,
+export function toThreadNotification(
+  threadId: string,
   turnId: string,
   event: AgentRuntimeEvent,
   timestamp: string,
 ):
   | Extract<
-      SessionEvent,
-      | { type: "assistant_delta" }
-      | { type: "tool_started" }
-      | { type: "tool_finished" }
-      | { type: "session_error" }
+      ThreadNotification,
+      | { type: "assistant.delta" }
+      | { type: "tool.started" }
+      | { type: "tool.finished" }
+      | { type: "thread.error" }
     >
   | null {
   switch (event.type) {
     case "assistant_message_delta":
       return {
-        type: "assistant_delta",
-        sessionId,
-        eventId: `${sessionId}-${event.messageId}-${timestamp}-delta`,
+        type: "assistant.delta",
+        threadId,
+        notificationId: `${threadId}-${event.messageId}-${timestamp}-delta`,
         turnId,
-        itemId: `${sessionId}-${turnId}-${event.messageId}`,
+        itemId: `${threadId}-${turnId}-${event.messageId}`,
         timestamp,
         payload: { text: event.payload.text },
       };
     case "tool_call":
       return {
-        type: "tool_started",
-        sessionId,
-        eventId: `${sessionId}-${event.toolCallId}-${timestamp}-start`,
+        type: "tool.started",
+        threadId,
+        notificationId: `${threadId}-${event.toolCallId}-${timestamp}-start`,
         turnId,
-        itemId: `${sessionId}-${event.toolCallId}`,
+        itemId: `${threadId}-${event.toolCallId}`,
         timestamp,
         payload: {
           name: event.toolName,
@@ -47,11 +47,11 @@ export function toSessionEvent(
       };
     case "tool_result":
       return {
-        type: "tool_finished",
-        sessionId,
-        eventId: `${sessionId}-${event.toolCallId}-${timestamp}-finish`,
+        type: "tool.finished",
+        threadId,
+        notificationId: `${threadId}-${event.toolCallId}-${timestamp}-finish`,
         turnId,
-        itemId: `${sessionId}-${event.toolCallId}`,
+        itemId: `${threadId}-${event.toolCallId}`,
         timestamp,
         payload: {
           name: event.toolName,
@@ -62,9 +62,9 @@ export function toSessionEvent(
       };
     case "runtime_error":
       return {
-        type: "session_error",
-        sessionId,
-        eventId: `${sessionId}-${timestamp}-error`,
+        type: "thread.error",
+        threadId,
+        notificationId: `${threadId}-${timestamp}-error`,
         timestamp,
         payload: {
           code: event.code,
@@ -78,7 +78,7 @@ export function toSessionEvent(
   }
 }
 
-export function toAuditEvent(event: AgentRuntimeEvent, timestamp: string): AuditSessionEvent | null {
+export function toAuditEvent(event: AgentRuntimeEvent, timestamp: string): ThreadAuditEvent | null {
   switch (event.type) {
     case "tool_call":
       return {
@@ -162,7 +162,7 @@ export function agentMessagesToRuntimeMessages(messages: AgentMessage[]): AgentM
 
 export async function composeUserContent(
   text: string,
-  attachments: UserMessageAttachment[] | undefined,
+  attachments: ThreadAttachment[] | undefined,
   blobStore: BlobStore,
 ): Promise<string> {
   if (!attachments || attachments.length === 0) return text;
@@ -251,7 +251,7 @@ function mimeTypeForPath(path: string): "image/png" | "image/jpeg" | "image/webp
   return undefined;
 }
 
-function imageExtension(mimeType: Extract<UserMessageAttachment, { kind: "image" }>["mimeType"]): string {
+function imageExtension(mimeType: Extract<ThreadAttachment, { kind: "image" }>["mimeType"]): string {
   switch (mimeType) {
     case "image/jpeg":
       return "jpg";

@@ -1,6 +1,6 @@
 # conversation
 
-UI / 持久化用的消息模型，**不是** LLM 面向的消息。LLM 视角是 `runtime/AgentMessage`；UI 视角是 `ConversationMessage`。两者的翻译由 agent-server 的 `MessageTranslator.agentMessagesToConversation` 维护，流式事件管道由 `SessionRuntimeOrchestrator` 触发。
+UI / 持久化用的消息模型，**不是** LLM 面向的消息。LLM 视角是 `runtime/AgentMessage`；UI 视角是 `ConversationMessage`。两者的翻译由 agent-server 的 `MessageTranslator.agentMessagesToConversation` 维护，流式事件管道后续由 `ThreadRuntimeOrchestrator` 触发。
 
 ## 文件
 
@@ -32,12 +32,12 @@ system → 立即 completed
 
 - 不要把 LLM 内部字段（如 `toolCalls` 列表）平铺到 `ConversationMessage`；UI 只关心一段文本 + 一个 toolCall 元信息。
 - 新增 status 时要同时考虑：runtime 事件 → MessageTranslator 翻译 → SwiftUI 渲染三处。
-- `toolCall.name` 是 UI 显示用，不是 ID；如需要联动 audit 审计请通过 `SessionEvent.toolCallId`。
-- `ConversationMessage` 是协议字段（被 `session_snapshot` / `load_session_response` 引用），改动时务必同步 [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md)。
+- `toolCall.name` 是 UI 显示用，不是 ID；如需要联动 audit 审计请通过 `ThreadAuditEvent.toolCallId`。
+- `ConversationMessage` 是协议字段（被 `thread.snapshot` 引用），改动时务必同步 [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md)。
 
 ## 相关文档
 
 - 协议引用：[protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md)
 - LLM 视角：[runtime/runtime.md](/Users/mu9/proj/handAgent/packages/core/src/runtime/runtime.md)
 - 翻译实现：[apps/agent-server/agent-server.md](/Users/mu9/proj/handAgent/apps/agent-server/agent-server.md)
-- 渲染端：[apps/desktop/Sources/SessionWindow/session-window.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/SessionWindow/session-window.md)
+- 渲染端：[apps/desktop/Sources/ThreadWindow/thread-window.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/ThreadWindow/thread-window.md)

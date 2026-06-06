@@ -6,18 +6,18 @@
 
 | 文件 | 职责 |
 |------|------|
-| `AppActivationPolicyCoordinator.swift` | 根据打开的 SessionWindow / SettingsWindow 数量切换 `NSApp.activationPolicy` |
+| `AppActivationPolicyCoordinator.swift` | 根据打开的 ThreadWindow / SettingsWindow 数量切换 `NSApp.activationPolicy` |
 
 ## 行为
 
-- 有 SessionWindow 或 SettingsWindow 打开 → `.regular`（出现在 Dock 与 Cmd+Tab）。
+- 有 ThreadWindow 或 SettingsWindow 打开 → `.regular`（出现在 Dock 与 Cmd+Tab）。
 - 都关闭 → `.accessory`（纯后台 app，仅 StatusBubble 可见）。
 
 ## 设计备注
 
 - 通过 delta（`+1` / `-1`）增减计数，外部不需要维护绝对值。
 - `max(0, ...)` 防御性处理，防止计数变负。
-- Settings 窗口走独立 `policyAfterUpdatingSettingsWindow(isOpen:)`，与 SessionWindow 计数解耦。
+- Settings 窗口走独立 `policyAfterUpdatingSettingsWindow(isOpen:)`，与 ThreadWindow 计数解耦。
 
 ## 编辑此目录的约束
 
@@ -27,4 +27,4 @@
 
 ## 与其他模块的关系
 
-- 由 [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 创建并注入 `SessionWindowLifecycle` / `SettingsLifecycle`；会话窗口开关通过 `SessionWindowLifecycle` 更新，设置窗口开关通过 `SettingsLifecycle.openOrFocus / handleClosed` 更新。
+- 由 [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 创建并注入 `ThreadWindowLifecycle` / `SettingsLifecycle`；thread 窗口开关通过 `ThreadWindowLifecycle` 更新，设置窗口开关通过 `SettingsLifecycle.openOrFocus / handleClosed` 更新。

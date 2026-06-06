@@ -2,29 +2,29 @@
 
 ## 目录职责
 
-`actions/` 管理 session 可用工具集合。它连接三类来源：settings 生成的 builtin tools、`~/.spotAgent/mcp.json` 中的全局 MCP server、plugin action binding 中声明的 session 级 MCP server。它还提供 HandAgent 原生 Computer Use MCP 兼容层。
+`actions/` 管理 thread 可用工具集合。它连接三类来源：settings 生成的 builtin tools、`~/.spotAgent/mcp.json` 中的全局 MCP server、plugin action binding 中声明的 thread 级 MCP server。它还提供 HandAgent 原生 Computer Use MCP 兼容层。
 
 ## 文件
 
 | 文件 | 职责 |
 |------|------|
-| `ActionBindingResolver.ts` | 校验 `create_session_request.payload.actionBinding`，从 `~/.spotAgent/plugins/<plugin-id>/plugin.json` 重新解析 `mcpServerIds`，不信任 desktop 传入的扩展列表 |
+| `ActionBindingResolver.ts` | 校验 `thread.start.payload.actionBinding`，从 `~/.spotAgent/plugins/<plugin-id>/plugin.json` 重新解析 `mcpServerIds`，不信任 desktop 传入的扩展列表 |
 | `MCPServerRegistry.ts` | 按 `serverId` 缓存 MCP client 和适配后的 tools；代理 prompts/resources 能力 |
 | `ComputerUseMCPClient.ts` | `computer_use` / `computer-use` server id 的原生兼容实现；暴露 `list_apps` 与 `get_app_state`，底层走 `PlatformAdapter` |
-| `SessionScopedToolRegistry.ts` | 为每个 session 维护独立 `ToolRegistry`；处理 `use_tools` 懒加载、全局 MCP、plugin binding MCP、mock LLM 特例和删除清理 |
+| `ThreadScopedToolRegistry.ts` | 为每个 thread 维护独立 `ToolRegistry`；处理 `use_tools` 懒加载、全局 MCP、plugin binding MCP、mock LLM 特例和删除清理 |
 
 ## 工具组合流
 
 ```mermaid
 flowchart TD
-  A["settings builtin registry"] --> D["SessionScopedToolRegistry"]
+  A["settings builtin registry"] --> D["ThreadScopedToolRegistry"]
   B["~/.spotAgent/mcp.json 全局 server ids"] --> D
   C["plugin actionBinding.mcpServerIds"] --> D
-  D --> E{"session activated?"}
+  D --> E{"thread activated?"}
   E -- "否" --> F["只暴露 use_tools"]
   E -- "mock 模式" --> G["use_tools + builtin tools"]
   E -- "是" --> H["use_tools + builtin + MCP tools"]
-  H --> I["core AgentRuntime registryForSession(sessionId)"]
+  H --> I["core AgentRuntime registryForThread(threadId)"]
 ```
 
 ## 关键机制
@@ -59,19 +59,19 @@ async listTools(serverId: string): Promise<AgentTool[]> {
 }
 ```
 
-`MCPServerRegistry` 让同一个 serverId 复用同一个 initialized client。tools 只适配一次，后续 session 组合时复用 `AgentTool` 包装。
+`MCPServerRegistry` 让同一个 serverId 复用同一个 initialized client。tools 只适配一次，后续 thread 组合时复用 `AgentTool` 包装。
 
-### session 懒激活
+### thread 懒激活
 
 ```ts
-if (this.activated.has(sessionId)) {
-  await this.refreshActivated(sessionId, binding, registry);
+if (this.activated.has(threadId)) {
+  await this.refreshActivated(threadId, binding, registry);
   return;
 }
 registry.replaceAll([this.metaTool]);
 ```
 
-未激活 session 默认只暴露 `use_tools`，减少普通聊天请求里的工具噪音。模型调用 meta-tool 后，core runtime 触发 `activate(sessionId)`，下一轮工具表扩展为 builtin + MCP。
+未激活 thread 默认只暴露 `use_tools`，减少普通聊天请求里的工具噪音。模型调用 meta-tool 后，core runtime 触发 `activate(threadId)`，下一轮工具表扩展为 builtin + MCP。
 
 ### Computer Use 兼容层
 
@@ -90,7 +90,7 @@ const screenshot = await this.options.platform.captureScreen(
 
 - 新增 plugin action 解析字段时优先放在 core actions 模块，agent-server 只负责读取本地 manifest 并调用 core 解析函数。
 - 新增 MCP server transport 时，先扩展 core `MCPClient` / config，再在 `server/createMCPClientFromConfig()` 接入。
-- `SessionScopedToolRegistry` 不直接读取磁盘配置；全局 server id 和 binding 都由上游传入。
+- `ThreadScopedToolRegistry` 不直接读取磁盘配置；全局 server id 和 binding 都由上游传入。
 - 缺失或失败的 MCP server 应记录 skip 日志并保留 builtin tools，不阻断整轮 prompt。
 
 ## 下一步阅读

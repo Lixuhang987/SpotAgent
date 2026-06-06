@@ -1,0 +1,108 @@
+import XCTest
+@testable import HandAgentDesktop
+
+@MainActor
+final class ThreadWindowLifecycleTests: XCTestCase {
+    func testInitialPromptUsesAppServerThreadTurnSemantics() throws {
+        let appServer = RecordingLifecycleAppServer()
+        let lifecycle = ThreadWindowLifecycle(
+            registry: ThreadRegistry(),
+            windowPresenter: NopThreadWindowPresenter(),
+            appServer: appServer,
+            activationPolicy: AppActivationPolicyCoordinator(),
+            setActivationPolicy: { _ in }
+        )
+        let prompt = try XCTUnwrap(PromptSubmission.compose(draft: "hello", attachments: []))
+
+        lifecycle.createTabWithInitialPrompt(prompt, onClosed: {})
+
+        XCTAssertEqual(appServer.connectionCount, 1)
+        XCTAssertTrue(appServer.calls.contains(.listThreads))
+        guard case let .startThread(commandId)? = appServer.calls.first(where: {
+            if case .startThread = $0 { return true }
+            return false
+        }) else {
+            return XCTFail("expected startThread")
+        }
+
+        appServer.onThreadEvent?(.global(.threadStarted(
+            threadID: "thread-1",
+            title: "hello",
+            responseMessageID: commandId
+        )))
+
+        XCTAssertTrue(appServer.calls.contains(.resumeThread("thread-1")))
+        XCTAssertTrue(appServer.calls.contains(.startTurn(threadId: "thread-1", text: "hello")))
+    }
+}
+
+@MainActor
+private final class RecordingLifecycleAppServer: AppServerManaging {
+    enum Call: Equatable {
+        case listThreads
+        case startThread(commandId: String)
+        case resumeThread(String)
+        case startTurn(threadId: String, text: String)
+    }
+
+    var threadConnectionState: AppServerConnectionState = .disconnected
+    var isAvailable = true
+    var startupErrorMessage: String?
+    var onAvailabilityChange: ((Bool) -> Void)?
+    var onFatalError: ((String) -> Void)?
+    var onThreadConnectionStateChange: ((AppServerConnectionState) -> Void)?
+    var onThreadEvent: ((AppServerThreadEvent) -> Void)?
+    private(set) var connectionCount = 0
+    private(set) var calls: [Call] = []
+
+    func start() {}
+    func stop() {}
+
+    func connectThreadClient() {
+        connectionCount += 1
+        onThreadConnectionStateChange?(.connected)
+    }
+
+    func disconnectThreadClient() {}
+
+    func startThread(
+        commandId: String,
+        timestamp: String,
+        workspaceId: String?,
+        actionBinding: ActionBindingPayload?
+    ) {
+        calls.append(.startThread(commandId: commandId))
+    }
+
+    func resumeThread(threadId: String, commandId: String, timestamp: String) {
+        calls.append(.resumeThread(threadId))
+    }
+
+    func listThreads(commandId: String, timestamp: String) {
+        calls.append(.listThreads)
+    }
+
+    func deleteThread(commandId: String, timestamp: String, targetThreadId: String) {}
+
+    func startTurn(
+        threadId: String,
+        commandId: String,
+        timestamp: String,
+        text: String,
+        attachments: [UserMessageAttachmentPayload]
+    ) {
+        calls.append(.startTurn(threadId: threadId, text: text))
+    }
+
+    func interruptTurn(threadId: String, commandId: String, timestamp: String) {}
+
+    func answerPermission(
+        requestId: String,
+        timestamp: String,
+        decision: AppServerPermissionDecision,
+        scope: AppServerPermissionScope?,
+        reason: String?
+    ) {}
+
+    func answerWorkspace(requestId: String, timestamp: String, workspaceId: String?, cancelled: Bool?) {}
+}

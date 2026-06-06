@@ -28,7 +28,7 @@ struct StatusBubbleView: View {
         .onTapGesture { viewModel.tap() }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(viewModel.isRunning ? "HandAgent 正在运行" : "HandAgent 空闲")
-        .accessibilityHint("打开最近会话或输入面板")
+        .accessibilityHint("打开最近 thread 或输入面板")
         .accessibilityAddTraits(.isButton)
         .accessibilityAction {
             viewModel.tap()

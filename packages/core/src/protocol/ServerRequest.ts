@@ -1,10 +1,10 @@
-import type { WorkspaceAskCandidate } from "./SessionProtocolShared.ts";
+import type { WorkspaceAskCandidate } from "./ThreadProtocolShared.ts";
 
 export type ServerRequest =
   | {
-      type: "permission_ask";
+      type: "permission.requested";
       requestId: string;
-      sessionId: string;
+      threadId: string;
       timestamp: string;
       payload: {
         toolName: string;
@@ -14,9 +14,9 @@ export type ServerRequest =
       };
     }
   | {
-      type: "workspace_ask";
+      type: "workspace.requested";
       requestId: string;
-      sessionId: string;
+      threadId: string;
       timestamp: string;
       payload: {
         toolCallId?: string;
