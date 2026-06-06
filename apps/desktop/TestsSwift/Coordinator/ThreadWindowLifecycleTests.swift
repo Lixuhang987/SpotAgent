@@ -84,6 +84,8 @@ private final class RecordingLifecycleAppServer: AppServerManaging {
         calls.append(.listThreads)
     }
 
+    func deleteThread(commandId: String, timestamp: String, targetThreadId: String) {}
+
     func startTurn(
         threadId: String,
         commandId: String,
@@ -93,4 +95,16 @@ private final class RecordingLifecycleAppServer: AppServerManaging {
     ) {
         calls.append(.startTurn(threadId: threadId, text: text))
     }
+
+    func interruptTurn(threadId: String, commandId: String, timestamp: String) {}
+
+    func answerPermission(
+        requestId: String,
+        timestamp: String,
+        decision: ThreadProtocolClient.PermissionDecision,
+        scope: ThreadProtocolClient.PermissionScope?,
+        reason: String?
+    ) {}
+
+    func answerWorkspace(requestId: String, timestamp: String, workspaceId: String?, cancelled: Bool?) {}
 }

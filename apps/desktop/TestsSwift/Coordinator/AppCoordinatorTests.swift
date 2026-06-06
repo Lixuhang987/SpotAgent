@@ -78,6 +78,26 @@ final class AppCoordinatorTests: XCTestCase {
             func stop() {}
             func connectThreadClient() {}
             func disconnectThreadClient() {}
+            func startThread(commandId: String, timestamp: String, workspaceId: String?, actionBinding: ActionBindingPayload?) {}
+            func resumeThread(threadId: String, commandId: String, timestamp: String) {}
+            func listThreads(commandId: String, timestamp: String) {}
+            func deleteThread(commandId: String, timestamp: String, targetThreadId: String) {}
+            func startTurn(
+                threadId: String,
+                commandId: String,
+                timestamp: String,
+                text: String,
+                attachments: [UserMessageAttachmentPayload]
+            ) {}
+            func interruptTurn(threadId: String, commandId: String, timestamp: String) {}
+            func answerPermission(
+                requestId: String,
+                timestamp: String,
+                decision: ThreadProtocolClient.PermissionDecision,
+                scope: ThreadProtocolClient.PermissionScope?,
+                reason: String?
+            ) {}
+            func answerWorkspace(requestId: String, timestamp: String, workspaceId: String?, cancelled: Bool?) {}
         }
         let stub = StubAppServer()
         let services = AppServices(
@@ -142,6 +162,26 @@ final class AppCoordinatorTests: XCTestCase {
             func stop() {}
             func connectThreadClient() {}
             func disconnectThreadClient() {}
+            func startThread(commandId: String, timestamp: String, workspaceId: String?, actionBinding: ActionBindingPayload?) {}
+            func resumeThread(threadId: String, commandId: String, timestamp: String) {}
+            func listThreads(commandId: String, timestamp: String) {}
+            func deleteThread(commandId: String, timestamp: String, targetThreadId: String) {}
+            func startTurn(
+                threadId: String,
+                commandId: String,
+                timestamp: String,
+                text: String,
+                attachments: [UserMessageAttachmentPayload]
+            ) {}
+            func interruptTurn(threadId: String, commandId: String, timestamp: String) {}
+            func answerPermission(
+                requestId: String,
+                timestamp: String,
+                decision: ThreadProtocolClient.PermissionDecision,
+                scope: ThreadProtocolClient.PermissionScope?,
+                reason: String?
+            ) {}
+            func answerWorkspace(requestId: String, timestamp: String, workspaceId: String?, cancelled: Bool?) {}
         }
         let stub = StubAppServer()
         let services = AppServices(
