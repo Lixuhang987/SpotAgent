@@ -32,22 +32,18 @@
 1. 在同一 thread 触发一次需要 workspace 或 permission 回流的工具场景，确认权限 / workspace 选择气泡仍能回到当前 thread。
 1. 打开对应的 thread 持久化文件，确认本轮 user / assistant 或 tool / event 按预期落盘。
 
-## 单连接 thread 路由 smoke（P2）
+## ThreadWindow WebView + split WebSocket smoke（P2）
 
+1. 从当前 worktree 执行 `pnpm --filter handagent-thread-window-web build`。
 1. 从当前 worktree 执行 `bash ./scripts/swiftw run HandAgentDesktop`。
-1. 打开主窗口后连续创建两个 thread，确认 desktop 侧只建立一条到 `ws://127.0.0.1:4317/api/thread` 的连接。
-1. 在 thread A 发送普通 prompt，在 thread B 发送另一条普通 prompt，确认两边的 assistant / tool / permission / workspace 事件不会串到错误 thread。
-1. 恢复 thread A，确认 client 发送的是 `thread.resume`，并收到 `thread.snapshot`；不再依赖显式 unsubscribe 协议。
-1. 在 thread A 触发一次需要 permission 或 workspace 选择的工具场景，确认 `permission.requested` / `workspace.requested` 只回到当前 `threadId` 对应视图，不会串到其他 thread。
-1. 在 agent-server 运行中手动重启 desktop 或 kill `agent-server` 后恢复，确认共享连接会自动重连、历史会刷新、已打开 thread 会重新恢复并继续可用。
-
-## AppServer 共享 PlatformBridge smoke（P2）
-
-1. 从当前 worktree 执行 `bash ./scripts/swiftw run HandAgentDesktop`。
-1. 确认 desktop 启动 agent-server 后，只建立一条到 `ws://127.0.0.1:4317/api/thread` 的 WebSocket。
-1. 触发一次需要平台能力的 tool，例如 `clipboard.read`、`app.frontmost`、`screen.capture` 或 `accessibility.snapshot`。
-1. 确认 agent-server 收到 `platform_bridge_hello` 后能发出 `platform_request`，desktop 通过同一连接回写 `platform_response`，没有新建第二条 platform WebSocket。
-1. 同时保持一个 thread 正在 streaming，确认 `assistant.delta` / `tool.finished` / `platform_response` 不互相串线。
+1. 通过 PromptPanel 提交一个普通 prompt，确认打开的是 WKWebView ThreadWindow，React 页面显示新 tab。
+1. 确认 React 建立到 `ws://127.0.0.1:4317/api/thread` 的 WebSocket，Swift 建立到 `ws://127.0.0.1:4317/api/platform` 的 WebSocket。
+1. 在当前 tab 继续追问，确认消息进入同一个 thread。
+1. 打开历史列表，确认 `thread.list`、历史恢复、删除确认可用。
+1. 恢复 thread A，确认 React client 发送的是 `thread.resume`，并收到 `thread.snapshot`；不依赖显式 unsubscribe 协议。
+1. 触发 permission 或 workspace 请求，确认 React 内联面板可回执，且 `permission.requested` / `workspace.requested` 只回到当前 `threadId` 对应视图。
+1. 触发平台能力 tool，例如 `clipboard.read`、`app.frontmost`、`screen.capture` 或 `accessibility.snapshot`，确认 agent-server 通过 `/api/platform` 发出 `platform_request`，Swift 回写 `platform_response`。
+1. 暂停或关闭 platform socket 后确认 platform tool 明确失败，但 thread socket 不因此中断。
 
 ## Thread 历史路径与状态气泡 smoke（P2）
 

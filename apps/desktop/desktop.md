@@ -1,6 +1,6 @@
 # desktop
 
-`apps/desktop` 是 macOS 宿主层：应用生命周期、PromptPanel、全局唯一 ThreadWindow、StatusBubble、Settings 与全局热键。
+`apps/desktop` 是 macOS 宿主层：应用生命周期、PromptPanel、全局唯一 WKWebView ThreadWindow、StatusBubble、Settings 与全局热键。
 
 ## 架构红线（编辑此目录前必读）
 
@@ -37,7 +37,7 @@
 ### 5. 输入边界（产品红线）
 
 - 只有用户主动输入和用户主动选区可以作为 thread 初始上下文；屏幕 / 窗口 / 文件 / 剪贴板 / App 状态一律通过 tool 按需读取。
-- 宿主层只通过 `AppServer + WebSocket + ThreadCommand / ThreadNotification / ServerRequest / ClientResponse` 与 agent-server 通信；**不组装 LLM 消息、不读取 runtime 内部状态、不直接执行 tool 编排**。
+- 宿主层不组装 LLM 消息、不读取 runtime 内部状态、不直接执行 tool 编排。ThreadWindow 的 thread 协议由 React 前端通过 `/api/thread` 处理；Swift 宿主只通过 `/api/platform` 处理平台能力 RPC。
 - 快捷键配置只保存在宿主层本地（UserDefaults，由 `KeyboardShortcuts` 库管理），不下沉到 runtime。
 
 ### 6. 点击区域：视觉边界 = 可交互边界
@@ -68,7 +68,7 @@
 - [Coordinator/](Sources/Coordinator/coordinator.md) — `AppCoordinator` 单向事件流
 - [Theme/](Sources/Theme/theme.md) — 视觉 token 与 Environment 注入
 - [PromptPanel/](Sources/PromptPanel/prompt-panel.md) — 命令面板 View+ViewModel+Controller+Styles
-- [ThreadWindow/](Sources/ThreadWindow/thread-window.md) — 单窗口多 tab thread 工作区、历史侧栏、权限气泡与共享连接
+- [ThreadWindow/](Sources/ThreadWindow/thread-window.md) — WKWebView host、初始 prompt 注入与 React ThreadWindow 加载
 - [StatusBubble/](Sources/StatusBubble/status-bubble.md) — 右下角状态气泡
 - [Settings/](Sources/Settings/settings.md) — 设置窗口 Tab 容器（model / tools / permissions / shortcuts / workspaces）
 - [AppServices/](Sources/AppServices/app-services.md) — 跨模块共享服务（AppServer / AgentSettings / Hotkey / Lifecycle / PlatformBridge / SelectionCapture / Thread）
@@ -103,9 +103,8 @@ sequenceDiagram
   participant Hotkey as KeyboardShortcuts
   participant Coord as AppCoordinator
   participant Panel as PromptPanel
-  participant Window as ThreadWindow
-  participant Conn as AppServerConnection
-  participant Bus as ThreadEventBus
+  participant Window as ThreadWindow WKWebView
+  participant React as React ThreadWindow
   participant Server as agent-server
 
   User->>Hotkey: 全局热键
@@ -114,11 +113,9 @@ sequenceDiagram
   User->>Panel: 输入并提交
   Panel->>Coord: send(.submitPrompt)
   Coord->>Window: NSWindow + ThreadWindowLifecycle
-  Window->>Conn: AppServer 持有的进程级唯一共享连接
-  Conn->>Server: ThreadCommand / ClientResponse / PlatformBridgeMessage
-  Server-->>Conn: ThreadNotification / ServerRequest / PlatformBridgeMessage
-  Conn-->>Bus: AppServerClient 解码后按 threadId 分发
-  Bus-->>Window: ThreadWindowViewModel / ThreadTabViewModel 订阅消费
+  Window->>React: 注入 /api/thread URL 与初始 prompt
+  React->>Server: /api/thread ThreadCommand / ClientResponse
+  Server-->>React: ThreadNotification / ServerRequest
 ```
 
 ## 关键 DTO
@@ -155,6 +152,6 @@ sequenceDiagram
 - `AgentServerService` 已实现指数退避重启（最多 5 次），多次失败时通过 `onFatalError` 回调上抛 Coordinator 弹原生 alert（详见 [agent-server.md](Sources/AppServices/AgentServer/agent-server.md)）。
 - node 子进程 stdout/stderr 通过 Pipe 捕获但未暴露 UI（仅防 fd 泄漏）。
 - 设置窗口与 Thread 窗口共享 `AppActivationPolicyCoordinator`，全部关闭后 app 切回 `.accessory`。
-- desktop 主 thread 链路由 `AppServer` 持有进程级唯一 `AppServerConnection`。`ThreadWindow` 通过 `ThreadEventBus` 按 `threadId` 分发事件，tab 不再各自持有主 socket。
-- `AppServerClient` 负责共享连接上的 command / notification / request / response 编解码；`ThreadWindowViewModel` / `ThreadTabViewModel` 只围绕恢复、触发 AppServer 语义命令/回执和本地 UI 状态工作。
-- `PlatformBridgeService` 不另建连接；`AppServerClient` 在共享连接上发送 `platform_bridge_hello`，并把 `platform_request` 分派给它处理。
+- desktop 不再持有 thread client。`ThreadWindowLifecycle` 只创建或聚焦 `WKWebView`，并把初始 prompt 队列注入 React。
+- React ThreadWindow 负责 `/api/thread` 上的 command / notification / request / response 编解码和 UI 状态。
+- `PlatformBridgeConnectionClient` 连接 `/api/platform`，发送 `platform_bridge_hello`，并把 `platform_request` 分派给 `PlatformBridgeService`。

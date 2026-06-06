@@ -21,36 +21,40 @@
 
 ```mermaid
 flowchart TD
-  A[apps/desktop<br/>macOS 宿主与 SwiftUI 交互壳] --> B[apps/agent-server<br/>本地 thread 桥与 runtime 驱动]
+  A[apps/desktop<br/>macOS 宿主与 WKWebView 壳] --> W[apps/thread-window-web<br/>React ThreadWindow]
+  W -->|/api/thread WebSocket| B[apps/agent-server<br/>本地 thread 桥与 runtime 驱动]
+  A -->|/api/platform WebSocket| B
   B --> C[packages/core<br/>thread、turn、消息、LLM/tool 循环]
-  A -->|同一 WebSocket 承载 PlatformBridgeMessage| B
 ```
 
 ### 分层职责
 
-- `apps/desktop`：负责宿主生命周期、热键、PromptPanel、全局唯一 ThreadWindow、状态气泡，以及通过 `MacPlatformProvider` 实现 macOS 原生能力（ScreenCaptureKit / NSWorkspace / NSPasteboard 等）。
-- `apps/agent-server`：负责本地 WebSocket thread 桥、thread/turn 路由、持久化封装和 runtime 驱动。
+- `apps/desktop`：负责宿主生命周期、热键、PromptPanel、全局唯一 ThreadWindow 的 `NSWindow/WKWebView` 生命周期、状态气泡，以及通过 `MacPlatformProvider` 实现 macOS 原生能力（ScreenCaptureKit / NSWorkspace / NSPasteboard 等）。
+- `apps/thread-window-web`：负责 React ThreadWindow UI，直接持有 `/api/thread` WebSocket，管理历史、tabs、消息、请求回执和 composer 状态。
+- `apps/agent-server`：负责本地 WebSocket thread 桥、`/api/thread` 与 `/api/platform` 路径分流、thread/turn 路由、持久化封装和 runtime 驱动。
 - `packages/core`：负责 thread 输入归一化、消息模型、tool 注册、LLM/tool 循环、`RemotePlatformAdapter` 通过 `PlatformBridge` 接口向桌面 App 请求平台能力。
 
 ## 主调用链路
 
 ```mermaid
 flowchart TD
-  A[用户按下全局热键] --> B[PromptPanelController.show]
-  B --> C[用户提交 prompt]
-  C --> D[Swift 创建或聚焦 ThreadWindow]
-  D --> E[ThreadWindowLifecycle 复用 AppServer 统一连接]
+  A[用户按下全局热键] --> B[Swift 宿主打开 PromptPanel]
+  B --> C[用户输入 prompt 并提交]
+  C --> D[Swift 创建 ThreadWindow WKWebView 并注入初始 prompt]
+  D --> E[React 连接 /api/thread 并发送 ThreadCommand]
   E --> F[agent-server 接收 ThreadCommand]
   F --> G[ThreadCommandRouter 路由命令]
   G --> H[AgentRuntime.run]
   H --> I[LLMClient.stream]
   I --> I1[转发 delta / tool / request 为单向事件]
   I1 --> J{返回 toolCalls?}
-  J -- 否 --> K[SwiftUI 渲染消息列表]
+  J -- 否 --> K[React 渲染 assistant bubbles]
   J -- 是 --> L[ToolRegistry.get]
   L --> M[AgentTool.call]
   M --> N[PlatformAdapter 或文件系统]
   N --> I
+  N --> O[platform tool 经 /api/platform 请求 Swift]
+  O --> I
 ```
 
 ## 主链路阶段 DTO
@@ -151,26 +155,25 @@ flowchart TD
 
 当前跨进程协议分为五组 DTO：
 
-- `ThreadCommand`：desktop -> agent-server 的命令，例如 `thread.start`、`thread.resume`、`thread.list`、`thread.delete`、`turn.start`、`turn.interrupt`。
-- `ThreadNotification`：agent-server / core -> desktop 的通知，例如 `thread.started`、`thread.snapshot`、`user.message.recorded`、`turn.started`、`assistant.delta`、`tool.started`、`tool.finished`、`turn.completed`、`thread.status.changed`、`thread.error`。
-- `ServerRequest`：server -> desktop 的待回执请求，当前包括 `permission.requested` 与 `workspace.requested`。
-- `ClientResponse`：desktop -> server 的请求回执，当前包括 `permission.answered` 与 `workspace.answered`。
-- `PlatformBridgeMessage`：独立于 thread 协议的反向平台 IPC，仍使用 `channel: "platform"` + `platform_bridge_hello` / `platform_request` / `platform_response`。
+- `ThreadCommand`：React ThreadWindow -> agent-server 的命令，例如 `thread.start`、`thread.resume`、`thread.list`、`thread.delete`、`turn.start`、`turn.interrupt`。
+- `ThreadNotification`：agent-server / core -> React ThreadWindow 的通知，例如 `thread.started`、`thread.snapshot`、`user.message.recorded`、`turn.started`、`assistant.delta`、`tool.started`、`tool.finished`、`turn.completed`、`thread.status.changed`、`thread.error`。
+- `ServerRequest`：server -> React ThreadWindow 的待回执请求，当前包括 `permission.requested` 与 `workspace.requested`。
+- `ClientResponse`：React ThreadWindow -> server 的请求回执，当前包括 `permission.answered` 与 `workspace.answered`。
+- `PlatformBridgeMessage`：独立于 thread 协议的反向平台 IPC，由 Swift 宿主通过 `/api/platform` 处理，仍使用 `channel: "platform"` + `platform_bridge_hello` / `platform_request` / `platform_response`。
 
 详见 [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md)。
 
 ## 当前实现状态
 
-- 当前桌面壳已经切到 `PromptPanel + 全局唯一 ThreadWindow + StatusBubble`。
-- 当前桌面端使用全局唯一 ThreadWindow。ThreadWindow 左侧展示持久化 thread 历史；点击历史项会在当前窗口创建或激活 tab。Window 拥有 tabs；tab 拥有 `threadId`、消息、运行态、权限请求和 workspace 选择等完整 thread 生命周期，并通过共享连接接收各自事件。
+- 当前桌面壳已经切到 `PromptPanel + 全局唯一 WKWebView ThreadWindow + StatusBubble`。
+- 当前 ThreadWindow 由 Swift `WKWebView` 承载 React 前端。React 左侧展示持久化 thread 历史；点击历史项会在当前窗口创建或激活 tab。React 持有 tabs、`threadId`、消息、运行态、权限请求和 workspace 选择等完整 thread UI 生命周期，并通过 `/api/thread` 接收各自事件。
 - `agent-server` 通过 `ThreadCommandRouter + ThreadRuntimeOrchestrator + ThreadNotificationPublisher + ThreadPersistence + ThreadStore` 管理 thread 并驱动 runtime。
 - `packages/core/src/storage` 提供持久化 thread 存储，默认使用 `FileThreadStore` 将 thread 写入 `~/.spotAgent/threads/`。
-- 桌面端通过 `AppServer` 持有的共享 `AppServerConnection` 与 agent-server 通信；单个 ThreadWindow 内多个 tab 通过 `thread.resume` 复用同一连接，并按 `threadId` 路由 `ThreadNotification` 与 `ServerRequest`。
-- 桌面端通过 agent-server 的 thread 协议读取同一目录，为 ThreadWindow 左侧历史列表提供恢复和删除入口；恢复同一 `threadId` 时优先激活已有 tab，未打开时创建新 tab 并等待 `thread.snapshot` 恢复。
+- React ThreadWindow 通过 agent-server 的 `/api/thread` 读取同一目录，为左侧历史列表提供恢复和删除入口；恢复同一 `threadId` 时优先激活已有 tab，未打开时创建新 tab 并等待 `thread.snapshot` 恢复。
 - `packages/core` 已经定义完整的 tool、platform DTO。
 - macOS 平台能力由 `apps/desktop` 内的 `MacPlatformProvider` 实现：剪贴板（`NSPasteboard`）、App 列表与前台 App（`NSWorkspace`）、窗口列表（`CGWindowListCopyWindowInfo`）、屏幕截图（`ScreenCaptureKit` + `SCScreenshotManager`，支持 display / window / region 三种 target）、OCR（Vision）与 Accessibility snapshot / action。
-- 桌面 App 通过 `AppServerClient` 的共享 `AppServerConnection` 发送 `platform_bridge_hello`，并把 `channel: "platform"` 的 `platform_request` 分派给独立的 `PlatformBridgeService`；`PlatformBridgeService` 只处理平台请求和 `platform_response` 编码，不再维护平行 WebSocket。
-- ThreadWindow 已有共享连接断线自动重连、历史刷新与 tab 重新恢复逻辑；仍需实机验证 agent-server 重启后的 `thread.snapshot` 恢复体验。
+- 桌面 App 通过独立 `/api/platform` WebSocket 发送 `platform_bridge_hello`，并把 `channel: "platform"` 的 `platform_request` 分派给 `PlatformBridgeService`；Swift 不再解析 `ThreadNotification`，也不发送 `ThreadCommand`。
+- React ThreadWindow 已有 thread socket 断线自动重连、历史刷新与 tab 重新恢复逻辑；仍需实机验证 agent-server 重启后的 `thread.snapshot` 恢复体验。
 - 图片 attachment 会落 Blob/Stub；agent-server 在 runtime 前把 image STUB 展开为多模态 image part，LLM 是否能理解图片取决于当前 provider capability。
 
 ## 阅读顺序建议

@@ -49,7 +49,7 @@ mkdir -p "$APP_DIR/Contents/Resources"
 
 if [[ ! -f "$WEB_DIST_DIR/index.html" ]]; then
   printf 'Missing ThreadWindow web build: %s/index.html\n' "$WEB_DIST_DIR" >&2
-  printf 'Run pnpm --filter @handagent/thread-window-web build or set HANDAGENT_THREAD_WINDOW_WEB_DIST_DIR.\n' >&2
+  printf 'Run pnpm --filter handagent-thread-window-web build or set HANDAGENT_THREAD_WINDOW_WEB_DIST_DIR.\n' >&2
   exit 1
 fi
 

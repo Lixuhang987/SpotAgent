@@ -1,10 +1,10 @@
 # protocol
 
-`packages/core/src/protocol` 定义 desktop、app-server、core 之间的跨进程协议边界。新主路径统一使用 `Thread` / `Turn` 语义：
+`packages/core/src/protocol` 定义 React ThreadWindow、desktop、app-server、core 之间的跨进程协议边界。新主路径统一使用 `Thread` / `Turn` 语义：
 
-- desktop 只提交 `ThreadCommand`，并回覆 `ClientResponse`
-- app-server / core 只向 desktop 推送 `ThreadNotification`，并在需要用户决定时发 `ServerRequest`
-- 平台 RPC 独立于 thread 主路径，继续走 `PlatformBridgeMessage`
+- React ThreadWindow 只提交 `ThreadCommand`，并回覆 `ClientResponse`
+- app-server / core 只向 React ThreadWindow 推送 `ThreadNotification`，并在需要用户决定时发 `ServerRequest`
+- 平台 RPC 独立于 thread 主路径，由 Swift desktop 通过 `/api/platform` 处理 `PlatformBridgeMessage`
 
 ## 文件
 
@@ -21,16 +21,17 @@
 
 ```mermaid
 flowchart LR
-  A[desktop] -->|ThreadCommand| B[app-server]
+  A[React ThreadWindow] -->|/api/thread ThreadCommand| B[app-server]
   B -->|submit| C[core runtime]
   C -->|ThreadNotification| B
-  B -->|ThreadNotification| A
-  B -->|ServerRequest| A
-  A -->|ClientResponse| B
-  B -->|PlatformBridgeMessage| A
+  B -->|/api/thread ThreadNotification| A
+  B -->|/api/thread ServerRequest| A
+  A -->|/api/thread ClientResponse| B
+  B -->|/api/platform PlatformBridgeMessage| D[Swift desktop]
 ```
 
-- desktop 不直接驱动 `AgentRuntime`，只发命令、收事件。
+- React ThreadWindow 不直接驱动 `AgentRuntime`，只发命令、收事件。
+- Swift desktop 不处理 thread DTO，只处理 platform bridge DTO。
 - app-server 负责 socket、订阅路由、持久化、权限 / workspace 回执桥接。
 - core 负责把命令转成 runtime 执行，并把执行结果归一化成稳定事件流。
 
@@ -67,12 +68,12 @@ flowchart LR
 
 这两组消息只用于“server 发起问题，等待 UI 回执”的少量交互，不承担普通 thread 流。
 
-## 单连接恢复模型
+## Thread Socket 恢复模型
 
-- desktop 进程固定只有一条到 `app-server` 的长连接。
-- thread 打开或重连时发送 `thread.resume(threadId)`。
+- React ThreadWindow 持有到 `/api/thread` 的长连接。
+- thread 打开或 thread socket 重连时发送 `thread.resume(threadId)`。
 - `thread.resume` 的结果是 `thread.snapshot`，不是新建 socket，也不是额外握手通道。
-- 所有 `ThreadNotification` 与 `ServerRequest` 都带 `threadId`，由 desktop 本地 store 按 thread 分发。
+- 所有 `ThreadNotification` 与 `ServerRequest` 都带 `threadId`，由 React store 按 thread 分发。
 
 ## core 侧消费方式
 
@@ -121,7 +122,7 @@ plugin action 绑定信息位于 `thread.start.payload.actionBinding`。app-serv
 }
 ```
 
-桌面端回复：
+React ThreadWindow 回复：
 
 ```json
 {
@@ -178,6 +179,7 @@ plugin action 绑定信息位于 `thread.start.payload.actionBinding`。app-serv
 ## 相关文档
 
 - TS 处理方：[apps/agent-server/agent-server.md](/Users/mu9/proj/handAgent/apps/agent-server/agent-server.md)
-- Swift 处理方：[apps/desktop/Sources/ThreadWindow/thread-window.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/ThreadWindow/thread-window.md) / [PlatformBridge](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/PlatformBridge/platform-bridge.md)
+- React 处理方：[apps/thread-window-web/thread-window-web.md](/Users/mu9/proj/handAgent/apps/thread-window-web/thread-window-web.md)
+- Swift platform 处理方：[PlatformBridge](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/PlatformBridge/platform-bridge.md)
 - 平台 RPC 接口：[platform/platform.md](/Users/mu9/proj/handAgent/packages/core/src/platform/platform.md)
 - UI 模型：[conversation/conversation.md](/Users/mu9/proj/handAgent/packages/core/src/conversation/conversation.md)

@@ -1,6 +1,6 @@
 # agent-server
 
-`apps/agent-server` 是本地 WebSocket thread 桥（Node + TypeScript）。desktop 将它作为子进程启动，它监听 `ws://127.0.0.1:4317/api/thread`，接收 `PlatformBridgeMessage`、`ThreadCommand`、`ClientResponse` 三类顶层消息，驱动 core `AgentRuntime`，并通过反向 bridge 向 desktop 请求平台能力、权限审批和 workspace 选择。
+`apps/agent-server` 是本地 WebSocket thread 桥（Node + TypeScript）。desktop 将它作为子进程启动，它暴露 `ws://127.0.0.1:4317/api/thread` 给 React ThreadWindow，暴露 `ws://127.0.0.1:4317/api/platform` 给 Swift 宿主。`/api/thread` 接收 `ThreadCommand` / `ClientResponse` 并推送 `ThreadNotification` / `ServerRequest`；`/api/platform` 只承载 `PlatformBridgeMessage`，用于向 desktop 请求平台能力。
 
 ## 直接子节点
 
@@ -15,9 +15,11 @@
 
 ```mermaid
 flowchart LR
-  A["apps/desktop<br/>Swift / SwiftUI"] -->|"ThreadCommand / ClientResponse / PlatformBridgeMessage"| B["apps/agent-server<br/>Node WebSocket bridge"]
+  A["apps/desktop<br/>Swift 宿主"] -->|"/api/platform PlatformBridgeMessage"| B["apps/agent-server<br/>Node WebSocket bridge"]
+  W["apps/thread-window-web<br/>React ThreadWindow"] -->|"/api/thread ThreadCommand / ClientResponse"| B
   B --> C["@handagent/core<br/>runtime / tools / storage / protocol"]
-  B -->|"ServerRequest / PlatformBridgeMessage"| A
+  B -->|"/api/thread ThreadNotification / ServerRequest"| W
+  B -->|"/api/platform PlatformBridgeMessage"| A
 ```
 
 ## 启动与组合
@@ -37,15 +39,16 @@ node --experimental-transform-types --experimental-specifier-resolution=node app
 5. 通过 `SettingsBackedLLMClient` 或 `MockLLMClient` 选择 LLM 模式。
 6. 按 thread 缓存 `AgentRuntime`，注入 thread 级 tool registry、permission policy、blob store 和 turn summarizer。
 7. 创建 `ThreadPersistence`、`ThreadRuntimeOrchestrator`、`ThreadNotificationPublisher`、`ThreadCommandRouter`。
-8. 启动 WebSocketServer，给每条 socket 挂载 `PlatformBridgeMessage / ClientResponse / ThreadCommand` 分派逻辑，并维护连接级 thread 订阅与解绑。
+8. 启动 WebSocketServer，按 request path 分流：`/api/thread` 挂载 thread command/response handler，`/api/platform` 挂载 platform bridge handler，未知 path 直接关闭。
 
 ## 主消息流
 
 ```mermaid
 flowchart TD
-  A["desktop shared AppServerConnection"] --> B["server/attachThreadSocketHandlers"]
-  B --> C{"PlatformBridgeMessage / ClientResponse / ThreadCommand"}
-  C -- "PlatformBridgeMessage" --> D["bridges/WebSocketPlatformBridge"]
+  A["React /api/thread socket"] --> B["server/attachThreadSocketHandlers"]
+  P["Swift /api/platform socket"] --> D["server/attachPlatformSocketHandlers"]
+  D --> PB["bridges/WebSocketPlatformBridge"]
+  B --> C{"ClientResponse / ThreadCommand"}
   C -- "ClientResponse" --> E["bridges/ThreadPermissionBridge<br/>bridges/ThreadWorkspaceAskBridge"]
   C -- "ThreadCommand" --> F["thread/ThreadCommandRouter"]
   F --> G["thread/ThreadRuntimeOrchestrator"]
@@ -53,16 +56,17 @@ flowchart TD
   G --> I["@handagent/core AgentRuntime"]
   I --> J["protocol/MessageTranslator"]
   J --> H
-  H --> K["desktop ThreadWindow"]
+  H --> K["React ThreadWindow"]
   G --> L["thread/ThreadPersistence"]
 ```
 
 ## 协议主干
 
-- socket 顶层只接收三类消息：`PlatformBridgeMessage`、`ThreadCommand`、`ClientResponse`。
+- `/api/thread` 顶层只接收 `ThreadCommand`、`ClientResponse`。
+- `/api/platform` 顶层只接收 `PlatformBridgeMessage`。
 - thread 通知主干统一走 `ThreadNotification`；`thread.snapshot` 是恢复入口。
-- permission / workspace 不再走旧协议 union，统一由 server 发 `ServerRequest`，desktop 回 `ClientResponse`。
-- 单条 desktop 连接可以同时恢复多个 thread；没有 unsubscribe 协议，tab 关闭只取消 desktop 本地订阅。
+- permission / workspace 不再走旧协议 union，统一由 server 发 `ServerRequest`，React 回 `ClientResponse`。
+- 单条 React thread socket 可以同时恢复多个 thread；没有 unsubscribe 协议，tab 关闭只取消 React 本地订阅。
 
 ## 与文件系统约定
 

@@ -16,7 +16,7 @@
 
 | 桥 | 请求来源 | 回流消息 | 默认超时 | 绑定粒度 |
 |------|------|------|------|------|
-| `WebSocketPlatformBridge` | core `RemotePlatformAdapter` | `platform_response` | `call()` 入参默认 15s | 当前发送 `platform_bridge_hello` 的共享 socket |
+| `WebSocketPlatformBridge` | core `RemotePlatformAdapter` | `platform_response` | `call()` 入参默认 15s | 当前发送 `platform_bridge_hello` 的 `/api/platform` socket |
 | `ThreadPermissionBridge` | core `FilePermissionPolicy.ask` | `permission.answered` | 60s | 当前 thread 绑定连接 |
 | `ThreadWorkspaceAskBridge` | builtin `workspace.askUser` | `workspace.answered` | 60s | 当前 thread 绑定连接，且同 thread 串行 |
 
@@ -38,7 +38,7 @@ attach(send: Send): BridgeToken {
 }
 ```
 
-新的 `platform_bridge_hello` 会替换旧 platform 绑定，并让旧 token 下的 pending request 以 offline 失败。旧 socket 晚到的 response 因 token 不匹配会被忽略。
+新的 `/api/platform` socket 发送 `platform_bridge_hello` 后会替换旧 platform 绑定，并让旧 token 下的 pending request 以 offline 失败。旧 socket 晚到的 response 因 token 不匹配会被忽略。`WebSocketPlatformBridge` 不挂载在 `/api/thread`，也不与 ThreadWindow UI 共享 WebSocket。
 
 ### 权限审批绑定到 thread
 
@@ -76,7 +76,7 @@ this.dispatchNext(threadId);
 
 - 新增桥时必须定义 token/fencing 策略，避免旧 socket 响应影响新 socket。
 - `handleResponse()` 必须先校验 requestId，再校验 token 和当前绑定。
-- socket close 清理由 `server/attachThreadSocketHandlers` 统一调用；桥内部只清理自己的 pending 状态。
+- socket close 清理由对应 server handler 调用；thread request 由 `attachThreadSocketHandlers` 清理，platform bridge 由 `attachPlatformSocketHandlers` 清理。桥内部只清理自己的 pending 状态。
 
 ## 下一步阅读
 

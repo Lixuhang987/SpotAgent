@@ -4,17 +4,19 @@
 
 `apps` 层负责可执行产品入口与用户交互壳层，不承载跨平台业务规则。
 
-当前包含两个独立可执行单元：
+当前包含两个可执行单元和一个 Web 前端包：
 
 - [desktop/desktop.md](/Users/mu9/proj/handAgent/apps/desktop/desktop.md) —— macOS 宿主壳（Swift / SwiftUI）。
+- [thread-window-web/thread-window-web.md](/Users/mu9/proj/handAgent/apps/thread-window-web/thread-window-web.md) —— WKWebView 承载的 React ThreadWindow 前端。
 - [agent-server/agent-server.md](/Users/mu9/proj/handAgent/apps/agent-server/agent-server.md) —— 本地 WebSocket thread 桥（Node / TypeScript），由 desktop 派生为子进程。
 
 ## 在整体架构中的位置
 
 ```mermaid
 flowchart LR
-  A[apps/desktop<br/>macOS 宿主] -->|ThreadCommand / ClientResponse / PlatformBridgeMessage WS| B[apps/agent-server<br/>本地 thread 桥]
-  B -->|ThreadNotification / ServerRequest / PlatformBridgeMessage| A
+  A[apps/desktop<br/>macOS 宿主] -->|WKWebView load| W[apps/thread-window-web<br/>React ThreadWindow]
+  W -->|/api/thread WebSocket| B[apps/agent-server<br/>本地 thread 桥]
+  A -->|/api/platform WebSocket| B
   B --> C[packages/core<br/>runtime / tool / LLM]
 ```
 
@@ -28,14 +30,14 @@ flowchart LR
 ### 2. Thread 交互
 
 - 用户提交 prompt 后，`AppCoordinator` 创建或聚焦 `ThreadWindow`。
-- `AppServer` 为 desktop 进程维护唯一 thread WebSocket；`ThreadWindowLifecycle` 通过 `ThreadEventBus` 按 `threadId` 分发 notification / request。
-- `AppServer` 暴露 thread / turn 语义方法，`AppServerClient` 在共享连接上编码 `ThreadCommand` / `ClientResponse`，由后端 `ThreadCommandRouter` 路由并交给 `ThreadRuntimeOrchestrator` 驱动 `AgentRuntime`。
-- ThreadWindow 左侧历史列表读取 `~/.spotAgent/threads/`，用于搜索、预览、恢复和删除持久化 thread。
+- Swift `ThreadWindowLifecycle` 创建 `WKWebView`，加载 `apps/thread-window-web` bundle，并注入 `/api/thread` URL 和初始 prompt。
+- React ThreadWindow 通过 `/api/thread` 编码 `ThreadCommand` / `ClientResponse`，接收 `ThreadNotification` / `ServerRequest`，由后端 `ThreadCommandRouter` 路由并交给 `ThreadRuntimeOrchestrator` 驱动 `AgentRuntime`。
+- ThreadWindow 左侧历史列表通过 thread 协议读取 `~/.spotAgent/threads/`，用于搜索、预览、恢复和删除持久化 thread。
 
 ### 3. 平台能力反向 IPC
 
 - `agent-server` 通过 `RemotePlatformAdapter` 调 `PlatformBridge.call`。
-- 桌面端 `AppServerClient` 在共享 WebSocket 上接收 `platform_request`，交给 `PlatformBridgeService` 派发给 `MacPlatformProvider`，再通过同一连接回写 `platform_response`。
+- 桌面端 `PlatformBridgeConnectionClient` 连接 `/api/platform`，接收 `platform_request`，交给 `PlatformBridgeService` 派发给 `MacPlatformProvider`，再通过 `/api/platform` 回写 `platform_response`。
 
 ### 4. 状态反馈
 
@@ -55,7 +57,7 @@ flowchart LR
 
 - Settings 模型页把 provider / API 选择从自绘 `HStack + Button` 改为系统 segmented `Picker`，API Key 输入改为 `SecureField`；Workspace 添加目录从直接创建 `NSOpenPanel` 改为 SwiftUI `fileImporter`。
 - Settings 容器把 tab 字符串收敛为 `SettingsTab` enum，并抽出 `SettingsListSection` 复用列表分割线逻辑，避免多个页面重复 `Array(enumerated())`。
-- ThreadWindow 新增 `ThreadRunStatus`，WebSocket 协议边界仍接收原始字符串，但进入 ViewModel 后立即归一化为枚举，UI 只用 `.isRunning` / `.rawValue`，避免散落比较 `"running"` / `"failed"`。
+- ThreadWindow 已迁移到 React；旧 Swift ViewModel 中的 `ThreadRunStatus` 经验只作为历史重构记录保留。
 - Theme 环境值从手写 `EnvironmentKey` 改为 SwiftUI `@Entry`；StatusBubble 补了首次出现时 running 动画启动和 accessibility action。
 
 可复用经验：

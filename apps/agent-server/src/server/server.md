@@ -2,13 +2,13 @@
 
 ## 目录职责
 
-`server/` 是 agent-server 的进程入口与组合根。它负责启动 WebSocketServer、给每条 socket 挂上平台消息、thread / turn 命令、客户端响应三类处理器，并把 core 与本目录其他模块组装成生产运行图。
+`server/` 是 agent-server 的进程入口与组合根。它负责启动 WebSocketServer，按 request path 拆分 `/api/thread` 与 `/api/platform`，并把 core 与本目录其他模块组装成生产运行图。
 
 ## 文件
 
 | 文件 | 职责 |
 |------|------|
-| `server.ts` | 暴露 `attachThreadSocketHandlers`、`startServer`、`startDefaultServer`；解析 `~/.spotAgent` 路径；读取 MCP 配置；按配置创建 MCP client；作为 `node ... src/server/server.ts` 的可执行入口 |
+| `server.ts` | 暴露 `attachThreadSocketHandlers`、`attachPlatformSocketHandlers`、`startServer`、`startDefaultServer`；解析 `~/.spotAgent` 路径；读取 MCP 配置；按配置创建 MCP client；作为 `node ... src/server/server.ts` 的可执行入口 |
 
 ## 运行入口
 
@@ -22,26 +22,27 @@ node --experimental-transform-types --experimental-specifier-resolution=node app
 
 ## 关键机制
 
-### Socket 消息分派
+### Socket 路径分派
 
 ```ts
-if (isPlatformBridgeMessage(message)) {
-  if (message.type === "platform_bridge_hello" && bridge) {
-    bridgeToken = bridge.attach(sendPlatform);
-  } else if (message.type === "platform_response") {
-    bridge?.handleResponse(message.payload, bridgeToken);
-  }
+const path = request.url?.split("?")[0];
+if (path === "/api/platform") {
+  attachPlatformSocketHandlers(socket, { bridge });
   return;
 }
+if (path === "/api/thread") {
+  attachThreadSocketHandlers(socket, dependencies);
+  return;
+}
+socket.close();
 ```
 
-这段逻辑先把 `channel: "platform"` 的消息从其他顶层消息中剥离。`platform_bridge_hello` 会为当前 socket 生成 fencing token；之后的 `platform_response` 必须带着这条 socket 当前 token 才能唤醒 pending request，避免旧 socket 的晚到响应污染新连接。
+`/api/thread` 和 `/api/platform` 是两条独立 WebSocket。未知 path 或缺失 path 会被关闭，不默认为 thread socket。
 
-按最小协议约束，server 顶层只接收三类消息：
+按最小协议约束：
 
-- `PlatformBridgeMessage`：平台桥接 hello / response。
-- `ClientResponse`：desktop 对 `permission.answered`、`workspace.answered` 的回答。
-- `ThreadCommand`：`thread.start`、`thread.resume`、`thread.list`、`thread.delete`、`turn.start`、`turn.interrupt`。
+- `/api/thread` 接收 `ClientResponse` 和 `ThreadCommand`。
+- `/api/platform` 接收 `PlatformBridgeMessage`，其中 `platform_bridge_hello` 会为当前 socket 生成 fencing token；之后的 `platform_response` 必须带着这条 socket 当前 token 才能唤醒 pending request，避免旧 socket 的晚到响应污染新连接。
 
 ### thread 绑定与关闭清理
 

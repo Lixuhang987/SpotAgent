@@ -51,7 +51,7 @@ sequenceDiagram
 
 ### 最小命令入口
 
-- `thread.start`：创建 thread，并在同一连接上建立该 thread 的通知路由。
+- `thread.start`：创建 thread，并在当前 `/api/thread` socket 上建立该 thread 的通知路由。
 - `thread.resume`：恢复既有 thread，并返回 `thread.snapshot`。
 - `thread.list`：返回 `thread.listed`。
 - `thread.delete`：删除指定 thread；若该 thread 正在运行，先中断再删。
@@ -67,7 +67,7 @@ sequenceDiagram
 ### 连接与通知分发
 
 - `ThreadNotificationPublisher` 维护 `connectionId -> subscribed threadIds`。
-- 同一条 desktop 连接可以同时接收多个 thread 的通知。
+- 同一条 React `/api/thread` socket 可以同时接收多个 thread 的通知。
 - 带 `threadId` 的 notification / server request 按 thread 定向；不带 `threadId` 的全局 notification 广播给所有连接。
 - 文档层面不再承诺显式 unsubscribe 协议；当前若实现中仍保留过渡逻辑，视为待清理内部细节。
 
