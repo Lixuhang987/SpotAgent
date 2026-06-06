@@ -827,3 +827,20 @@
 - **验证过程**：在 main 上执行 `bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build` 均通过；重新 `bash ./scripts/package-app.sh --mock-llm` 并启动 App，提交 `QA order fix first [mock:assistant-ok] ORDER_FIX_A_20260606`，随后同 tab 提交 `QA order fix second [mock:assistant-ok] ORDER_FIX_B_20260606`。
 - **证据**：Computer Use 观察到 UI 顺序为第一条 user、第一条 assistant、第二条 user、第二条 assistant；`~/.spotAgent/sessions/session-1780744892022-0l1uzs.json` 中 `messages` 为 4 条，顺序同上，`events: []`；`lsof -nP -iTCP:4317` 显示仍只有 platform bridge 与共享 session connection 两条 established 连接。
 - **结论**：通过。已从 `docs/bugs.md` 当前 bug 中移除。
+
+### 单连接 session 路由 smoke（P2）
+
+- **验证日期**：2026-06-06
+- **验证环境**：mock-llm / `dist/HandAgentDesktop.app` / `main` 分支 / macOS 15+
+- **验证过程**：
+  - 在 main 上通过 `bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`，再执行 `bash ./scripts/package-app.sh --mock-llm` 并启动 `dist/HandAgentDesktop.app`。
+  - 使用原生全局快捷键打开 PromptPanel，创建 B 会话 `session-1780744892022-0l1uzs`，连续提交 `QA order fix first [mock:assistant-ok] ORDER_FIX_A_20260606` 与 `QA order fix second [mock:assistant-ok] ORDER_FIX_B_20260606`。UI 按 user/assistant/user/assistant 顺序展示。
+  - 创建 A 会话 `session-1780745046557-gwvvup`，提交 `QA route fix A workspace [mock:workspace-ask] ROUTE_FIX_A_TOOL_20260606`。`workspace.askUser` 授权面板和 workspace 选择面板只出现在 A tab；选择 `qa-workspace` 后 A 显示 `Mock workspace.askUser completed.`。
+  - 关闭 A tab 后 B 自动成为 active，并继续提交 `QA route fix B after close [mock:assistant-ok] ROUTE_FIX_B_AFTER_CLOSE_20260606` 成功。
+  - 从左侧历史重新打开 A，snapshot 恢复出 `{"workspaceId":"qa-workspace"}` 与最终 assistant。随后 kill agent-server PID `36405`，App 自动拉起新 PID `39289`，两个已打开 tab 重新建立共享连接；A 在重启后继续提交 `QA route fix A after restart [mock:assistant-ok] ROUTE_FIX_A_AFTER_RESTART_20260606` 成功。
+- **证据**：
+  - `lsof -nP -iTCP:4317` 在多 tab、关闭/重开 tab、agent-server 重启前后均显示 desktop 到 4317 只有两条 established 连接：platform bridge 与共享 session connection。
+  - `~/.spotAgent/sessions/session-1780745046557-gwvvup.json`：包含 A 的 workspace tool call、tool result `{"workspaceId":"qa-workspace"}`、最终 assistant，以及重启后的普通 follow-up；events 仅包含 A 的 `permission_request` / `tool_call` / `tool_result`。
+  - `~/.spotAgent/sessions/session-1780744892022-0l1uzs.json`：包含 B 的三轮普通 user/assistant 消息，`events: []`，未混入 A 的 tool 或 workspace 事件。
+  - QA 结束后已退出 `HandAgentDesktop`；`pgrep -lf HandAgentDesktop`、`pgrep -lf server.ts` 均无输出，`lsof -nP -iTCP:4317` 无监听或连接残留。
+- **结论**：通过。单个 SessionWindow 的多 tab 复用共享 session connection；session event / permission / workspace ask 均按 `sessionId` 路由；关闭、历史恢复与 agent-server 重启后重订阅均符合预期。

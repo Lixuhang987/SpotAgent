@@ -22,15 +22,6 @@
 
 最近阻塞记录：2026-05-24 复查 `~/.spotAgent/settings.json`，当前 `llm.provider` 为 `openai-compatible`，`llm.api` 为 `responses`，`llm.model` 为 `gpt-5.4`，`llm.baseUrl` 为 `http://127.0.0.1:8317/v1`，API key 仅属于 OpenAI 兼容配置；环境变量中没有 `ANTHROPIC_API_KEY` 或 `CLAUDE_API_KEY`，仅有 `ANTHROPIC_BASE_URL`。配置文件没有可用的 Anthropic key 或 Anthropic 模型；在没有用户提供真实 Anthropic 配置前，不能验证 Anthropic streaming 与 tool call 回灌，本项不归档为通过。
 
-## 单连接 session 路由 smoke（P2）
-
-1. 从当前 worktree 执行 `bash ./scripts/swiftw run HandAgentDesktop`。
-1. 打开 SessionWindow 后连续创建两个 session tab，确认 desktop 侧只建立一条到 `ws://127.0.0.1:4317/api/session` 的连接。
-1. 在 tab A 发送普通 prompt，在 tab B 发送另一条普通 prompt，确认两边的 assistant / tool / permission / workspace 事件不会串到错误 tab。
-1. 关闭 tab A，确认 client 会发送 `session_unsubscribe`，tab B 仍可继续追问；再次打开 tab A 对应历史会话，确认会重新发送 `session_subscribe` 并收到 `session_snapshot`。
-1. 在 tab A 触发一次需要 permission 或 workspace 选择的工具场景，确认 `permission_ask` / `workspace_ask` 只回到当前 `sessionId` 对应 tab，不会串到其他 tab。
-1. 在 agent-server 运行中手动重启 desktop 或 kill `agent-server` 后恢复，确认共享连接会自动重连、左侧历史会刷新、已打开 tab 会重新订阅并继续可用。
-
 ## 懒加载工具激活（P1）
 
 最近阻塞记录：2026-05-24 使用真实 LLM 模式重试 `HANDAGENT_LAZY_TOOL_QA_20260524`。首轮已验证 `use_tools` 激活后会调到真实工具链；在允许 `screen.capture` / `accessibility.snapshot` 之前，工具先被判定为拒绝。随后在权限弹窗中选择 `始终允许` 再重试 `HANDAGENT_LAZY_TOOL_QA_20260524_RETRY`，SessionWindow 已显示 `window.list` 与 `screen.capture` 的工具结果，但最终仍落到 UI 告警 `AI SDK stream finished without assistant content or tool calls.`，对应 session `session-1779601103378-sa0wyo` 也记录了同名 error 事件，因此本项当前仍不能归档为通过。
