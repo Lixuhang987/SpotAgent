@@ -119,7 +119,7 @@ describe("SessionRuntimeOrchestrator", () => {
       type: "assistant_delta",
       sessionId: "session-1",
       turnId: "user-1",
-      itemId: "session-1-assistant-1",
+      itemId: "session-1-user-1-assistant-1",
       payload: { text: "你好，我收到了。" },
     });
     expect(pushed[3]).toMatchObject({
@@ -528,7 +528,7 @@ describe("SessionRuntimeOrchestrator", () => {
     });
     expect(pushed[4]).toMatchObject({
       type: "assistant_delta",
-      itemId: "session-tool-running-assistant-2",
+      itemId: "session-tool-running-user-1-assistant-2",
       payload: { text: "done" },
     });
     expect(pushed.some((message) => message.type === "session_error")).toBe(false);

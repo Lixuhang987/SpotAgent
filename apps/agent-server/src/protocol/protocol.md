@@ -21,6 +21,17 @@
 ### Runtime event 到 `SessionEvent`
 
 ```ts
+case "assistant_message_delta":
+  return {
+    type: "assistant_delta",
+    sessionId,
+    eventId: `${sessionId}-${event.messageId}-${timestamp}-delta`,
+    turnId,
+    itemId: `${sessionId}-${turnId}-${event.messageId}`,
+    timestamp,
+    payload: { text: event.payload.text },
+  };
+
 case "tool_result":
   return {
     type: "tool_finished",
@@ -37,6 +48,8 @@ case "tool_result":
     },
   };
 ```
+
+`AgentRuntime` 的 assistant `messageId` 只保证单次 run 内部递增；同一 session 后续 turn 可能再次出现 `assistant-1`。因此 `assistant_delta.itemId` 必须拼入 `turnId`，保证 desktop `SessionWindow` 的 SwiftUI message identity 在多轮会话中稳定唯一。
 
 core runtime 只知道 `tool_result` 成功或失败；desktop UI 需要的是 `tool_finished(status)`。这个映射集中在这里，新增工具事件字段时只改一个地方。
 

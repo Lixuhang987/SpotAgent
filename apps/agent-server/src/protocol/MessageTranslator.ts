@@ -28,7 +28,7 @@ export function toSessionEvent(
         sessionId,
         eventId: `${sessionId}-${event.messageId}-${timestamp}-delta`,
         turnId,
-        itemId: `${sessionId}-${event.messageId}`,
+        itemId: `${sessionId}-${turnId}-${event.messageId}`,
         timestamp,
         payload: { text: event.payload.text },
       };

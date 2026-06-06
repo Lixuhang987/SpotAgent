@@ -28,10 +28,39 @@ describe("MessageTranslator", () => {
       sessionId: "session-1",
       eventId: "session-1-assistant-1-2026-05-18T00:00:00.000Z-delta",
       turnId: "turn-1",
-      itemId: "session-1-assistant-1",
+      itemId: "session-1-turn-1-assistant-1",
       timestamp: "2026-05-18T00:00:00.000Z",
       payload: { text: "你好" },
     });
+  });
+
+  it("keeps assistant item ids unique across turns with repeated runtime message ids", () => {
+    const first = toSessionEvent(
+      "session-1",
+      "turn-a",
+      {
+        type: "assistant_message_delta",
+        messageId: "assistant-1",
+        payload: { text: "first" },
+      },
+      "2026-06-06T00:00:00.000Z",
+    );
+    const second = toSessionEvent(
+      "session-1",
+      "turn-b",
+      {
+        type: "assistant_message_delta",
+        messageId: "assistant-1",
+        payload: { text: "second" },
+      },
+      "2026-06-06T00:00:01.000Z",
+    );
+
+    expect(first?.type).toBe("assistant_delta");
+    expect(second?.type).toBe("assistant_delta");
+    expect(first?.itemId).toBe("session-1-turn-a-assistant-1");
+    expect(second?.itemId).toBe("session-1-turn-b-assistant-1");
+    expect(first?.itemId).not.toBe(second?.itemId);
   });
 
   it("translates tool call and result events into tool_message frames", () => {
