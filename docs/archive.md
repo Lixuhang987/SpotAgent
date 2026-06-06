@@ -801,3 +801,11 @@
 - **验证环境**：mock-llm / macOS；主仓库 `/Users/mu9/proj/handAgent`，分支 `main`；`dist/HandAgentDesktop.app/Contents/Resources/HandAgentRuntimeMode.json` 为 `{"llmMode":"mock"}`。
 - **验证过程**：通过 PromptPanel 提交 `[mock:slow-focus] QA_DELETE_RUNNING_SESSION_TIMEOUT_20260524_043305`，生成 running 会话 `session-1779568466925-l2g7yi`；SessionWindow 底部出现停止按钮 `stop.fill`，会话文件最初仅包含 user message。随后在左侧历史列表对同一 session 执行删除，确认删除弹窗后窗口返回其他会话，目标 tab 不再打开，未卡在 running 或等待删除状态。
 - **证据**：目标文件 `~/.spotAgent/sessions/session-1779568466925-l2g7yi.json` 已不存在；`rg -n "QA_DELETE_RUNNING_SESSION_TIMEOUT_20260524_043305|session-1779568466925-l2g7yi" ~/.spotAgent/sessions -g '*.json'` 无命中；历史侧栏仍可见的 `QA_DELETE_RUNNING_SESSION_TIM...` 是 2026-05-22 旧 QA 会话，不是本次 session。删除后 `HandAgentDesktop` 与 `agent-server` 仍运行，`lsof -nP -iTCP:4317 -sTCP:LISTEN` 显示 `node` 继续监听 `*:4317`。
+
+### agent-server 源码目录重构 smoke
+
+- **验证日期**：2026-06-06
+- **验证环境**：mock-llm / `dist/HandAgentDesktop.app` / `main` 分支 / macOS 15+
+- **验证过程**：先在 `main` 重新通过 `bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`，再用 `bash ./scripts/package-app.sh --mock-llm` 打包启动。通过原生全局快捷键打开 PromptPanel，提交 `QA smoke after fix [mock:assistant-ok] 2026-06-06`，SessionWindow 正常显示 `Mock assistant response: main chain is reachable.`。随后在同一 session 提交 `QA workspace ask after fix [mock:workspace-ask] 2026-06-06`，UI 出现 `workspace.askUser` 授权气泡；选择“仅本次”后出现 workspace 选择气泡，选择 `qa-workspace` 后 UI 显示 `Mock workspace.askUser completed.`。
+- **证据**：`HandAgentRuntimeMode.json` 内容为 `{"llmMode":"mock"}`；`ps -o pid,ppid,command -p 11940` 显示 agent-server 命令路径为 `/Users/mu9/proj/handAgent/apps/agent-server/src/server/server.ts`；`~/.spotAgent/sessions/session-1780741750422-gycv3b.json` 记录 user / assistant、`workspace.askUser` tool call、`{"workspaceId":"qa-workspace"}` tool result、最终 assistant 回复，以及 `permission_request` / `tool_call` / `tool_result` 事件。QA 后已退出 `HandAgentDesktop`，`lsof -nP -iTCP:4317` 无监听进程残留。
+- **结论**：通过。desktop 可从当前源码目录派生 agent-server，普通 prompt、同 session workspace 回流、session 持久化与清理状态均符合预期。

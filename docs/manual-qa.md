@@ -28,18 +28,6 @@
 
 最近阻塞记录：2026-05-24 复查 `~/.spotAgent/settings.json`，当前 `llm.provider` 为 `openai-compatible`，`llm.api` 为 `responses`，`llm.model` 为 `gpt-5.4`，`llm.baseUrl` 为 `http://127.0.0.1:8317/v1`，API key 仅属于 OpenAI 兼容配置；环境变量中没有 `ANTHROPIC_API_KEY` 或 `CLAUDE_API_KEY`，仅有 `ANTHROPIC_BASE_URL`。配置文件没有可用的 Anthropic key 或 Anthropic 模型；在没有用户提供真实 Anthropic 配置前，不能验证 Anthropic streaming 与 tool call 回灌，本项不归档为通过。
 
-## agent-server 源码目录重构 smoke（P2）
-
-最近阻塞记录：2026-06-06 在 `main` 分支完成基线验证：`bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build` 均通过；随后使用 `bash ./scripts/package-app.sh --mock-llm` 打包启动。已验证 `HandAgentRuntimeMode.json` 为 `{"llmMode":"mock"}`，`ps -o pid,ppid,command -p <agent-server-pid>` 显示 agent-server 命令路径指向 `apps/agent-server/src/server/server.ts`，普通 prompt `QA smoke [mock:assistant-ok] 2026-06-06` 可打开 SessionWindow 并在 `~/.spotAgent/sessions/session-1780739178062-ysugm5.json` 落盘 user / assistant。继续在同一 session 提交 `QA workspace ask [mock:workspace-ask] 2026-06-06` 时，因 `MockLLMClient` 会被历史 `[mock:assistant-ok]` trigger 截走，未能出现 workspace 选择气泡；该缺陷已记录到 [bugs.md](./bugs.md)。QA 后已退出 `HandAgentDesktop`，`lsof -nP -iTCP:4317` 确认无监听进程残留。
-
-修复记录：2026-06-06 已在 `codex/mock-llm-latest-trigger` 中补充 `MockLLMClient` 回归测试并修复场景选择逻辑，自动化验证 `pnpm vitest run packages/core/tests/llm/mock-llm-client.test.ts` 与 `bash ./scripts/test.sh` 均通过。此条仍需在合入 `main` 后重新执行实机 QA，确认同一 session 第二轮 `[mock:workspace-ask]` 能出现 workspace 选择气泡，再决定是否归档。
-
-1. 从当前 worktree 执行 `bash ./scripts/swiftw run HandAgentDesktop`。
-1. 确认 desktop 成功派生 agent-server，`ps -o pid,ppid,command -p <agent-server-pid>` 中命令路径指向 `apps/agent-server/src/server/server.ts`。
-1. 提交一个普通文本 prompt，确认 SessionWindow 能收到 assistant 回复或明确的模型配置错误气泡，不出现 `agent-server` 入口文件缺失。
-1. 在同一 session 触发一次需要 workspace 或 permission 回流的工具场景，确认权限 / workspace 选择气泡仍能回到当前 session。
-1. 打开 `~/.spotAgent/sessions/<id>.json`，确认本轮 user / assistant 或 tool / event 按预期落盘。
-
 ## 单连接 session 路由 smoke（P2）
 
 1. 从当前 worktree 执行 `bash ./scripts/swiftw run HandAgentDesktop`。
