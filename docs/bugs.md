@@ -31,24 +31,24 @@
 
 ## 当前 bug
 
-### Anthropic provider 未使用 settings baseUrl 且不能使用 ANTHROPIC_AUTH_TOKEN
+### Anthropic AI SDK provider 错误流被落成空 assistant
 
 - **严重级别**：P1
 - **发现日期**：2026-06-06
 - **复现步骤**：
-  1. 在 `~/.spotAgent/settings.json` 中将 `llm.provider` 配置为 `anthropic`，并填写 `llm.baseUrl` 为 Anthropic 兼容代理地址。
-  1. 当前环境只提供 Bearer token 形式的 `ANTHROPIC_AUTH_TOKEN`，没有 `ANTHROPIC_API_KEY`。
-  1. 通过 `SettingsBackedLLMClient` 创建 Anthropic provider client。
-  1. 提交 Anthropic Provider 真实调用 QA 或检查 `LLMClientFactory.createAnthropicModel()` 的配置透传。
-- **实际结果**：`packages/core/src/llm/LLMClientFactory.ts` 的 Anthropic 分支只执行 `createAnthropic({ apiKey: settings.apiKey })`，没有传入 `settings.baseUrl`，也没有在 settings 未提供 apiKey 时透传 `ANTHROPIC_AUTH_TOKEN`。因此设置页 / settings 文件中的 Anthropic 代理地址不会进入 AI SDK provider；当前只接受 Bearer token 的 Anthropic 兼容网关也不能通过真实 QA。
-- **期望结果**：Anthropic provider 应与 OpenAI 兼容 provider 一样使用 settings 文件中的 `llm.baseUrl`；当 settings 没有 Anthropic apiKey 但环境存在 `ANTHROPIC_AUTH_TOKEN` 时，应把该 token 作为 AI SDK Anthropic provider 的 `authToken` 使用。
+  1. 将 `~/.spotAgent/settings.json` 配置为 `llm.provider = "anthropic"`、`llm.api = "chat"`、`llm.baseUrl = "https://anyrouter.top/v1"`、`llm.model = "claude-3-5-haiku-20241022"`，并通过 `ANTHROPIC_AUTH_TOKEN` 提供 Bearer token。
+  1. 使用真实模式打包启动 `HandAgentDesktop`，确认 bundle 内没有 `HandAgentRuntimeMode.json`。
+  1. 提交普通文本 prompt：`Use plain text only. Reply exactly: ANTHROPIC_QA_TEXT_20260606`。
+  1. 直接用 `createLLMClient({ provider: "anthropic", ... })` 调同一 Anthropic-compatible endpoint 复现 provider stream。
+- **实际结果**：SessionWindow 最终回到 idle，但没有 assistant 文本，也没有错误 banner；session 文件落了一条 `content: ""` 的 assistant message，`events: []`。直接 Node 调用时 AI SDK 把 TLS handshake failure 写到 stderr，但 `AISDKStreamingClient.stream()` 仍产出空 `message_end`。
+- **期望结果**：provider 报错或流结束但没有 assistant content / tool call 时，`LLMClient.stream()` 应抛出明确错误，让 runtime 写入 `session_error` / `error` event 并在 UI 显示失败，而不是持久化空 assistant。
 - **证据**：
-  - `packages/core/src/llm/LLMClientFactory.ts` 中 `createOpenAICompatibleLLMClient()` 会把 `settings.baseUrl` 传给 `VercelClient`，但 `createAnthropicModel()` 没有传。
-  - 本地依赖 `@ai-sdk/anthropic@3.0.78` 的 `AnthropicProviderSettings` 明确支持 `baseURL?: string` 与 `authToken?: string`；`createAnthropic()` 会用 `baseURL` 构造请求地址，并用 `authToken` 生成 `Authorization: Bearer ...`。
-  - 2026-06-06 `curl ${ANTHROPIC_BASE_URL}/v1/models` 使用 `x-api-key: ${ANTHROPIC_AUTH_TOKEN}` 返回 HTTP 401 “未提供令牌”；使用 `Authorization: Bearer ${ANTHROPIC_AUTH_TOKEN}` 返回 HTTP 200，并列出 `claude-3-5-haiku-20241022`、`claude-sonnet-4-5-20250929`、`claude-haiku-4-5-20251001` 等模型。
-  - 当前 `manual-qa.md` 的 Anthropic Provider 真实调用仍无法归档，settings 仍为 `openai-compatible`；在代码未透传 `baseUrl` / `authToken` 的情况下，即便把 settings 切到 Anthropic，也无法按当前网关配置完成真实 QA。
-- **初步调用链 / 根因边界**：Settings UI 与 `ModelSettings` 已有 `baseUrl` 字段；`@ai-sdk/anthropic` 已有 `baseURL` / `authToken` 能力；缺口位于 `LLMClientFactory.createAnthropicModel()` 到 `@ai-sdk/anthropic.createAnthropic()` 的配置透传层。
-- **基线与清理状态**：发现前 main 已通过 `bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`；当前无 `HandAgentDesktop` / `server.ts` 进程残留，4317 无监听。
+  - `~/.spotAgent/sessions/session-1780746486889-66y697.json` 记录 user message 后紧跟 `{"role":"assistant","content":""}`，`events: []`。
+  - `curl ${ANTHROPIC_BASE_URL}/v1/models` 使用 `Authorization: Bearer ${ANTHROPIC_AUTH_TOKEN}` 返回 HTTP 200，说明 token 与模型列表可用；同一网关用 `x-api-key` 返回 HTTP 401，符合当前 Bearer token 配置。
+  - 直接 Node 调用 `LLMClientFactory.createLLMClient()` 的 Anthropic stream 时，stderr 出现 `RetryError` / `TLS handshake failure`，但归一化输出只有 `{"type":"message_end","message":{"role":"assistant","content":""},"toolCalls":[]}`。
+  - `packages/core/src/llm/VercelClient.ts` 已有 provider error 与空流保护；`packages/core/src/llm/LLMClientFactory.ts` 的 `AISDKStreamingClient.stream()` 目前只处理 `text-delta` / `tool-call`，循环结束后无条件 yield `message_end`。
+- **初步调用链 / 根因边界**：`SettingsBackedLLMClient` 已能构造 Anthropic provider，失败边界位于 `AISDKStreamingClient.stream()` 对 AI SDK `fullStream` 的归一化：未处理 error part，也未在 content 与 toolCalls 都为空时抛错。
+- **基线与清理状态**：发现前 main 已通过 `bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`；发现后 `HandAgentDesktop` PID `56979` 与 agent-server PID `56986` 仍保持真实 QA 现场，4317 由 `node` 监听。
 
 ### `AI SDK stream finished without assistant content or tool calls`
 
@@ -61,4 +61,4 @@
 - **实际结果**：SessionWindow 先显示 `use_tools`、`window.list`、`screen.capture` 等工具结果，但最终出现红色警告 `AI SDK stream finished without assistant content or tool calls.`，没有产出最终 assistant 总结。
 - **期望结果**：工具执行完成后，流应正常收尾并输出 assistant 总结，session 里应有可见 assistant 内容而不是空流错误。
 - **证据**：`~/.spotAgent/sessions/session-1779601103378-sa0wyo.json` 记录了初始 `use_tools`、`app.frontmost`、`screen.capture`、`accessibility.snapshot` 以及 `error` 事件 `AI SDK stream finished without assistant content or tool calls.`；`~/.spotAgent/log/2026-05-24/network-001.jsonl` 可见对应 `screen.capture` / `accessibility.snapshot` 请求与返回。UI 中也直接显示同名告警。
-- **初步调用链 / 根因边界**：问题出现在 `LLMClient` 流式收尾到 session 持久化之间的收束阶段，暂不确定是模型空收尾、AI SDK 处理空结尾，还是 runtime 对工具结果后的 assistant 完成信号处理有缺口。
+- **初步调用链 / 根因边界**：问题出现在真实 provider 工具结果回灌后的流式收束阶段；需在修复 Anthropic 空 assistant 后继续复验，确认是否为同一类空流处理缺口或另一个 runtime/provider 收尾问题。

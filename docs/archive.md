@@ -844,3 +844,12 @@
   - `~/.spotAgent/sessions/session-1780744892022-0l1uzs.json`：包含 B 的三轮普通 user/assistant 消息，`events: []`，未混入 A 的 tool 或 workspace 事件。
   - QA 结束后已退出 `HandAgentDesktop`；`pgrep -lf HandAgentDesktop`、`pgrep -lf server.ts` 均无输出，`lsof -nP -iTCP:4317` 无监听或连接残留。
 - **结论**：通过。单个 SessionWindow 的多 tab 复用共享 session connection；session event / permission / workspace ask 均按 `sessionId` 路由；关闭、历史恢复与 agent-server 重启后重订阅均符合预期。
+
+### 已修复：Anthropic provider 未使用 settings baseUrl 且不能使用 ANTHROPIC_AUTH_TOKEN
+
+- **验证日期**：2026-06-06
+- **验证环境**：真实 LLM 配置检查 + 单元测试 / `main` 分支 / macOS 15+
+- **缺陷现象**：Anthropic provider 分支没有把 settings 中的 `llm.baseUrl` 传给 `@ai-sdk/anthropic`，且 settings 未配置 `apiKey` 时不会使用当前环境可用的 Bearer token `ANTHROPIC_AUTH_TOKEN`，导致 Anthropic-compatible 网关无法按 settings 配置走真实 QA。
+- **修复内容**：`packages/core/src/llm/LLMClientFactory.ts` 在 Anthropic 分支透传 `baseURL: settings.baseUrl`；认证优先使用 settings `apiKey`，缺失时使用 `ANTHROPIC_AUTH_TOKEN` 作为 `authToken`。同时补充 `packages/core/tests/llm/llm-client-factory.test.ts` 覆盖 baseUrl、apiKey 优先级和 authToken fallback，并同步 `packages/core/src/llm/llm.md`。
+- **验证过程**：在 main cherry-pick 修复提交 `283e7cc` 后运行 `pnpm vitest run --exclude '.worktrees/**' packages/core/tests/llm/llm-client-factory.test.ts`、`bash ./scripts/test.sh`、`bash ./scripts/swiftw build` 均通过；`curl ${ANTHROPIC_BASE_URL}/v1/models` 使用 `Authorization: Bearer ${ANTHROPIC_AUTH_TOKEN}` 返回 HTTP 200，并列出 Anthropic-compatible 模型。
+- **结论**：已修复并从 `docs/bugs.md` 当前 bug 中移除。后续真实 Anthropic QA 的当前阻塞点已转为 `AISDKStreamingClient.stream()` 对 provider 错误流/空流的处理缺口。
