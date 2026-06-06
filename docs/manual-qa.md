@@ -15,12 +15,6 @@
 - 已通过 `bash ./scripts/swiftw test`。
 - 已通过 `bash ./scripts/swiftw build`。
 
-## AgentRuntime 循环次数命名回归（P2）
-
-1. 使用真实或 mock LLM 模式提交一个会调用工具并最终结束的 prompt。
-1. 确认这一次用户输入从提交到最终 assistant 回复结束，在会话恢复、审计和 turn summary 语义中仍只算一个 turn。
-1. 构造或保留一个持续返回 tool call 的测试场景，确认 runtime 命中上限时错误文案为 `AgentRuntime exceeded maxTimes: <n>`，不会再出现 `maxTurns`。
-
 ## Anthropic Provider 真实调用（P1）
 
 1. 配置可用 Anthropic API key 与模型后提交普通文本 prompt，确认 assistant 回复可见且逐段 streaming。

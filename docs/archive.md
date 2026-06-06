@@ -809,3 +809,11 @@
 - **验证过程**：先在 `main` 重新通过 `bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`，再用 `bash ./scripts/package-app.sh --mock-llm` 打包启动。通过原生全局快捷键打开 PromptPanel，提交 `QA smoke after fix [mock:assistant-ok] 2026-06-06`，SessionWindow 正常显示 `Mock assistant response: main chain is reachable.`。随后在同一 session 提交 `QA workspace ask after fix [mock:workspace-ask] 2026-06-06`，UI 出现 `workspace.askUser` 授权气泡；选择“仅本次”后出现 workspace 选择气泡，选择 `qa-workspace` 后 UI 显示 `Mock workspace.askUser completed.`。
 - **证据**：`HandAgentRuntimeMode.json` 内容为 `{"llmMode":"mock"}`；`ps -o pid,ppid,command -p 11940` 显示 agent-server 命令路径为 `/Users/mu9/proj/handAgent/apps/agent-server/src/server/server.ts`；`~/.spotAgent/sessions/session-1780741750422-gycv3b.json` 记录 user / assistant、`workspace.askUser` tool call、`{"workspaceId":"qa-workspace"}` tool result、最终 assistant 回复，以及 `permission_request` / `tool_call` / `tool_result` 事件。QA 后已退出 `HandAgentDesktop`，`lsof -nP -iTCP:4317` 无监听进程残留。
 - **结论**：通过。desktop 可从当前源码目录派生 agent-server，普通 prompt、同 session workspace 回流、session 持久化与清理状态均符合预期。
+
+### AgentRuntime 循环次数命名回归
+
+- **验证日期**：2026-06-06
+- **验证环境**：mock-llm / `dist/HandAgentDesktop.app` / `main` 分支 / macOS 15+
+- **验证过程**：复用 `session-1780741750422-gycv3b` 实机链路，在同一 session 第二轮提交 `QA workspace ask after fix [mock:workspace-ask] 2026-06-06`，完成一次用户输入内的 assistant tool call、`workspace.askUser` 工具执行、tool result 回灌与最终 assistant 回复。随后运行 `pnpm vitest run --exclude '.worktrees/**' packages/core/tests/runtime/agent-runtime.test.ts apps/agent-server/tests/session/SessionRuntimeOrchestrator.test.ts`，确认 runtime 循环、session history、turn 事件和 summary 等相关回归测试通过。
+- **证据**：`~/.spotAgent/sessions/session-1780741750422-gycv3b.json` 中第二轮 user message 后仅作为一次运行完成：assistant tool call `mock-workspace-ask-1`、tool result `{"workspaceId":"qa-workspace"}`、最终 assistant `Mock workspace.askUser completed.` 均落在同一 session；定向测试结果为 2 个 test files、28 tests 全部通过；`rg -n "maxTurns|AgentRuntime exceeded maxTimes" packages apps docs -g '!docs/archive.md' -g '!.worktrees/**'` 只命中 runtime 实现与对应测试，未发现 `maxTurns` 残留。
+- **结论**：通过。一次用户输入内的多轮 LLM/tool 循环仍按产品语义归为一个 turn，runtime 上限错误文案为 `AgentRuntime exceeded maxTimes: <n>`。
