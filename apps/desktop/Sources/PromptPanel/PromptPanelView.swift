@@ -111,16 +111,9 @@ struct PromptPanelView: View {
             maxVisibleLines: 5,
             onSubmit: { viewModel.submit() }
         )
-        .padding(.horizontal, theme.spacing.md)
-        .padding(.vertical, 10)
-        .frame(height: inputHeight + 20)
-        .frame(width: inputShouldExpand ? nil : 360)
+        .frame(height: inputHeight)
+        .frame(width: PromptPanelInputLayout.inputWidth(for: viewModel.draft))
         .frame(maxWidth: inputShouldExpand ? .infinity : nil)
-        .borderedCard(
-            fill: theme.colors.background.opacity(0.85),
-            border: isQueryFocused ? theme.colors.accentRing : theme.colors.border,
-            cornerRadius: theme.radius.md
-        )
         .onTapGesture {
             isQueryFocused = true
         }
