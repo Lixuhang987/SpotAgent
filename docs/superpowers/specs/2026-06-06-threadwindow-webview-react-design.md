@@ -74,13 +74,13 @@ Swift 首版不解析 `ThreadNotification`，也不维护 ThreadWindow 的 tabs/
 | `src/App.tsx` | ThreadWindow 根组合 |
 | `src/protocol/` | thread 协议类型、编码、解码与 runtime guard |
 | `src/thread/` | WebSocket client、重连、命令发送、事件分发 |
-| `src/store/` | reducer、状态模型、selectors、初始 prompt 队列 |
+| `src/store/` | Zustand store、immer 状态更新、selectors、初始 prompt 队列 |
 | `src/components/` | history sidebar、tab bar、message list、request panels、composer |
 | `src/native/` | 读取启动配置：thread URL、开发模式、初始 prompt |
 | `src/styles/` | 暗色 glass 风格 CSS 与布局 token |
-| `tests/` | reducer、protocol、socket client 单元测试 |
+| `tests/` | store、protocol、socket client 单元测试 |
 
-React 设计以 reducer 为状态源。socket client 只负责收发与重连，不直接改 UI 状态；组件只派发明确 action，不直接写 WebSocket。
+React 状态管理固定使用 `zustand + immer`。Zustand store 是 ThreadWindow 的单一状态源，覆盖 history、tabs、activeTab、connection、pending requests 和 pending initial prompts；immer 用于维护嵌套 tab/message 状态更新，避免手写深层拷贝。组件只通过 selector 订阅所需状态并调用明确 action，不直接操作 WebSocket。socket client 只负责收发、重连和把入站协议消息转成 store action，不直接持有 UI 状态。
 
 ## Swift 模块调整
 
@@ -156,8 +156,8 @@ PromptPanel 提交仍由 Coordinator 接收并调用 `ThreadWindowLifecycle.crea
   - platform socket close 只 detach bridge，不 interrupt thread。
   - thread socket close 仍 interrupt active run 并清理 thread permission/workspace binding。
 - React：
-  - reducer 处理 `thread.started`、`thread.snapshot`、`assistant.delta`、`tool.started`、`tool.finished`、`turn.completed`、`thread.status.changed`、`thread.error`。
-  - reducer 处理 pending initial prompt 与 snapshot 竞态。
+  - Zustand store action 处理 `thread.started`、`thread.snapshot`、`assistant.delta`、`tool.started`、`tool.finished`、`turn.completed`、`thread.status.changed`、`thread.error`。
+  - Zustand store action 处理 pending initial prompt 与 snapshot 竞态。
   - socket client 重连后触发 `thread.list` 和每个打开 tab 的 `thread.resume`。
   - request panel action 正确编码 `permission.answered` 与 `workspace.answered`。
 
@@ -200,7 +200,7 @@ PromptPanel 提交仍由 Coordinator 接收并调用 `ThreadWindowLifecycle.crea
 
 ## 风险与处理
 
-- React 重建旧 Swift/TCA 状态机容易漏掉事件竞态。处理方式是先写 reducer 测试，尤其覆盖 `thread.snapshot` 与 pending 首轮消息。
+- React 用 Zustand 重建旧 Swift/TCA 状态机时容易漏掉事件竞态。处理方式是先写 store action 测试，尤其覆盖 `thread.snapshot` 与 pending 首轮消息。
 - WebView 本地 bundle 与 Vite dev server 两种入口容易分叉。处理方式是只允许“本地构建产物 file URL”和“显式 dev server URL”两种加载策略，其他情况显示可诊断错误。
 - platform bridge 拆 socket 会影响现有测试。处理方式是先修改 server socket 测试，再修改 Swift connection 测试，最后删除旧共享 socket 断言。
 - StatusBubble 暂停可能让运行状态少一个入口。处理方式是在文档和 manual QA 中明确首版不覆盖，后续另行设计 Swift-Web bridge。
