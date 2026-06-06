@@ -201,6 +201,59 @@ describe("LLMClientFactory", () => {
     );
   });
 
+  it("throws Anthropic AI SDK provider errors instead of returning an empty assistant message", async () => {
+    const providerError = new Error("TLS handshake failure");
+    const streamText = vi.fn(() => ({
+      fullStream: (async function* () {
+        yield { type: "error", error: providerError };
+      })(),
+    }));
+    const model = { provider: "anthropic", modelId: "claude-sonnet-4-5-20250929" };
+    const result = createLLMClient(
+      {
+        provider: "anthropic",
+        model: "claude-sonnet-4-5-20250929",
+        summarizerModel: "claude-haiku-4-5-20251001",
+        apiKey: "anthropic-key",
+        api: "chat",
+      },
+      {
+        createAnthropic: vi.fn(() => vi.fn(() => model)),
+        streamText,
+      } as LLMClientFactoryDependencies,
+    );
+
+    await expect(
+      collectLLMStream(result.client.stream([{ role: "user", content: "hi" }], [])),
+    ).rejects.toThrow(providerError);
+  });
+
+  it("throws when Anthropic AI SDK stream finishes without assistant content or tool calls", async () => {
+    const streamText = vi.fn(() => ({
+      fullStream: (async function* () {
+        yield { type: "finish", finishReason: "stop" };
+      })(),
+    }));
+    const model = { provider: "anthropic", modelId: "claude-sonnet-4-5-20250929" };
+    const result = createLLMClient(
+      {
+        provider: "anthropic",
+        model: "claude-sonnet-4-5-20250929",
+        summarizerModel: "claude-haiku-4-5-20251001",
+        apiKey: "anthropic-key",
+        api: "chat",
+      },
+      {
+        createAnthropic: vi.fn(() => vi.fn(() => model)),
+        streamText,
+      } as LLMClientFactoryDependencies,
+    );
+
+    await expect(
+      collectLLMStream(result.client.stream([{ role: "user", content: "hi" }], [])),
+    ).rejects.toThrow("AI SDK stream finished without assistant content or tool calls.");
+  });
+
   it("rejects unsupported multimodal messages before calling the provider", async () => {
     const stream = vi.fn(async function* () {
       yield { type: "text_delta" as const, text: "should not run" };
