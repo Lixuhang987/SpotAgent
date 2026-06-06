@@ -104,7 +104,24 @@ describe("thread protocol helpers", () => {
     expect(isThreadNotification({
       ...baseSnapshot,
       payload: {
-        messages: [],
+        messages: [{ id: 123, role: "alien", text: null }],
+        status: "running",
+      },
+    })).toBe(false);
+
+    expect(isThreadNotification({
+      ...baseSnapshot,
+      payload: {
+        messages: [{
+          id: "message-1",
+          role: "assistant",
+          text: "hello",
+          status: "completed",
+          createdAt: "2026-06-06T00:00:06.000Z",
+          updatedAt: "2026-06-06T00:00:06.000Z",
+          toolCall: { name: "file.read" },
+          error: "ignored after retry",
+        }],
         status: "running",
       },
     })).toBe(true);

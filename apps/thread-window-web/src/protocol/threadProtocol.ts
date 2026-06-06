@@ -168,6 +168,7 @@ export function isThreadNotification(value: unknown): value is ThreadNotificatio
         && isRecord(value.payload)
         && isOptionalString(value.commandId)
         && Array.isArray(value.payload.messages)
+        && value.payload.messages.every(isConversationMessage)
         && isRunStatus(value.payload.status);
     case "user.message.recorded":
       return hasNotificationBase(value)
@@ -288,6 +289,38 @@ function isOptionalString(value: unknown): boolean {
 
 function isNullableString(value: unknown): boolean {
   return value === null || typeof value === "string";
+}
+
+function isConversationMessage(value: unknown): boolean {
+  return isRecord(value)
+    && !Array.isArray(value)
+    && typeof value.id === "string"
+    && isConversationMessageRole(value.role)
+    && typeof value.text === "string"
+    && isConversationMessageStatus(value.status)
+    && typeof value.createdAt === "string"
+    && typeof value.updatedAt === "string"
+    && isOptionalToolCall(value.toolCall)
+    && isOptionalString(value.error);
+}
+
+function isConversationMessageRole(value: unknown): boolean {
+  return value === "user"
+    || value === "assistant"
+    || value === "tool"
+    || value === "system";
+}
+
+function isConversationMessageStatus(value: unknown): boolean {
+  return value === "streaming"
+    || value === "running"
+    || value === "completed"
+    || value === "failed";
+}
+
+function isOptionalToolCall(value: unknown): boolean {
+  return value === undefined
+    || (isRecord(value) && !Array.isArray(value) && typeof value.name === "string");
 }
 
 function isRunStatus(value: unknown): boolean {
