@@ -61,12 +61,14 @@ struct ThemeTypography: Sendable {
     let bodyFont: Font
     let captionFont: Font
     let promptInputFont: Font
+    let promptInputFontSize: CGFloat
 
     static let `default` = ThemeTypography(
         titleFont: .system(size: 16, weight: .semibold),
         bodyFont: .system(size: 15),
         captionFont: .system(size: 13),
-        promptInputFont: .system(size: 16)
+        promptInputFont: .system(size: 16),
+        promptInputFontSize: 16
     )
 }
 

@@ -7,6 +7,8 @@
 | 文件 | 职责 |
 |------|------|
 | `PromptPanelView.swift` | 纯 UI：输入框 + action 列表 + 附件 chip（图片 chip 可点击触发 QuickLook 预览）+ server 不可用提示，绑定 ViewModel 状态，消费 Theme token |
+| `PromptPanelGrowingTextView.swift` | `NSViewRepresentable` 输入控件：封装 `NSTextView + NSScrollView`，支持自动增高、5 行高度上限和超出后垂直滚动 |
+| `PromptPanelInputLayout.swift` | 输入区布局辅助：根据 `draft` 是否有可见内容决定是否占满首行剩余宽度 |
 | `PromptPanelViewModel.swift` | `@Observable` 状态：`draft` / `focusSeed` / `filteredActions` / `attachments` / `submissionDisabledMessage`；支持 `updateActions(_:)` 刷新 action；`onSubmit` / `onSubmitAction` / `onHide` / `onOpenSettings` / `onPreviewImage` 回调出口 |
 | `PromptPanelController.swift` | `NSPanel` 生命周期、ESC 局部监听、ViewModel 注入、持有 `QuickLookPreviewController` |
 | `PromptPanelWindow.swift` | `NSPanel` 子类，处理失焦自动隐藏 |
@@ -57,10 +59,11 @@ Action prompt 的参数与提交流程：
 - **Action 全局快捷键**：每个 `ActionDefinition` 通过 `shortcutName = "action.<id>"` 获得可配置全局快捷键名；plugin manifest 可通过 prompt 级 `globalShortcut` 声明默认值，用户改过后不覆盖。
 - **动态 action 刷新**：Controller 可多次 `register(actions:)`；首次创建 ViewModel，后续只刷新 ViewModel action 列表。Coordinator 同步刷新 Action 全局快捷键注册。新增动态 action 不要覆盖已有用户自定义快捷键。
 - **Styles 抽取阈值**：跨 View 复用的样式才放 `PromptPanelStyles.swift`；一次性样式写在 View 里，避免 ViewModifier 爆炸。
-- **窗口与拖动区域**：`NSPanel` 自身设为 `isOpaque = false` + `backgroundColor = .clear`，可见背景全部由 SwiftUI `promptPanelContainer()` 的圆角 + ultraThinMaterial 提供，避免顶部"标题栏条"和主体颜色不一致。`isMovableByWindowBackground = true` 让任何空白处都能拖；首行的 input 框宽度固定（左上角紧凑，带 surface 背景与 border），右侧是齿轮按钮，中间留出的 `Spacer` 区域天然成为不显眼的拖动手柄。新增首行控件时不要让控件铺满整行，必须保留中间的拖动空隙。
+- **窗口与拖动区域**：`NSPanel` 自身设为 `isOpaque = false` + `backgroundColor = .clear`，可见背景全部由 SwiftUI `promptPanelContainer()` 的圆角 + ultraThinMaterial 提供，避免顶部"标题栏条"和主体颜色不一致。`isMovableByWindowBackground = true` 让任何空白处都能拖；首行左侧 input 不显示独立图标，视觉背景与面板拖动背景保持一致。`draft` 没有可见内容时 input 保持紧凑宽度，右侧 `Spacer` 继续作为可拖动空隙；`draft` 有可见内容后 input 占满设置按钮左侧剩余空间。新增首行控件时不要破坏这个空态拖动区 / 有内容扩展区切换。
+- **输入框高度**：PromptPanel 输入使用 `PromptPanelGrowingTextView` 包装 AppKit `NSTextView + NSScrollView`。输入框随文本自动增高，最多显示 5 行；超过 5 行后固定高度并出现垂直滚动条。普通 Return 提交；Shift/Option + Return 插入换行。
 - **Action 匹配大小写不敏感**：trigger 使用前缀匹配，title / description 使用包含匹配；trigger 冲突按 plugin id 稳定排序保留第一个。
 - **server 不可用时不丢草稿**：`submissionDisabledMessage != nil` 时输入框禁用并显示提示，`submit()` 直接返回，不清空 `draft` / `attachments`。
-- **测试**：[PromptPanelViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/PromptPanel/PromptPanelViewModelTests.swift) 覆盖普通 draft 提交 / 过滤 / skill/plugin action 提交；[ActionDefinitionTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/PromptPanel/ActionDefinitionTests.swift)、[ActionInvocationTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/PromptPanel/ActionInvocationTests.swift)、[ActionManifestStoreTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/PromptPanel/ActionManifestStoreTests.swift) 覆盖 manifest 校验、trigger 解析和目录读取。
+- **测试**：[PromptPanelViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/PromptPanel/PromptPanelViewModelTests.swift) 覆盖普通 draft 提交 / 过滤 / skill/plugin action 提交；[PromptPanelInputLayoutTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/PromptPanel/PromptPanelInputLayoutTests.swift) 覆盖空态保留拖动空隙、有内容占满剩余宽度的判断；[ActionDefinitionTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/PromptPanel/ActionDefinitionTests.swift)、[ActionInvocationTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/PromptPanel/ActionInvocationTests.swift)、[ActionManifestStoreTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/PromptPanel/ActionManifestStoreTests.swift) 覆盖 manifest 校验、trigger 解析和目录读取。
 
 ## 与其他模块的关系
 

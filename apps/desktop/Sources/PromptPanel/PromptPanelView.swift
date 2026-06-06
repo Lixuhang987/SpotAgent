@@ -5,6 +5,7 @@ struct PromptPanelView: View {
     @Environment(\.appTheme) private var theme
     @FocusState private var isQueryFocused: Bool
     @State private var hoveredActionId: String?
+    @State private var inputHeight: CGFloat = 20
 
     var body: some View {
         VStack(alignment: .leading, spacing: theme.spacing.lg) {
@@ -92,28 +93,41 @@ struct PromptPanelView: View {
     private var firstRow: some View {
         HStack(spacing: theme.spacing.md) {
             inputField
-            Spacer(minLength: theme.spacing.lg)
+            if !inputShouldExpand {
+                Spacer(minLength: theme.spacing.lg)
+            }
             settingsButton
         }
     }
 
     private var inputField: some View {
-        HStack(spacing: theme.spacing.sm) {
-            Image(systemName: "sparkles")
-                .foregroundStyle(theme.colors.accent)
-                .font(.system(size: 14, weight: .medium))
-            TextField("输入你的请求", text: $viewModel.draft)
-                .textFieldStyle(.plain)
-                .font(theme.typography.promptInputFont)
-                .foregroundStyle(theme.colors.textPrimary)
-                .focused($isQueryFocused)
-                .disabled(viewModel.isSubmissionInputDisabled)
-                .onSubmit { viewModel.submit() }
-        }
+        PromptPanelGrowingTextView(
+            text: $viewModel.draft,
+            measuredHeight: $inputHeight,
+            placeholder: "输入你的请求",
+            fontSize: theme.typography.promptInputFontSize,
+            isFocused: isQueryFocused,
+            isDisabled: viewModel.isSubmissionInputDisabled,
+            maxVisibleLines: 5,
+            onSubmit: { viewModel.submit() }
+        )
         .padding(.horizontal, theme.spacing.md)
         .padding(.vertical, 10)
-        .frame(width: 360)
-        .borderedCard(fill: theme.colors.surface, border: theme.colors.border, cornerRadius: theme.radius.md)
+        .frame(height: inputHeight + 20)
+        .frame(width: inputShouldExpand ? nil : 360)
+        .frame(maxWidth: inputShouldExpand ? .infinity : nil)
+        .borderedCard(
+            fill: theme.colors.background.opacity(0.85),
+            border: isQueryFocused ? theme.colors.accentRing : theme.colors.border,
+            cornerRadius: theme.radius.md
+        )
+        .onTapGesture {
+            isQueryFocused = true
+        }
+    }
+
+    private var inputShouldExpand: Bool {
+        PromptPanelInputLayout.shouldExpandInput(for: viewModel.draft)
     }
 
     private func submissionDisabledBanner(_ message: String) -> some View {

@@ -1,0 +1,150 @@
+import AppKit
+import SwiftUI
+
+@MainActor
+struct PromptPanelGrowingTextView: NSViewRepresentable {
+    @Binding var text: String
+    @Binding var measuredHeight: CGFloat
+    let placeholder: String
+    let fontSize: CGFloat
+    let isFocused: Bool
+    let isDisabled: Bool
+    let maxVisibleLines: Int
+    let onSubmit: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSScrollView()
+        scrollView.drawsBackground = false
+        scrollView.borderType = .noBorder
+        scrollView.hasVerticalScroller = false
+        scrollView.autohidesScrollers = true
+        scrollView.verticalScrollElasticity = .automatic
+
+        let textView = PlaceholderTextView()
+        textView.delegate = context.coordinator
+        textView.font = nsFont
+        textView.textColor = .labelColor
+        textView.placeholder = placeholder
+        textView.placeholderColor = .placeholderTextColor
+        textView.backgroundColor = .clear
+        textView.drawsBackground = false
+        textView.isRichText = false
+        textView.isEditable = !isDisabled
+        textView.isSelectable = !isDisabled
+        textView.allowsUndo = true
+        textView.importsGraphics = false
+        textView.textContainerInset = NSSize(width: 0, height: 0)
+        textView.textContainer?.lineFragmentPadding = 0
+        textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.heightTracksTextView = false
+        textView.minSize = NSSize(width: 0, height: 0)
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.autoresizingMask = [.width]
+        textView.string = text
+
+        scrollView.documentView = textView
+        context.coordinator.textView = textView
+        context.coordinator.scrollView = scrollView
+        context.coordinator.recalculateHeight()
+        return scrollView
+    }
+
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        context.coordinator.parent = self
+        guard let textView = scrollView.documentView as? PlaceholderTextView else { return }
+
+        if textView.string != text {
+            textView.string = text
+        }
+        textView.font = nsFont
+        textView.textColor = .labelColor
+        textView.placeholder = placeholder
+        textView.placeholderColor = .placeholderTextColor
+        textView.isEditable = !isDisabled
+        textView.isSelectable = !isDisabled
+        textView.needsDisplay = true
+        context.coordinator.recalculateHeight()
+
+        if isFocused, scrollView.window?.firstResponder !== textView, !isDisabled {
+            DispatchQueue.main.async {
+                scrollView.window?.makeFirstResponder(textView)
+            }
+        }
+    }
+
+    private var nsFont: NSFont {
+        .systemFont(ofSize: fontSize)
+    }
+
+    @MainActor
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        var parent: PromptPanelGrowingTextView
+        weak var textView: NSTextView?
+        weak var scrollView: NSScrollView?
+
+        init(parent: PromptPanelGrowingTextView) {
+            self.parent = parent
+        }
+
+        func textDidChange(_ notification: Notification) {
+            guard let textView else { return }
+            parent.text = textView.string
+            recalculateHeight()
+        }
+
+        func textView(_ textView: NSTextView,
+                      doCommandBy commandSelector: Selector) -> Bool {
+            if commandSelector == #selector(NSResponder.insertNewline(_:)) {
+                let modifierFlags = NSApp.currentEvent?.modifierFlags ?? []
+                if modifierFlags.intersection([.shift, .option]).isEmpty {
+                    parent.onSubmit()
+                } else {
+                    textView.insertNewlineIgnoringFieldEditor(nil)
+                }
+                return true
+            }
+            return false
+        }
+
+        func recalculateHeight() {
+            guard let textView, let scrollView else { return }
+            textView.layoutManager?.ensureLayout(for: textView.textContainer!)
+
+            let font = textView.font ?? parent.nsFont
+            let lineHeight = font.ascender - font.descender + font.leading
+            let maxHeight = lineHeight * CGFloat(parent.maxVisibleLines)
+            let usedHeight = textView.layoutManager?.usedRect(for: textView.textContainer!).height ?? lineHeight
+            let nextHeight = min(max(ceil(usedHeight), ceil(lineHeight)), ceil(maxHeight))
+            let needsScroller = ceil(usedHeight) > ceil(maxHeight)
+
+            scrollView.hasVerticalScroller = needsScroller
+            if parent.measuredHeight != nextHeight {
+                DispatchQueue.main.async {
+                    self.parent.measuredHeight = nextHeight
+                }
+            }
+        }
+    }
+}
+
+private final class PlaceholderTextView: NSTextView {
+    var placeholder: String = ""
+    var placeholderColor: NSColor = .placeholderTextColor
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        guard string.isEmpty, !placeholder.isEmpty else { return }
+
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font ?? NSFont.systemFont(ofSize: NSFont.systemFontSize),
+            .foregroundColor: placeholderColor
+        ]
+        placeholder.draw(at: textContainerOrigin, withAttributes: attributes)
+    }
+}

@@ -55,6 +55,15 @@
 1. 重启 desktop 后打开历史列表，确认刚才的 thread 可恢复，且旧历史目录文件不会作为 AppServices 主历史来源出现。
 1. 在一个 thread 运行中观察状态气泡，确认气泡展示最新摘要 / running 状态，点击后回到当前活跃 thread 对应窗口。
 
+## PromptPanel 输入框视觉与拖动 smoke（P2）
+
+1. 从当前 worktree 执行 `bash ./scripts/swiftw run HandAgentDesktop`。
+1. 通过全局快捷键打开 PromptPanel，确认首行输入框左侧没有独立图标，输入框背景与面板可拖动背景视觉一致。
+1. 在空输入框状态下，从首行输入框右侧到设置按钮左侧的空白区域拖动面板，确认窗口可移动。
+1. 输入一段普通文本，确认输入框占满设置按钮左侧剩余空间，不再保留中间拖动空隙。
+1. 继续输入多行文本，确认输入框随文本自动增高；达到 5 行后停止增高，并在继续输入时出现垂直滚动条。
+1. 按 Return 确认仍会提交 prompt；按 Shift + Return 或 Option + Return 确认可在输入框内插入换行。
+
 ## 懒加载工具激活（P1）
 
 最近阻塞记录：2026-05-24 使用真实 LLM 模式重试 `HANDAGENT_LAZY_TOOL_QA_20260524`。首轮已验证 `use_tools` 激活后会调到真实工具链；在允许 `screen.capture` / `accessibility.snapshot` 之前，工具先被判定为拒绝。随后在权限弹窗中选择 `始终允许` 再重试 `HANDAGENT_LAZY_TOOL_QA_20260524_RETRY`，旧版窗口已显示 `window.list` 与 `screen.capture` 的工具结果，但最终仍落到 UI 告警 `AI SDK stream finished without assistant content or tool calls.`，对应旧版 thread 记录也写入了同名 error 事件，因此本项当前仍不能归档为通过。
