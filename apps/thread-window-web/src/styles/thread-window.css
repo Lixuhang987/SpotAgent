@@ -1,7 +1,7 @@
 :root {
-  color: #f7f2ea;
-  background: #151312;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #f3f0ea;
+  background: #171716;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 * {
@@ -12,7 +12,7 @@ body {
   margin: 0;
   min-width: 720px;
   min-height: 520px;
-  background: #151312;
+  background: #171716;
 }
 
 button,
@@ -21,33 +21,346 @@ textarea {
   font: inherit;
 }
 
+button {
+  cursor: default;
+}
+
 .thread-window-shell {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
+  width: 100vw;
   min-height: 100vh;
-  color: #f7f2ea;
+  color: #f3f0ea;
+  overflow: hidden;
 }
 
 .thread-history-panel {
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(22, 20, 19, 0.96);
+  min-height: 100vh;
+  border-right: 1px solid #32302d;
+  background: #1c1b1a;
   padding: 14px;
+  overflow: hidden;
 }
 
 .thread-window-title {
   font-size: 13px;
   font-weight: 650;
-  color: #ffbc65;
+  color: #e8b15d;
+  line-height: 20px;
+}
+
+.thread-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: calc(100vh - 48px);
+  margin-top: 14px;
+  overflow-y: auto;
+}
+
+.thread-history-empty,
+.message-empty-state {
+  color: #85817a;
+  font-size: 13px;
+  padding: 12px 8px;
+}
+
+.thread-history-row,
+.thread-tab {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+
+.thread-history-row[data-active="true"],
+.thread-tab[data-active="true"] {
+  border-color: #4a4640;
+  background: #262421;
+}
+
+.thread-history-open,
+.thread-tab > button:first-child {
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.thread-history-open {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 4px 8px 10px;
+}
+
+.thread-history-open span,
+.thread-tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.thread-history-open span {
+  color: #f1ede6;
+  font-size: 13px;
+}
+
+.thread-history-open small {
+  color: #918c84;
+  font-size: 11px;
+}
+
+.icon-button {
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #9a958d;
+}
+
+.icon-button:hover {
+  background: #34312e;
+  color: #f2eee7;
 }
 
 .thread-workspace {
   min-width: 0;
-  background: #1d1a18;
+  height: 100vh;
+  background: #22211f;
   display: grid;
-  place-items: center;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  overflow: hidden;
+}
+
+.thread-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  border-bottom: 1px solid #33302d;
+  padding: 8px 12px;
+}
+
+.thread-tab-bar {
+  display: flex;
+  min-width: 0;
+  gap: 8px;
+  overflow-x: auto;
+}
+
+.thread-tab {
+  flex: 0 1 220px;
+  min-width: 140px;
+  background: #1c1b1a;
+}
+
+.thread-tab > button:first-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #78736b;
+}
+
+.status-dot[data-status="running"] {
+  background: #55c27a;
+}
+
+.status-dot[data-status="failed"] {
+  background: #e36b5f;
+}
+
+.status-dot[data-status="interrupted"] {
+  background: #e2b65e;
+}
+
+.connection-pill {
+  border: 1px solid #3b3835;
+  border-radius: 999px;
+  color: #bcb6ad;
+  font-size: 12px;
+  line-height: 22px;
+  padding: 0 10px;
+}
+
+.connection-pill[data-state="connected"] {
+  color: #9dd7ae;
+  border-color: #41664b;
+}
+
+.connection-pill[data-state="reconnecting"],
+.connection-pill[data-state="connecting"] {
+  color: #e3c175;
+  border-color: #685934;
+}
+
+.window-error,
+.thread-error {
+  border: 1px solid #7a3a34;
+  background: #3a201e;
+  color: #ffd5cf;
+  font-size: 13px;
+}
+
+.window-error {
+  margin: 10px 12px 0;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.thread-error {
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.message-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px 22px;
+}
+
+.message-bubble {
+  width: min(760px, 100%);
+  border: 1px solid #3a3733;
+  border-radius: 8px;
+  background: #282622;
+  padding: 12px 14px;
+}
+
+.message-bubble[data-role="user"] {
+  align-self: flex-end;
+  border-color: #4d5145;
+  background: #30332b;
+}
+
+.message-bubble[data-role="tool"] {
+  border-color: #504637;
+  background: #2d2921;
+}
+
+.message-bubble p {
+  margin: 0;
+  color: #f2eee7;
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.message-bubble small,
+.tool-name {
+  display: block;
+  color: #9b968e;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.request-panels {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  border-top: 1px solid #33302d;
+  padding: 10px 12px;
+  background: #1f1e1c;
+}
+
+.request-panel {
+  flex: 0 0 min(420px, 80vw);
+  border: 1px solid #4c4539;
+  border-radius: 8px;
+  background: #292720;
+  padding: 10px;
+}
+
+.request-panel strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #f1ede6;
+  font-size: 13px;
+}
+
+.request-panel pre {
+  max-height: 140px;
+  margin: 0 0 10px;
+  overflow: auto;
+  color: #c9c2b8;
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+.request-actions,
+.composer-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.request-actions button,
+.composer-actions button {
+  border: 1px solid #4b4741;
+  border-radius: 7px;
+  background: #34312d;
+  color: #f1ede6;
+  padding: 6px 10px;
+}
+
+.request-actions button:hover,
+.composer-actions button:hover {
+  background: #403c37;
+}
+
+.request-actions button:disabled,
+.composer-actions button:disabled {
+  color: #77726a;
+  background: #292724;
+}
+
+.composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  border-top: 1px solid #33302d;
+  padding: 12px;
+  background: #1c1b1a;
+}
+
+.composer textarea {
+  min-width: 0;
+  min-height: 58px;
+  max-height: 160px;
+  resize: vertical;
+  border: 1px solid #3c3935;
+  border-radius: 8px;
+  background: #252320;
+  color: #f2eee7;
+  line-height: 1.45;
+  padding: 10px 12px;
+}
+
+.composer textarea:disabled {
+  color: #8d877e;
+  background: #211f1d;
 }
 
 .thread-empty-state {
-  color: rgba(247, 242, 234, 0.64);
+  align-self: center;
+  justify-self: center;
+  color: #98928a;
   font-size: 14px;
 }
