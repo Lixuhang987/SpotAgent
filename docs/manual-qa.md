@@ -22,7 +22,7 @@
 
 最近阻塞记录：2026-05-24 复查 `~/.spotAgent/settings.json`，当前 `llm.provider` 为 `openai-compatible`，`llm.api` 为 `responses`，`llm.model` 为 `gpt-5.4`，`llm.baseUrl` 为 `http://127.0.0.1:8317/v1`，API key 仅属于 OpenAI 兼容配置；环境变量中没有 `ANTHROPIC_API_KEY` 或 `CLAUDE_API_KEY`，仅有 `ANTHROPIC_BASE_URL`。配置文件没有可用的 Anthropic key 或 Anthropic 模型；在没有用户提供真实 Anthropic 配置前，不能验证 Anthropic streaming 与 tool call 回灌，本项不归档为通过。
 
-最近阻塞记录：2026-06-06 已将 `~/.spotAgent/settings.json` 临时切到 Anthropic provider、`llm.api = "chat"`、`llm.model = "claude-3-5-haiku-20241022"`、`llm.baseUrl = "https://anyrouter.top/v1"`，并通过 `ANTHROPIC_AUTH_TOKEN` 提供 Bearer token。真实模式 App 提交 `Use plain text only. Reply exactly: ANTHROPIC_QA_TEXT_20260606` 后 UI 回到 idle，但没有 assistant 文本和错误 banner；`~/.spotAgent/sessions/session-1780746486889-66y697.json` 只写入空 assistant，`events: []`。直接 Node 调 `createLLMClient()` 时 AI SDK stderr 出现 `RetryError` / `TLS handshake failure`，但 `AISDKStreamingClient.stream()` 仍归一化为空 `message_end`。该问题已记录到 `docs/bugs.md` 的 `Anthropic AI SDK provider 错误流被落成空 assistant`，修复前本项不能归档为通过。
+最近阻塞记录：2026-06-06 修复 `Anthropic AI SDK provider 错误流被落成空 assistant` 后，继续使用 Anthropic provider、`llm.api = "chat"`、`llm.model = "claude-3-5-haiku-20241022"`、`llm.baseUrl = "https://anyrouter.top/v1"` 与 `ANTHROPIC_AUTH_TOKEN` 真实模式回归。提交 `Use plain text only. Reply exactly: ANTHROPIC_QA_TEXT_AFTER_FIX_20260606` 后，SessionWindow 不再静默写空 assistant，而是显示红色错误 `Failed after 3 attempts...ssl/tls alert handshake failure`；`~/.spotAgent/sessions/session-1780747297335-f414w0.json` 只有 user message，并记录同名 `error` event。当前 anyrouter endpoint 对 Node/AI SDK streaming TLS 握手失败，因此仍未获得 assistant 文本或 Anthropic tool call 回灌证据，本项不能归档为通过。
 
 ## 懒加载工具激活（P1）
 

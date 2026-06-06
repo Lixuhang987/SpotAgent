@@ -31,25 +31,6 @@
 
 ## 当前 bug
 
-### Anthropic AI SDK provider 错误流被落成空 assistant
-
-- **严重级别**：P1
-- **发现日期**：2026-06-06
-- **复现步骤**：
-  1. 将 `~/.spotAgent/settings.json` 配置为 `llm.provider = "anthropic"`、`llm.api = "chat"`、`llm.baseUrl = "https://anyrouter.top/v1"`、`llm.model = "claude-3-5-haiku-20241022"`，并通过 `ANTHROPIC_AUTH_TOKEN` 提供 Bearer token。
-  1. 使用真实模式打包启动 `HandAgentDesktop`，确认 bundle 内没有 `HandAgentRuntimeMode.json`。
-  1. 提交普通文本 prompt：`Use plain text only. Reply exactly: ANTHROPIC_QA_TEXT_20260606`。
-  1. 直接用 `createLLMClient({ provider: "anthropic", ... })` 调同一 Anthropic-compatible endpoint 复现 provider stream。
-- **实际结果**：SessionWindow 最终回到 idle，但没有 assistant 文本，也没有错误 banner；session 文件落了一条 `content: ""` 的 assistant message，`events: []`。直接 Node 调用时 AI SDK 把 TLS handshake failure 写到 stderr，但 `AISDKStreamingClient.stream()` 仍产出空 `message_end`。
-- **期望结果**：provider 报错或流结束但没有 assistant content / tool call 时，`LLMClient.stream()` 应抛出明确错误，让 runtime 写入 `session_error` / `error` event 并在 UI 显示失败，而不是持久化空 assistant。
-- **证据**：
-  - `~/.spotAgent/sessions/session-1780746486889-66y697.json` 记录 user message 后紧跟 `{"role":"assistant","content":""}`，`events: []`。
-  - `curl ${ANTHROPIC_BASE_URL}/v1/models` 使用 `Authorization: Bearer ${ANTHROPIC_AUTH_TOKEN}` 返回 HTTP 200，说明 token 与模型列表可用；同一网关用 `x-api-key` 返回 HTTP 401，符合当前 Bearer token 配置。
-  - 直接 Node 调用 `LLMClientFactory.createLLMClient()` 的 Anthropic stream 时，stderr 出现 `RetryError` / `TLS handshake failure`，但归一化输出只有 `{"type":"message_end","message":{"role":"assistant","content":""},"toolCalls":[]}`。
-  - `packages/core/src/llm/VercelClient.ts` 已有 provider error 与空流保护；`packages/core/src/llm/LLMClientFactory.ts` 的 `AISDKStreamingClient.stream()` 目前只处理 `text-delta` / `tool-call`，循环结束后无条件 yield `message_end`。
-- **初步调用链 / 根因边界**：`SettingsBackedLLMClient` 已能构造 Anthropic provider，失败边界位于 `AISDKStreamingClient.stream()` 对 AI SDK `fullStream` 的归一化：未处理 error part，也未在 content 与 toolCalls 都为空时抛错。
-- **基线与清理状态**：发现前 main 已通过 `bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`；发现后 `HandAgentDesktop` PID `56979` 与 agent-server PID `56986` 仍保持真实 QA 现场，4317 由 `node` 监听。
-
 ### `AI SDK stream finished without assistant content or tool calls`
 
 - **严重级别**：P1

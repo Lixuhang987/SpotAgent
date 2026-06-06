@@ -853,3 +853,12 @@
 - **修复内容**：`packages/core/src/llm/LLMClientFactory.ts` 在 Anthropic 分支透传 `baseURL: settings.baseUrl`；认证优先使用 settings `apiKey`，缺失时使用 `ANTHROPIC_AUTH_TOKEN` 作为 `authToken`。同时补充 `packages/core/tests/llm/llm-client-factory.test.ts` 覆盖 baseUrl、apiKey 优先级和 authToken fallback，并同步 `packages/core/src/llm/llm.md`。
 - **验证过程**：在 main cherry-pick 修复提交 `283e7cc` 后运行 `pnpm vitest run --exclude '.worktrees/**' packages/core/tests/llm/llm-client-factory.test.ts`、`bash ./scripts/test.sh`、`bash ./scripts/swiftw build` 均通过；`curl ${ANTHROPIC_BASE_URL}/v1/models` 使用 `Authorization: Bearer ${ANTHROPIC_AUTH_TOKEN}` 返回 HTTP 200，并列出 Anthropic-compatible 模型。
 - **结论**：已修复并从 `docs/bugs.md` 当前 bug 中移除。后续真实 Anthropic QA 的当前阻塞点已转为 `AISDKStreamingClient.stream()` 对 provider 错误流/空流的处理缺口。
+
+### 已修复：Anthropic AI SDK provider 错误流被落成空 assistant
+
+- **验证日期**：2026-06-06
+- **验证环境**：真实 LLM / `dist/HandAgentDesktop.app` / Anthropic provider / `main` 分支 / macOS 15+
+- **缺陷现象**：Anthropic provider 遇到 AI SDK `fullStream` error 或空流时，`AISDKStreamingClient.stream()` 会无条件 yield 空 `message_end`，导致 UI idle、无错误 banner，session 写入 `{"role":"assistant","content":""}` 且 `events: []`。
+- **修复内容**：`packages/core/src/llm/LLMClientFactory.ts` 的 `AISDKStreamingClient.stream()` 处理 `error` part 并抛出 provider error；流结束时若没有 assistant content 且没有 tool call，则抛出 `AI SDK stream finished without assistant content or tool calls.`。同时补充 `packages/core/tests/llm/llm-client-factory.test.ts` 两个回归测试，并同步 `packages/core/src/llm/llm.md`。
+- **验证过程**：子 agent 在 `.worktrees/anthropic-stream-errors` 先跑 RED，两个新增测试失败为 `2 failed | 7 passed`，复现空 assistant；修复后 main 提交 `5c35c4e`。主仓库通过 `pnpm vitest run --exclude '.worktrees/**' packages/core/tests/llm/llm-client-factory.test.ts`、`bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`。直接 Node 调 Anthropic stream 时不再输出空 `message_end`，而是抛出 TLS failure。真实 App 回归提交 `Use plain text only. Reply exactly: ANTHROPIC_QA_TEXT_AFTER_FIX_20260606` 后 UI 显示红色错误，`~/.spotAgent/sessions/session-1780747297335-f414w0.json` 只包含 user message 与 `error` event，没有空 assistant。
+- **结论**：已修复并从 `docs/bugs.md` 当前 bug 中移除。Anthropic Provider 真实调用条目仍受当前 anyrouter endpoint 对 Node/AI SDK streaming TLS 握手失败阻塞，尚未归档为通过。
