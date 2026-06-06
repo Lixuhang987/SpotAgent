@@ -79,6 +79,11 @@ async function emitMessage(
   await Promise.resolve();
 }
 
+async function emitRawMessage(socket: FakeSocket, raw: string): Promise<void> {
+  socket.emit("message", Buffer.from(raw));
+  await Promise.resolve();
+}
+
 function makeHandlerDependencies(options: {
   commandRouter?: Partial<ThreadCommandRouter>;
   eventPublisher?: ThreadNotificationPublisher;
@@ -389,6 +394,28 @@ describe("attachThreadSocketHandlers", () => {
     expect(socket.sent).toEqual([]);
   });
 
+  it("ignores non-object and malformed thread socket frames", async () => {
+    const socket = new FakeSocket();
+    const { commandRouter, eventPublisher } = makeHandlerDependencies();
+
+    attachThreadSocketHandlers(socket as never, {
+      commandRouter,
+      eventPublisher,
+    });
+
+    await emitRawMessage(socket, "null");
+    await emitRawMessage(socket, '"thread.start"');
+    await emitRawMessage(socket, "true");
+    await emitRawMessage(socket, "{not json");
+
+    expect(commandRouter.receive).not.toHaveBeenCalled();
+    expect(commandRouter.handleResponse).not.toHaveBeenCalled();
+
+    await emitMessage(socket, turnStart("Thread-A", "after bad frames"));
+
+    expect(commandRouter.receive).toHaveBeenCalledTimes(1);
+  });
+
   it("detaches platform sockets without interrupting thread runs", async () => {
     const socket = new FakeSocket();
     const bridge = {
@@ -406,6 +433,31 @@ describe("attachThreadSocketHandlers", () => {
 
     expect(bridge.attach).toHaveBeenCalledWith(expect.any(Function));
     expect(bridge.detach).toHaveBeenCalledWith(501);
+  });
+
+  it("ignores non-platform and malformed platform socket frames", async () => {
+    const socket = new FakeSocket();
+    const bridge = {
+      attach: vi.fn().mockReturnValue(501),
+      detach: vi.fn(),
+      handleResponse: vi.fn(),
+    };
+
+    attachPlatformSocketHandlers(socket as never, {
+      bridge: bridge as never,
+    });
+
+    await emitRawMessage(socket, "null");
+    await emitRawMessage(socket, '"platform_bridge_hello"');
+    await emitRawMessage(socket, JSON.stringify({ type: "platform_bridge_hello" }));
+    await emitRawMessage(socket, "{not json");
+
+    expect(bridge.attach).not.toHaveBeenCalled();
+    expect(bridge.handleResponse).not.toHaveBeenCalled();
+
+    await emitMessage(socket, platformHello("bridge-1"));
+
+    expect(bridge.attach).toHaveBeenCalledTimes(1);
   });
 });
 

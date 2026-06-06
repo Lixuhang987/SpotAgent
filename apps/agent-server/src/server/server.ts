@@ -35,9 +35,6 @@ type ThreadSocket = {
   on(event: "close", listener: () => void): void;
 };
 
-type ThreadSocketMessage = ThreadCommand | ClientResponse;
-type PlatformSocketMessage = PlatformBridgeMessage;
-
 let nextConnectionId = 0;
 
 export function attachThreadSocketHandlers(
@@ -65,7 +62,7 @@ export function attachThreadSocketHandlers(
   eventPublisher?.attachConnection(connectionId, sendPublished);
 
   socket.on("message", async (raw) => {
-    const message = JSON.parse(raw.toString()) as ThreadSocketMessage;
+    const message = parseSocketMessage(raw);
 
     if (isClientResponse(message)) {
       if (message.type === "permission.answered" && permissionBridge) {
@@ -142,7 +139,7 @@ export function attachPlatformSocketHandlers(
   };
 
   socket.on("message", (raw) => {
-    const message = JSON.parse(raw.toString()) as PlatformSocketMessage;
+    const message = parseSocketMessage(raw);
     if (!isPlatformBridgeMessage(message)) {
       return;
     }
@@ -165,7 +162,10 @@ function isPlatformBridgeMessage(message: unknown): message is PlatformBridgeMes
   return isRecord(message) && message.channel === "platform";
 }
 
-function isThreadCommand(message: ThreadSocketMessage): message is ThreadCommand {
+function isThreadCommand(message: unknown): message is ThreadCommand {
+  if (!isRecord(message)) {
+    return false;
+  }
   return [
     "thread.start",
     "thread.resume",
@@ -176,8 +176,19 @@ function isThreadCommand(message: ThreadSocketMessage): message is ThreadCommand
   ].includes((message as { type?: string }).type ?? "");
 }
 
-function isClientResponse(message: ThreadSocketMessage): message is ClientResponse {
+function isClientResponse(message: unknown): message is ClientResponse {
+  if (!isRecord(message)) {
+    return false;
+  }
   return message.type === "permission.answered" || message.type === "workspace.answered";
+}
+
+function parseSocketMessage(raw: { toString(): string }): unknown {
+  try {
+    return JSON.parse(raw.toString()) as unknown;
+  } catch {
+    return undefined;
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
