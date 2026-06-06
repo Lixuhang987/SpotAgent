@@ -41,7 +41,8 @@ final class AppCoordinatorTests: XCTestCase {
 
         coordinator.send(.submitPrompt("hello", attachments: []))
 
-        XCTAssertNotNil(coordinator.threadWindowViewModel)
+        XCTAssertNotNil(coordinator.threadWindowWebHost)
+        XCTAssertEqual(coordinator.threadWindowWebHost?.pendingInitialPromptCount, 1)
     }
 
     @MainActor
@@ -52,7 +53,7 @@ final class AppCoordinatorTests: XCTestCase {
 
         coordinator.send(.threadWindowClosed)
 
-        XCTAssertNil(coordinator.threadWindowViewModel)
+        XCTAssertNil(coordinator.threadWindowWebHost)
     }
 
     @MainActor
@@ -61,7 +62,7 @@ final class AppCoordinatorTests: XCTestCase {
 
         coordinator.send(.submitPrompt("   ", attachments: []))
 
-        XCTAssertNil(coordinator.threadWindowViewModel)
+        XCTAssertNil(coordinator.threadWindowWebHost)
     }
 
     @MainActor
@@ -91,24 +92,21 @@ final class AppCoordinatorTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(10))
         coordinator.send(.submitPrompt("hello", attachments: []))
 
-        XCTAssertNil(coordinator.threadWindowViewModel)
+        XCTAssertNil(coordinator.threadWindowWebHost)
         XCTAssertEqual(coordinator.agentServerError, "agent-server 已断开，正在尝试重连…")
     }
 
     @MainActor
-    func testHistoryActionOpensSingleThreadWindowWithoutChangingActiveTab() {
+    func testHistoryActionOpensSingleThreadWindowWithoutQueuingPrompt() {
         let coordinator = AppCoordinator(services: AppServices.testing())
 
         coordinator.send(.openHistory)
-        coordinator.threadWindowViewModel?.handleWindowEvent(
-            .threadStarted(threadID: "thread-1", title: nil)
-        )
-        let firstActive = coordinator.threadWindowViewModel?.activeTabID
+        let firstHost = coordinator.threadWindowWebHost
 
         coordinator.send(.openHistory)
 
-        XCTAssertNotNil(firstActive)
-        XCTAssertEqual(coordinator.threadWindowViewModel?.activeTabID, firstActive)
+        XCTAssertTrue(coordinator.threadWindowWebHost === firstHost)
+        XCTAssertEqual(coordinator.threadWindowWebHost?.pendingInitialPromptCount, 0)
     }
 
     @MainActor
@@ -116,10 +114,11 @@ final class AppCoordinatorTests: XCTestCase {
         let coordinator = AppCoordinator(services: AppServices.testing())
 
         coordinator.send(.submitPrompt("first", attachments: []))
-        let firstModel = coordinator.threadWindowViewModel
+        let firstHost = coordinator.threadWindowWebHost
         coordinator.send(.submitPrompt("second", attachments: []))
 
-        XCTAssertTrue(coordinator.threadWindowViewModel === firstModel)
+        XCTAssertTrue(coordinator.threadWindowWebHost === firstHost)
+        XCTAssertEqual(coordinator.threadWindowWebHost?.pendingInitialPromptCount, 2)
     }
 
     @MainActor

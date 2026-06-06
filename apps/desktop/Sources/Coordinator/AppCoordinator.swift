@@ -19,7 +19,7 @@ final class AppCoordinator {
         case statusBubbleTapped(String?)
     }
 
-    var threadWindowViewModel: ThreadWindowViewModel? { threadWindowLifecycle.viewModel }
+    var threadWindowWebHost: ThreadWindowWebHost? { threadWindowLifecycle.webHost }
     var agentServerError: String? { agentServerHealth.errorMessage }
 
     @ObservationIgnored private let services: AppServices
@@ -51,9 +51,9 @@ final class AppCoordinator {
             showsFatalAlert: services.showsStatusBubble
         )
         self.threadWindowLifecycle = ThreadWindowLifecycle(
-            registry: services.threadRegistry,
+            threadWebSocketURL: services.appServerURL,
+            webAppURL: services.threadWindowWebAppURL,
             windowPresenter: services.threadWindowPresenter,
-            appServer: services.appServer,
             activationPolicy: activationPolicy,
             setActivationPolicy: services.setActivationPolicy
         )

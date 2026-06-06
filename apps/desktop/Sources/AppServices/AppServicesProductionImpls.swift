@@ -39,10 +39,10 @@ final class ProductionThreadWindowPresenter: ThreadWindowPresenting {
     private var closeObservations: [ObjectIdentifier: WindowCloseObservation] = [:]
 
     func present(
-        viewModel: ThreadWindowViewModel,
+        host: ThreadWindowWebHost,
         onClose: @escaping () -> Void
     ) -> NSWindow? {
-        let hosting = NSHostingController(rootView: ThreadWindowView(viewModel: viewModel))
+        let hosting = NSHostingController(rootView: ThreadWindowWebView(host: host))
         let window = NSWindow(contentViewController: hosting)
         window.title = "HandAgent"
         window.setContentSize(NSSize(width: 920, height: 640))

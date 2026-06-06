@@ -3,12 +3,12 @@ import XCTest
 
 @MainActor
 final class ThreadWindowLifecycleTests: XCTestCase {
-    func testInitialPromptUsesAppServerThreadTurnSemantics() throws {
-        let appServer = RecordingLifecycleAppServer()
+    func testInitialPromptCreatesWebHostAndQueuesPrompt() throws {
+        let presenter = RecordingThreadWindowPresenter()
         let lifecycle = ThreadWindowLifecycle(
-            registry: ThreadRegistry(),
-            windowPresenter: NopThreadWindowPresenter(),
-            appServer: appServer,
+            threadWebSocketURL: URL(string: "ws://127.0.0.1:4317/api/thread")!,
+            webAppURL: URL(fileURLWithPath: "/tmp/index.html"),
+            windowPresenter: presenter,
             activationPolicy: AppActivationPolicyCoordinator(),
             setActivationPolicy: { _ in }
         )
@@ -16,93 +16,61 @@ final class ThreadWindowLifecycleTests: XCTestCase {
 
         lifecycle.createTabWithInitialPrompt(prompt, onClosed: {})
 
-        XCTAssertEqual(appServer.connectionCount, 1)
-        XCTAssertTrue(appServer.calls.contains(.listThreads))
-        guard case let .startThread(commandId)? = appServer.calls.first(where: {
-            if case .startThread = $0 { return true }
-            return false
-        }) else {
-            return XCTFail("expected startThread")
-        }
+        let host = try XCTUnwrap(lifecycle.webHost)
+        XCTAssertTrue(presenter.presentedHost === host)
+        XCTAssertEqual(host.threadWebSocketURL.absoluteString, "ws://127.0.0.1:4317/api/thread")
+        XCTAssertEqual(host.webAppURL.path, "/tmp/index.html")
+        XCTAssertEqual(host.pendingInitialPromptCount, 1)
+        XCTAssertEqual(host.drainInitialPrompts().map(\.text), ["hello"])
+    }
 
-        appServer.onThreadEvent?(.global(.threadStarted(
-            threadID: "thread-1",
-            title: "hello",
-            responseMessageID: commandId
-        )))
+    func testOpenHistoryOnlyEnsuresWindowWithoutQueuingPrompt() {
+        let presenter = RecordingThreadWindowPresenter()
+        let lifecycle = ThreadWindowLifecycle(
+            threadWebSocketURL: URL(string: "ws://127.0.0.1:4317/api/thread")!,
+            webAppURL: URL(fileURLWithPath: "/tmp/index.html"),
+            windowPresenter: presenter,
+            activationPolicy: AppActivationPolicyCoordinator(),
+            setActivationPolicy: { _ in }
+        )
 
-        XCTAssertTrue(appServer.calls.contains(.resumeThread("thread-1")))
-        XCTAssertTrue(appServer.calls.contains(.startTurn(threadId: "thread-1", text: "hello")))
+        lifecycle.openOrFocusHistory(onClosed: {})
+
+        XCTAssertNotNil(lifecycle.webHost)
+        XCTAssertEqual(lifecycle.webHost?.pendingInitialPromptCount, 0)
+        XCTAssertEqual(presenter.presentCount, 1)
+    }
+
+    func testMultiplePromptsReuseHost() throws {
+        let presenter = RecordingThreadWindowPresenter()
+        let lifecycle = ThreadWindowLifecycle(
+            threadWebSocketURL: URL(string: "ws://127.0.0.1:4317/api/thread")!,
+            webAppURL: URL(fileURLWithPath: "/tmp/index.html"),
+            windowPresenter: presenter,
+            activationPolicy: AppActivationPolicyCoordinator(),
+            setActivationPolicy: { _ in }
+        )
+        let first = try XCTUnwrap(PromptSubmission.compose(draft: "first", attachments: []))
+        let second = try XCTUnwrap(PromptSubmission.compose(draft: "second", attachments: []))
+
+        lifecycle.createTabWithInitialPrompt(first, onClosed: {})
+        let firstHost = lifecycle.webHost
+        lifecycle.createTabWithInitialPrompt(second, onClosed: {})
+
+        XCTAssertTrue(lifecycle.webHost === firstHost)
+        XCTAssertEqual(presenter.presentCount, 1)
+        XCTAssertEqual(lifecycle.webHost?.drainInitialPrompts().map(\.text), ["first", "second"])
     }
 }
 
 @MainActor
-private final class RecordingLifecycleAppServer: AppServerManaging {
-    enum Call: Equatable {
-        case listThreads
-        case startThread(commandId: String)
-        case resumeThread(String)
-        case startTurn(threadId: String, text: String)
+private final class RecordingThreadWindowPresenter: ThreadWindowPresenting {
+    private(set) var presentedHost: ThreadWindowWebHost?
+    private(set) var presentCount = 0
+
+    func present(host: ThreadWindowWebHost, onClose: @escaping () -> Void) -> NSWindow? {
+        presentedHost = host
+        presentCount += 1
+        return NSWindow()
     }
-
-    var threadConnectionState: AppServerConnectionState = .disconnected
-    var isAvailable = true
-    var startupErrorMessage: String?
-    var onAvailabilityChange: ((Bool) -> Void)?
-    var onFatalError: ((String) -> Void)?
-    var onThreadConnectionStateChange: ((AppServerConnectionState) -> Void)?
-    var onThreadEvent: ((AppServerThreadEvent) -> Void)?
-    private(set) var connectionCount = 0
-    private(set) var calls: [Call] = []
-
-    func start() {}
-    func stop() {}
-
-    func connectThreadClient() {
-        connectionCount += 1
-        onThreadConnectionStateChange?(.connected)
-    }
-
-    func disconnectThreadClient() {}
-
-    func startThread(
-        commandId: String,
-        timestamp: String,
-        workspaceId: String?,
-        actionBinding: ActionBindingPayload?
-    ) {
-        calls.append(.startThread(commandId: commandId))
-    }
-
-    func resumeThread(threadId: String, commandId: String, timestamp: String) {
-        calls.append(.resumeThread(threadId))
-    }
-
-    func listThreads(commandId: String, timestamp: String) {
-        calls.append(.listThreads)
-    }
-
-    func deleteThread(commandId: String, timestamp: String, targetThreadId: String) {}
-
-    func startTurn(
-        threadId: String,
-        commandId: String,
-        timestamp: String,
-        text: String,
-        attachments: [UserMessageAttachmentPayload]
-    ) {
-        calls.append(.startTurn(threadId: threadId, text: text))
-    }
-
-    func interruptTurn(threadId: String, commandId: String, timestamp: String) {}
-
-    func answerPermission(
-        requestId: String,
-        timestamp: String,
-        decision: AppServerPermissionDecision,
-        scope: AppServerPermissionScope?,
-        reason: String?
-    ) {}
-
-    func answerWorkspace(requestId: String, timestamp: String, workspaceId: String?, cancelled: Bool?) {}
 }

@@ -6,7 +6,7 @@ import SwiftUI
 @MainActor
 protocol ThreadWindowPresenting {
     func present(
-        viewModel: ThreadWindowViewModel,
+        host: ThreadWindowWebHost,
         onClose: @escaping () -> Void
     ) -> NSWindow?
 }
@@ -53,6 +53,7 @@ final class AppServices {
     let actionManifestStore: ActionManifestStore
     let appServerURL: URL
     let platformServerURL: URL
+    let threadWindowWebAppURL: URL
     let hotkeyRegistrar: any HotkeyRegistering
     let threadWindowPresenter: any ThreadWindowPresenting
     let settingsWindowPresenter: any SettingsWindowPresenting
@@ -68,6 +69,7 @@ final class AppServices {
         actionManifestStore: ActionManifestStore = ActionManifestStore(),
         appServerURL: URL = URL(string: "ws://127.0.0.1:4317/api/thread")!,
         platformServerURL: URL = URL(string: "ws://127.0.0.1:4317/api/platform")!,
+        threadWindowWebAppURL: URL = AppServices.defaultThreadWindowWebAppURL(),
         hotkeyRegistrar: any HotkeyRegistering = ProductionHotkeyRegistrar(),
         threadWindowPresenter: any ThreadWindowPresenting = ProductionThreadWindowPresenter(),
         settingsWindowPresenter: any SettingsWindowPresenting = ProductionSettingsWindowPresenter(),
@@ -90,6 +92,7 @@ final class AppServices {
         self.actionManifestStore = actionManifestStore
         self.appServerURL = appServerURL
         self.platformServerURL = platformServerURL
+        self.threadWindowWebAppURL = threadWindowWebAppURL
         self.hotkeyRegistrar = hotkeyRegistrar
         self.threadWindowPresenter = threadWindowPresenter
         self.settingsWindowPresenter = settingsWindowPresenter
@@ -110,6 +113,7 @@ final class AppServices {
             actionManifestStore: actionManifestStore,
             appServerURL: URL(string: "ws://127.0.0.1:0/noop")!,
             platformServerURL: URL(string: "ws://127.0.0.1:0/noop-platform")!,
+            threadWindowWebAppURL: URL(fileURLWithPath: "/tmp/index.html"),
             hotkeyRegistrar: NopHotkeyRegistrar(),
             threadWindowPresenter: NopThreadWindowPresenter(),
             settingsWindowPresenter: settingsWindowPresenter,
@@ -117,6 +121,32 @@ final class AppServices {
             setActivationPolicy: setActivationPolicy,
             showsStatusBubble: false
         )
+    }
+
+    static func defaultThreadWindowWebAppURL(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        bundle: Bundle = .main,
+        currentDirectoryURL: URL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+    ) -> URL {
+        if let rawURL = environment["HANDAGENT_THREAD_WINDOW_WEB_URL"], !rawURL.isEmpty {
+            if let parsed = URL(string: rawURL), parsed.scheme != nil {
+                return parsed
+            }
+            return URL(fileURLWithPath: rawURL)
+        }
+
+        if let resourceURL = bundle.resourceURL {
+            let bundled = resourceURL
+                .appendingPathComponent("ThreadWindowWeb", isDirectory: true)
+                .appendingPathComponent("index.html")
+            if FileManager.default.fileExists(atPath: bundled.path) {
+                return bundled
+            }
+        }
+
+        return currentDirectoryURL
+            .appendingPathComponent("apps/thread-window-web/dist", isDirectory: true)
+            .appendingPathComponent("index.html")
     }
 }
 
@@ -146,10 +176,10 @@ final class NopHotkeyRegistrar: HotkeyRegistering {
 
 @MainActor
 final class NopThreadWindowPresenter: ThreadWindowPresenting {
-    private(set) var presentedViewModel: ThreadWindowViewModel?
+    private(set) var presentedHost: ThreadWindowWebHost?
 
-    func present(viewModel: ThreadWindowViewModel, onClose: @escaping () -> Void) -> NSWindow? {
-        presentedViewModel = viewModel
+    func present(host: ThreadWindowWebHost, onClose: @escaping () -> Void) -> NSWindow? {
+        presentedHost = host
         return NSWindow()
     }
 }
