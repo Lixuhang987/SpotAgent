@@ -31,21 +31,23 @@
 
 ## 当前 bug
 
-### Anthropic provider 未使用 settings 中的 baseUrl
+### Anthropic provider 未使用 settings baseUrl 且不能使用 ANTHROPIC_AUTH_TOKEN
 
 - **严重级别**：P1
 - **发现日期**：2026-06-06
 - **复现步骤**：
   1. 在 `~/.spotAgent/settings.json` 中将 `llm.provider` 配置为 `anthropic`，并填写 `llm.baseUrl` 为 Anthropic 兼容代理地址。
+  1. 当前环境只提供 Bearer token 形式的 `ANTHROPIC_AUTH_TOKEN`，没有 `ANTHROPIC_API_KEY`。
   1. 通过 `SettingsBackedLLMClient` 创建 Anthropic provider client。
   1. 提交 Anthropic Provider 真实调用 QA 或检查 `LLMClientFactory.createAnthropicModel()` 的配置透传。
-- **实际结果**：`packages/core/src/llm/LLMClientFactory.ts` 的 Anthropic 分支只执行 `createAnthropic({ apiKey: settings.apiKey })`，没有传入 `settings.baseUrl`。因此设置页 / settings 文件中的 Anthropic 代理地址不会进入 AI SDK provider；只有进程环境变量 `ANTHROPIC_BASE_URL` 才可能生效。
-- **期望结果**：Anthropic provider 应与 OpenAI 兼容 provider 一样使用 settings 文件中的 `llm.baseUrl`，使用户在 Settings 中填写的代理地址对下一次 LLM 请求生效。
+- **实际结果**：`packages/core/src/llm/LLMClientFactory.ts` 的 Anthropic 分支只执行 `createAnthropic({ apiKey: settings.apiKey })`，没有传入 `settings.baseUrl`，也没有在 settings 未提供 apiKey 时透传 `ANTHROPIC_AUTH_TOKEN`。因此设置页 / settings 文件中的 Anthropic 代理地址不会进入 AI SDK provider；当前只接受 Bearer token 的 Anthropic 兼容网关也不能通过真实 QA。
+- **期望结果**：Anthropic provider 应与 OpenAI 兼容 provider 一样使用 settings 文件中的 `llm.baseUrl`；当 settings 没有 Anthropic apiKey 但环境存在 `ANTHROPIC_AUTH_TOKEN` 时，应把该 token 作为 AI SDK Anthropic provider 的 `authToken` 使用。
 - **证据**：
   - `packages/core/src/llm/LLMClientFactory.ts` 中 `createOpenAICompatibleLLMClient()` 会把 `settings.baseUrl` 传给 `VercelClient`，但 `createAnthropicModel()` 没有传。
-  - 本地依赖 `@ai-sdk/anthropic@3.0.78` 的 `AnthropicProviderSettings` 明确支持 `baseURL?: string`；`createAnthropic()` 会用该字段构造请求 base URL。
-  - 2026-06-06 当前 `manual-qa.md` 的 Anthropic Provider 真实调用仍无法归档，当前环境只有 `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_BASE_URL`，settings 仍为 `openai-compatible`；在代码未透传 `baseUrl` 的情况下，settings 中配置 Anthropic 代理也不能按产品设置语义生效。
-- **初步调用链 / 根因边界**：Settings UI 与 `ModelSettings` 已有 `baseUrl` 字段；缺口位于 `LLMClientFactory.createAnthropicModel()` 到 `@ai-sdk/anthropic.createAnthropic()` 的配置透传层。
+  - 本地依赖 `@ai-sdk/anthropic@3.0.78` 的 `AnthropicProviderSettings` 明确支持 `baseURL?: string` 与 `authToken?: string`；`createAnthropic()` 会用 `baseURL` 构造请求地址，并用 `authToken` 生成 `Authorization: Bearer ...`。
+  - 2026-06-06 `curl ${ANTHROPIC_BASE_URL}/v1/models` 使用 `x-api-key: ${ANTHROPIC_AUTH_TOKEN}` 返回 HTTP 401 “未提供令牌”；使用 `Authorization: Bearer ${ANTHROPIC_AUTH_TOKEN}` 返回 HTTP 200，并列出 `claude-3-5-haiku-20241022`、`claude-sonnet-4-5-20250929`、`claude-haiku-4-5-20251001` 等模型。
+  - 当前 `manual-qa.md` 的 Anthropic Provider 真实调用仍无法归档，settings 仍为 `openai-compatible`；在代码未透传 `baseUrl` / `authToken` 的情况下，即便把 settings 切到 Anthropic，也无法按当前网关配置完成真实 QA。
+- **初步调用链 / 根因边界**：Settings UI 与 `ModelSettings` 已有 `baseUrl` 字段；`@ai-sdk/anthropic` 已有 `baseURL` / `authToken` 能力；缺口位于 `LLMClientFactory.createAnthropicModel()` 到 `@ai-sdk/anthropic.createAnthropic()` 的配置透传层。
 - **基线与清理状态**：发现前 main 已通过 `bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`；当前无 `HandAgentDesktop` / `server.ts` 进程残留，4317 无监听。
 
 ### `AI SDK stream finished without assistant content or tool calls`
