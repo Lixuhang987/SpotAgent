@@ -1,11 +1,11 @@
 export type AppConfig = {
   workspaceRoot: string;
-  sessionStoragePath: string;
+  threadStoragePath: string;
   locale: string;
 };
 
 export const defaultAppConfig: AppConfig = {
   workspaceRoot: "",
-  sessionStoragePath: ".handagent",
+  threadStoragePath: ".handagent",
   locale: "zh-CN"
 };

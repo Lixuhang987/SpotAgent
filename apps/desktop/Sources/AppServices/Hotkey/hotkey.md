@@ -27,7 +27,7 @@
 - Action 快捷键使用 `KeyboardShortcuts.Recorder` 配置，存储仍由 KeyboardShortcuts 写入 UserDefaults。
 - Action 快捷键是系统级全局快捷键，由 `ProductionHotkeyRegistrar.registerActionShortcut(...)` 注册。
 - 默认值来自 plugin manifest prompt 级 `globalShortcut`，仅当用户未自定义时写入。
-- Action 快捷键触发后由 Coordinator 根据 `ActionDefinition.submission` 决定行为：无必填参数的 skill/plugin 直接创建 session；有必填参数的 skill/plugin 打开 PromptPanel 并预填 `trigger [arg: ]`。
+- Action 快捷键触发后由 Coordinator 根据 `ActionDefinition.submission` 决定行为：无必填参数的 skill/plugin 直接创建 thread；有必填参数的 skill/plugin 打开 PromptPanel 并预填 `trigger [arg: ]`。
 
 ### 设置界面
 

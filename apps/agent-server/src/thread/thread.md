@@ -15,7 +15,7 @@
 - `notification`
 - `server request`
 
-旧的 session 语义、显式 unsubscribe 语义、以及任何额外命令均不再视为目标协议的一部分，统一下沉到 [docs/TODO.md](/Users/mu9/proj/handAgent/docs/TODO.md) 跟踪。
+旧协议里的显式 unsubscribe 语义以及任何额外命令均不再视为目标协议的一部分，统一下沉到 [docs/TODO.md](/Users/mu9/proj/handAgent/docs/TODO.md) 跟踪。
 
 ## 文件
 
@@ -92,4 +92,4 @@ sequenceDiagram
 
 - 新增 thread / turn 命令分支优先落在 `ThreadCommandRouter.ts`。
 - runtime event 到 notification / 审计事件的翻译不要散落到文档外推断；以 core 协议与实际 translator 为准。
-- 与旧 session / unsubscribe 兼容相关的内容不要继续写回本文件，统一写入 `docs/TODO.md`。
+- 与旧协议兼容相关的内容不要继续写回本文件，统一写入 `docs/TODO.md`。

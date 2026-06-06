@@ -265,7 +265,7 @@ describe("AgentRuntime", () => {
     await expect(runtime.run("loop")).rejects.toThrow("AgentRuntime exceeded maxTimes: 1");
   });
 
-  it("passes session context into tool calls", async () => {
+  it("passes thread context into tool calls", async () => {
     const tool = new ContextCapturingTool();
     const client = {
       async complete(messages: AgentMessage[]) {

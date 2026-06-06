@@ -136,7 +136,7 @@ export const mockLLMScenarios: MockLLMScenario[] = [
   toolScenario({
     id: "workspace-ask",
     trigger: "[mock:workspace-ask]",
-    description: "调用 workspace.askUser，用于验证 SessionWindow 内联 workspace 选择链路。",
+    description: "调用 workspace.askUser，用于验证 ThreadWindow 内联 workspace 选择链路。",
     toolCall: {
       id: "mock-workspace-ask-1",
       name: "workspace.askUser",
@@ -360,7 +360,7 @@ export const mockLLMScenarios: MockLLMScenario[] = [
   {
     id: "slow-focus",
     triggers: ["[mock:slow-focus]"],
-    description: "较长延迟返回，用于状态气泡回到 running session 的实机 QA。",
+    description: "较长延迟返回，用于状态气泡回到 running thread 的实机 QA。",
     complete: async (context) => {
       await delay(10 * 60_000, context.options?.signal);
       return assistant("Mock slow focus response completed.");

@@ -26,14 +26,14 @@ protocol AppServerConnectionTransport {
 }
 
 final class URLSessionAppServerConnectionTransport: AppServerConnectionTransport {
-    private let session: URLSession
+    private let urlClient: URLSession
 
-    init(session: URLSession = .shared) {
-        self.session = session
+    init(urlClient: URLSession = .shared) {
+        self.urlClient = urlClient
     }
 
     func makeWebSocketTask(with url: URL) -> any AppServerWebSocketTask {
-        session.webSocketTask(with: url)
+        urlClient.webSocketTask(with: url)
     }
 }
 
@@ -52,9 +52,13 @@ final class AppServerConnection: @unchecked Sendable {
     private var userRequestedDisconnect = false
     private var state: State = .disconnected
 
-    init(serverURL: URL?, session: URLSession = .shared) {
+    var connectionState: State {
+        state
+    }
+
+    init(serverURL: URL?, urlClient: URLSession = .shared) {
         self.serverURL = serverURL
-        self.transport = URLSessionAppServerConnectionTransport(session: session)
+        self.transport = URLSessionAppServerConnectionTransport(urlClient: urlClient)
         self.reconnectDelay = 2
     }
 

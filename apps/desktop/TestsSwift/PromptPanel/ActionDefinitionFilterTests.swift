@@ -17,9 +17,9 @@ final class ActionDefinitionFilterTests: XCTestCase {
             ActionDefinition.skill(
                 id: "new",
                 trigger: "new",
-                title: "New Session",
+                title: "New Thread",
                 description: "workspace",
-                template: "New session",
+                template: "New thread",
                 arguments: [],
                 defaultShortcut: .init(.n, modifiers: [.command])
             )

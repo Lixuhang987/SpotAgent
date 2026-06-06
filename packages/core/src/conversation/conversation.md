@@ -40,4 +40,4 @@ system → 立即 completed
 - 协议引用：[protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md)
 - LLM 视角：[runtime/runtime.md](/Users/mu9/proj/handAgent/packages/core/src/runtime/runtime.md)
 - 翻译实现：[apps/agent-server/agent-server.md](/Users/mu9/proj/handAgent/apps/agent-server/agent-server.md)
-- 渲染端：[apps/desktop/Sources/SessionWindow/session-window.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/SessionWindow/session-window.md)
+- 渲染端：[apps/desktop/Sources/ThreadWindow/thread-window.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/ThreadWindow/thread-window.md)

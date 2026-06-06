@@ -3,18 +3,18 @@ import XCTest
 
 final class StatusBubbleViewModelTests: XCTestCase {
     @MainActor
-    func testIsRunningReturnsFalseWhenNoSessions() {
-        let registry = SessionRegistry()
+    func testIsRunningReturnsFalseWhenNoThreads() {
+        let registry = ThreadRegistry()
         let vm = StatusBubbleViewModel(registry: registry)
 
         XCTAssertFalse(vm.isRunning)
     }
 
     @MainActor
-    func testIsRunningReturnsTrueWhenPrimarySessionIsRunning() {
-        let registry = SessionRegistry()
-        registry.upsert(SessionSummary(
-            sessionId: "s1",
+    func testIsRunningReturnsTrueWhenPrimaryThreadIsRunning() {
+        let registry = ThreadRegistry()
+        registry.upsert(ThreadSummary(
+            threadId: "s1",
             isRunning: true,
             latestSummary: "hello",
             lastActiveAt: .now,
@@ -27,17 +27,17 @@ final class StatusBubbleViewModelTests: XCTestCase {
 
     @MainActor
     func testLatestSummaryShowsDefaultWhenEmpty() {
-        let registry = SessionRegistry()
+        let registry = ThreadRegistry()
         let vm = StatusBubbleViewModel(registry: registry)
 
         XCTAssertEqual(vm.latestSummary, "点击开始")
     }
 
     @MainActor
-    func testLatestSummaryShowsPrimarySessionSummary() {
-        let registry = SessionRegistry()
-        registry.upsert(SessionSummary(
-            sessionId: "s1",
+    func testLatestSummaryShowsPrimaryThreadSummary() {
+        let registry = ThreadRegistry()
+        registry.upsert(ThreadSummary(
+            threadId: "s1",
             isRunning: false,
             latestSummary: "分析完成",
             lastActiveAt: .now,

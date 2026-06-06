@@ -28,14 +28,13 @@
 
 ### 1. 输入阶段
 
-- `AgentSession.open(input)` 接收 `AgentSessionInput`
+- `AgentThread.open(input)` 接收 `AgentThreadInput`
 - 内部通过 `selectionTextFromResult()` 提取 `selectedText`
 - `buildInitialUserMessage()` 输出给 runtime 的首轮字符串
 
 ### 2. runtime 阶段
 
-- 新主路径由 agent-server 的 `ThreadRuntimeOrchestrator` 调 `AgentRuntime.runWithMessages(messages, onEvent, {threadId})`
-- 旧 `AgentSessionHandle.submit(command)` / `nextEvent()` 仍是 `SessionCommand` / `SessionEvent` 迁移残留，不再作为 app-server 新主入口扩展。
+- 主路径由 agent-server 的 `ThreadRuntimeOrchestrator` 调 `AgentRuntime.runWithMessages(messages, onEvent, {threadId})`
 - 每轮先通过 `SystemPrompt` 把默认 system prompt sections 临时前置到 LLM 输入，再消费 `LLMClient.stream(llmMessages, registry.list(), {blobStore?})`
 - 处理 `toolCalls`：`PermissionPolicy.check` → ask / allow / deny → tool 调用 → 写 tool message
 - 详细流程图见 [runtime/runtime.md](/Users/mu9/proj/handAgent/packages/core/src/runtime/runtime.md)
@@ -75,7 +74,7 @@ plugin action 绑定的外部能力不由 core tools 目录加载私有插件进
 - desktop 与 app-server 走统一 WebSocket；Thread 主路径拆为 `ThreadCommand`、`ThreadNotification`、`ServerRequest`、`ClientResponse` 四类消息。
 - `ThreadCommand` 只表示 UI 主动提交的命令；`ThreadNotification` 只表示 server/core 向 UI 推送的结果通知。
 - `ServerRequest` / `ClientResponse` 只覆盖少量“server 提问，UI 回执”的交互，如权限审批与 workspace 选择。
-- 平台反向 IPC 不并入 session 主协议，继续走独立 `PlatformBridgeMessage`，通过 `channel: "platform"` 分流。
+- 平台反向 IPC 不并入 thread 主协议，继续走独立 `PlatformBridgeMessage`，通过 `channel: "platform"` 分流。
 - 字段说明详见 [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md)。
 
 ## 当前实现特点与已知改进项

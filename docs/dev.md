@@ -41,7 +41,7 @@ bash ./scripts/swiftw run HandAgentDesktop
 
 - 本地 `apps/agent-server/src/server/server.ts` 会通过 `SettingsBackedLLMClient` 在每次请求前检查 `~/.spotAgent/settings.json` 的文件戳，配置变化后重新读取。
 - core 的 `LLMClientFactory` 会根据配置里的 `provider` 创建 OpenAI 兼容或 Anthropic client；OpenAI 兼容路径会继续根据 `api` 选择 `responses`、`chat` 或 `completion` provider model。
-- 图片附件会先保存为本地 blob 与 session STUB；进入 LLM 请求前才展开为多模态 image part。`api=completion` 不支持图片，请使用 `responses` 或 `chat`。
+- 图片附件会先保存为本地 blob 与 image stub；进入 LLM 请求前才展开为多模态 image part。`api=completion` 不支持图片，请使用 `responses` 或 `chat`。
 - 如果提交 prompt 后看到 `Missing apiKey in ~/.spotAgent/settings.json. 请先在设置页完成模型配置。`，说明当前设置文件里没有有效的 `apiKey`。
 - 如果提交 prompt 后看到 `Could not connect to the server`，优先检查本地 `agent-server` 是否成功启动，而不要先把问题归因到 API key。
 - 如果模型请求打到了错误的 provider 地址，先检查 `baseUrl` 是否与目标服务要求的 OpenAI 兼容入口一致。
@@ -64,14 +64,14 @@ bash ./scripts/test.sh
 bash ./scripts/swiftw build
 ```
 
-- 如果需要观察窗口与热键行为，优先用 PromptPanel、SessionWindow 和状态气泡的可见状态来定位问题。
+- 如果需要观察窗口与热键行为，优先用 PromptPanel、ThreadWindow 和状态气泡的可见状态来定位问题。
 - 热键相关问题先确认辅助功能权限是否已授权。
 
 ### 端到端
 
-- 文本链路：热键唤起 -> PromptPanel 输入 prompt -> 新建 SessionWindow -> bubble 输出结果。
-- 状态链路：状态气泡展示 -> 点击后回到 running session 或最近活跃窗口。
-- 工具链路：先通过 `packages/core/tests/*` 里对应测试验证，再考虑接到 SessionWindow。
+- 文本链路：热键唤起 -> PromptPanel 输入 prompt -> 新建 ThreadWindow -> bubble 输出结果。
+- 状态链路：状态气泡展示 -> 点击后回到 running thread 或最近活跃窗口。
+- 工具链路：先通过 `packages/core/tests/*` 里对应测试验证，再考虑接到 ThreadWindow。
 
 ### 打包与系统权限
 
@@ -84,7 +84,7 @@ bash ./scripts/swiftw build
 ### 目录边界
 
 - `apps/desktop/HandAgentApp.swift` 只放 macOS 宿主入口与顶层协调逻辑。
-- `apps/desktop/Sources/` 按 `AppServices`、`PromptPanel`、`SessionWindow`、`StatusBubble` 分目录放 Swift 实现。
+- `apps/desktop/Sources/` 按 `AppServices`、`PromptPanel`、`ThreadWindow`、`StatusBubble` 分目录放 Swift 实现。
 - `packages/core/` 只放跨平台的 Agent Core、tool 协议和通用测试。
 - macOS 平台能力放在 `apps/desktop/Sources/AppServices/PlatformBridge/MacPlatformProvider.swift`，通过 `PlatformBridgeService` 暴露反向 IPC。
 

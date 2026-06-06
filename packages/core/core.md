@@ -14,7 +14,7 @@ TypeScript workspace 包名为 `@handagent/core`。应用层代码应通过 `@ha
 
 | 子模块 | 职责 | 文档 |
 |------|------|------|
-| `runtime/` | 会话循环、消息模型、tool call 编排 | [runtime/runtime.md](/Users/mu9/proj/handAgent/packages/core/src/runtime/runtime.md) |
+| `runtime/` | thread turn 循环、消息模型、tool call 编排 | [runtime/runtime.md](/Users/mu9/proj/handAgent/packages/core/src/runtime/runtime.md) |
 | `actions/` | Action manifest 与 thread binding 解析 | [actions/actions.md](/Users/mu9/proj/handAgent/packages/core/src/actions/actions.md) |
 | `llm/` | LLMClient 抽象与 Vercel AI SDK 适配 | [llm/llm.md](/Users/mu9/proj/handAgent/packages/core/src/llm/llm.md) |
 | `mcp/` | 标准 MCP client 与 tool adapter | [mcp/mcp.md](/Users/mu9/proj/handAgent/packages/core/src/mcp/mcp.md) |
@@ -47,9 +47,9 @@ flowchart TD
 
 ## Core 核心 DTO
 
-### 会话层
+### Thread 输入层
 
-- `AgentSessionInput`
+- `AgentThreadInput`
   - `prompt: string`
   - `selection?: SelectionCaptureResult | null`
 - `SelectionCaptureResult`
@@ -73,9 +73,6 @@ flowchart TD
 
 - `AgentRunResult`
   - `messages`
-- `AgentSessionHandle`
-  - `submit(command: SessionCommand)`
-  - `nextEvent(): Promise<SessionEvent>`
 
 ### Tool 协议
 
@@ -117,9 +114,9 @@ flowchart TD
 
 ## 目录级职责边界
 
-- `runtime` 负责 LLM/tool 循环，以及 `AgentSessionHandle` 的提交 / 事件消费接口，不关心 UI 或 socket。
+- `runtime` 负责 LLM/tool 循环，不关心 UI 或 socket；ThreadCommand 到 runtime 的编排属于 agent-server `thread/` 层。
 - `llm` 只管 provider 适配，不关心窗口或平台。
-- `tools` 只管 tool schema 与调用，不关心会话页面状态。
+- `tools` 只管 tool schema 与调用，不关心 thread/window UI 状态。
 - `platform` 只定义协议与 RPC 入口，不写 macOS 细节。
 - `permission` 只定义策略接口与持久化，不做 UI 询问；UI 通过 `AskResolver` 注入。
 - `storage` 只做持久化，不感知 runtime 内部状态机。
@@ -141,7 +138,7 @@ flowchart TD
 
 ### 输入边界
 
-- 在会话开始前，不要默认抓取额外上下文；只有用户主动输入和用户主动选区可以作为初始上下文。
+- 在 thread 开始前，不要默认抓取额外上下文；只有用户主动输入和用户主动选区可以作为初始上下文。
 - 屏幕、窗口、文件、剪贴板、App 状态一律通过 tool 按需读取。
 - 任何 tool 的输入 schema 必须清晰、稳定、可序列化，避免把宿主内部状态直接暴露给 LLM。
 

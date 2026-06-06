@@ -1,3 +1,4 @@
+import ComposableArchitecture
 import Foundation
 import KeyboardShortcuts
 import SwiftUI
@@ -14,23 +15,25 @@ final class AppCoordinator {
         case openSettings
         case openHistory
         case settingsWindowClosed
-        case sessionWindowClosed
+        case threadWindowClosed
         case statusBubbleTapped(String?)
     }
 
-    var sessionWindowViewModel: SessionWindowViewModel? { sessionWindowLifecycle.viewModel }
+    var threadWindowViewModel: ThreadWindowViewModel? { threadWindowLifecycle.viewModel }
     var agentServerError: String? { agentServerHealth.errorMessage }
 
     @ObservationIgnored private let services: AppServices
+    @ObservationIgnored private let store = Store(initialState: AppFeature.State()) {
+        AppFeature()
+    }
     @ObservationIgnored private let agentServerHealth: AgentServerHealth
-    @ObservationIgnored private let sessionWindowLifecycle: SessionWindowLifecycle
+    @ObservationIgnored private let threadWindowLifecycle: ThreadWindowLifecycle
     @ObservationIgnored private let settingsLifecycle: SettingsLifecycle
     @ObservationIgnored private let activationPolicy = AppActivationPolicyCoordinator()
-    @ObservationIgnored private var platformBridgeService: (any PlatformBridgeRunning)?
     @ObservationIgnored private var registeredActionShortcutNames: Set<KeyboardShortcuts.Name> = []
     @ObservationIgnored private lazy var promptPanelController = PromptPanelController()
     @ObservationIgnored private lazy var statusBubbleController: StatusBubbleController = {
-        StatusBubbleController(registry: services.sessionRegistry)
+        StatusBubbleController(registry: services.threadRegistry)
     }()
     @ObservationIgnored private lazy var captureCoordinator = PromptCaptureCoordinator(
         controller: promptPanelController,
@@ -43,14 +46,14 @@ final class AppCoordinator {
     init(services: AppServices) {
         self.services = services
         self.agentServerHealth = AgentServerHealth(
-            agentServer: services.agentServer,
+            appServer: services.appServer,
             fatalAlertPresenter: services.fatalAlertPresenter,
             showsFatalAlert: services.showsStatusBubble
         )
-        self.sessionWindowLifecycle = SessionWindowLifecycle(
-            registry: services.sessionRegistry,
-            windowPresenter: services.sessionWindowPresenter,
-            agentServerURL: services.agentServerURL,
+        self.threadWindowLifecycle = ThreadWindowLifecycle(
+            registry: services.threadRegistry,
+            windowPresenter: services.threadWindowPresenter,
+            appServer: services.appServer,
             activationPolicy: activationPolicy,
             setActivationPolicy: services.setActivationPolicy
         )
@@ -68,17 +71,14 @@ final class AppCoordinator {
         setupStatusBubble()
         setupAgentServerHealth()
         agentServerHealth.start()
-        startPlatformBridge()
         if services.showsStatusBubble { statusBubbleController.show() }
     }
 
     func shutdown() {
-        platformBridgeService?.stop()
-        platformBridgeService = nil
         unregisterActionShortcuts()
         agentServerHealth.stop()
         settingsLifecycle.close()
-        sessionWindowLifecycle.close()
+        threadWindowLifecycle.close()
     }
 
     func send(_ action: Action) {
@@ -101,10 +101,11 @@ final class AppCoordinator {
             handleOpenHistory()
         case .settingsWindowClosed:
             settingsLifecycle.handleClosed()
-        case .sessionWindowClosed:
-            sessionWindowLifecycle.close()
-        case .statusBubbleTapped(let sessionID):
-            handleStatusBubbleTap(sessionID)
+        case .threadWindowClosed:
+            threadWindowLifecycle.close()
+            store.send(.threadWindowClosed)
+        case .statusBubbleTapped(let threadID):
+            handleStatusBubbleTap(threadID)
         }
     }
 
@@ -148,6 +149,7 @@ final class AppCoordinator {
     private func setupAgentServerHealth() {
         agentServerHealth.onAvailabilityChange = { [weak self] available, message in
             guard let self else { return }
+            self.store.send(.appServerAvailabilityChanged(available))
             self.promptPanelController.setSubmissionEnabled(available, message: message)
         }
     }
@@ -165,15 +167,9 @@ final class AppCoordinator {
     }
 
     private func setupStatusBubble() {
-        statusBubbleController.onTap = { [weak self] sessionID in
-            self?.send(.statusBubbleTapped(sessionID))
+        statusBubbleController.onTap = { [weak self] threadID in
+            self?.send(.statusBubbleTapped(threadID))
         }
-    }
-
-    private func startPlatformBridge() {
-        guard let bridge = services.platformBridgeFactory(services.agentServerURL) else { return }
-        platformBridgeService = bridge
-        bridge.start()
     }
 
     private func handleSubmitPrompt(
@@ -193,9 +189,10 @@ final class AppCoordinator {
             actionBinding: actionBinding
         ) else { return }
         promptPanelController.hide()
-        sessionWindowLifecycle.createTabWithInitialPrompt(prompt) { [weak self] in
-            self?.send(.sessionWindowClosed)
+        threadWindowLifecycle.createTabWithInitialPrompt(prompt) { [weak self] in
+            self?.send(.threadWindowClosed)
         }
+        store.send(.threadWindowOpened)
     }
 
     private func handleOpenSettings() {
@@ -215,13 +212,14 @@ final class AppCoordinator {
     }
 
     private func handleOpenHistory() {
-        sessionWindowLifecycle.openOrFocusHistory { [weak self] in
-            self?.send(.sessionWindowClosed)
+        threadWindowLifecycle.openOrFocusHistory { [weak self] in
+            self?.send(.threadWindowClosed)
         }
+        store.send(.threadWindowOpened)
     }
 
-    private func handleStatusBubbleTap(_ sessionID: String?) {
-        if sessionID != nil, sessionWindowLifecycle.focus() { return }
+    private func handleStatusBubbleTap(_ threadID: String?) {
+        if threadID != nil, threadWindowLifecycle.focus() { return }
         promptPanelController.show()
     }
 

@@ -43,7 +43,7 @@ agent-server / SettingsBackedLLMClient
 
 ## 编辑此目录的约束
 
-- 不要把 `NetworkLogger` 当成产品级日志；产品事件审计用 `SessionEvent` 走 `SessionStore.appendEvents`。
+- 不要把 `NetworkLogger` 当成产品级日志；产品事件审计用 `ThreadAuditEvent` 走 `ThreadStore.appendEvents`。
 - logger 内只允许做必要脱敏，不做产品级过滤或决策；当前会脱敏多模态图片 payload。
 - 新增 logger 实现必须保持 `log()` 不抛——外层 fetch 装饰器假定 logger 不会让请求失败。
 

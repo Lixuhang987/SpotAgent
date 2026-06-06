@@ -7,22 +7,22 @@ final class AgentServerHealth {
     private(set) var errorMessage: String?
     var onAvailabilityChange: ((Bool, String?) -> Void)?
 
-    @ObservationIgnored private let agentServer: any AgentServerStarting
+    @ObservationIgnored private let appServer: any AppServerManaging
     @ObservationIgnored private let fatalAlertPresenter: any FatalAlertPresenting
     @ObservationIgnored private let showsFatalAlert: Bool
 
     init(
-        agentServer: any AgentServerStarting,
+        appServer: any AppServerManaging,
         fatalAlertPresenter: any FatalAlertPresenting,
         showsFatalAlert: Bool
     ) {
-        self.agentServer = agentServer
+        self.appServer = appServer
         self.fatalAlertPresenter = fatalAlertPresenter
         self.showsFatalAlert = showsFatalAlert
     }
 
     func start() {
-        agentServer.onAvailabilityChange = { [weak self] available in
+        appServer.onAvailabilityChange = { [weak self] available in
             Task { @MainActor in
                 guard let self else { return }
                 if available {
@@ -34,7 +34,7 @@ final class AgentServerHealth {
                 }
             }
         }
-        agentServer.onFatalError = { [weak self] message in
+        appServer.onFatalError = { [weak self] message in
             Task { @MainActor in
                 guard let self else { return }
                 self.errorMessage = message
@@ -42,18 +42,18 @@ final class AgentServerHealth {
                 self.presentFatalAlert(message: message)
             }
         }
-        do {
-            try agentServer.start()
+        appServer.start()
+        if appServer.isAvailable {
             errorMessage = nil
             onAvailabilityChange?(true, nil)
-        } catch {
-            errorMessage = agentServer.lastStartupError ?? error.localizedDescription
+        } else {
+            errorMessage = appServer.startupErrorMessage ?? "agent-server 已断开，正在尝试重连…"
             onAvailabilityChange?(false, errorMessage)
         }
     }
 
     func stop() {
-        agentServer.stop()
+        appServer.stop()
     }
 
     private func presentFatalAlert(message: String) {

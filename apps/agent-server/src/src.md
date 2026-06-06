@@ -10,7 +10,7 @@
 |------|------|------|
 | `server/` | [server/server.md](/Users/mu9/proj/handAgent/apps/agent-server/src/server/server.md) | 进程入口、WebSocket socket 绑定、组合根与 `~/.spotAgent` 路径解析 |
 | `thread/` | [thread/thread.md](/Users/mu9/proj/handAgent/apps/agent-server/src/thread/thread.md) | thread 路由、一轮 turn 编排、持久化恢复与删除 |
-| `protocol/` | [protocol/protocol.md](/Users/mu9/proj/handAgent/apps/agent-server/src/protocol/protocol.md) | core runtime event、会话消息、审计事件与多模态 STUB 的翻译 |
+| `protocol/` | [protocol/protocol.md](/Users/mu9/proj/handAgent/apps/agent-server/src/protocol/protocol.md) | core runtime event、thread 消息、审计事件与多模态 STUB 的翻译 |
 | `settings/` | [settings/settings.md](/Users/mu9/proj/handAgent/apps/agent-server/src/settings/settings.md) | `~/.spotAgent/settings.json` 驱动的 LLM client 与 builtin tool 热加载 |
 | `actions/` | [actions/actions.md](/Users/mu9/proj/handAgent/apps/agent-server/src/actions/actions.md) | plugin action binding、全局 / thread scoped MCP、Computer Use 兼容层与 thread 级工具表 |
 | `bridges/` | [bridges/bridges.md](/Users/mu9/proj/handAgent/apps/agent-server/src/bridges/bridges.md) | desktop 回流桥：平台 RPC、权限审批、workspace 选择 |
@@ -29,7 +29,7 @@ flowchart TD
   H --> I["ThreadRuntimeOrchestrator.handleUserMessage"]
   I --> J["core AgentRuntime.runWithMessages"]
   J --> K["protocol/MessageTranslator"]
-  K --> L["desktop SessionWindow messages"]
+  K --> L["desktop ThreadWindow messages"]
 ```
 
 ## 边界规则

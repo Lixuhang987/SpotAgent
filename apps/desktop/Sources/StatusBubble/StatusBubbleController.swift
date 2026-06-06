@@ -6,7 +6,7 @@ final class StatusBubbleController {
     private let viewModel: StatusBubbleViewModel
     private var panel: StatusBubblePanel?
 
-    init(registry: SessionRegistry) {
+    init(registry: ThreadRegistry) {
         self.viewModel = StatusBubbleViewModel(registry: registry)
     }
 

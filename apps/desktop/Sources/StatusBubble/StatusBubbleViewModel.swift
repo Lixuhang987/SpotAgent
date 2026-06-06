@@ -3,7 +3,7 @@ import Foundation
 @Observable
 @MainActor
 final class StatusBubbleViewModel {
-    @ObservationIgnored private let registry: SessionRegistry
+    @ObservationIgnored private let registry: ThreadRegistry
 
     var onTap: ((String?) -> Void)?
 
@@ -15,15 +15,15 @@ final class StatusBubbleViewModel {
         primarySummary?.latestSummary ?? "点击开始"
     }
 
-    init(registry: SessionRegistry) {
+    init(registry: ThreadRegistry) {
         self.registry = registry
     }
 
     func tap() {
-        onTap?(registry.primarySessionID)
+        onTap?(registry.primaryThreadID)
     }
 
-    private var primarySummary: SessionSummary? {
-        registry.primarySessionID.flatMap { registry.summaries[$0] }
+    private var primarySummary: ThreadSummary? {
+        registry.primaryThreadID.flatMap { registry.summaries[$0] }
     }
 }

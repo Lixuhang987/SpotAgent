@@ -1,6 +1,6 @@
 # runtime
 
-会话循环、消息模型、tool call 编排。是整个 Agent 的"主心脏"。
+Thread turn 循环、消息模型、tool call 编排。是整个 Agent 的"主心脏"。
 
 ## 文件
 
@@ -8,10 +8,9 @@
 |------|------|
 | `AgentMessage.ts` | LLM 面向的消息判别联合：`user / assistant(+toolCalls?) / tool / system`；user content 支持字符串或 `text/image` 多模态 parts |
 | `ToolCallEnvelope.ts` | `{ id, name, arguments }` 三元组，连接 LLM 输出与 ToolRegistry |
-| `AgentSession.ts` | 把 `AgentSessionInput`（prompt + 可选选区）归一化为首轮 user message；当前未在 agent-server 主链路使用，仅作为脚本入口 |
+| `AgentThread.ts` | 把 `AgentThreadInput`（prompt + 可选选区）归一化为首轮 user message；当前未在 agent-server 主链路使用，仅作为脚本入口 |
 | `AgentRuntime.ts` | 主循环：消费 `LLMClient.stream` → 按 delta 发 assistant runtime 事件 → 收集 toolCalls → 逐个交给 `handleToolCall` 处理权限、执行、结果回灌；同一次用户输入内最多循环 `maxTimes` 次；支持 `AbortSignal` 中断 |
-| `AgentSessionHandle.ts` | core 对 app-server 暴露的会话把手：提交 `SessionCommand`，顺序消费 `SessionEvent` |
-| `SystemPrompt.ts` | system prompt 分段组装器：以 `SystemPromptSection[]` 表达默认策略，按 LLM 请求临时解析成 `system` messages，不写回会话历史 |
+| `SystemPrompt.ts` | system prompt 分段组装器：以 `SystemPromptSection[]` 表达默认策略，按 LLM 请求临时解析成 `system` messages，不写回 thread 历史 |
 | `Stub.ts` | 统一渲染 / 解析 `[STUB ...]...[/STUB]` 文本，占位引用 Blob 内容 |
 | `TurnSummarizer.ts` | turn 结束后压缩 `cached=turn` 的 tool message，写回 Blob summary 并重渲染消息 |
 
@@ -46,26 +45,19 @@ flowchart TD
 
 ## 事件
 
-`AgentRuntimeEvent` 是 runtime 内部回调流，供 `AgentSessionHandle` 归一化为 `SessionEvent`：
+`AgentRuntimeEvent` 是 runtime 内部回调流，由 agent-server `ThreadRuntimeOrchestrator` 翻译为 `ThreadNotification` 与审计事件：
 
 - `assistant_message_start | assistant_message_delta | assistant_message_end`：由 `LLMStreamEvent.text_delta` 逐段转发；legacy `complete()` client 会经 `streamLLM()` 兼容层退化为单段 delta；中断时 `_end` status 为 `interrupted`。
 - `tool_call`：tool 调用前埋点；agent-server 会翻译成 `tool.started`。
 - `tool_result`：成功 / 失败 + 序列化输出（`MAX_OUTPUT_BYTES = 8 KiB` 截断）+ duration；agent-server 会翻译成 `tool.finished`。
 - `permission_decision`：进入 `ask` 路径后的解析结果；用于审计事件，不直接发 UI 消息。
-- `runtime_error`：仅类型预留，目前未在循环内主动 emit；若出现，会被 handle 归一化为 `session_error`。
+- `runtime_error`：仅类型预留，目前未在循环内主动 emit；若出现，会由 agent-server 归一化为 `thread.error`。
 
-## 迁移残留：`AgentSessionHandle`
+## Thread 编排边界
 
-- `AgentRuntime` 仍只负责 LLM/tool loop，不直接暴露给 UI 或 app-server 当作协议边界。
-- `AgentSessionHandle` 是旧 `SessionCommand` / `SessionEvent` 路径的迁移残留，后续会删除或重写为 Thread 命名：
-  - 输入：`submit(command: SessionCommand)`，当前只处理旧 runtime 相关命令，例如 `turn_start`、`turn_interrupt`
-  - 输出：`nextEvent(): Promise<SessionEvent>`，例如 `user_message_recorded`、`turn_started`、`assistant_delta`、`tool_started`、`tool_finished`、`turn_completed`
+- `AgentRuntime` 只负责 LLM/tool loop，不直接暴露给 UI，也不直接处理 WebSocket 协议。
 - 新主路径由 agent-server 的 `ThreadRuntimeOrchestrator` 调用 `AgentRuntime.runWithMessages(..., { threadId })`，并把 `AgentRuntimeEvent` 翻译成 `ThreadNotification`。
-- handle 不负责：
-  - app-server socket 协议翻译
-  - 持久化审计事件模型
-  - server 侧中断补帧策略
-  - desktop 展示状态推断
+- runtime 不负责 app-server socket 协议翻译、持久化审计事件模型、server 侧中断补帧策略或 desktop 展示状态推断。
 
 ## meta-tool 激活分支
 
@@ -81,7 +73,7 @@ flowchart TD
 
 - `maxTimes = 100`：限制一次用户输入内的 LLM/tool 循环次数，防止无限循环；这里的 times 不是产品语义上的 turn，产品语义里的 turn 是“一次用户输入到本次运行自然结束”。
 - `permissionPolicy = AllowAllPermissionPolicy()`：仅在测试 / 脚本场景默认放行；生产由 `agent-server` 注入 `FilePermissionPolicy(askResolver)`。
-- `systemPromptSections = buildDefaultSystemPromptSections()`：默认包含 tool-use policy section；当 `ToolRegistry` 中存在可用 tool 时，每次 LLM 请求前临时前置 system message，要求模型在需要外部状态或多步流程时返回结构化 tool call，而不是只用 assistant 文本描述计划。该 system message 只进入本次 LLM 输入，不进入 `AgentRunResult.messages`，因此不会被 UI 或会话持久化重复保存。
+- `systemPromptSections = buildDefaultSystemPromptSections()`：默认包含 tool-use policy section；当 `ToolRegistry` 中存在可用 tool 时，每次 LLM 请求前临时前置 system message，要求模型在需要外部状态或多步流程时返回结构化 tool call，而不是只用 assistant 文本描述计划。该 system message 只进入本次 LLM 输入，不进入 `AgentRunResult.messages`，因此不会被 UI 或 thread 持久化重复保存。
 - `serializeToolResult` 把非字符串结果用 `JSON.stringify`，循环引用降级为 `[unserializable tool result]`。
 - 带 `stubByDefault` 的 tool 若输入里显式传 `cached=turn|persist`，runtime 会把序列化结果写入注入的 `BlobStore`，并把 tool message content 渲染成 STUB。
 - runtime 不解析持久化 image STUB；agent-server 会在调用 runtime 前把用户主动提交的 image STUB 转成多模态 image part，runtime 只负责把注入的 `BlobStore` 继续透传给 `LLMClient`。
@@ -99,7 +91,6 @@ flowchart TD
 - tool 调用以 `ToolRegistry.get(name)` 为唯一入口，不允许直接 `import` builtin tool。
 - 新增 system prompt 规则时优先放入 `SystemPrompt.ts` 的 section builder，不要在 `AgentRuntime.completeAssistantResponse()` 里直接拼接策略字符串。
 - 新增事件类型时，app-server 的协议转发层与审计落盘层必须同步更新。
-- 旧 `AgentSessionHandle` 只能依赖 core 内类型；不要继续扩展旧 `SessionMessage` 兼容层、WebSocket、Swift UI 或 app-server 持久化编排语义。
 
 ## 相关文档
 

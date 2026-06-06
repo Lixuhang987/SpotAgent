@@ -86,7 +86,7 @@ const runtimeForThread = (threadId: string) => {
 
 `resolveServerPaths()` 集中生成以下路径：
 
-- `~/.spotAgent/sessions/`：会话 JSON。
+- `~/.spotAgent/threads/`：thread JSON。
 - `~/.spotAgent/blobs/`：图片附件和大段 tool 输出。
 - `~/.spotAgent/log/`：LLM 网络日志。
 - `~/.spotAgent/plugins/`：plugin manifest。

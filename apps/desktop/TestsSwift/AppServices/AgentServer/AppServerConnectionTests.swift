@@ -5,7 +5,7 @@ final class AppServerConnectionTests: XCTestCase {
     func testConnectOpensSocketAndEmitsConnectedState() {
         let transport = RecordingAppServerConnectionTransport()
         let connection = AppServerConnection(
-            serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
+            serverURL: URL(string: "ws://127.0.0.1:4317/api/thread")!,
             transport: transport,
             reconnectDelay: 0
         )
@@ -21,7 +21,7 @@ final class AppServerConnectionTests: XCTestCase {
     func testReceiveFailureReconnectsAndEmitsReconnectingThenConnected() {
         let transport = RecordingAppServerConnectionTransport()
         let connection = AppServerConnection(
-            serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
+            serverURL: URL(string: "ws://127.0.0.1:4317/api/thread")!,
             transport: transport,
             reconnectDelay: 0
         )
@@ -38,7 +38,7 @@ final class AppServerConnectionTests: XCTestCase {
     func testManualDisconnectPreventsReconnectAfterReceiveFailure() {
         let transport = RecordingAppServerConnectionTransport()
         let connection = AppServerConnection(
-            serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
+            serverURL: URL(string: "ws://127.0.0.1:4317/api/thread")!,
             transport: transport,
             reconnectDelay: 0
         )
@@ -56,7 +56,7 @@ final class AppServerConnectionTests: XCTestCase {
     func testSendForwardsRawTextToSocketTask() {
         let transport = RecordingAppServerConnectionTransport()
         let connection = AppServerConnection(
-            serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
+            serverURL: URL(string: "ws://127.0.0.1:4317/api/thread")!,
             transport: transport,
             reconnectDelay: 0
         )

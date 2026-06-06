@@ -30,7 +30,7 @@ describe("WebSocketPlatformBridge", () => {
     const req = sent[0];
     expect(req.channel).toBe("platform");
     expect(req.type).toBe("platform_request");
-    expect("sessionId" in req).toBe(false);
+    expect("threadId" in req).toBe(false);
     if (req.type !== "platform_request") throw new Error("type");
 
     bridge.handleResponse({

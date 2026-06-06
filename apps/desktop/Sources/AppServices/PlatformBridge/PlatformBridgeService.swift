@@ -8,19 +8,19 @@ protocol PlatformBridgeRunning: AnyObject {
 
 @MainActor
 protocol PlatformBridgeSocketTransport {
-    func makeWebSocketTask(with url: URL) -> any SessionWebSocketTask
+    func makeWebSocketTask(with url: URL) -> any AppServerWebSocketTask
 }
 
 @MainActor
 final class URLSessionPlatformBridgeTransport: PlatformBridgeSocketTransport {
-    private let session: URLSession
+    private let urlClient: URLSession
 
-    init(session: URLSession = .shared) {
-        self.session = session
+    init(urlClient: URLSession = .shared) {
+        self.urlClient = urlClient
     }
 
-    func makeWebSocketTask(with url: URL) -> any SessionWebSocketTask {
-        session.webSocketTask(with: url)
+    func makeWebSocketTask(with url: URL) -> any AppServerWebSocketTask {
+        urlClient.webSocketTask(with: url)
     }
 }
 
@@ -32,7 +32,7 @@ final class PlatformBridgeService: PlatformBridgeRunning {
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
-    private var socketTask: (any SessionWebSocketTask)?
+    private var socketTask: (any AppServerWebSocketTask)?
     private var reconnectWorkItem: DispatchWorkItem?
     private var stopped = false
 
@@ -68,7 +68,7 @@ final class PlatformBridgeService: PlatformBridgeRunning {
         receiveNext()
     }
 
-    private func sendHello(on task: any SessionWebSocketTask) {
+    private func sendHello(on task: any AppServerWebSocketTask) {
         let envelope: [String: Any] = [
             "channel": "platform",
             "type": "platform_bridge_hello",
@@ -162,7 +162,7 @@ final class PlatformBridgeService: PlatformBridgeRunning {
         sendJSON(envelope, on: task)
     }
 
-    private func sendJSON(_ object: [String: Any], on task: any SessionWebSocketTask) {
+    private func sendJSON(_ object: [String: Any], on task: any AppServerWebSocketTask) {
         guard
             let data = try? JSONSerialization.data(withJSONObject: object, options: []),
             let string = String(data: data, encoding: .utf8)

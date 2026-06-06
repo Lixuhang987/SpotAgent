@@ -3,10 +3,10 @@ import XCTest
 
 @MainActor
 final class PlatformBridgeServiceTests: XCTestCase {
-    func testHelloUsesPlatformChannelWithoutSessionId() {
+    func testHelloUsesPlatformChannelWithoutThreadRouting() {
         let transport = RecordingPlatformBridgeTransport()
         let service = PlatformBridgeService(
-            serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
+            serverURL: URL(string: "ws://127.0.0.1:4317/api/thread")!,
             provider: RecordingPlatformProvider(),
             transport: transport
         )
@@ -16,13 +16,13 @@ final class PlatformBridgeServiceTests: XCTestCase {
         let object = transport.tasks[0].sentObjects[0]
         XCTAssertEqual(object["channel"] as? String, "platform")
         XCTAssertEqual(object["type"] as? String, "platform_bridge_hello")
-        XCTAssertNil(object["sessionId"])
+        XCTAssertNil(object["threadId"])
     }
 
-    func testResponseUsesPlatformChannelWithoutSessionId() async {
+    func testResponseUsesPlatformChannelWithoutThreadRouting() async {
         let transport = RecordingPlatformBridgeTransport()
         let service = PlatformBridgeService(
-            serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
+            serverURL: URL(string: "ws://127.0.0.1:4317/api/thread")!,
             provider: RecordingPlatformProvider(result: ["text": "hello"]),
             transport: transport
         )
@@ -48,7 +48,7 @@ final class PlatformBridgeServiceTests: XCTestCase {
         let object = transport.tasks[0].sentObjects[1]
         XCTAssertEqual(object["channel"] as? String, "platform")
         XCTAssertEqual(object["type"] as? String, "platform_response")
-        XCTAssertNil(object["sessionId"])
+        XCTAssertNil(object["threadId"])
         let payload = object["payload"] as? [String: Any]
         XCTAssertEqual(payload?["requestId"] as? String, "r1")
         XCTAssertEqual(payload?["status"] as? String, "ok")
@@ -58,7 +58,7 @@ final class PlatformBridgeServiceTests: XCTestCase {
         let provider = RecordingPlatformProvider(result: ["ok": true])
         let transport = RecordingPlatformBridgeTransport()
         let service = PlatformBridgeService(
-            serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
+            serverURL: URL(string: "ws://127.0.0.1:4317/api/thread")!,
             provider: provider,
             transport: transport
         )
@@ -97,7 +97,7 @@ final class PlatformBridgeServiceTests: XCTestCase {
     func testPlatformBridgeErrorResponseIncludesProviderCode() async {
         let transport = RecordingPlatformBridgeTransport()
         let service = PlatformBridgeService(
-            serverURL: URL(string: "ws://127.0.0.1:4317/api/session")!,
+            serverURL: URL(string: "ws://127.0.0.1:4317/api/thread")!,
             provider: RecordingPlatformProvider(error: PlatformBridgeError(
                 code: "capture_failed",
                 message: "ScreenCaptureKit failed"
@@ -135,14 +135,14 @@ final class PlatformBridgeServiceTests: XCTestCase {
 private final class RecordingPlatformBridgeTransport: PlatformBridgeSocketTransport {
     private(set) var tasks: [RecordingPlatformBridgeWebSocketTask] = []
 
-    func makeWebSocketTask(with url: URL) -> any SessionWebSocketTask {
+    func makeWebSocketTask(with url: URL) -> any AppServerWebSocketTask {
         let task = RecordingPlatformBridgeWebSocketTask()
         tasks.append(task)
         return task
     }
 }
 
-private final class RecordingPlatformBridgeWebSocketTask: SessionWebSocketTask {
+private final class RecordingPlatformBridgeWebSocketTask: AppServerWebSocketTask {
     private var receiveHandler: ((Result<URLSessionWebSocketTask.Message, Error>) -> Void)?
     private(set) var sentObjects: [[String: Any]] = []
 

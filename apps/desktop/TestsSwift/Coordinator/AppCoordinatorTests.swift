@@ -20,7 +20,7 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
-    func testSettingsWindowClosedReturnsAccessoryPolicyWithoutSessions() {
+    func testSettingsWindowClosedReturnsAccessoryPolicyWithoutThreads() {
         var appliedPolicies: [NSApplication.ActivationPolicy] = []
         let presenter = StubSettingsWindowPresenter()
         let services = AppServices.testing(
@@ -36,23 +36,23 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
-    func testSubmitPromptCreatesSessionWindow() {
+    func testSubmitPromptCreatesThreadWindow() {
         let coordinator = AppCoordinator(services: AppServices.testing())
 
         coordinator.send(.submitPrompt("hello", attachments: []))
 
-        XCTAssertNotNil(coordinator.sessionWindowViewModel)
+        XCTAssertNotNil(coordinator.threadWindowViewModel)
     }
 
     @MainActor
-    func testSessionClosedRemovesWindowViewModel() {
+    func testThreadClosedRemovesWindowViewModel() {
         let coordinator = AppCoordinator(services: AppServices.testing())
 
         coordinator.send(.submitPrompt("hello", attachments: []))
 
-        coordinator.send(.sessionWindowClosed)
+        coordinator.send(.threadWindowClosed)
 
-        XCTAssertNil(coordinator.sessionWindowViewModel)
+        XCTAssertNil(coordinator.threadWindowViewModel)
     }
 
     @MainActor
@@ -61,27 +61,31 @@ final class AppCoordinatorTests: XCTestCase {
 
         coordinator.send(.submitPrompt("   ", attachments: []))
 
-        XCTAssertNil(coordinator.sessionWindowViewModel)
+        XCTAssertNil(coordinator.threadWindowViewModel)
     }
 
     @MainActor
-    func testSubmitPromptDoesNotCreateSessionWhileAgentServerUnavailable() async throws {
-        final class StubServer: AgentServerStarting {
-            var lastStartupError: String?
-            var fatalErrorMessage: String?
+    func testSubmitPromptDoesNotCreateThreadWhileAgentServerUnavailable() async throws {
+        final class StubAppServer: AppServerManaging {
+            var threadConnectionState: AppServerConnectionState = .disconnected
             var isAvailable = true
+            var startupErrorMessage: String?
             var onAvailabilityChange: ((Bool) -> Void)?
             var onFatalError: ((String) -> Void)?
-            func start() throws {}
+            var onThreadConnectionStateChange: ((AppServerConnectionState) -> Void)?
+            var onThreadMessage: ((String) -> Void)?
+            func start() {}
             func stop() {}
+            func connectThreadClient() {}
+            func disconnectThreadClient() {}
+            func sendThreadMessage(_ text: String) {}
         }
-        let stub = StubServer()
+        let stub = StubAppServer()
         let services = AppServices(
-            agentServer: stub,
-            agentServerURL: URL(string: "ws://127.0.0.1:0/noop")!,
-            platformBridgeFactory: { _ in nil },
+            appServer: stub,
+            appServerURL: URL(string: "ws://127.0.0.1:0/noop")!,
             hotkeyRegistrar: NopHotkeyRegistrar(),
-            sessionWindowPresenter: NopSessionWindowPresenter(),
+            threadWindowPresenter: NopThreadWindowPresenter(),
             settingsWindowPresenter: NopSettingsWindowPresenter(),
             fatalAlertPresenter: NopFatalAlertPresenter(),
             setActivationPolicy: { _ in },
@@ -93,24 +97,24 @@ final class AppCoordinatorTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(10))
         coordinator.send(.submitPrompt("hello", attachments: []))
 
-        XCTAssertNil(coordinator.sessionWindowViewModel)
+        XCTAssertNil(coordinator.threadWindowViewModel)
         XCTAssertEqual(coordinator.agentServerError, "agent-server 已断开，正在尝试重连…")
     }
 
     @MainActor
-    func testHistoryActionOpensSingleSessionWindowWithoutChangingActiveTab() {
+    func testHistoryActionOpensSingleThreadWindowWithoutChangingActiveTab() {
         let coordinator = AppCoordinator(services: AppServices.testing())
 
         coordinator.send(.openHistory)
-        coordinator.sessionWindowViewModel?.handleWindowEvent(
-            .createSessionResponse(sessionID: "session-1", title: nil)
+        coordinator.threadWindowViewModel?.handleWindowEvent(
+            .threadStarted(threadID: "thread-1", title: nil)
         )
-        let firstActive = coordinator.sessionWindowViewModel?.activeTabID
+        let firstActive = coordinator.threadWindowViewModel?.activeTabID
 
         coordinator.send(.openHistory)
 
         XCTAssertNotNil(firstActive)
-        XCTAssertEqual(coordinator.sessionWindowViewModel?.activeTabID, firstActive)
+        XCTAssertEqual(coordinator.threadWindowViewModel?.activeTabID, firstActive)
     }
 
     @MainActor
@@ -118,31 +122,35 @@ final class AppCoordinatorTests: XCTestCase {
         let coordinator = AppCoordinator(services: AppServices.testing())
 
         coordinator.send(.submitPrompt("first", attachments: []))
-        let firstModel = coordinator.sessionWindowViewModel
+        let firstModel = coordinator.threadWindowViewModel
         coordinator.send(.submitPrompt("second", attachments: []))
 
-        XCTAssertTrue(coordinator.sessionWindowViewModel === firstModel)
+        XCTAssertTrue(coordinator.threadWindowViewModel === firstModel)
     }
 
     @MainActor
     func testInjectedAgentServerStartIsCalledOnBootstrap() throws {
-        final class StubServer: AgentServerStarting {
-            var lastStartupError: String?
-            var fatalErrorMessage: String?
+        final class StubAppServer: AppServerManaging {
+            var threadConnectionState: AppServerConnectionState = .disconnected
             var isAvailable = false
+            var startupErrorMessage: String?
             var onAvailabilityChange: ((Bool) -> Void)?
             var onFatalError: ((String) -> Void)?
+            var onThreadConnectionStateChange: ((AppServerConnectionState) -> Void)?
+            var onThreadMessage: ((String) -> Void)?
             var startCount = 0
-            func start() throws { startCount += 1 }
+            func start() { startCount += 1 }
             func stop() {}
+            func connectThreadClient() {}
+            func disconnectThreadClient() {}
+            func sendThreadMessage(_ text: String) {}
         }
-        let stub = StubServer()
+        let stub = StubAppServer()
         let services = AppServices(
-            agentServer: stub,
-            agentServerURL: URL(string: "ws://127.0.0.1:0/noop")!,
-            platformBridgeFactory: { _ in nil },
+            appServer: stub,
+            appServerURL: URL(string: "ws://127.0.0.1:0/noop")!,
             hotkeyRegistrar: NopHotkeyRegistrar(),
-            sessionWindowPresenter: NopSessionWindowPresenter(),
+            threadWindowPresenter: NopThreadWindowPresenter(),
             settingsWindowPresenter: NopSettingsWindowPresenter(),
             fatalAlertPresenter: NopFatalAlertPresenter(),
             setActivationPolicy: { _ in },
