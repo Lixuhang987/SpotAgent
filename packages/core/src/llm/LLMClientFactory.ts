@@ -125,7 +125,15 @@ function createAnthropicModel(
   dependencies: LLMClientFactoryDependencies,
 ) {
   const createProvider = dependencies.createAnthropic ?? createAnthropic;
-  const provider = createProvider({ apiKey: settings.apiKey });
+  const providerOptions: NonNullable<Parameters<typeof createAnthropic>[0]> = {
+    baseURL: settings.baseUrl,
+  };
+  if (settings.apiKey) {
+    providerOptions.apiKey = settings.apiKey;
+  } else if (process.env.ANTHROPIC_AUTH_TOKEN) {
+    providerOptions.authToken = process.env.ANTHROPIC_AUTH_TOKEN;
+  }
+  const provider = createProvider(providerOptions);
   return provider(settings.model);
 }
 

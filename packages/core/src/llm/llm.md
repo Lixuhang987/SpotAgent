@@ -41,7 +41,7 @@ AgentRuntime
 - **tool 命名**：core 内部 tool 名一律点号风格（`file.read`），`VercelAdapters` 在适配层做 `file_read` 转换；冲突时抛 `Tool name collision after sanitization`。
 - **legacy `provider.completion()`**：当前默认 `defaultModelSettings.api = "responses"`；`VercelClient` 构造默认 `api = "chat"`。两个默认不一致，但生产路径全程透传 settings，无实际冲突。
 - **completion API 限制**：`api = "completion"` 不支持 image content；`VercelClient` 会在调用 provider 前抛出明确错误，要求改用 `chat` 或 `responses`。
-- **DI 入口**：`LLMClientFactory` 可注入 OpenAI 兼容 client、Anthropic provider 与 `streamText`；`VercelClientOptions.networkLogger` 注入 `FileNetworkLogger` 可把请求 / 响应 body 落到 `~/.spotAgent/log/<YYYY-MM-DD>/network-NNN.jsonl`；`VercelClientDependencies.{createOpenAI, streamText, generateText}` 仅供测试替换。
+- **DI 入口**：`LLMClientFactory` 可注入 OpenAI 兼容 client、Anthropic provider 与 `streamText`；Anthropic 分支会把 settings 的 `baseUrl` 作为 AI SDK `baseURL` 透传，认证优先使用 settings `apiKey`，缺失时使用环境变量 `ANTHROPIC_AUTH_TOKEN` 作为 `authToken`；`VercelClientOptions.networkLogger` 注入 `FileNetworkLogger` 可把请求 / 响应 body 落到 `~/.spotAgent/log/<YYYY-MM-DD>/network-NNN.jsonl`；`VercelClientDependencies.{createOpenAI, streamText, generateText}` 仅供测试替换。
 - **真实 API 集成测试**：`pnpm run test:llm:integration` 会读取 `~/.spotAgent/settings.json` 调用真实端点，并把 provider 原始 JSON 与归一化 `LLMCompletion` 写入 `.cache/llm-api-integration/latest/`，详见 [docs/llm-api-integration.md](/Users/mu9/proj/handAgent/docs/llm-api-integration.md)。
 - **MockLLMClient 场景真源**：日常 QA mock 不读 fixture 文件，固定触发词和返回结构都维护在 `mockLLMScenarios`。新增 QA 功能时，必须先在这里新增触发词和对应测试，再让 live QA 用该触发词覆盖链路。
 - **mock tool 场景模板**：多数"先返回 tool call，收到对应 tool result 后再返回最终 assistant 文本"的场景使用 `toolScenario()` 声明；需要从 prompt 解析参数的场景（例如 `windowId=`、`imageBase64=`）可传入 tool call factory。

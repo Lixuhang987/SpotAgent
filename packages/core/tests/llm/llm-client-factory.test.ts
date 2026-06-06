@@ -98,6 +98,7 @@ describe("LLMClientFactory", () => {
       ],
     });
     expect(createAnthropic).toHaveBeenCalledWith({
+      baseURL: undefined,
       apiKey: "anthropic-key",
     });
     expect(streamText).toHaveBeenCalledWith(
@@ -109,6 +110,58 @@ describe("LLMClientFactory", () => {
         }),
       }),
     );
+  });
+
+  it("passes Anthropic baseUrl to the AI SDK provider", () => {
+    const model = { provider: "anthropic", modelId: "claude-sonnet-4-5-20250929" };
+    const createAnthropic = vi.fn(() => vi.fn(() => model));
+
+    createLLMClient(
+      {
+        provider: "anthropic",
+        model: "claude-sonnet-4-5-20250929",
+        summarizerModel: "claude-haiku-4-5-20251001",
+        apiKey: "anthropic-key",
+        baseUrl: "https://anthropic-gateway.example/v1",
+        api: "chat",
+      },
+      { createAnthropic } as LLMClientFactoryDependencies,
+    );
+
+    expect(createAnthropic).toHaveBeenCalledWith({
+      baseURL: "https://anthropic-gateway.example/v1",
+      apiKey: "anthropic-key",
+    });
+  });
+
+  it("uses ANTHROPIC_AUTH_TOKEN for Anthropic when settings apiKey is empty", () => {
+    const previousAuthToken = process.env.ANTHROPIC_AUTH_TOKEN;
+    process.env.ANTHROPIC_AUTH_TOKEN = "gateway-token";
+    const model = { provider: "anthropic", modelId: "claude-sonnet-4-5-20250929" };
+    const createAnthropic = vi.fn(() => vi.fn(() => model));
+
+    try {
+      createLLMClient(
+        {
+          provider: "anthropic",
+          model: "claude-sonnet-4-5-20250929",
+          summarizerModel: "claude-haiku-4-5-20251001",
+          api: "chat",
+        },
+        { createAnthropic } as LLMClientFactoryDependencies,
+      );
+    } finally {
+      if (previousAuthToken === undefined) {
+        delete process.env.ANTHROPIC_AUTH_TOKEN;
+      } else {
+        process.env.ANTHROPIC_AUTH_TOKEN = previousAuthToken;
+      }
+    }
+
+    expect(createAnthropic).toHaveBeenCalledWith({
+      baseURL: undefined,
+      authToken: "gateway-token",
+    });
   });
 
   it("passes abort signals to Anthropic AI SDK requests", async () => {
