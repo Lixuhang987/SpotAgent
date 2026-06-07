@@ -50,6 +50,9 @@ cat >"$FAKE_BIN_DIR/pnpm" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 printf 'pnpm:%s\n' "$*" >>"$HANDAGENT_PACKAGE_LOG_FILE"
+if [[ "$*" == "install" ]]; then
+  mkdir -p "$HANDAGENT_PACKAGE_ROOT_DIR/node_modules"
+fi
 mkdir -p "$HANDAGENT_PACKAGE_ROOT_DIR/apps/thread-window-web/dist"
 cat >"$HANDAGENT_PACKAGE_ROOT_DIR/apps/thread-window-web/dist/index.html" <<'HTML'
 <!doctype html><html><body>built web</body></html>
@@ -79,21 +82,33 @@ grep -q 'codesign:--force --deep --sign - --requirements =designated => identifi
 rm -rf "$DIST_DIR"
 : >"$LOG_FILE"
 
-PATH="$FAKE_BIN_DIR:$PATH" \
-HANDAGENT_PACKAGE_SWIFT_BIN="$FAKE_BIN_DIR/swift" \
-HANDAGENT_PACKAGE_CODESIGN_BIN="$FAKE_BIN_DIR/codesign" \
-HANDAGENT_PACKAGE_BUILD_DIR="$BUILD_DIR" \
-HANDAGENT_PACKAGE_DIST_DIR="$DIST_DIR" \
-HANDAGENT_PACKAGE_ROOT_DIR="$PACKAGE_ROOT_DIR" \
-HANDAGENT_PACKAGE_LOG_FILE="$LOG_FILE" \
-"$ROOT_DIR/scripts/package-app.sh" >/dev/null
+package_output="$(
+  PATH="$FAKE_BIN_DIR:$PATH" \
+    HANDAGENT_PACKAGE_SWIFT_BIN="$FAKE_BIN_DIR/swift" \
+    HANDAGENT_PACKAGE_CODESIGN_BIN="$FAKE_BIN_DIR/codesign" \
+    HANDAGENT_PACKAGE_BUILD_DIR="$BUILD_DIR" \
+    HANDAGENT_PACKAGE_DIST_DIR="$DIST_DIR" \
+    HANDAGENT_PACKAGE_ROOT_DIR="$PACKAGE_ROOT_DIR" \
+    HANDAGENT_PACKAGE_LOG_FILE="$LOG_FILE" \
+    "$ROOT_DIR/scripts/package-app.sh"
+)"
 
 test -x "$APP_DIR/Contents/MacOS/HandAgentDesktop"
 test ! -f "$MARKER_FILE"
 test -f "$APP_DIR/Contents/Resources/ThreadWindowWeb/index.html"
 grep -q 'built web' "$APP_DIR/Contents/Resources/ThreadWindowWeb/index.html"
+grep -q 'pnpm:install' "$LOG_FILE"
 grep -q 'pnpm:--filter handagent-thread-window-web build' "$LOG_FILE"
 grep -q 'swift:build -c release --product HandAgentDesktop' "$LOG_FILE"
 grep -q 'codesign:--force --deep --sign - --requirements =designated => identifier "com.yourname.HandAgentDesktop"' "$LOG_FILE"
+
+if [[ "$package_output" != *"[package-app] node_modules missing, running pnpm install..."* ]] ||
+  [[ "$package_output" != *"[package-app] Building thread-window-web..."* ]] ||
+  [[ "$package_output" != *"[package-app] Building HandAgentDesktop release binary..."* ]] ||
+  [[ "$package_output" != *"[package-app] Code signing app bundle..."* ]] ||
+  [[ "$package_output" != *"success"* ]]; then
+  printf 'Expected package-app progress output, got:\n%s\n' "$package_output" >&2
+  exit 1
+fi
 
 echo "success"

@@ -38,6 +38,7 @@ bash ./scripts/swiftw run HandAgentDesktop
 说明：
 
 - `bash ./scripts/swiftw run HandAgentDesktop` 现在会先自动执行 `pnpm --filter handagent-thread-window-web build`，确保 `WKWebView` 开发态加载的 `apps/thread-window-web/dist/index.html` 已存在，避免 ThreadWindow 因缺少前端 bundle 白屏。
+- 如果根目录缺少 `node_modules`，`swiftw run HandAgentDesktop` 会先输出 `[swiftw] node_modules missing, running pnpm install...` 并自动执行 `pnpm install`，再构建 ThreadWindow web bundle。
 - `ThreadWindow` 默认不再直接通过 `file://` 加载前端，而是走 `http://127.0.0.1:4317/thread-window/index.html`。这个静态入口由 `agent-server` 同端口提供，用来规避 `WKWebView` 在 `file://` 场景下不执行外链 module script 的白屏问题。
 
 4. 如果 `swiftw run` 在当前机器报错，优先检查 Xcode 版本与 `xcode-select` 是否指向完整 Xcode，再执行同样流程。
@@ -81,6 +82,7 @@ bash ./scripts/swiftw build
 ### 打包与系统权限
 
 - 本地 QA 打包使用 `bash ./scripts/package-app.sh --mock-llm`。
+- 如果根目录缺少 `node_modules`，打包脚本会先自动执行 `pnpm install`；随后会依次打印 `Building thread-window-web...`、`Building HandAgentDesktop release binary...`、`Code signing app bundle...`。其中 release Swift build 可能持续数分钟，看到 release binary 阶段日志后不代表 web build 卡住。
 - 脚本默认用 ad-hoc 签名，但会显式写入 `designated => identifier "com.yourname.HandAgentDesktop"`，避免默认 requirement 退化成随二进制变化的 `cdhash`。这样屏幕录制、辅助功能等 macOS TCC 权限在多次重构建后仍能复用同一个 App 身份。
 - 如果需要换正式签名身份，可设置 `HANDAGENT_PACKAGE_CODESIGN_IDENTITY`；如果 bundle id 或签名策略变化，也要同步设置 `HANDAGENT_PACKAGE_CODESIGN_REQUIREMENT`。
 

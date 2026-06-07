@@ -45,6 +45,13 @@
 1. 触发平台能力 tool，例如 `clipboard.read`、`app.frontmost`、`screen.capture` 或 `accessibility.snapshot`，确认 agent-server 通过 `/api/platform` 发出 `platform_request`，Swift 回写 `platform_response`。
 1. 暂停或关闭 platform socket 后确认 platform tool 明确失败，但 thread socket 不因此中断。
 
+## 开发脚本依赖与打包反馈 smoke（P2）
+
+1. 在缺少根目录 `node_modules` 的干净 worktree 中执行 `bash ./scripts/swiftw run HandAgentDesktop`，确认脚本先输出 `[swiftw] node_modules missing, running pnpm install...`，再执行 ThreadWindow web build 和 Swift run。
+1. 在缺少根目录 `node_modules` 的干净 worktree 中执行 `bash ./scripts/package-app.sh --mock-llm`，确认脚本先自动执行 `pnpm install`。
+1. 确认打包脚本依次输出 `Building thread-window-web...`、`Building HandAgentDesktop release binary...`、`Code signing app bundle...`，release Swift build 阶段不再表现为 web build 后静默卡住。
+1. 确认最终生成 `dist/HandAgentDesktop.app` 并输出 `success`。
+
 ## Thread 历史路径与状态气泡 smoke（P2）
 
 1. 提交一个普通 prompt，确认本轮历史写入 `~/.spotAgent/threads/<threadId>.json`，不会写入旧历史目录。
