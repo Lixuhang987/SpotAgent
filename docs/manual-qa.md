@@ -20,7 +20,7 @@
 ### 后端常驻 Thread 输入队列
 
 - 完成日期：2026-06-07
-- 关键 commit：`a09853e`
+- 关键 commit：`b0893c5`
 - 实现位置：`apps/agent-server/src/thread/ThreadInputQueue.ts`、`apps/agent-server/src/thread/ThreadRuntimeOrchestrator.ts`、`apps/agent-server/src/thread/ThreadPersistence.ts`
 - 验收结果：后端兼容旧 `turn.start`；运行中输入不再中断当前 run，而是排队进入 active turn follow-up。已通过 `bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`。
 
