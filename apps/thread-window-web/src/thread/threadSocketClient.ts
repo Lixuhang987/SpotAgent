@@ -3,6 +3,7 @@ import {
   encodeThreadResume,
   encodeThreadStart,
   encodeTurnStart,
+  encodeWorkspaceList,
   isServerRequest,
   isThreadNotification,
   type InitialPromptPayload,
@@ -131,6 +132,10 @@ export class ThreadSocketClient {
       }
       this.options.onConnectionState("connected");
       this.flushOutboundQueue(socket);
+      this.sendRaw(encodeWorkspaceList({
+        commandId: this.nextId(),
+        timestamp: this.now(),
+      }));
       this.listThreads();
       for (const threadId of this.options.getOpenThreadIds()) {
         this.resumeThread(threadId);
