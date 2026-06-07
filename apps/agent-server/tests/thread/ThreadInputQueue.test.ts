@@ -37,6 +37,19 @@ describe("ThreadInputQueue", () => {
     expect(queue.hasPending()).toBe(false);
   });
 
+  it("waitForItems immediately drains already queued input", async () => {
+    const queue = new ThreadInputQueue();
+
+    queue.enqueue(userItem("u1", "first"));
+    queue.enqueue(userItem("u2", "second"));
+
+    await expect(queue.waitForItems()).resolves.toEqual([
+      userItem("u1", "first"),
+      userItem("u2", "second"),
+    ]);
+    expect(queue.hasPending()).toBe(false);
+  });
+
   it("keeps attachment payloads on user input items", () => {
     const attachments: ThreadAttachment[] = [
       { kind: "text_selection", id: "selection-1", text: "selected text" },
@@ -55,6 +68,34 @@ describe("ThreadInputQueue", () => {
       kind: "user",
       payload: { attachments },
     });
+  });
+
+  it("keeps response item message payloads", () => {
+    const queue = new ThreadInputQueue();
+
+    queue.enqueue({
+      kind: "response",
+      id: "response-1",
+      timestamp: "2026-06-07T00:00:00.000Z",
+      payload: {
+        messages: [
+          { role: "assistant", content: "response item" },
+        ],
+      },
+    });
+
+    expect(queue.takeAll()).toEqual([
+      {
+        kind: "response",
+        id: "response-1",
+        timestamp: "2026-06-07T00:00:00.000Z",
+        payload: {
+          messages: [
+            { role: "assistant", content: "response item" },
+          ],
+        },
+      },
+    ]);
   });
 
   it("clears pending input without resolving future waits", async () => {

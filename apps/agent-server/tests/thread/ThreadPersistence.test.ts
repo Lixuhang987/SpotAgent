@@ -282,6 +282,47 @@ describe("ThreadPersistence", () => {
     ]);
   });
 
+  it("appends runtime delta events even when no messages were generated", async () => {
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
+      () => "2026-06-07T00:00:00.000Z",
+    );
+    await persistence.ensureThread("thread-delta-events");
+    await persistence.persistUserMessage("thread-delta-events", "first");
+    const runtimeMessages = [
+      ...await persistence.getMessages("thread-delta-events"),
+    ];
+
+    await persistence.persistRunDelta(
+      "thread-delta-events",
+      runtimeMessages.length,
+      runtimeMessages,
+      [
+        {
+          type: "tool_result",
+          timestamp: "2026-06-07T00:00:01.000Z",
+          toolCallId: "tc-delta",
+          status: "success",
+          output: "ok",
+          durationMs: 1,
+        },
+      ],
+    );
+
+    const thread = await persistence.getThread("thread-delta-events");
+    expect(thread?.messages).toEqual([{ role: "user", content: "first" }]);
+    expect(thread?.events).toEqual([
+      {
+        type: "tool_result",
+        timestamp: "2026-06-07T00:00:01.000Z",
+        toolCallId: "tc-delta",
+        status: "success",
+        output: "ok",
+        durationMs: 1,
+      },
+    ]);
+  });
+
   it("persists runtime errors as audit events", async () => {
     const persistence = new ThreadPersistence(
       new InMemoryThreadStore(),
