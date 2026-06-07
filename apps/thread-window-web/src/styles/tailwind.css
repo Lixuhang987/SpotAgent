@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  body {
+    margin: 0;
+    min-width: 720px;
+    min-height: 520px;
+    background: #0B0B0F;
+    color: #F2F2F5;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  button {
+    cursor: default;
+  }
+}
