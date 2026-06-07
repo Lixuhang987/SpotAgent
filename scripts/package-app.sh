@@ -39,10 +39,22 @@ done
 tmp_log="$(mktemp -t "package-app.XXXXXX")"
 trap 'rm -f "$tmp_log"' EXIT
 
+ensure_workspace_dependencies() {
+  if [[ -d "$ROOT_DIR/node_modules" ]]; then
+    return
+  fi
+
+  echo "[package-app] node_modules missing, running pnpm install..."
+  (cd "$ROOT_DIR" && pnpm install)
+}
+
 if [[ -z "${HANDAGENT_THREAD_WINDOW_WEB_DIST_DIR:-}" ]]; then
+  ensure_workspace_dependencies
+  echo "[package-app] Building thread-window-web..."
   (cd "$ROOT_DIR" && pnpm --filter handagent-thread-window-web build)
 fi
 
+echo "[package-app] Building $APP_NAME release binary..."
 if ! "$SWIFT_BIN" build -c release --product "$APP_NAME" >"$tmp_log" 2>&1; then
   cat "$tmp_log"
   exit 1
@@ -109,6 +121,7 @@ fi
 
 # 本地 QA 默认使用 ad-hoc 签名，但显式写入稳定 designated requirement。
 # 否则默认 requirement 会退化为 cdhash，重构建后二进制 hash 改变，macOS TCC 会把它视为新 App。
+echo "[package-app] Code signing app bundle..."
 "$CODESIGN_BIN" \
   --force \
   --deep \

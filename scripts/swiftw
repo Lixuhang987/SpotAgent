@@ -12,11 +12,24 @@ mkdir -p "$CLANG_CACHE_DIR" "$SWIFT_CACHE_DIR"
 export CLANG_MODULE_CACHE_PATH="$CLANG_CACHE_DIR"
 export SWIFT_MODULECACHE_PATH="$SWIFT_CACHE_DIR"
 
+ensure_workspace_dependencies() {
+  if [[ -d "$ROOT_DIR/node_modules" ]]; then
+    return
+  fi
+
+  echo "[swiftw] node_modules missing, running pnpm install..." >&2
+  (
+    cd "$ROOT_DIR"
+    pnpm install
+  )
+}
+
 ensure_thread_window_web_build() {
   if [[ -n "${HANDAGENT_THREAD_WINDOW_WEB_URL:-}" ]]; then
     return
   fi
 
+  ensure_workspace_dependencies
   (
     cd "$ROOT_DIR"
     pnpm --filter handagent-thread-window-web build
