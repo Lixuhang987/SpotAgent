@@ -171,6 +171,7 @@ describe("ThreadCommandRouter", () => {
     const publisher = new ThreadNotificationPublisher();
     const seen: ThreadNotification[] = [];
     publisher.attachConnection("c1", (event) => seen.push(event as ThreadNotification));
+    publisher.subscribe("c1", "thread-interrupt");
     const persistence = new ThreadPersistence(
       new InMemoryThreadStore(),
       () => "2026-06-07T00:00:00.000Z",
@@ -218,6 +219,59 @@ describe("ThreadCommandRouter", () => {
       expect.objectContaining({
         type: "user.message.recorded",
         threadId: thread.metadata.id,
+      }),
+    ]);
+  });
+
+  it("waits for interrupt cleanup when old turn.interrupt is received", async () => {
+    const publisher = new ThreadNotificationPublisher();
+    const seen: ThreadNotification[] = [];
+    publisher.attachConnection("c1", (event) => seen.push(event as ThreadNotification));
+    publisher.subscribe("c1", "thread-interrupt");
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
+      () => "2026-06-07T00:00:00.000Z",
+    );
+    const orchestrator = {
+      handleUserMessage: vi.fn(async () => {}),
+      interruptThread: vi.fn(),
+      interruptAndWait: vi.fn(async (_threadId, push: (message: ThreadNotification) => void) => {
+        push({
+          type: "turn.completed",
+          threadId: "thread-interrupt",
+          notificationId: "interrupted",
+          turnId: "turn-1",
+          timestamp: "2026-06-07T00:00:00.000Z",
+          payload: { status: "interrupted" },
+        });
+      }),
+    };
+    const router = new ThreadCommandRouter(
+      orchestrator,
+      persistence,
+      publisher,
+      () => "2026-06-07T00:00:00.000Z",
+    );
+
+    await router.receive(
+      {
+        type: "turn.interrupt",
+        threadId: "thread-interrupt",
+        commandId: "interrupt-1",
+        timestamp: "2026-06-07T00:00:00.000Z",
+      },
+      "c1",
+    );
+
+    expect(orchestrator.interruptAndWait).toHaveBeenCalledWith(
+      "thread-interrupt",
+      expect.any(Function),
+    );
+    expect(orchestrator.interruptThread).not.toHaveBeenCalled();
+    expect(seen).toEqual([
+      expect.objectContaining({
+        type: "turn.completed",
+        threadId: "thread-interrupt",
       }),
     ]);
   });

@@ -116,13 +116,7 @@ export class ThreadRuntimeOrchestrator {
   }
 
   interruptThread(threadId: string, push: PushMessage = () => {}): void {
-    const session = this.sessions.get(threadId);
-    const activeRun = session?.activeRun ?? this.activeRuns.get(threadId);
-    session?.queue.clear();
-    if (!activeRun || activeRun.interrupted) return;
-
-    activeRun.controller.abort();
-    this.emitInterrupted(threadId, push, activeRun);
+    this.interruptActiveRun(threadId, push);
   }
 
   isThreadRunning(threadId: string): boolean {
@@ -141,11 +135,13 @@ export class ThreadRuntimeOrchestrator {
   }
 
   async interruptAndWait(threadId: string, push: PushMessage = () => {}): Promise<void> {
-    const session = this.sessions.get(threadId);
-    const activeRun = session?.activeRun ?? this.activeRuns.get(threadId);
+    let session: ThreadSession | undefined;
+    let activeRun: ActiveRun | null = null;
+    await this.withThreadInputLock(threadId, async () => {
+      session = this.sessions.get(threadId);
+      activeRun = this.interruptActiveRun(threadId, push);
+    });
     if (!activeRun) return;
-
-    this.interruptThread(threadId, push);
 
     const startedAt = Date.now();
     while (this.isActive(threadId, activeRun)) {
@@ -167,6 +163,18 @@ export class ThreadRuntimeOrchestrator {
       }
       await new Promise((resolve) => setTimeout(resolve, this.interruptPollIntervalMs));
     }
+  }
+
+  private interruptActiveRun(threadId: string, push: PushMessage): ActiveRun | null {
+    const session = this.sessions.get(threadId);
+    const activeRun = session?.activeRun ?? this.activeRuns.get(threadId);
+    session?.queue.clear();
+    if (!activeRun) return null;
+    if (activeRun.interrupted) return activeRun;
+
+    activeRun.controller.abort();
+    this.emitInterrupted(threadId, push, activeRun);
+    return activeRun;
   }
 
   private async recordUserInput(

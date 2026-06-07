@@ -1112,6 +1112,93 @@ describe("ThreadRuntimeOrchestrator", () => {
     ])).resolves.toBe("idle");
   });
 
+  it("clears input that finishes enqueueing during interrupt cleanup", async () => {
+    const pushed: ThreadNotification[] = [];
+    const runtimeCalls: AgentMessage[][] = [];
+    const secondPersistStarted = createDeferred();
+    const releaseSecondPersist = createDeferred();
+    const store = new InMemoryThreadStore();
+    class DelayedSecondUserPersistence extends ThreadPersistence {
+      private persistCount = 0;
+
+      override async persistUserMessage(
+        threadId: string,
+        text: string,
+        attachments?: ThreadAttachment[],
+      ): Promise<void> {
+        this.persistCount += 1;
+        if (this.persistCount === 2) {
+          secondPersistStarted.resolve();
+          await releaseSecondPersist.promise;
+        }
+        await super.persistUserMessage(threadId, text, attachments);
+      }
+    }
+    const persistence = new DelayedSecondUserPersistence(
+      store,
+      () => "2026-06-07T00:00:00.000Z",
+    );
+    let firstRunFinish: (() => void) | undefined;
+    const runStarted = createDeferred();
+    const orchestrator = new ThreadRuntimeOrchestrator(
+      {
+        runWithMessages(messages, _onEvent, runOptions) {
+          runtimeCalls.push(messages.map((message) => ({ ...message })));
+          if (runtimeCalls.length === 1) {
+            runOptions?.signal.addEventListener("abort", () => {
+              firstRunFinish?.();
+            });
+            runStarted.resolve();
+            return new Promise((resolve) => {
+              firstRunFinish = () => resolve({ messages });
+            });
+          }
+          return Promise.resolve({
+            messages: [
+              ...messages,
+              { role: "assistant", content: "should not run" },
+            ],
+          });
+        },
+      },
+      persistence,
+      () => "2026-06-07T00:00:00.000Z",
+    );
+
+    await persistence.ensureThread("Thread-interrupt-enqueue");
+    const runPromise = orchestrator.handleUserMessage(
+      createUserMessage("Thread-interrupt-enqueue", "first", "user-1"),
+      (message) => pushed.push(message),
+    );
+    await runStarted.promise;
+
+    const secondInputPromise = orchestrator.handleUserMessage(
+      createUserMessage("Thread-interrupt-enqueue", "second", "user-2"),
+      (message) => pushed.push(message),
+    );
+    await secondPersistStarted.promise;
+    const interruptPromise = orchestrator.interruptAndWait(
+      "Thread-interrupt-enqueue",
+      (message) => pushed.push(message),
+    );
+
+    releaseSecondPersist.resolve();
+    await Promise.all([secondInputPromise, interruptPromise, runPromise]);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(runtimeCalls).toHaveLength(1);
+    expect(await persistence.getMessages("Thread-interrupt-enqueue")).toEqual([
+      { role: "user", content: "first" },
+      { role: "user", content: "second" },
+    ]);
+    expect(eventTypes(pushed).filter((type) => type === "turn.completed")).toEqual([
+      "turn.completed",
+    ]);
+    expect(pushed.find((message) => message.type === "turn.completed")).toMatchObject({
+      payload: { status: "interrupted" },
+    });
+  });
+
   it("records interrupted instead of runtime error when an aborted run rejects without AbortError", async () => {
     const pushed: ThreadNotification[] = [];
     const persistence = new ThreadPersistence(
