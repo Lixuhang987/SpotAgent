@@ -73,6 +73,7 @@ const DEFAULT_INTERRUPT_POLL_INTERVAL_MS = 10;
 export class ThreadRuntimeOrchestrator {
   private readonly sessions = new Map<string, ThreadSession>();
   private readonly activeRuns = new Map<string, ActiveRun>();
+  private readonly inputLocks = new Map<string, Promise<void>>();
   private nextGeneration = 0;
   private readonly interruptWaitTimeoutMs: number;
   private readonly interruptPollIntervalMs: number;
@@ -105,11 +106,13 @@ export class ThreadRuntimeOrchestrator {
       },
     };
 
-    const queuedItem = await this.recordUserInput(item, push);
-    const session = this.getOrCreateSession(message.threadId, push);
-    session.push = push;
-    session.queue.enqueue(queuedItem);
-    this.ensureSessionLoop(session);
+    await this.withThreadInputLock(message.threadId, async () => {
+      const queuedItem = await this.recordUserInput(item, push);
+      const session = this.getOrCreateSession(message.threadId, push);
+      session.push = push;
+      session.queue.enqueue(queuedItem);
+      this.ensureSessionLoop(session);
+    });
   }
 
   interruptThread(threadId: string, push: PushMessage = () => {}): void {
@@ -152,10 +155,11 @@ export class ThreadRuntimeOrchestrator {
           this.activeRuns.delete(threadId);
           if (session?.activeRun === activeRun) {
             session.activeRun = null;
-            this.resolveIdleWaitersIfIdle(session);
           }
           if (session) {
+            session.processing = false;
             session.closed = true;
+            this.resolveIdleWaiters(session);
             this.sessions.delete(threadId);
           }
         }
@@ -189,6 +193,29 @@ export class ThreadRuntimeOrchestrator {
       ...item,
       persistedMessageCount: (await this.persistence.getMessages(item.threadId)).length,
     };
+  }
+
+  private async withThreadInputLock<T>(
+    threadId: string,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const previous = this.inputLocks.get(threadId) ?? Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const next = previous.catch(() => {}).then(() => current);
+    this.inputLocks.set(threadId, next);
+
+    await previous.catch(() => {});
+    try {
+      return await operation();
+    } finally {
+      release();
+      if (this.inputLocks.get(threadId) === next) {
+        this.inputLocks.delete(threadId);
+      }
+    }
   }
 
   private getOrCreateSession(threadId: string, push: PushMessage): ThreadSession {
@@ -346,10 +373,21 @@ export class ThreadRuntimeOrchestrator {
           result.messages,
           events,
         );
+        const generatedMessageCount = Math.max(
+          0,
+          result.messages.length - runtimeBaseMessageCount,
+        );
 
         const steeredItems = session.queue.takeAll();
         if (steeredItems.length > 0) {
-          maxVisibleMessageCount = Number.POSITIVE_INFINITY;
+          const steeredUserItems = steeredItems.filter(
+            (item): item is QueuedThreadUserInputItem =>
+              item.kind === "user" && "persistedMessageCount" in item,
+          );
+          maxVisibleMessageCount = Math.max(
+            maxVisibleMessageCount,
+            ...steeredUserItems.map((item) => item.persistedMessageCount),
+          ) + generatedMessageCount;
           continue;
         }
 
@@ -439,6 +477,10 @@ export class ThreadRuntimeOrchestrator {
       return;
     }
 
+    this.resolveIdleWaiters(session);
+  }
+
+  private resolveIdleWaiters(session: ThreadSession): void {
     const waiters = [...session.idleWaiters];
     session.idleWaiters.clear();
     for (const resolve of waiters) {

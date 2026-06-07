@@ -206,6 +206,80 @@ describe("ThreadRuntimeOrchestrator", () => {
     expect(eventTypes(pushed).filter((type) => type === "turn.completed")).toHaveLength(1);
   });
 
+  it("keeps input steered during follow-up preparation out of that follow-up snapshot", async () => {
+    const runtimeCalls: AgentMessage[][] = [];
+    const firstRunGate = createDeferred();
+    const secondBeforeRunGate = createDeferred();
+    let beforeRunCount = 0;
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
+      () => "2026-06-07T00:00:00.000Z",
+    );
+    const orchestrator = new ThreadRuntimeOrchestrator(
+      {
+        async runWithMessages(messages) {
+          runtimeCalls.push(messages.map((message) => ({ ...message })));
+          if (runtimeCalls.length === 1) {
+            await firstRunGate.promise;
+          }
+          return {
+            messages: [
+              ...messages,
+              {
+                role: "assistant" as const,
+                content: `reply ${runtimeCalls.length}`,
+              },
+            ],
+          };
+        },
+      },
+      persistence,
+      () => "2026-06-07T00:00:00.000Z",
+      async () => {
+        beforeRunCount += 1;
+        if (beforeRunCount === 2) {
+          await secondBeforeRunGate.promise;
+        }
+      },
+    );
+
+    await persistence.ensureThread("thread-follow-up-steer");
+    await orchestrator.handleUserMessage(
+      createUserMessage("thread-follow-up-steer", "first", "user-1"),
+      () => {},
+    );
+    await waitUntil(() => runtimeCalls.length === 1, "first runtime call");
+    await orchestrator.handleUserMessage(
+      createUserMessage("thread-follow-up-steer", "second", "user-2"),
+      () => {},
+    );
+    firstRunGate.resolve();
+    await waitUntil(() => beforeRunCount === 2, "second beforeRun");
+    await orchestrator.handleUserMessage(
+      createUserMessage("thread-follow-up-steer", "third", "user-3"),
+      () => {},
+    );
+
+    secondBeforeRunGate.resolve();
+    await orchestrator.waitForThreadIdle("thread-follow-up-steer");
+
+    expect(runtimeCalls).toEqual([
+      [{ role: "user", content: "first" }],
+      [
+        { role: "user", content: "first" },
+        { role: "user", content: "second" },
+        { role: "assistant", content: "reply 1" },
+      ],
+      [
+        { role: "user", content: "first" },
+        { role: "user", content: "second" },
+        { role: "assistant", content: "reply 1" },
+        { role: "user", content: "third" },
+        { role: "assistant", content: "reply 2" },
+      ],
+    ]);
+  });
+
   it("pushes assistant events and persists final user + assistant messages", async () => {
     const pushed: ThreadNotification[] = [];
     const runtimeCalls: AgentMessage[][] = [];
@@ -1001,6 +1075,41 @@ describe("ThreadRuntimeOrchestrator", () => {
       { role: "user", content: "继续" },
       { role: "assistant", content: "after timeout" },
     ]);
+  });
+
+  it("resolves idle waiters when interrupt cleanup times out", async () => {
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
+      () => "2026-06-07T00:00:00.000Z",
+    );
+    const runStarted = Promise.withResolvers<void>();
+    const orchestrator = new ThreadRuntimeOrchestrator(
+      {
+        runWithMessages() {
+          runStarted.resolve();
+          return new Promise(() => {});
+        },
+      },
+      persistence,
+      () => "2026-06-07T00:00:00.000Z",
+      () => {},
+      { interruptWaitTimeoutMs: 20, interruptPollIntervalMs: 1 },
+    );
+
+    await persistence.ensureThread("Thread-timeout-idle-waiter");
+    void orchestrator.handleUserMessage(
+      createUserMessage("Thread-timeout-idle-waiter", "删除中", "user-1"),
+      () => {},
+    );
+    await runStarted.promise;
+
+    const idlePromise = orchestrator.waitForThreadIdle("Thread-timeout-idle-waiter");
+    await orchestrator.interruptAndWait("Thread-timeout-idle-waiter");
+
+    await expect(Promise.race([
+      idlePromise.then(() => "idle"),
+      new Promise((resolve) => setTimeout(() => resolve("timed-out"), 100)),
+    ])).resolves.toBe("idle");
   });
 
   it("records interrupted instead of runtime error when an aborted run rejects without AbortError", async () => {
