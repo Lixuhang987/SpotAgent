@@ -69,6 +69,17 @@ export function encodeThreadList(input: {
   });
 }
 
+export function encodeWorkspaceList(input: {
+  commandId: string;
+  timestamp: string;
+}): string {
+  return encode({
+    type: "workspace.list",
+    commandId: input.commandId,
+    timestamp: input.timestamp,
+  });
+}
+
 export function encodeThreadDelete(input: {
   commandId: string;
   timestamp: string;
