@@ -54,12 +54,18 @@ export type ThreadWindowState = {
   activeTabId: string | null;
   pendingInitialPrompts: Record<string, InitialPromptPayload>;
   processedNotificationIds: Record<string, true>;
+  workspaces: Array<{ id: string; name: string; rootPath: string }>;
+  expandedWorkspaceIds: Set<string>;
+  searchQuery: string;
   setConnectionState(state: ConnectionState): void;
   enqueueInitialPrompt(prompt: InitialPromptPayload): void;
   openHistoryThread(threadId: string): void;
   closeTab(threadId: string): void;
   resolvePermissionRequest(requestId: string): void;
   resolveWorkspaceRequest(requestId: string): void;
+  setWorkspaces(workspaces: Array<{ id: string; name: string; rootPath: string }>): void;
+  toggleWorkspaceExpanded(workspaceId: string): void;
+  setSearchQuery(query: string): void;
   handleNotification(notification: ThreadNotification): void;
   handleRequest(request: ServerRequest): void;
 };
@@ -85,9 +91,30 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
   activeTabId: null,
   pendingInitialPrompts: {},
   processedNotificationIds: {},
+  workspaces: [],
+  expandedWorkspaceIds: new Set(),
+  searchQuery: "",
 
   setConnectionState(state) {
     set({ connectionState: state });
+  },
+
+  setWorkspaces(workspaces) {
+    set({ workspaces });
+  },
+
+  toggleWorkspaceExpanded(workspaceId) {
+    set(produce<ThreadWindowState>((draft) => {
+      if (draft.expandedWorkspaceIds.has(workspaceId)) {
+        draft.expandedWorkspaceIds.delete(workspaceId);
+      } else {
+        draft.expandedWorkspaceIds.add(workspaceId);
+      }
+    }));
+  },
+
+  setSearchQuery(query) {
+    set({ searchQuery: query });
   },
 
   enqueueInitialPrompt(prompt) {
@@ -262,6 +289,11 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
         case "thread.listed":
           draft.processedNotificationIds[notification.notificationId] = true;
           draft.history = notification.payload.threads;
+          break;
+
+        case "workspace.listed":
+          draft.processedNotificationIds[notification.notificationId] = true;
+          draft.workspaces = notification.payload.workspaces;
           break;
 
         case "thread.deleted":

@@ -8,6 +8,7 @@ import { getThreadWebSocketURL, installInitialPromptReceiver } from "./native/na
 import {
   encodePermissionAnswer,
   encodeThreadDelete,
+  encodeThreadStart,
   encodeTurnInterrupt,
   encodeWorkspaceAnswer,
 } from "./protocol/threadProtocol.ts";
@@ -20,19 +21,6 @@ function now() {
 
 function id(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`;
-}
-
-function connectionLabel(connectionState: ConnectionState) {
-  switch (connectionState) {
-    case "connected":
-      return "connected";
-    case "connecting":
-      return "connecting";
-    case "reconnecting":
-      return "reconnecting";
-    case "disconnected":
-      return "disconnected";
-  }
 }
 
 export function App() {
@@ -66,8 +54,23 @@ export function App() {
     };
   }, []);
 
+  const handleNewThread = () => {
+    const commandId = id('start');
+    const timestamp = now();
+
+    // 发送创建空白 thread 的命令
+    clientRef.current?.sendRaw(
+      encodeThreadStart({
+        commandId,
+        timestamp,
+        workspaceId: null,  // 默认 workspace
+        actionBinding: null,
+      })
+    );
+  };
+
   return (
-    <main className="thread-window-shell">
+    <main className="grid grid-cols-[260px_1fr] w-screen min-h-screen overflow-hidden bg-background text-text-primary">
       <HistorySidebar
         history={state.history}
         activeTabId={state.activeTabId}
@@ -78,25 +81,27 @@ export function App() {
         onDeleteThread={(threadId) => {
           setDeleteTargetThreadId(threadId);
         }}
+        onNewThread={handleNewThread}
       />
-      <section className="thread-workspace" aria-label="Thread workspace">
-        <header className="thread-toolbar">
+      <section className="grid grid-rows-[auto_auto_1fr_auto] min-w-0 min-h-screen overflow-hidden bg-surface/30" aria-label="Thread workspace">
+        <header className="flex items-center gap-3 min-h-[48px] border-b border-border px-3 py-2">
           <TabBar
             tabs={tabs}
             activeTabId={state.activeTabId}
             onActivate={(threadId) => createThreadWindowStore.setState({ activeTabId: threadId })}
             onClose={(threadId) => createThreadWindowStore.getState().closeTab(threadId)}
           />
-          <div className="connection-pill" data-state={state.connectionState}>
-            {connectionLabel(state.connectionState)}
-          </div>
         </header>
 
-        {state.windowErrorMessage ? <div className="window-error">{state.windowErrorMessage}</div> : null}
+        {state.windowErrorMessage ? (
+          <div className="mx-3 mt-2.5 rounded-lg border border-error/30 bg-error/10 px-3 py-2 text-sm text-error">
+            {state.windowErrorMessage}
+          </div>
+        ) : null}
 
         {activeTab ? (
           <>
-            <div className="thread-main-region">
+            <div className="grid grid-rows-[1fr_auto] min-w-0 min-h-0 overflow-hidden">
               <MessageList messages={activeTab.messages} errorMessage={activeTab.errorMessage} />
               <RequestPanels
                 permissionRequests={activeTab.permissionRequests}
@@ -137,7 +142,9 @@ export function App() {
             />
           </>
         ) : (
-          <div className="thread-empty-state">准备开始</div>
+          <div className="flex items-center justify-center text-sm text-text-secondary">
+            准备开始
+          </div>
         )}
         {deleteTargetThreadId ? (
           <div className="delete-confirmation" role="dialog" aria-modal="true" aria-label="Delete thread">

@@ -5,6 +5,7 @@ import type {
   ThreadActionBinding,
   ThreadSummary,
 } from "@handagent/core/storage/index.ts";
+import type { WorkspaceRegistry } from "@handagent/core/workspace/Workspace.ts";
 import { ThreadNotificationPublisher } from "./ThreadNotificationPublisher.ts";
 import type { ThreadPersistence } from "./ThreadPersistence.ts";
 import type { ThreadRuntimeOrchestrator } from "./ThreadRuntimeOrchestrator.ts";
@@ -46,6 +47,7 @@ export class ThreadCommandRouter {
     private readonly actionBindingResolver?: ActionBindingResolver,
     private readonly onThreadDeleted?: (threadId: string) => void,
     private readonly responseHandlers: ResponseHandlers = {},
+    private readonly workspaceRegistry?: WorkspaceRegistry,
   ) {}
 
   async receive(command: ThreadCommand, connectionId: string): Promise<void> {
@@ -63,6 +65,8 @@ export class ThreadCommandRouter {
         return this.handleListThreads(command, connectionId);
       case "thread.delete":
         return this.handleDeleteThread(command, connectionId);
+      case "workspace.list":
+        return this.handleListWorkspaces(command, connectionId);
     }
   }
 
@@ -256,6 +260,40 @@ export class ThreadCommandRouter {
       payload: {
         targetThreadId,
         status: "deleted",
+      },
+    });
+  }
+
+  private async handleListWorkspaces(
+    command: Extract<ThreadCommand, { type: "workspace.list" }>,
+    connectionId: string,
+  ): Promise<void> {
+    if (!this.workspaceRegistry) {
+      this.publisher.publishToConnection(connectionId, {
+        type: "thread.error",
+        notificationId: this.makeNotificationId(),
+        commandId: command.commandId,
+        timestamp: this.now(),
+        payload: {
+          code: "workspace_registry_not_configured",
+          message: "Workspace registry is not configured",
+        },
+      });
+      return;
+    }
+
+    const workspaces = await this.workspaceRegistry.list();
+    this.publisher.publishToConnection(connectionId, {
+      type: "workspace.listed",
+      notificationId: this.makeNotificationId(),
+      commandId: command.commandId,
+      timestamp: this.now(),
+      payload: {
+        workspaces: workspaces.map((ws) => ({
+          id: ws.id,
+          name: ws.name,
+          rootPath: ws.rootPath,
+        })),
       },
     });
   }
