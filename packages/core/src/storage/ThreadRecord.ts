@@ -6,7 +6,7 @@ export type ThreadMetadata = {
   createdAt: string;
   updatedAt: string;
   messageCount: number;
-  workspaceId?: string | null;
+  workspaceId: string | null;
   actionBinding?: ThreadActionBinding;
 };
 

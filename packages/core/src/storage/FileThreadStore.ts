@@ -39,7 +39,14 @@ export class FileThreadStore implements ThreadStore {
   async get(threadId: string): Promise<PersistedThread | null> {
     try {
       const raw = await readFile(this.path(threadId), "utf-8");
-      return JSON.parse(raw) as PersistedThread;
+      const thread = JSON.parse(raw) as PersistedThread;
+
+      // 兼容旧版本：补全缺失的 workspaceId 字段
+      if (thread.metadata && thread.metadata.workspaceId === undefined) {
+        thread.metadata.workspaceId = null;
+      }
+
+      return thread;
     } catch {
       return null;
     }
@@ -65,6 +72,12 @@ export class FileThreadStore implements ThreadStore {
       try {
         const raw = await readFile(join(this.dir, file), "utf-8");
         const thread = JSON.parse(raw) as PersistedThread;
+
+        // 兼容旧版本：补全缺失的 workspaceId 字段
+        if (thread.metadata && thread.metadata.workspaceId === undefined) {
+          thread.metadata.workspaceId = null;
+        }
+
         summaries.push({ ...thread.metadata });
       } catch {
         // skip corrupted files
