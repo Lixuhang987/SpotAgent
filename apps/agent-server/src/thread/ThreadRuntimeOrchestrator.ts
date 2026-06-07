@@ -52,6 +52,10 @@ type ActiveRun = {
   interruptionPersisted: boolean;
 };
 
+type QueuedThreadUserInputItem = ThreadUserInputItem & {
+  persistedMessageCount: number;
+};
+
 type ThreadSession = {
   threadId: string;
   queue: ThreadInputQueue;
@@ -59,6 +63,7 @@ type ThreadSession = {
   loop: Promise<void> | null;
   activeRun: ActiveRun | null;
   idleWaiters: Set<() => void>;
+  processing: boolean;
   closed: boolean;
 };
 
@@ -100,10 +105,10 @@ export class ThreadRuntimeOrchestrator {
       },
     };
 
-    await this.recordUserInput(item, push);
+    const queuedItem = await this.recordUserInput(item, push);
     const session = this.getOrCreateSession(message.threadId, push);
     session.push = push;
-    session.queue.enqueue(item);
+    session.queue.enqueue(queuedItem);
     this.ensureSessionLoop(session);
   }
 
@@ -123,7 +128,7 @@ export class ThreadRuntimeOrchestrator {
 
   async waitForThreadIdle(threadId: string): Promise<void> {
     const session = this.sessions.get(threadId);
-    if (!session || !session.activeRun) {
+    if (!session || this.isSessionIdle(session)) {
       return;
     }
 
@@ -147,7 +152,7 @@ export class ThreadRuntimeOrchestrator {
           this.activeRuns.delete(threadId);
           if (session?.activeRun === activeRun) {
             session.activeRun = null;
-            this.resolveIdleWaiters(session);
+            this.resolveIdleWaitersIfIdle(session);
           }
           if (session) {
             session.closed = true;
@@ -160,7 +165,10 @@ export class ThreadRuntimeOrchestrator {
     }
   }
 
-  private async recordUserInput(item: ThreadUserInputItem, push: PushMessage): Promise<void> {
+  private async recordUserInput(
+    item: ThreadUserInputItem,
+    push: PushMessage,
+  ): Promise<QueuedThreadUserInputItem> {
     await this.persistence.persistUserMessage(
       item.threadId,
       item.payload.text,
@@ -177,6 +185,10 @@ export class ThreadRuntimeOrchestrator {
         text: item.payload.text,
       },
     });
+    return {
+      ...item,
+      persistedMessageCount: (await this.persistence.getMessages(item.threadId)).length,
+    };
   }
 
   private getOrCreateSession(threadId: string, push: PushMessage): ThreadSession {
@@ -192,6 +204,7 @@ export class ThreadRuntimeOrchestrator {
       loop: null,
       activeRun: null,
       idleWaiters: new Set(),
+      processing: false,
       closed: false,
     };
     this.sessions.set(threadId, session);
@@ -217,18 +230,23 @@ export class ThreadRuntimeOrchestrator {
         if (session.loop === loop) {
           session.loop = null;
         }
-        this.resolveIdleWaiters(session);
+        this.resolveIdleWaitersIfIdle(session);
       });
     session.loop = loop;
   }
 
   private async runSessionLoop(session: ThreadSession): Promise<void> {
     while (!session.closed) {
+      session.processing = false;
       const queuedItems = await session.queue.waitForItems();
+      session.processing = true;
       const firstUserInput = queuedItems.find(
-        (item): item is ThreadUserInputItem => item.kind === "user",
+        (item): item is QueuedThreadUserInputItem =>
+          item.kind === "user" && "persistedMessageCount" in item,
       );
       if (!firstUserInput) {
+        session.processing = false;
+        this.resolveIdleWaitersIfIdle(session);
         continue;
       }
 
@@ -238,7 +256,7 @@ export class ThreadRuntimeOrchestrator {
       this.emitTurnStarted(session.threadId, firstUserInput.messageId, session.push);
 
       try {
-        await this.runActiveTurnUntilDrained(session, activeRun);
+        await this.runActiveTurnUntilDrained(session, activeRun, firstUserInput);
       } finally {
         if (this.isActive(session.threadId, activeRun)) {
           this.activeRuns.delete(session.threadId);
@@ -246,7 +264,8 @@ export class ThreadRuntimeOrchestrator {
         if (session.activeRun === activeRun) {
           session.activeRun = null;
         }
-        this.resolveIdleWaiters(session);
+        session.processing = false;
+        this.resolveIdleWaitersIfIdle(session);
       }
     }
   }
@@ -277,16 +296,18 @@ export class ThreadRuntimeOrchestrator {
   private async runActiveTurnUntilDrained(
     session: ThreadSession,
     activeRun: ActiveRun,
+    firstUserInput: QueuedThreadUserInputItem,
   ): Promise<void> {
+    let maxVisibleMessageCount = firstUserInput.persistedMessageCount;
     while (this.isActive(session.threadId, activeRun) && !activeRun.controller.signal.aborted) {
-      const history = await this.persistence.getMessages(session.threadId);
-      await this.beforeRun(session.threadId);
-      const runtime = this.runtimeForThread(session.threadId);
-      await runtime.waitForPendingSummaries?.(history);
-      const runtimeHistory = agentMessagesToRuntimeMessages(history);
-      const runtimeBaseMessageCount = runtimeHistory.length;
-
       try {
+        const persistedHistory = await this.persistence.getMessages(session.threadId);
+        const history = persistedHistory.slice(0, maxVisibleMessageCount);
+        await this.beforeRun(session.threadId);
+        const runtime = this.runtimeForThread(session.threadId);
+        await runtime.waitForPendingSummaries?.(history);
+        const runtimeHistory = agentMessagesToRuntimeMessages(history);
+        const runtimeBaseMessageCount = runtimeHistory.length;
         const events: ThreadAuditEvent[] = [];
         const result = await runtime.runWithMessages(
           runtimeHistory,
@@ -326,7 +347,9 @@ export class ThreadRuntimeOrchestrator {
           events,
         );
 
-        if (session.queue.takeAll().length > 0) {
+        const steeredItems = session.queue.takeAll();
+        if (steeredItems.length > 0) {
+          maxVisibleMessageCount = Number.POSITIVE_INFINITY;
           continue;
         }
 
@@ -407,7 +430,15 @@ export class ThreadRuntimeOrchestrator {
     await this.persistence.persistError(session.threadId, errorMessage);
   }
 
-  private resolveIdleWaiters(session: ThreadSession): void {
+  private isSessionIdle(session: ThreadSession): boolean {
+    return !session.activeRun && !session.processing && !session.queue.hasPending();
+  }
+
+  private resolveIdleWaitersIfIdle(session: ThreadSession): void {
+    if (!this.isSessionIdle(session)) {
+      return;
+    }
+
     const waiters = [...session.idleWaiters];
     session.idleWaiters.clear();
     for (const resolve of waiters) {

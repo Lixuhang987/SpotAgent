@@ -139,6 +139,73 @@ describe("ThreadRuntimeOrchestrator", () => {
     });
   });
 
+  it("keeps input steered during run preparation out of the current runtime snapshot", async () => {
+    const pushed: ThreadNotification[] = [];
+    const runtimeCalls: AgentMessage[][] = [];
+    const beforeRunGate = createDeferred();
+    let beforeRunCount = 0;
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
+      () => "2026-06-07T00:00:00.000Z",
+    );
+    const orchestrator = new ThreadRuntimeOrchestrator(
+      {
+        async runWithMessages(messages) {
+          runtimeCalls.push(messages.map((message) => ({ ...message })));
+          return {
+            messages: [
+              ...messages,
+              {
+                role: "assistant" as const,
+                content: `reply ${runtimeCalls.length}`,
+              },
+            ],
+          };
+        },
+      },
+      persistence,
+      () => "2026-06-07T00:00:00.000Z",
+      async () => {
+        beforeRunCount += 1;
+        if (beforeRunCount === 1) {
+          await beforeRunGate.promise;
+        }
+      },
+    );
+
+    await persistence.ensureThread("thread-prepare-steer");
+    await orchestrator.handleUserMessage(
+      createUserMessage("thread-prepare-steer", "first", "user-1"),
+      (message) => pushed.push(message),
+    );
+    await waitUntil(() => beforeRunCount === 1, "first beforeRun");
+
+    await orchestrator.handleUserMessage(
+      createUserMessage("thread-prepare-steer", "second", "user-2"),
+      (message) => pushed.push(message),
+    );
+
+    const idleBeforeRelease = await Promise.race([
+      orchestrator.waitForThreadIdle("thread-prepare-steer").then(() => "idle"),
+      new Promise((resolve) => setTimeout(() => resolve("still-running"), 10)),
+    ]);
+    expect(idleBeforeRelease).toBe("still-running");
+
+    beforeRunGate.resolve();
+    await orchestrator.waitForThreadIdle("thread-prepare-steer");
+
+    expect(runtimeCalls).toEqual([
+      [{ role: "user", content: "first" }],
+      [
+        { role: "user", content: "first" },
+        { role: "user", content: "second" },
+        { role: "assistant", content: "reply 1" },
+      ],
+    ]);
+    expect(eventTypes(pushed).filter((type) => type === "turn.started")).toHaveLength(1);
+    expect(eventTypes(pushed).filter((type) => type === "turn.completed")).toHaveLength(1);
+  });
+
   it("pushes assistant events and persists final user + assistant messages", async () => {
     const pushed: ThreadNotification[] = [];
     const runtimeCalls: AgentMessage[][] = [];
@@ -361,6 +428,56 @@ describe("ThreadRuntimeOrchestrator", () => {
       ],
     ]);
     expect(order).toEqual(["refresh:Thread-summary", "summary", "runtime"]);
+  });
+
+  it("pushes and records a failed turn when summary preparation fails", async () => {
+    const pushed: ThreadNotification[] = [];
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
+      () => "2026-06-07T00:00:00.000Z",
+    );
+    const orchestrator = new ThreadRuntimeOrchestrator(
+      {
+        async waitForPendingSummaries() {
+          throw new Error("summary unavailable");
+        },
+        async runWithMessages(messages) {
+          return { messages };
+        },
+      },
+      persistence,
+      () => "2026-06-07T00:00:00.000Z",
+    );
+
+    await persistence.ensureThread("Thread-summary-error");
+    await orchestrator.handleUserMessage(
+      createUserMessage("Thread-summary-error", "第一句", "user-1"),
+      (message) => pushed.push(message),
+    );
+    await orchestrator.waitForThreadIdle("Thread-summary-error");
+
+    expectTypes(pushed, [
+      "user.message.recorded",
+      "turn.started",
+      "thread.error",
+      "turn.completed",
+      "thread.status.changed",
+    ]);
+    expect(pushed[2]).toMatchObject({
+      type: "thread.error",
+      payload: { message: "summary unavailable" },
+    });
+    expect(pushed[3]).toMatchObject({
+      type: "turn.completed",
+      payload: { status: "failed" },
+    });
+    expect((await persistence.getThread("Thread-summary-error"))?.events).toEqual([
+      {
+        type: "error",
+        timestamp: "2026-06-07T00:00:00.000Z",
+        message: "summary unavailable",
+      },
+    ]);
   });
 
   it("passes image attachments to runtime as multimodal content while persisting stubs", async () => {
