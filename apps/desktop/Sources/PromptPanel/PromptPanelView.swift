@@ -17,7 +17,7 @@ struct PromptPanelView: View {
                 submissionDisabledBanner(message)
             }
             Divider()
-                .overlay(theme.colors.border)
+                .overlay(theme.colors.hairline)
             actionList
         }
         .promptPanelContainer()
@@ -38,7 +38,7 @@ struct PromptPanelView: View {
     private func attachmentChip(_ attachment: PromptAttachmentResult) -> some View {
         let isError = attachment.isError
         let foreground = isError ? theme.colors.textSecondary : theme.colors.textPrimary
-        let background = isError ? theme.colors.surface.opacity(0.4) : theme.colors.accentSubtle
+        let background = isError ? theme.colors.surfaceSoft : theme.colors.surfaceCard
         return HStack(spacing: 6) {
             chipLabel(for: attachment, foreground: foreground)
             Button {
@@ -53,7 +53,7 @@ struct PromptPanelView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
-        .borderedCard(fill: background, border: theme.colors.border, cornerRadius: theme.radius.sm)
+        .borderedCard(fill: background, border: theme.colors.hairline, cornerRadius: theme.radius.sm)
         .help(tooltip(for: attachment))
     }
 
@@ -138,7 +138,11 @@ struct PromptPanelView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: theme.radius.sm)
-                .fill(theme.colors.accentSubtle)
+                .fill(theme.colors.surfaceSoft)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: theme.radius.sm)
+                .strokeBorder(theme.colors.accentRing, lineWidth: 0.8)
         )
     }
 
@@ -176,16 +180,16 @@ struct PromptPanelView: View {
             HStack(spacing: theme.spacing.md) {
                 Text(action.title)
                     .font(theme.typography.bodyFont)
-                    .foregroundStyle(isHovered ? theme.colors.textPrimary : theme.colors.textSecondary)
+                    .foregroundStyle(isHovered ? theme.colors.bodyStrong : theme.colors.body)
                 Spacer()
                 Text(action.trigger)
                     .font(theme.typography.captionFont)
-                    .foregroundStyle(theme.colors.textSecondary.opacity(0.7))
+                    .foregroundStyle(isHovered ? theme.colors.accent : theme.colors.muted)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(
                         RoundedRectangle(cornerRadius: 4)
-                            .fill(theme.colors.surface)
+                            .fill(isHovered ? theme.colors.canvas : theme.colors.surfaceSoft)
                     )
             }
             .actionRow(isHighlighted: isHovered)
