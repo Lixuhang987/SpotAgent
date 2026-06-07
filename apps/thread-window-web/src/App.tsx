@@ -8,6 +8,7 @@ import { getThreadWebSocketURL, installInitialPromptReceiver } from "./native/na
 import {
   encodePermissionAnswer,
   encodeThreadDelete,
+  encodeThreadStart,
   encodeTurnInterrupt,
   encodeWorkspaceAnswer,
 } from "./protocol/threadProtocol.ts";
@@ -66,6 +67,21 @@ export function App() {
     };
   }, []);
 
+  const handleNewThread = () => {
+    const commandId = id('start');
+    const timestamp = now();
+
+    // 发送创建空白 thread 的命令
+    clientRef.current?.sendRaw(
+      encodeThreadStart({
+        commandId,
+        timestamp,
+        workspaceId: null,  // 默认 workspace
+        actionBinding: null,
+      })
+    );
+  };
+
   return (
     <main className="thread-window-shell">
       <HistorySidebar
@@ -78,6 +94,7 @@ export function App() {
         onDeleteThread={(threadId) => {
           setDeleteTargetThreadId(threadId);
         }}
+        onNewThread={handleNewThread}
       />
       <section className="thread-workspace" aria-label="Thread workspace">
         <header className="thread-toolbar">

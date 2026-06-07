@@ -1,16 +1,16 @@
 // apps/thread-window-web/src/utils/groupThreads.ts
-import type { ThreadMetadata } from '../store/threadWindowStore.ts';
+import type { ThreadListEntry } from '../protocol/threadProtocol.ts';
 
 export interface GroupedThreads {
   workspaceGroups: Array<{
     workspace: { id: string; name: string; rootPath: string };
-    threads: ThreadMetadata[];
+    threads: ThreadListEntry[];
   }>;
-  defaultGroup: ThreadMetadata[];
+  defaultGroup: ThreadListEntry[];
 }
 
 export function groupThreadsByWorkspace(
-  threads: ThreadMetadata[],
+  threads: ThreadListEntry[],
   workspaces: Array<{ id: string; name: string; rootPath: string }>,
   searchQuery: string
 ): GroupedThreads {
@@ -22,7 +22,7 @@ export function groupThreadsByWorkspace(
     : threads;
 
   // 按 workspaceId 分组
-  const grouped = new Map<string | null, ThreadMetadata[]>();
+  const grouped = new Map<string | null, ThreadListEntry[]>();
   for (const thread of filtered) {
     const key = thread.workspaceId ?? null;
     if (!grouped.has(key)) grouped.set(key, []);

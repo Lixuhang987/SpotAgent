@@ -11,6 +11,7 @@ interface HistorySidebarProps {
   activeTabId: string | null;
   onOpenThread: (threadId: string) => void;
   onDeleteThread: (threadId: string) => void;
+  onNewThread: () => void;
 }
 
 export function HistorySidebar({
@@ -18,6 +19,7 @@ export function HistorySidebar({
   activeTabId,
   onOpenThread,
   onDeleteThread,
+  onNewThread,
 }: HistorySidebarProps) {
   const workspaces = createThreadWindowStore((state) => state.workspaces);
   const searchQuery = createThreadWindowStore((state) => state.searchQuery);
@@ -37,10 +39,7 @@ export function HistorySidebar({
           HandAgent
         </h1>
         <button
-          onClick={() => {
-            // 创建空白 thread 的逻辑稍后实现
-            console.log('Create new thread');
-          }}
+          onClick={onNewThread}
           className="mt-3 w-full h-8 rounded-lg bg-accent/10 hover:bg-accent/20 text-accent text-sm font-medium transition-colors"
         >
           新建对话
