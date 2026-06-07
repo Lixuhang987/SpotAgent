@@ -135,18 +135,7 @@ final class AppServices {
             return URL(fileURLWithPath: rawURL)
         }
 
-        if let resourceURL = bundle.resourceURL {
-            let bundled = resourceURL
-                .appendingPathComponent("ThreadWindowWeb", isDirectory: true)
-                .appendingPathComponent("index.html")
-            if FileManager.default.fileExists(atPath: bundled.path) {
-                return bundled
-            }
-        }
-
-        return currentDirectoryURL
-            .appendingPathComponent("apps/thread-window-web/dist", isDirectory: true)
-            .appendingPathComponent("index.html")
+        return URL(string: "http://127.0.0.1:4317/thread-window/index.html")!
     }
 }
 

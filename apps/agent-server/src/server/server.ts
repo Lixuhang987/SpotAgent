@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
-import { join } from "node:path";
+import { extname, join, resolve } from "node:path";
 import { homedir } from "node:os";
 import type { PlatformBridgeMessage } from "@handagent/core/protocol/PlatformBridgeMessage.ts";
 import type { ThreadCommand } from "@handagent/core/protocol/ThreadCommand.ts";
@@ -207,6 +207,7 @@ export async function startServer({
   permissionBridge,
   permissionPolicy,
   workspaceAskBridge,
+  staticFilesDir,
   port = 4317,
 }: {
   commandRouter: ThreadCommandRouter;
@@ -215,33 +216,65 @@ export async function startServer({
   permissionBridge?: ThreadPermissionBridge;
   permissionPolicy?: FilePermissionPolicy;
   workspaceAskBridge?: ThreadWorkspaceAskBridge;
+  staticFilesDir?: string;
   port?: number;
 }) {
+  const { createServer } = await import("node:http");
   const { WebSocketServer } = await import("ws");
-  const wss = new WebSocketServer({ port });
+  const threadWebSocketServer = new WebSocketServer({ noServer: true });
+  const platformWebSocketServer = new WebSocketServer({ noServer: true });
+  const server = createServer((request, response) => {
+    void handleStaticRequest(request.url ?? "/", response, staticFilesDir);
+  });
 
-  wss.on("connection", (socket, request) => {
+  threadWebSocketServer.on("connection", (socket, request) => {
+    attachThreadSocketHandlers(socket, {
+      commandRouter,
+      eventPublisher,
+      permissionBridge,
+      permissionPolicy,
+      workspaceAskBridge,
+    });
+  });
+
+  platformWebSocketServer.on("connection", (socket) => {
+    attachPlatformSocketHandlers(socket, { bridge });
+  });
+
+  server.on("upgrade", (request, socket, head) => {
     const path = request.url?.split("?")[0];
     if (path === "/api/platform") {
-      attachPlatformSocketHandlers(socket, { bridge });
-      return;
-    }
-
-    if (path === "/api/thread") {
-      attachThreadSocketHandlers(socket, {
-        commandRouter,
-        eventPublisher,
-        permissionBridge,
-        permissionPolicy,
-        workspaceAskBridge,
+      platformWebSocketServer.handleUpgrade(request, socket, head, (webSocket) => {
+        platformWebSocketServer.emit("connection", webSocket, request);
       });
       return;
     }
 
-    socket.close();
+    if (path === "/api/thread") {
+      threadWebSocketServer.handleUpgrade(request, socket, head, (webSocket) => {
+        threadWebSocketServer.emit("connection", webSocket, request);
+      });
+      return;
+    }
+
+    socket.destroy();
   });
 
-  return wss;
+  await new Promise<void>((resolveStart, rejectStart) => {
+    const onError = (error: Error) => {
+      server.off("listening", onListening);
+      rejectStart(error);
+    };
+    const onListening = () => {
+      server.off("error", onError);
+      resolveStart();
+    };
+    server.once("error", onError);
+    server.once("listening", onListening);
+    server.listen(port, "127.0.0.1");
+  });
+
+  return server;
 }
 
 export async function startDefaultServer(port = 4317) {
@@ -411,6 +444,7 @@ export async function startDefaultServer(port = 4317) {
     permissionBridge,
     permissionPolicy,
     workspaceAskBridge,
+    staticFilesDir: resolveThreadWindowWebDistDir(),
     port,
   });
 }
@@ -495,6 +529,16 @@ export function resolveLLMMode(env: Record<string, string | undefined> = process
   return env.HANDAGENT_LLM_MODE === "mock" ? "mock" : "settings";
 }
 
+function resolveThreadWindowWebDistDir(
+  env: Record<string, string | undefined> = process.env,
+  currentDirectory = process.cwd(),
+): string {
+  if (env.HANDAGENT_THREAD_WINDOW_WEB_DIST_DIR) {
+    return env.HANDAGENT_THREAD_WINDOW_WEB_DIST_DIR;
+  }
+  return join(currentDirectory, "apps/thread-window-web/dist");
+}
+
 function isNotFoundError(error: unknown): boolean {
   return (
     typeof error === "object" &&
@@ -506,6 +550,94 @@ function isNotFoundError(error: unknown): boolean {
 
 function historyShowsToolsActivated(messages: readonly AgentMessage[]): boolean {
   return messages.some((m) => m.role === "tool" && m.name === META_TOOL_NAME);
+}
+
+const THREAD_WINDOW_HTTP_PREFIX = "/thread-window";
+
+async function handleStaticRequest(
+  rawURL: string,
+  response: {
+    statusCode: number;
+    setHeader(name: string, value: string): void;
+    end(body?: string | Buffer): void;
+  },
+  staticFilesDir?: string,
+): Promise<void> {
+  if (!staticFilesDir) {
+    response.statusCode = 404;
+    response.end("Not Found");
+    return;
+  }
+
+  const pathname = new URL(rawURL, "http://127.0.0.1").pathname;
+  const relativePath = resolveThreadWindowRequestPath(pathname);
+  if (!relativePath) {
+    response.statusCode = 404;
+    response.end("Not Found");
+    return;
+  }
+
+  const rootDir = resolve(staticFilesDir);
+  const targetPath = resolve(rootDir, relativePath);
+  if (targetPath !== rootDir && !targetPath.startsWith(`${rootDir}/`)) {
+    response.statusCode = 403;
+    response.end("Forbidden");
+    return;
+  }
+
+  try {
+    const body = await readFile(targetPath);
+    response.statusCode = 200;
+    response.setHeader("Content-Type", mimeTypeForExtension(extname(targetPath)));
+    response.end(body);
+  } catch (error) {
+    if (isNotFoundError(error)) {
+      response.statusCode = 404;
+      response.end("Not Found");
+      return;
+    }
+    response.statusCode = 500;
+    response.end("Internal Server Error");
+  }
+}
+
+function resolveThreadWindowRequestPath(pathname: string): string | null {
+  if (pathname === THREAD_WINDOW_HTTP_PREFIX || pathname === `${THREAD_WINDOW_HTTP_PREFIX}/`) {
+    return "index.html";
+  }
+  if (!pathname.startsWith(`${THREAD_WINDOW_HTTP_PREFIX}/`)) {
+    return null;
+  }
+  const rawRelativePath = pathname.slice(THREAD_WINDOW_HTTP_PREFIX.length + 1);
+  if (rawRelativePath.length === 0) {
+    return "index.html";
+  }
+  return decodeURIComponent(rawRelativePath);
+}
+
+function mimeTypeForExtension(extension: string): string {
+  switch (extension) {
+    case ".html":
+      return "text/html; charset=utf-8";
+    case ".js":
+      return "text/javascript; charset=utf-8";
+    case ".css":
+      return "text/css; charset=utf-8";
+    case ".json":
+    case ".map":
+      return "application/json; charset=utf-8";
+    case ".svg":
+      return "image/svg+xml";
+    case ".png":
+      return "image/png";
+    case ".jpg":
+    case ".jpeg":
+      return "image/jpeg";
+    case ".webp":
+      return "image/webp";
+    default:
+      return "application/octet-stream";
+  }
 }
 
 function maybeUnbindThreadOwner(

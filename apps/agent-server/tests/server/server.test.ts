@@ -1,5 +1,8 @@
 import { EventEmitter, once } from "node:events";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { WebSocket } from "ws";
 import { describe, expect, it, vi } from "vitest";
 import type { AgentMessage } from "@handagent/core/runtime/AgentMessage.ts";
@@ -502,13 +505,12 @@ describe("startServer", () => {
       const socket = new WebSocket(`ws://127.0.0.1:${address.port}${path}`);
 
       try {
-        await once(socket, "open");
-        socket.send(JSON.stringify(turnStart("Thread-A", "should not route")));
-        socket.send(JSON.stringify(platformHello("bridge-1")));
+        const outcome = await new Promise<"open" | "error">((resolve) => {
+          socket.once("open", () => resolve("open"));
+          socket.once("error", () => resolve("error"));
+        });
 
-        const closed = await waitForClose(socket);
-
-        expect(closed).toBe(true);
+        expect(outcome).toBe("error");
         expect(eventPublisher.attachConnection).not.toHaveBeenCalled();
         expect(commandRouter.receive).not.toHaveBeenCalled();
         expect(bridge.attach).not.toHaveBeenCalled();
@@ -524,6 +526,53 @@ describe("startServer", () => {
       }
     },
   );
+
+  it("serves thread-window static assets over HTTP on the same port", async () => {
+    const staticDir = await mkdtemp(join(tmpdir(), "handagent-thread-window-web-"));
+    await writeFile(
+      join(staticDir, "index.html"),
+      "<!doctype html><html><body>thread-window</body></html>",
+    );
+    await writeFile(join(staticDir, "app.js"), "console.log('ok');");
+
+    const commandRouter = {
+      receive: vi.fn(async () => {}),
+      interruptThread: vi.fn(),
+      handleResponse: vi.fn(),
+    } as unknown as ThreadCommandRouter;
+    const eventPublisher = {
+      attachConnection: vi.fn(),
+      detachConnection: vi.fn(),
+      subscribe: vi.fn(),
+      publishToConnection: vi.fn(),
+    } as unknown as ThreadNotificationPublisher;
+    const server = await startServer({
+      commandRouter,
+      eventPublisher,
+      staticFilesDir: staticDir,
+      port: 0,
+    });
+    const address = server.address() as AddressInfo;
+
+    try {
+      const indexResponse = await fetch(`http://127.0.0.1:${address.port}/thread-window/index.html`);
+      expect(indexResponse.status).toBe(200);
+      expect(indexResponse.headers.get("content-type")).toContain("text/html");
+      expect(await indexResponse.text()).toContain("thread-window");
+
+      const assetResponse = await fetch(`http://127.0.0.1:${address.port}/thread-window/app.js`);
+      expect(assetResponse.status).toBe(200);
+      expect(assetResponse.headers.get("content-type")).toContain("text/javascript");
+      expect(await assetResponse.text()).toContain("console.log");
+
+      const missingResponse = await fetch(`http://127.0.0.1:${address.port}/thread-window/missing.js`);
+      expect(missingResponse.status).toBe(404);
+    } finally {
+      server.close();
+      await once(server, "close");
+      await rm(staticDir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("resolveLLMMode", () => {

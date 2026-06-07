@@ -177,6 +177,7 @@ final class AgentServerService: AgentServerStarting, @unchecked Sendable {
         let existingNodePath = environment["NODE_PATH"].flatMap { $0.isEmpty ? nil : $0 }
         environment["NODE_PATH"] = (extraNodePaths + [existingNodePath].compactMap { $0 })
             .joined(separator: separator)
+        environment["HANDAGENT_THREAD_WINDOW_WEB_DIST_DIR"] = threadWindowWebDistDir(repoRoot: repoRoot).path
         AgentServerRuntimeMode.apply(to: &environment, resourcesURL: Bundle.main.resourceURL)
         return environment
     }
@@ -211,6 +212,17 @@ final class AgentServerService: AgentServerStarting, @unchecked Sendable {
         }
 
         return nil
+    }
+
+    private func threadWindowWebDistDir(repoRoot: URL) -> URL {
+        if let resourcesURL = Bundle.main.resourceURL {
+            let bundled = resourcesURL.appendingPathComponent("ThreadWindowWeb", isDirectory: true)
+            if FileManager.default.fileExists(atPath: bundled.appendingPathComponent("index.html").path) {
+                return bundled
+            }
+        }
+
+        return repoRoot.appendingPathComponent("apps/thread-window-web/dist", isDirectory: true)
     }
 }
 

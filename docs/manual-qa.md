@@ -34,8 +34,8 @@
 
 ## ThreadWindow WebView + split WebSocket smoke（P2）
 
-1. 从当前 worktree 执行 `pnpm --filter handagent-thread-window-web build`。
 1. 从当前 worktree 执行 `bash ./scripts/swiftw run HandAgentDesktop`。
+   - 说明：该命令现在会先自动执行 `pnpm --filter handagent-thread-window-web build`，确保开发态 `WKWebView` 加载的 `apps/thread-window-web/dist/index.html` 已存在。
 1. 通过 PromptPanel 提交一个普通 prompt，确认打开的是 WKWebView ThreadWindow，React 页面显示新 tab。
 1. 确认 React 建立到 `ws://127.0.0.1:4317/api/thread` 的 WebSocket，Swift 建立到 `ws://127.0.0.1:4317/api/platform` 的 WebSocket。
 1. 在当前 tab 继续追问，确认消息进入同一个 thread。

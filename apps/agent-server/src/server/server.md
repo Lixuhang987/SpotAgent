@@ -2,7 +2,7 @@
 
 ## 目录职责
 
-`server/` 是 agent-server 的进程入口与组合根。它负责启动 WebSocketServer，按 request path 拆分 `/api/thread` 与 `/api/platform`，并把 core 与本目录其他模块组装成生产运行图。
+`server/` 是 agent-server 的进程入口与组合根。它负责启动同端口 HTTP + WebSocket 服务，按 request path 拆分 `/api/thread`、`/api/platform` 与 `/thread-window/*`，并把 core 与本目录其他模块组装成生产运行图。
 
 ## 文件
 
@@ -22,7 +22,7 @@ node --experimental-transform-types --experimental-specifier-resolution=node app
 
 ## 关键机制
 
-### Socket 路径分派
+### 路径分派
 
 ```ts
 const path = request.url?.split("?")[0];
@@ -37,7 +37,7 @@ if (path === "/api/thread") {
 socket.close();
 ```
 
-`/api/thread` 和 `/api/platform` 是两条独立 WebSocket。未知 path 或缺失 path 会被关闭，不默认为 thread socket。
+`/api/thread` 和 `/api/platform` 是两条独立 WebSocket。`/thread-window/*` 由同一个 HTTP server 直接返回 React 静态资源，供桌面端 `WKWebView` 使用。未知 path 或缺失 path 会被关闭或返回 404，不默认为 thread socket。
 
 按最小协议约束：
 

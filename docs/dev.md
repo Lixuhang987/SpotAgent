@@ -35,6 +35,11 @@ pnpm install
 bash ./scripts/swiftw run HandAgentDesktop
 ```
 
+说明：
+
+- `bash ./scripts/swiftw run HandAgentDesktop` 现在会先自动执行 `pnpm --filter handagent-thread-window-web build`，确保 `WKWebView` 开发态加载的 `apps/thread-window-web/dist/index.html` 已存在，避免 ThreadWindow 因缺少前端 bundle 白屏。
+- `ThreadWindow` 默认不再直接通过 `file://` 加载前端，而是走 `http://127.0.0.1:4317/thread-window/index.html`。这个静态入口由 `agent-server` 同端口提供，用来规避 `WKWebView` 在 `file://` 场景下不执行外链 module script 的白屏问题。
+
 4. 如果 `swiftw run` 在当前机器报错，优先检查 Xcode 版本与 `xcode-select` 是否指向完整 Xcode，再执行同样流程。
 
 ### 模型配置排查

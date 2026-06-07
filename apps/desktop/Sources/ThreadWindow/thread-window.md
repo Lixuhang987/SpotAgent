@@ -30,11 +30,20 @@ sequenceDiagram
   Server-->>React: ThreadNotification / ServerRequest
 ```
 
+## 调试前提
+
+- 仅通过全局快捷键打开 `PromptPanel`，**不会**触发 `ThreadWindow` 创建或 `WKWebView` 加载。
+- `ThreadWindow` 的加载链路只会在以下入口触发：
+  - 用户在 `PromptPanel` 中输入内容并提交（回车）；
+  - Coordinator 显式调用历史入口 `openOrFocusHistory(...)`。
+- 因此排查 `ThreadWindow` 白屏、`WKWebView` 导航、React 首屏渲染等问题时，必须先完成一次真实提交，或明确走历史入口；不要把“`PromptPanel` 已打开”误判为“`ThreadWindow` 已开始加载”。
+
 ## 边界
 
 - Swift 不再持有 ThreadWindow tab/message/history 状态。
 - Swift 不发送 `ThreadCommand`，不解析 `ThreadNotification`，不回执 `ClientResponse`。
 - Swift 只负责 `NSWindow` 生命周期、`WKWebView` 加载、注入配置和初始 prompt。
+- 默认加载入口是 `http://127.0.0.1:4317/thread-window/index.html`。本地 React 静态资源由 `agent-server` 在同端口按 `/thread-window/*` 提供，避免 `file://` 下 `type="module"` bundle 在 `WKWebView` 中不执行导致白屏。
 - React 直接连接 `/api/thread`，用 `zustand + immer` 作为 ThreadWindow 状态源。
 - 首版不做 StatusBubble 摘要同步。
 

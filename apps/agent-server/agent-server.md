@@ -1,6 +1,6 @@
 # agent-server
 
-`apps/agent-server` 是本地 WebSocket thread 桥（Node + TypeScript）。desktop 将它作为子进程启动，它暴露 `ws://127.0.0.1:4317/api/thread` 给 React ThreadWindow，暴露 `ws://127.0.0.1:4317/api/platform` 给 Swift 宿主。`/api/thread` 接收 `ThreadCommand` / `ClientResponse` 并推送 `ThreadNotification` / `ServerRequest`；`/api/platform` 只承载 `PlatformBridgeMessage`，用于向 desktop 请求平台能力。
+`apps/agent-server` 是本地 thread 桥（Node + TypeScript）。desktop 将它作为子进程启动，它在 `127.0.0.1:4317` 同时提供三类入口：`ws://127.0.0.1:4317/api/thread` 给 React ThreadWindow，`ws://127.0.0.1:4317/api/platform` 给 Swift 宿主，以及 `http://127.0.0.1:4317/thread-window/*` 给 `WKWebView` 加载 React 静态资源。`/api/thread` 接收 `ThreadCommand` / `ClientResponse` 并推送 `ThreadNotification` / `ServerRequest`；`/api/platform` 只承载 `PlatformBridgeMessage`，用于向 desktop 请求平台能力。
 
 ## 直接子节点
 
@@ -39,7 +39,7 @@ node --experimental-transform-types --experimental-specifier-resolution=node app
 5. 通过 `SettingsBackedLLMClient` 或 `MockLLMClient` 选择 LLM 模式。
 6. 按 thread 缓存 `AgentRuntime`，注入 thread 级 tool registry、permission policy、blob store 和 turn summarizer。
 7. 创建 `ThreadPersistence`、`ThreadRuntimeOrchestrator`、`ThreadNotificationPublisher`、`ThreadCommandRouter`。
-8. 启动 WebSocketServer，按 request path 分流：`/api/thread` 挂载 thread command/response handler，`/api/platform` 挂载 platform bridge handler，未知 path 直接关闭。
+8. 启动同端口 HTTP + WebSocket 服务：`/api/thread` 挂载 thread command/response handler，`/api/platform` 挂载 platform bridge handler，`/thread-window/*` 提供 React 静态资源，未知 path 直接关闭或返回 404。
 
 ## 主消息流
 

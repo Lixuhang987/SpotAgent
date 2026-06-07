@@ -12,6 +12,17 @@ mkdir -p "$CLANG_CACHE_DIR" "$SWIFT_CACHE_DIR"
 export CLANG_MODULE_CACHE_PATH="$CLANG_CACHE_DIR"
 export SWIFT_MODULECACHE_PATH="$SWIFT_CACHE_DIR"
 
+ensure_thread_window_web_build() {
+  if [[ -n "${HANDAGENT_THREAD_WINDOW_WEB_URL:-}" ]]; then
+    return
+  fi
+
+  (
+    cd "$ROOT_DIR"
+    pnpm --filter handagent-thread-window-web build
+  )
+}
+
 if [[ "${1:-}" == "test" || "${1:-}" == "build" ]]; then
 
   tmp_log="$(mktemp -t "swiftw-${1:-swift}.XXXXXX")"
@@ -29,6 +40,10 @@ if [[ "${1:-}" == "test" || "${1:-}" == "build" ]]; then
     cat "$tmp_log"
     exit "$status"
   fi
+fi
+
+if [[ "${1:-}" == "run" && "${2:-}" == "HandAgentDesktop" ]]; then
+  ensure_thread_window_web_build
 fi
 
 exec swift "$@"
