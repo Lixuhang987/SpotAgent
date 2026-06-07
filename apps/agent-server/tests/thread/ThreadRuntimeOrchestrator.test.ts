@@ -1112,6 +1112,67 @@ describe("ThreadRuntimeOrchestrator", () => {
     ])).resolves.toBe("idle");
   });
 
+  it("replays input queued while interrupted runtime is waiting for timeout cleanup", async () => {
+    const pushed: ThreadNotification[] = [];
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
+      () => "2026-06-07T00:00:00.000Z",
+    );
+    const runStarted = createDeferred();
+    let runtimeCallCount = 0;
+    const orchestrator = new ThreadRuntimeOrchestrator(
+      {
+        runWithMessages(messages) {
+          runtimeCallCount += 1;
+          if (runtimeCallCount === 1) {
+            runStarted.resolve();
+            return new Promise(() => {});
+          }
+          return Promise.resolve({
+            messages: [
+              ...messages,
+              { role: "assistant", content: "after interrupted timeout" },
+            ],
+          });
+        },
+      },
+      persistence,
+      () => "2026-06-07T00:00:00.000Z",
+      () => {},
+      { interruptWaitTimeoutMs: 20, interruptPollIntervalMs: 1 },
+    );
+
+    await persistence.ensureThread("Thread-timeout-replay");
+    void orchestrator.handleUserMessage(
+      createUserMessage("Thread-timeout-replay", "first", "user-1"),
+      (message) => pushed.push(message),
+    );
+    await runStarted.promise;
+
+    const interruptPromise = orchestrator.interruptAndWait(
+      "Thread-timeout-replay",
+      (message) => pushed.push(message),
+    );
+    await waitUntil(
+      () => eventTypes(pushed).includes("turn.completed"),
+      "interrupt notification",
+    );
+    await orchestrator.handleUserMessage(
+      createUserMessage("Thread-timeout-replay", "second", "user-2"),
+      (message) => pushed.push(message),
+    );
+
+    await interruptPromise;
+    await orchestrator.waitForThreadIdle("Thread-timeout-replay");
+
+    expect(runtimeCallCount).toBe(2);
+    expect(await persistence.getMessages("Thread-timeout-replay")).toEqual([
+      { role: "user", content: "first" },
+      { role: "user", content: "second" },
+      { role: "assistant", content: "after interrupted timeout" },
+    ]);
+  });
+
   it("clears input that finishes enqueueing during interrupt cleanup", async () => {
     const pushed: ThreadNotification[] = [];
     const runtimeCalls: AgentMessage[][] = [];

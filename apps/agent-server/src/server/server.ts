@@ -136,7 +136,7 @@ export function attachThreadSocketHandlers(
     for (const [threadId, token] of boundThreads) {
       const unbound = permissionBridge?.unbindThread(threadId, token) ?? false;
       if (unbound) {
-        commandRouter.interruptThread(threadId);
+        void Promise.resolve(commandRouter.interruptThread(threadId)).catch(() => {});
         clearThreadPermissionRules(permissionPolicy, threadId);
       }
     }

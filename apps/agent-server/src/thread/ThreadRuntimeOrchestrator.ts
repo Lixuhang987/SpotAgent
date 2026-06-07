@@ -153,10 +153,12 @@ export class ThreadRuntimeOrchestrator {
             session.activeRun = null;
           }
           if (session) {
+            const pendingItems = session.queue.takeAll();
             session.processing = false;
             session.closed = true;
             this.resolveIdleWaiters(session);
             this.sessions.delete(threadId);
+            this.replayPendingItems(threadId, session.push, pendingItems);
           }
         }
         return;
@@ -175,6 +177,23 @@ export class ThreadRuntimeOrchestrator {
     activeRun.controller.abort();
     this.emitInterrupted(threadId, push, activeRun);
     return activeRun;
+  }
+
+  private replayPendingItems(
+    threadId: string,
+    push: PushMessage,
+    pendingItems: ReturnType<ThreadInputQueue["takeAll"]>,
+  ): void {
+    if (pendingItems.length === 0) {
+      return;
+    }
+
+    const session = this.getOrCreateSession(threadId, push);
+    session.push = push;
+    for (const item of pendingItems) {
+      session.queue.enqueue(item);
+    }
+    this.ensureSessionLoop(session);
   }
 
   private async recordUserInput(
