@@ -27,6 +27,38 @@ describe("ThreadCommandRouter", () => {
     expect(sent).toEqual(["thread.started"]);
   });
 
+  it("persists workspaceId when creating a thread with workspace", async () => {
+    const store = new InMemoryThreadStore();
+    const publisher = new ThreadNotificationPublisher();
+    publisher.attachConnection("c1", () => {});
+    const persistence = new ThreadPersistence(
+      store,
+      () => "2026-06-04T00:00:00.000Z",
+    );
+    const router = new ThreadCommandRouter(
+      { handleUserMessage: vi.fn(async () => {}) },
+      persistence,
+      publisher,
+      () => "2026-06-04T00:00:00.000Z",
+    );
+
+    const command: Extract<ThreadCommand, { type: "thread.start" }> = {
+      type: "thread.start",
+      commandId: "create-ws-1",
+      timestamp: "2026-06-04T00:00:00.000Z",
+      payload: {
+        workspaceId: "workspace-123",
+        actionBinding: null,
+      },
+    };
+
+    await router.receive(command, "c1");
+
+    const threads = await store.list();
+    expect(threads).toHaveLength(1);
+    expect(threads[0].workspaceId).toBe("workspace-123");
+  });
+
   it("resumes and immediately emits a thread snapshot without starting runtime", async () => {
     const publisher = new ThreadNotificationPublisher();
     const sent: ThreadNotification[] = [];
