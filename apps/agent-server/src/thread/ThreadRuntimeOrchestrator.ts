@@ -367,33 +367,41 @@ export class ThreadRuntimeOrchestrator {
           return;
         }
 
-        await this.persistence.persistRunDelta(
-          session.threadId,
-          runtimeBaseMessageCount,
-          result.messages,
-          events,
-        );
         const generatedMessageCount = Math.max(
           0,
           result.messages.length - runtimeBaseMessageCount,
         );
+        const steeredItems = await this.withThreadInputLock(
+          session.threadId,
+          async () => {
+            await this.persistence.persistRunDelta(
+              session.threadId,
+              runtimeBaseMessageCount,
+              result.messages,
+              events,
+            );
+            const queuedItems = session.queue.takeAll();
+            if (queuedItems.length === 0) {
+              this.emitCompleted(session.threadId, session.push, activeRun, "completed");
+              this.emitThreadStatus(session.threadId, session.push, activeRun.turnId, "idle");
+            }
+            return queuedItems;
+          },
+        );
 
-        const steeredItems = session.queue.takeAll();
-        if (steeredItems.length > 0) {
-          const steeredUserItems = steeredItems.filter(
-            (item): item is QueuedThreadUserInputItem =>
-              item.kind === "user" && "persistedMessageCount" in item,
-          );
-          maxVisibleMessageCount = Math.max(
-            maxVisibleMessageCount,
-            ...steeredUserItems.map((item) => item.persistedMessageCount),
-          ) + generatedMessageCount;
-          continue;
+        if (steeredItems.length === 0) {
+          return;
         }
 
-        this.emitCompleted(session.threadId, session.push, activeRun, "completed");
-        this.emitThreadStatus(session.threadId, session.push, activeRun.turnId, "idle");
-        return;
+        const steeredUserItems = steeredItems.filter(
+          (item): item is QueuedThreadUserInputItem =>
+            item.kind === "user" && "persistedMessageCount" in item,
+        );
+        maxVisibleMessageCount = Math.max(
+          maxVisibleMessageCount,
+          ...steeredUserItems.map((item) => item.persistedMessageCount),
+        ) + generatedMessageCount;
+        continue;
       } catch (error) {
         await this.handleActiveRunError(session, activeRun, error);
         return;
