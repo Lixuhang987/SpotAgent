@@ -167,6 +167,61 @@ describe("ThreadCommandRouter", () => {
     ]);
   });
 
+  it("keeps old turn.start compatible with async backend input handling", async () => {
+    const publisher = new ThreadNotificationPublisher();
+    const seen: ThreadNotification[] = [];
+    publisher.attachConnection("c1", (event) => seen.push(event as ThreadNotification));
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
+      () => "2026-06-07T00:00:00.000Z",
+    );
+    const thread = await persistence.createThread();
+    publisher.subscribe("c1", thread.metadata.id);
+    const orchestrator = {
+      handleUserMessage: vi.fn(async (_message, push: (message: ThreadNotification) => void) => {
+        push({
+          type: "user.message.recorded",
+          threadId: thread.metadata.id,
+          notificationId: "recorded",
+          timestamp: "2026-06-07T00:00:00.000Z",
+          payload: { messageId: "turn-1", text: "hi" },
+        });
+      }),
+    };
+    const router = new ThreadCommandRouter(
+      orchestrator,
+      persistence,
+      publisher,
+      () => "2026-06-07T00:00:00.000Z",
+    );
+
+    await router.receive(
+      {
+        type: "turn.start",
+        threadId: thread.metadata.id,
+        commandId: "turn-1",
+        timestamp: "2026-06-07T00:00:00.000Z",
+        payload: { text: "hi" },
+      },
+      "c1",
+    );
+
+    expect(orchestrator.handleUserMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId: thread.metadata.id,
+        messageId: "turn-1",
+        payload: { text: "hi", attachments: undefined },
+      }),
+      expect.any(Function),
+    );
+    expect(seen).toEqual([
+      expect.objectContaining({
+        type: "user.message.recorded",
+        threadId: thread.metadata.id,
+      }),
+    ]);
+  });
+
   it("emits thread.error to the requesting connection when turn.start targets a missing thread", async () => {
     const publisher = new ThreadNotificationPublisher();
     const first: ThreadNotification[] = [];
