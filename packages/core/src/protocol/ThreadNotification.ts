@@ -126,4 +126,17 @@ export type ThreadNotification =
         code?: string;
         message: string;
       };
+    }
+  | {
+      type: "workspace.listed";
+      notificationId: string;
+      commandId?: string;
+      timestamp: string;
+      payload: {
+        workspaces: Array<{
+          id: string;
+          name: string;
+          rootPath: string;
+        }>;
+      };
     };

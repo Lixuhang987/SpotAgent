@@ -47,4 +47,9 @@ export type ThreadCommand =
       threadId: string;
       commandId: string;
       timestamp: string;
+    }
+  | {
+      type: "workspace.list";
+      commandId: string;
+      timestamp: string;
     };
