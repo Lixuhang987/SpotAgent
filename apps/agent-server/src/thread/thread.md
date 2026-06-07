@@ -22,30 +22,43 @@
 | 文件 | 职责 |
 |------|------|
 | `ThreadCommandRouter.ts` | 处理 thread / turn 命令，调用 orchestrator / persistence，并把 notification / server request 推给 publisher |
+| `ThreadInputQueue.ts` | thread-local FIFO input item 队列；当前承载用户输入，预留 response item 入口 |
 | `ThreadNotificationPublisher.ts` | 维护 `connection -> subscribed threadIds` 的分发表；thread 级消息按 `threadId` 定向，非 thread 级 notification 广播 |
-| `ThreadRuntimeOrchestrator.ts` | 编排一轮 `turn.start`：持久化用户消息、等待 summary、调用 runtime、转译通知、处理中断与错误 |
-| `ThreadPersistence.ts` | `ThreadStore` 的唯一直接封装：创建 / 删除 / 读取 / 列出 thread，恢复重启前未完成的 turn |
+| `ThreadRuntimeOrchestrator.ts` | 维护 per-thread session loop：记录输入、唤醒 runtime、drain queued input、转译通知、处理中断与错误 |
+| `ThreadPersistence.ts` | `ThreadStore` 的唯一直接封装：创建 / 删除 / 读取 / 列出 thread，追加用户消息、runtime delta、审计事件，恢复重启前未完成的 turn |
 
-## 一轮 `turn.start`
+## 兼容旧协议的输入队列
+
+`turn.start` 仍是 desktop 发来的旧命令，但 agent-server 内部会先把它归一化为 `ThreadInputItem(kind: "user")`。
 
 ```mermaid
 sequenceDiagram
   participant Router as ThreadCommandRouter
   participant Orchestrator as ThreadRuntimeOrchestrator
-  participant Persistence as ThreadPersistence
+  participant Queue as ThreadInputQueue
   participant Runtime as core AgentRuntime
   participant Publisher as ThreadNotificationPublisher
 
-  Router->>Persistence: getThread(threadId)
-  Router->>Orchestrator: handleUserMessage(turn.start, push)
-  Orchestrator->>Persistence: persist user message
-  Orchestrator->>Persistence: get conversation messages
-  Orchestrator->>Orchestrator: beforeRun(threadId)
-  Orchestrator->>Runtime: runWithMessages(history, onEvent, { threadId, signal })
-  Runtime-->>Orchestrator: AgentRuntimeEvent
-  Orchestrator-->>Publisher: publish notification
-  Orchestrator->>Persistence: persist final messages / events
+  Router->>Orchestrator: handleUserMessage(turn.start)
+  Orchestrator->>Orchestrator: persist user message
+  Orchestrator-->>Publisher: user.message.recorded
+  Orchestrator->>Queue: enqueue ThreadInputItem
+  alt thread idle
+    Orchestrator-->>Publisher: turn.started
+    Orchestrator->>Runtime: runWithMessages(history)
+  else thread running
+    Queue-->>Orchestrator: pending input for active turn follow-up
+  end
+  Runtime-->>Orchestrator: AgentRuntimeEvent / result
+  Orchestrator->>Orchestrator: append runtime delta
+  alt queued input exists
+    Orchestrator->>Runtime: runWithMessages(updated history)
+  else no queued input
+    Orchestrator-->>Publisher: turn.completed + thread.status.changed
+  end
 ```
+
+运行中收到新的 `turn.start` 不再 abort 当前 run；新输入会立即记录为用户消息，并在当前 active turn 的下一次 follow-up 中进入模型上下文。
 
 ## 关键机制
 
@@ -55,7 +68,7 @@ sequenceDiagram
 - `thread.resume`：恢复既有 thread，并返回 `thread.snapshot`。
 - `thread.list`：返回 `thread.listed`。
 - `thread.delete`：删除指定 thread；若该 thread 正在运行，先中断再删。
-- `turn.start`：启动新一轮运行。
+- `turn.start`：兼容旧入口；后端内部归一化为 user input item，idle 时唤醒 session loop，running 时 steer 到 active turn follow-up。
 - `turn.interrupt`：中断当前运行中的 turn。
 
 ### `thread.snapshot` 是恢复入口
@@ -71,10 +84,12 @@ sequenceDiagram
 - 带 `threadId` 的 notification / server request 按 thread 定向；不带 `threadId` 的全局 notification 广播给所有连接。
 - 文档层面不再承诺显式 unsubscribe 协议；当前若实现中仍保留过渡逻辑，视为待清理内部细节。
 
-### generation 防旧 run 写回
+### active turn 与 append-only 写回
 
-- 同一 thread 启动新一轮 turn 时，会先 abort 旧 run，再分配新的 generation。
-- runtime 回调落通知或持久化前都要检查当前 generation；旧 run 的晚到 delta / tool result / error 不得污染新一轮状态。
+- 每个 thread 进程内最多一个 active run；session loop 会持续等待该 thread 的输入队列。
+- runtime 回调落通知或持久化前都要检查当前 generation；被中断或超时清理的旧 run 的晚到 delta / tool result / error 不得污染当前状态。
+- runtime 结果通过 `persistRunDelta` 追加 generated messages 和 events，避免覆盖运行期间已经持久化的新 user input。
+- 每轮 runtime 使用稳定输入快照；active run 准备阶段收到的新 input 只进入 follow-up，不会被当前 runtime 和 follow-up 重复处理。
 
 ### 中断与重启恢复
 

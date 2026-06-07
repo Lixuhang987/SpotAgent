@@ -163,7 +163,7 @@ flowchart TD
 
 - 当前桌面壳已经切到 `PromptPanel + 全局唯一 ThreadWindow + StatusBubble`。
 - 当前桌面端使用全局唯一 ThreadWindow。ThreadWindow 左侧展示持久化 thread 历史；点击历史项会在当前窗口创建或激活 tab。Window 拥有 tabs；tab 拥有 `threadId`、消息、运行态、权限请求和 workspace 选择等完整 thread 生命周期，并通过共享连接接收各自事件。
-- `agent-server` 通过 `ThreadCommandRouter + ThreadRuntimeOrchestrator + ThreadNotificationPublisher + ThreadPersistence + ThreadStore` 管理 thread 并驱动 runtime。
+- `agent-server` 通过 `ThreadCommandRouter + ThreadRuntimeOrchestrator + ThreadInputQueue + ThreadNotificationPublisher + ThreadPersistence + ThreadStore` 管理 thread；旧 `turn.start` 协议在后端内部归一化为 input item，运行中的 thread 会优先把新输入 steer 到当前 active turn。
 - `packages/core/src/storage` 提供持久化 thread 存储，默认使用 `FileThreadStore` 将 thread 写入 `~/.spotAgent/threads/`。
 - 桌面端通过 `AppServer` 持有的共享 `AppServerConnection` 与 agent-server 通信；单个 ThreadWindow 内多个 tab 通过 `thread.resume` 复用同一连接，并按 `threadId` 路由 `ThreadNotification` 与 `ServerRequest`。
 - 桌面端通过 agent-server 的 thread 协议读取同一目录，为 ThreadWindow 左侧历史列表提供恢复和删除入口；恢复同一 `threadId` 时优先激活已有 tab，未打开时创建新 tab 并等待 `thread.snapshot` 恢复。
