@@ -121,7 +121,15 @@
 8. 点击"新建对话"按钮，确认创建空白 thread 并自动切换到新 tab
 9. 点击历史项，确认激活或创建对应 tab
 
-#### 场景 5: ThreadWindow Claude warm-canvas 视觉验证
+#### 场景 5: 左侧边栏响应式缩放与隐藏
+
+1. 打开 ThreadWindow，保持默认窗口宽度，确认左侧历史边栏可见且宽度接近窗口宽度的 30%。
+2. 横向放大窗口，确认左侧历史边栏随窗口变宽，但达到约 320px 后不再继续变宽。
+3. 横向缩小窗口到约 760px 以上，确认左侧历史边栏随窗口变窄，且不会窄到低于约 220px。
+4. 继续缩小窗口到 760px 以下，确认左侧历史边栏隐藏，右侧对话区占满窗口宽度。
+5. 从窄窗口重新放大到 760px 以上，确认左侧历史边栏重新出现，历史项、搜索框和 workspace 展开状态仍正常。
+
+#### 场景 6: ThreadWindow Claude warm-canvas 视觉验证
 
 1. 创建新 thread，发送若干消息（user / assistant / tool）
 2. 确认左侧历史栏是 warm cream surface：整体为 `#efe9de`，搜索框和选中 thread 为 `#faf9f5`，边线为浅 cream hairline。
@@ -130,7 +138,7 @@
 5. 确认 user 消息是 coral-tinted cream card，assistant 消息是 cream card，tool 消息是 dark code-style card 并使用 monospace。
 6. 将窗口缩到最小尺寸附近，确认历史标题、tab 标题、消息、按钮文字没有互相遮挡或溢出容器。
 
-#### 场景 6: GPT 风格布局验证
+#### 场景 7: GPT 风格布局验证
 
 **验收目标**: 确认 ThreadWindow 已按 `docs/superpowers/specs/2026-06-08-session-window-chatgpt-style-ui.md` 改造为 ChatGPT 风格布局，同时保留 DESIGN.md 配色。
 
@@ -176,7 +184,7 @@
 - [ ] user 消息背景使用 `#efe9de` (surface-card, warm cream)，不是 spec 中的 `#3A3A3A`
 - [ ] 主按钮使用 `#cc785c` (primary, coral)
 
-#### 场景 7: 消息操作按钮验证（GPT 风格）
+#### 场景 8: 消息操作按钮验证（GPT 风格）
 
 1. 确认 assistant 和 tool 消息的操作按钮默认不显示
 2. hover assistant 或 tool 消息，确认操作按钮显示
@@ -185,7 +193,7 @@
 5. 确认"编辑"和"重新生成"按钮显示但禁用，hover 时显示 tooltip "即将推出"
 6. 确认操作按钮栏在深色 workspace 上使用低对比度 cream 文本，不干扰阅读
 
-#### 场景 8: Composer 自动增高输入框验证（GPT 风格）
+#### 场景 9: Composer 自动增高输入框验证（GPT 风格）
 
 1. 在输入框输入单行文本，确认高度为最小值（52px）
 2. 按 Shift+Return 插入换行，继续输入到第 2、3、4、5 行
@@ -194,7 +202,7 @@
 5. 按 Return（无修饰键）确认提交消息，输入框清空并恢复最小高度
 6. 确认输入栏保持 pill 形，居中，最大宽度 720pt
 
-#### 场景 9: 视觉一致性验证
+#### 场景 10: 视觉一致性验证
 
 1. 确认 ThreadWindow 整体不再是 dark-only Raycast Glass 风格，而是 cream sidebar + dark product workspace 的双 surface 节奏。
 2. 确认顶部工具栏不再显示 connection pill（已移除），tab 状态点仍能区分 running / failed / interrupted / idle。
