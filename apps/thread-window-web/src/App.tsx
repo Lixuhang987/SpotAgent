@@ -14,6 +14,7 @@ import {
 } from "./protocol/threadProtocol.ts";
 import { createThreadWindowStore } from "./store/threadWindowStore.ts";
 import { ThreadSocketClient, type ConnectionState } from "./thread/threadSocketClient.ts";
+import { getThreadWindowSidebarLayout } from "./utils/sidebarLayout.ts";
 
 function now() {
   return new Date().toISOString();
@@ -29,6 +30,8 @@ export function App() {
   const activeTab = state.activeTabId ? state.tabs[state.activeTabId] : null;
   const clientRef = useRef<ThreadSocketClient | null>(null);
   const [deleteTargetThreadId, setDeleteTargetThreadId] = useState<string | null>(null);
+  const [windowWidth, setWindowWidth] = useState(() => window.innerWidth);
+  const sidebarLayout = getThreadWindowSidebarLayout(windowWidth);
 
   useEffect(() => {
     const socket = new ThreadSocketClient({
@@ -54,6 +57,13 @@ export function App() {
     };
   }, []);
 
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   const handleNewThread = () => {
     const commandId = id('start');
     const timestamp = now();
@@ -70,19 +80,24 @@ export function App() {
   };
 
   return (
-    <main className="grid grid-cols-[280px_1fr] w-screen min-h-screen overflow-hidden bg-canvas text-ink font-body">
-      <HistorySidebar
-        history={state.history}
-        activeTabId={state.activeTabId}
-        onOpenThread={(threadId) => {
-          createThreadWindowStore.getState().openHistoryThread(threadId);
-          clientRef.current?.resumeThread(threadId);
-        }}
-        onDeleteThread={(threadId) => {
-          setDeleteTargetThreadId(threadId);
-        }}
-        onNewThread={handleNewThread}
-      />
+    <main
+      className="grid w-screen min-h-screen overflow-hidden bg-canvas text-ink font-body"
+      style={{ gridTemplateColumns: sidebarLayout.gridTemplateColumns }}
+    >
+      {sidebarLayout.isSidebarVisible ? (
+        <HistorySidebar
+          history={state.history}
+          activeTabId={state.activeTabId}
+          onOpenThread={(threadId) => {
+            createThreadWindowStore.getState().openHistoryThread(threadId);
+            clientRef.current?.resumeThread(threadId);
+          }}
+          onDeleteThread={(threadId) => {
+            setDeleteTargetThreadId(threadId);
+          }}
+          onNewThread={handleNewThread}
+        />
+      ) : null}
       <section className="grid grid-rows-[auto_auto_1fr_auto] min-w-0 min-h-screen overflow-hidden bg-surface-dark text-on-dark shadow-product-inner" aria-label="Thread workspace">
         <header className="flex items-center gap-3 min-h-[52px] border-b border-white/10 bg-surface-dark-soft px-sm py-xs">
           <TabBar

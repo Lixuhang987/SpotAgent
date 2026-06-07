@@ -38,6 +38,12 @@ HistorySidebar
     └── DefaultGroup（workspaceId: null 的 thread，固定在最下方，默认展开）
 ```
 
+左侧历史边栏由 `src/utils/sidebarLayout.ts` 根据 ThreadWindow 当前宽度计算：
+
+- 窗口宽度 `>= 760px` 时显示历史边栏，宽度为窗口宽度的 30%，并限制在 220px 到 320px 之间。
+- 窗口宽度 `< 760px` 时隐藏历史边栏，右侧对话区切到单列布局。
+- 全局 `body` 最小宽度保持低于隐藏阈值，确保缩窄窗口时可以进入隐藏侧栏状态。
+
 ### 右侧对话区（GPT 风格布局）
 
 ```
