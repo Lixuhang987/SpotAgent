@@ -45,7 +45,9 @@
 1. 触发平台能力 tool，例如 `clipboard.read`、`app.frontmost`、`screen.capture` 或 `accessibility.snapshot`，确认 agent-server 通过 `/api/platform` 发出 `platform_request`，Swift 回写 `platform_response`。
 1. 暂停或关闭 platform socket 后确认 platform tool 明确失败，但 thread socket 不因此中断。
 
-## ThreadWindow UI 基础设施与协议扩展（P2）
+## ThreadWindow UI 重构完整验收（P2）
+
+**实施状态**：Phase 1-4 已 100% 完成（2026-06-07 合并到 main）
 
 ### 前提条件
 - 已通过 `bash ./scripts/test.sh`
@@ -54,16 +56,17 @@
 
 ### 验收场景
 
-#### 场景 1: Tailwind CSS 构建验证
+#### 场景 1: Tailwind CSS 构建与主题验证
 
 1. 执行 `pnpm --filter handagent-thread-window-web build`
 2. 确认 `apps/thread-window-web/dist/` 生成包含 Tailwind utilities 的 CSS
 3. 确认构建输出无 PostCSS 或 Tailwind 配置错误
-4. 检查 `dist/assets/*.css` 文件，确认包含自定义 theme tokens（如 `text-accent`、`bg-surface`）
+4. 检查 `dist/assets/*.css` 文件，确认包含 Raycast Glass 自定义 theme tokens（如 `text-accent`、`bg-surface`、`bg-user-bubble`）
+5. 启动 desktop app，用开发者工具检查 DOM，确认组件使用 Tailwind 类名（如 `px-6 py-4`、`rounded-bubble`）
 
 #### 场景 2: workspaceId 向后兼容验证
 
-1. 创建一个测试用旧版本 thread 文件（不含 `workspaceId` 字段）：
+1. 创建测试用旧版本 thread 文件（不含 `workspaceId` 字段）：
    ```bash
    cat > ~/.spotAgent/threads/test-old-thread.json <<'EOF'
    {
@@ -82,28 +85,71 @@
    ```
 2. 启动 desktop app：`bash ./scripts/swiftw run HandAgentDesktop`
 3. 打开 ThreadWindow 历史列表
-4. 确认旧 thread 可正常显示，不出现解析错误或崩溃
+4. 确认旧 thread 出现在"默认对话"分组（最下方），不出现解析错误或崩溃
 5. 用 `cat ~/.spotAgent/threads/test-old-thread.json` 确认文件未被意外修改
 6. 创建新 thread，用 `cat ~/.spotAgent/threads/<新threadId>.json | jq .metadata.workspaceId` 确认新文件包含 `"workspaceId": null` 字段
 7. 清理测试文件：`rm ~/.spotAgent/threads/test-old-thread.json`
 
-#### 场景 3: workspace.list 协议定义验证
+#### 场景 3: workspace.list 协议与处理器验证
 
 1. 审查 `packages/core/src/protocol/ThreadCommand.ts`，确认 `workspace.list` 命令类型存在
 2. 审查 `packages/core/src/protocol/ThreadNotification.ts`，确认 `workspace.listed` 通知类型存在
 3. 执行 `bash ./scripts/test.sh`，确认协议类型守卫测试通过
-4. 注意：当前 agent-server **尚未实现** `workspace.list` 命令处理逻辑，前端发送该命令会被忽略（等待 Phase 2.3-2.8 完成）
+4. 启动 desktop app，打开浏览器开发者工具 Network 标签
+5. 打开 ThreadWindow，确认 WebSocket 连接后自动发送 `workspace.list` 命令
+6. 确认收到 `workspace.listed` 响应，包含 `~/.spotAgent/settings.json` 中配置的 workspace 列表
+7. 在设置中添加新 workspace，刷新 ThreadWindow，确认新 workspace 出现在历史边栏分组中
 
-## ThreadWindow UI 重构进度说明（2026-06-07）
+#### 场景 4: 左侧边栏 workspace 分组交互
 
-**当前状态**：仅完成 Phase 1（基础设施）和 Phase 2.1（ThreadMetadata 扩展）
+1. 确认历史边栏顶部显示"新建对话"按钮
+2. 确认显示搜索输入框
+3. 确认 workspace 分组按字母顺序排列，"默认对话"分组固定在最下方
+4. 点击 workspace 分组标题，确认可展开/收起，图标有旋转动画
+5. 在搜索框输入关键词，确认过滤所有分组的 thread（按 preview 字段匹配）
+6. 清空搜索，确认恢复完整列表
+7. 展开/收起若干分组后刷新页面，确认展开状态保持（持久化到 store）
+8. 点击"新建对话"按钮，确认创建空白 thread 并自动切换到新 tab
+9. 点击历史项，确认激活或创建对应 tab
 
-**未完成部分**：
-- Phase 2.2-2.8：workspace.list 命令处理、前端 store 扩展、WebSocket 自动请求
-- Phase 3：左侧边栏 workspace 分组重写
-- Phase 4：右侧对话区 ChatGPT 风格重写
+#### 场景 5: 右侧对话区 ChatGPT 风格布局验证
 
-**影响**：ThreadWindow 仍使用旧 UI 样式，Tailwind 基础设施已安装但未应用到组件。
+1. 创建新 thread，发送若干消息（user / assistant / tool）
+2. 确认消息气泡使用 ChatGPT 布局密度：
+   - 消息内边距为 24px 水平、16px 垂直（`px-6 py-4`）
+   - 消息之间间距为 12px（`space-y-3`）
+   - 消息行高为 1.625（`leading-relaxed`）
+   - 消息最大宽度 768px，居中显示（`max-w-3xl mx-auto`）
+3. 确认 user 消息使用 Mango Amber 色调背景（`bg-user-bubble`）
+4. 确认 assistant 消息使用玻璃质感背景（`bg-assistant-bubble`）
+5. 确认 tool 消息显示 tool 名称标签
+
+#### 场景 6: 消息操作按钮验证
+
+1. 确认每条消息下方始终显示操作按钮栏（不需要 hover）
+2. 点击"复制"按钮，确认消息内容复制到剪贴板
+3. 确认"编辑"和"重新生成"按钮显示但禁用，hover 时显示 tooltip "即将推出"
+4. 确认操作按钮栏使用低对比度颜色（`text-text-secondary`），不干扰阅读
+
+#### 场景 7: Composer 自动增高输入框验证
+
+1. 在输入框输入单行文本，确认高度为最小值（52px）
+2. 按 Shift+Return 插入换行，继续输入到第 2、3、4、5、6 行
+3. 确认输入框随内容自动增高
+4. 继续输入第 7 行，确认输入框停止增高，出现垂直滚动条
+5. 确认最大高度约 144px（6 行 × 24px 行高）
+6. 按 Return（无修饰键）确认提交消息，输入框清空并恢复最小高度
+
+#### 场景 8: 视觉一致性验证
+
+1. 确认 ThreadWindow 整体使用 Raycast Glass 视觉风格：
+   - 背景色 `#0B0B0F`
+   - 玻璃质感表面（半透明白色叠加）
+   - Mango Amber 强调色 `#FFA947`（按钮、user 消息边框）
+   - SF Pro 系统字体
+2. 确认顶部工具栏不再显示 connection pill（已移除）
+3. 确认所有交互元素有 hover 状态和过渡动画
+4. 确认 dark-only 主题（无 light mode）
 
 ## 开发脚本依赖与打包反馈 smoke（P2）
 
