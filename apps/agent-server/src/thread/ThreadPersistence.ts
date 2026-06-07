@@ -163,12 +163,7 @@ export class ThreadPersistence {
   ): Promise<void> {
     const generatedMessages = runtimeMessages.slice(baseMessageCount);
     if (generatedMessages.length > 0) {
-      const currentMessages = await this.getMessages(threadId);
-      await this.store.setMessages(
-        threadId,
-        [...currentMessages, ...generatedMessages],
-        this.now(),
-      );
+      await this.store.appendMessages(threadId, generatedMessages, this.now());
     }
     if (events.length > 0) {
       await this.store.appendEvents(threadId, events);

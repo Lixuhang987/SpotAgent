@@ -4,6 +4,40 @@ import { InMemoryThreadStore } from "@handagent/core/storage/index.ts";
 import { MemoryBlobStore } from "../support/MemoryBlobStore.ts";
 import { ThreadPersistence } from "../../src/thread/ThreadPersistence.ts";
 
+class InterleavingThreadStore extends InMemoryThreadStore {
+  private interleavedMessage: AgentMessage | null = null;
+
+  armInterleavedAppend(message: AgentMessage): void {
+    this.interleavedMessage = message;
+  }
+
+  override async appendMessages(
+    threadId: string,
+    messages: AgentMessage[],
+    updatedAt: string,
+  ): Promise<void> {
+    await this.appendInterleavedIfArmed(threadId, updatedAt);
+    await super.appendMessages(threadId, messages, updatedAt);
+  }
+
+  override async setMessages(
+    threadId: string,
+    messages: AgentMessage[],
+    updatedAt: string,
+  ): Promise<void> {
+    await this.appendInterleavedIfArmed(threadId, updatedAt);
+    await super.setMessages(threadId, messages, updatedAt);
+  }
+
+  private async appendInterleavedIfArmed(threadId: string, updatedAt: string): Promise<void> {
+    if (!this.interleavedMessage) return;
+
+    const message = this.interleavedMessage;
+    this.interleavedMessage = null;
+    await super.appendMessages(threadId, [message], updatedAt);
+  }
+}
+
 describe("ThreadPersistence", () => {
   it("wraps Thread CRUD operations", async () => {
     const persistence = new ThreadPersistence(
@@ -198,29 +232,53 @@ describe("ThreadPersistence", () => {
   });
 
   it("appends runtime output without dropping user input recorded during the run", async () => {
+    const store = new InterleavingThreadStore();
     const persistence = new ThreadPersistence(
-      new InMemoryThreadStore(),
+      store,
       () => "2026-06-07T00:00:00.000Z",
     );
     await persistence.ensureThread("thread-delta");
     await persistence.persistUserMessage("thread-delta", "first");
-    const baseMessages = await persistence.getMessages("thread-delta");
+    const baseMessagesSnapshot = [
+      ...await persistence.getMessages("thread-delta"),
+    ];
+    const baseMessageCount = baseMessagesSnapshot.length;
 
     await persistence.persistUserMessage("thread-delta", "steered while running");
+    store.armInterleavedAppend({ role: "user", content: "queued before runtime append" });
     await persistence.persistRunDelta(
       "thread-delta",
-      baseMessages.length,
+      baseMessageCount,
       [
-        ...baseMessages,
+        ...baseMessagesSnapshot,
         { role: "assistant", content: "reply to first" },
       ],
-      [],
+      [
+        {
+          type: "tool_call",
+          timestamp: "2026-06-07T00:00:01.000Z",
+          toolCallId: "tc-delta",
+          toolName: "file.read",
+          input: { path: "/tmp/delta.txt" },
+        },
+      ],
     );
 
-    expect(await persistence.getMessages("thread-delta")).toEqual([
+    const thread = await persistence.getThread("thread-delta");
+    expect(thread?.messages).toEqual([
       { role: "user", content: "first" },
       { role: "user", content: "steered while running" },
+      { role: "user", content: "queued before runtime append" },
       { role: "assistant", content: "reply to first" },
+    ]);
+    expect(thread?.events).toEqual([
+      {
+        type: "tool_call",
+        timestamp: "2026-06-07T00:00:01.000Z",
+        toolCallId: "tc-delta",
+        toolName: "file.read",
+        input: { path: "/tmp/delta.txt" },
+      },
     ]);
   });
 
