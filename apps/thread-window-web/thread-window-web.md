@@ -10,6 +10,7 @@
 | `src/thread/` | WebSocket client、重连、命令发送 |
 | `src/store/` | `zustand + immer` ThreadWindow 状态源 |
 | `src/components/` | 历史侧栏、tab、消息、请求面板、输入区 |
+| `src/styles/` | Tailwind CSS 样式入口 |
 | `src/native/` | Swift 注入配置和初始 prompt 接收 |
 
 ## 边界

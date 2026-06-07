@@ -45,6 +45,66 @@
 1. 触发平台能力 tool，例如 `clipboard.read`、`app.frontmost`、`screen.capture` 或 `accessibility.snapshot`，确认 agent-server 通过 `/api/platform` 发出 `platform_request`，Swift 回写 `platform_response`。
 1. 暂停或关闭 platform socket 后确认 platform tool 明确失败，但 thread socket 不因此中断。
 
+## ThreadWindow UI 基础设施与协议扩展（P2）
+
+### 前提条件
+- 已通过 `bash ./scripts/test.sh`
+- 已通过 `bash ./scripts/swiftw build`
+- 已执行 `pnpm --filter handagent-thread-window-web build`
+
+### 验收场景
+
+#### 场景 1: Tailwind CSS 构建验证
+
+1. 执行 `pnpm --filter handagent-thread-window-web build`
+2. 确认 `apps/thread-window-web/dist/` 生成包含 Tailwind utilities 的 CSS
+3. 确认构建输出无 PostCSS 或 Tailwind 配置错误
+4. 检查 `dist/assets/*.css` 文件，确认包含自定义 theme tokens（如 `text-accent`、`bg-surface`）
+
+#### 场景 2: workspaceId 向后兼容验证
+
+1. 创建一个测试用旧版本 thread 文件（不含 `workspaceId` 字段）：
+   ```bash
+   cat > ~/.spotAgent/threads/test-old-thread.json <<'EOF'
+   {
+     "version": 1,
+     "metadata": {
+       "id": "test-old-thread",
+       "preview": "测试旧版本 thread",
+       "createdAt": "2026-06-01T10:00:00.000Z",
+       "updatedAt": "2026-06-01T10:00:00.000Z",
+       "messageCount": 0
+     },
+     "messages": [],
+     "events": []
+   }
+   EOF
+   ```
+2. 启动 desktop app：`bash ./scripts/swiftw run HandAgentDesktop`
+3. 打开 ThreadWindow 历史列表
+4. 确认旧 thread 可正常显示，不出现解析错误或崩溃
+5. 用 `cat ~/.spotAgent/threads/test-old-thread.json` 确认文件未被意外修改
+6. 创建新 thread，用 `cat ~/.spotAgent/threads/<新threadId>.json | jq .metadata.workspaceId` 确认新文件包含 `"workspaceId": null` 字段
+7. 清理测试文件：`rm ~/.spotAgent/threads/test-old-thread.json`
+
+#### 场景 3: workspace.list 协议定义验证
+
+1. 审查 `packages/core/src/protocol/ThreadCommand.ts`，确认 `workspace.list` 命令类型存在
+2. 审查 `packages/core/src/protocol/ThreadNotification.ts`，确认 `workspace.listed` 通知类型存在
+3. 执行 `bash ./scripts/test.sh`，确认协议类型守卫测试通过
+4. 注意：当前 agent-server **尚未实现** `workspace.list` 命令处理逻辑，前端发送该命令会被忽略（等待 Phase 2.3-2.8 完成）
+
+## ThreadWindow UI 重构进度说明（2026-06-07）
+
+**当前状态**：仅完成 Phase 1（基础设施）和 Phase 2.1（ThreadMetadata 扩展）
+
+**未完成部分**：
+- Phase 2.2-2.8：workspace.list 命令处理、前端 store 扩展、WebSocket 自动请求
+- Phase 3：左侧边栏 workspace 分组重写
+- Phase 4：右侧对话区 ChatGPT 风格重写
+
+**影响**：ThreadWindow 仍使用旧 UI 样式，Tailwind 基础设施已安装但未应用到组件。
+
 ## 开发脚本依赖与打包反馈 smoke（P2）
 
 1. 在缺少根目录 `node_modules` 的干净 worktree 中执行 `bash ./scripts/swiftw run HandAgentDesktop`，确认脚本先输出 `[swiftw] node_modules missing, running pnpm install...`，再执行 ThreadWindow web build 和 Swift run。

@@ -10,7 +10,7 @@
 
 | 文件 | 职责 |
 |------|------|
-| `ThreadCommand.ts` | 最小命令协议：`thread.start` / `thread.resume` / `thread.list` / `thread.delete` / `turn.start` / `turn.interrupt` |
+| `ThreadCommand.ts` | 最小命令协议：`thread.start` / `thread.resume` / `thread.list` / `thread.delete` / `turn.start` / `turn.interrupt` / `workspace.list` |
 | `ThreadNotification.ts` | 通知协议：`thread.started` / `thread.snapshot` / `assistant.delta` / `tool.started` / `turn.completed` 等 |
 | `ServerRequest.ts` | 待回执请求：`permission.requested` / `workspace.requested`，按 `threadId` 路由 |
 | `ClientResponse.ts` | 回执协议：`permission.answered` / `workspace.answered` |
@@ -45,6 +45,7 @@ flowchart LR
 - `thread.delete`
 - `turn.start`
 - `turn.interrupt`
+- `workspace.list`
 
 ### `ThreadNotification`
 
@@ -60,6 +61,7 @@ flowchart LR
 - `thread.listed`
 - `thread.deleted`
 - `thread.error`
+- `workspace.listed`
 
 ### `ServerRequest` / `ClientResponse`
 

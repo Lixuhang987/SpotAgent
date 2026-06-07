@@ -132,6 +132,8 @@ flowchart TD
   - `createdAt: string`
   - `updatedAt: string`
   - `messageCount: number`
+  - `workspaceId: string | null`
+  - `actionBinding?: ThreadActionBinding`
 - `PersistedThread`
   - `version: 1`
   - `metadata: ThreadMetadata`
