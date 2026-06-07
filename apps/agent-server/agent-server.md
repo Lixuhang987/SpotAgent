@@ -38,7 +38,7 @@ node --experimental-transform-types --experimental-specifier-resolution=node app
 4. 通过 `SettingsBackedToolRegistry` 注册 builtin tools。
 5. 通过 `SettingsBackedLLMClient` 或 `MockLLMClient` 选择 LLM 模式。
 6. 按 thread 缓存 `AgentRuntime`，注入 thread 级 tool registry、permission policy、blob store 和 turn summarizer。
-7. 创建 `ThreadPersistence`、`ThreadRuntimeOrchestrator`、`ThreadNotificationPublisher`、`ThreadCommandRouter`。
+7. 创建 `ThreadPersistence`、`ThreadRuntimeOrchestrator`、`ThreadInputQueue` 驱动的 per-thread session loop、`ThreadNotificationPublisher`、`ThreadCommandRouter`。
 8. 启动同端口 HTTP + WebSocket 服务：`/api/thread` 挂载 thread command/response handler，`/api/platform` 挂载 platform bridge handler，`/thread-window/*` 提供 React 静态资源，未知 path 直接关闭或返回 404。
 
 ## 主消息流
@@ -59,6 +59,8 @@ flowchart TD
   H --> K["React ThreadWindow"]
   G --> L["thread/ThreadPersistence"]
 ```
+
+`turn.start` 是兼容入口；进入 `ThreadRuntimeOrchestrator` 后会变成 thread-local input item，优先 steer 到当前 active turn，没有 active turn 时才唤醒新的 backend turn worker。
 
 ## 协议主干
 

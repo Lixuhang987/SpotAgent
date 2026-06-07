@@ -4,6 +4,40 @@ import { InMemoryThreadStore } from "@handagent/core/storage/index.ts";
 import { MemoryBlobStore } from "../support/MemoryBlobStore.ts";
 import { ThreadPersistence } from "../../src/thread/ThreadPersistence.ts";
 
+class InterleavingThreadStore extends InMemoryThreadStore {
+  private interleavedMessage: AgentMessage | null = null;
+
+  armInterleavedAppend(message: AgentMessage): void {
+    this.interleavedMessage = message;
+  }
+
+  override async appendMessages(
+    threadId: string,
+    messages: AgentMessage[],
+    updatedAt: string,
+  ): Promise<void> {
+    await this.appendInterleavedIfArmed(threadId, updatedAt);
+    await super.appendMessages(threadId, messages, updatedAt);
+  }
+
+  override async setMessages(
+    threadId: string,
+    messages: AgentMessage[],
+    updatedAt: string,
+  ): Promise<void> {
+    await this.appendInterleavedIfArmed(threadId, updatedAt);
+    await super.setMessages(threadId, messages, updatedAt);
+  }
+
+  private async appendInterleavedIfArmed(threadId: string, updatedAt: string): Promise<void> {
+    if (!this.interleavedMessage) return;
+
+    const message = this.interleavedMessage;
+    this.interleavedMessage = null;
+    await super.appendMessages(threadId, [message], updatedAt);
+  }
+}
+
 describe("ThreadPersistence", () => {
   it("wraps Thread CRUD operations", async () => {
     const persistence = new ThreadPersistence(
@@ -193,6 +227,98 @@ describe("ThreadPersistence", () => {
         toolCallId: "tc-1",
         toolName: "file.read",
         input: { path: "/tmp/test.txt" },
+      },
+    ]);
+  });
+
+  it("appends runtime output without dropping user input recorded during the run", async () => {
+    const store = new InterleavingThreadStore();
+    const persistence = new ThreadPersistence(
+      store,
+      () => "2026-06-07T00:00:00.000Z",
+    );
+    await persistence.ensureThread("thread-delta");
+    await persistence.persistUserMessage("thread-delta", "first");
+    const baseMessagesSnapshot = [
+      ...await persistence.getMessages("thread-delta"),
+    ];
+    const baseMessageCount = baseMessagesSnapshot.length;
+
+    await persistence.persistUserMessage("thread-delta", "steered while running");
+    store.armInterleavedAppend({ role: "user", content: "queued before runtime append" });
+    await persistence.persistRunDelta(
+      "thread-delta",
+      baseMessageCount,
+      [
+        ...baseMessagesSnapshot,
+        { role: "assistant", content: "reply to first" },
+      ],
+      [
+        {
+          type: "tool_call",
+          timestamp: "2026-06-07T00:00:01.000Z",
+          toolCallId: "tc-delta",
+          toolName: "file.read",
+          input: { path: "/tmp/delta.txt" },
+        },
+      ],
+    );
+
+    const thread = await persistence.getThread("thread-delta");
+    expect(thread?.messages).toEqual([
+      { role: "user", content: "first" },
+      { role: "user", content: "steered while running" },
+      { role: "user", content: "queued before runtime append" },
+      { role: "assistant", content: "reply to first" },
+    ]);
+    expect(thread?.events).toEqual([
+      {
+        type: "tool_call",
+        timestamp: "2026-06-07T00:00:01.000Z",
+        toolCallId: "tc-delta",
+        toolName: "file.read",
+        input: { path: "/tmp/delta.txt" },
+      },
+    ]);
+  });
+
+  it("appends runtime delta events even when no messages were generated", async () => {
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
+      () => "2026-06-07T00:00:00.000Z",
+    );
+    await persistence.ensureThread("thread-delta-events");
+    await persistence.persistUserMessage("thread-delta-events", "first");
+    const runtimeMessages = [
+      ...await persistence.getMessages("thread-delta-events"),
+    ];
+
+    await persistence.persistRunDelta(
+      "thread-delta-events",
+      runtimeMessages.length,
+      runtimeMessages,
+      [
+        {
+          type: "tool_result",
+          timestamp: "2026-06-07T00:00:01.000Z",
+          toolCallId: "tc-delta",
+          status: "success",
+          output: "ok",
+          durationMs: 1,
+        },
+      ],
+    );
+
+    const thread = await persistence.getThread("thread-delta-events");
+    expect(thread?.messages).toEqual([{ role: "user", content: "first" }]);
+    expect(thread?.events).toEqual([
+      {
+        type: "tool_result",
+        timestamp: "2026-06-07T00:00:01.000Z",
+        toolCallId: "tc-delta",
+        status: "success",
+        output: "ok",
+        durationMs: 1,
       },
     ]);
   });

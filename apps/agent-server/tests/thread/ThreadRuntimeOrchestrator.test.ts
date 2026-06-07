@@ -37,7 +37,249 @@ function expectTypes(events: ThreadNotification[], expected: ThreadNotification[
   expect(eventTypes(events)).toEqual(expected);
 }
 
+async function waitUntil(
+  predicate: () => boolean | Promise<boolean>,
+  label: string,
+): Promise<void> {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < 500) {
+    if (await predicate()) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error(`Timed out waiting for ${label}`);
+}
+
+function createDeferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 describe("ThreadRuntimeOrchestrator", () => {
+  it("steers new user input into the active turn without aborting the running request", async () => {
+    const pushed: ThreadNotification[] = [];
+    const runtimeCalls: AgentMessage[][] = [];
+    const runSignals: AbortSignal[] = [];
+    const firstRunGate = createDeferred();
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
+      () => "2026-06-07T00:00:00.000Z",
+    );
+    const orchestrator = new ThreadRuntimeOrchestrator(
+      {
+        async runWithMessages(messages, _onEvent, runOptions) {
+          runtimeCalls.push(messages.map((message) => ({ ...message })));
+          if (runOptions?.signal) {
+            runSignals.push(runOptions.signal);
+          }
+          if (runtimeCalls.length === 1) {
+            await firstRunGate.promise;
+            return {
+              messages: [
+                ...messages,
+                { role: "assistant" as const, content: "first reply" },
+              ],
+            };
+          }
+          return {
+            messages: [
+              ...messages,
+              { role: "assistant" as const, content: "second reply" },
+            ],
+          };
+        },
+      },
+      persistence,
+      () => "2026-06-07T00:00:00.000Z",
+    );
+
+    await persistence.ensureThread("thread-steer");
+
+    await orchestrator.handleUserMessage(
+      createUserMessage("thread-steer", "first", "user-1"),
+      (message) => pushed.push(message),
+    );
+    await waitUntil(() => runtimeCalls.length === 1, "first runtime call");
+
+    await orchestrator.handleUserMessage(
+      createUserMessage("thread-steer", "second", "user-2"),
+      (message) => pushed.push(message),
+    );
+
+    expect(runSignals[0]?.aborted).toBe(false);
+    expect(eventTypes(pushed).filter((type) => type === "turn.started")).toHaveLength(1);
+    expect(eventTypes(pushed).filter((type) => type === "user.message.recorded")).toHaveLength(2);
+
+    firstRunGate.resolve();
+    await waitUntil(() => runtimeCalls.length === 2, "follow-up runtime call");
+    await orchestrator.waitForThreadIdle("thread-steer");
+
+    expect(runtimeCalls).toEqual([
+      [{ role: "user", content: "first" }],
+      [
+        { role: "user", content: "first" },
+        { role: "user", content: "second" },
+        { role: "assistant", content: "first reply" },
+      ],
+    ]);
+    expect(await persistence.getMessages("thread-steer")).toEqual([
+      { role: "user", content: "first" },
+      { role: "user", content: "second" },
+      { role: "assistant", content: "first reply" },
+      { role: "assistant", content: "second reply" },
+    ]);
+    expect(eventTypes(pushed).filter((type) => type === "turn.completed")).toHaveLength(1);
+    expect(pushed.at(-1)).toMatchObject({
+      type: "thread.status.changed",
+      payload: { value: "idle" },
+    });
+  });
+
+  it("keeps input steered during run preparation out of the current runtime snapshot", async () => {
+    const pushed: ThreadNotification[] = [];
+    const runtimeCalls: AgentMessage[][] = [];
+    const beforeRunGate = createDeferred();
+    let beforeRunCount = 0;
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
+      () => "2026-06-07T00:00:00.000Z",
+    );
+    const orchestrator = new ThreadRuntimeOrchestrator(
+      {
+        async runWithMessages(messages) {
+          runtimeCalls.push(messages.map((message) => ({ ...message })));
+          return {
+            messages: [
+              ...messages,
+              {
+                role: "assistant" as const,
+                content: `reply ${runtimeCalls.length}`,
+              },
+            ],
+          };
+        },
+      },
+      persistence,
+      () => "2026-06-07T00:00:00.000Z",
+      async () => {
+        beforeRunCount += 1;
+        if (beforeRunCount === 1) {
+          await beforeRunGate.promise;
+        }
+      },
+    );
+
+    await persistence.ensureThread("thread-prepare-steer");
+    await orchestrator.handleUserMessage(
+      createUserMessage("thread-prepare-steer", "first", "user-1"),
+      (message) => pushed.push(message),
+    );
+    await waitUntil(() => beforeRunCount === 1, "first beforeRun");
+
+    await orchestrator.handleUserMessage(
+      createUserMessage("thread-prepare-steer", "second", "user-2"),
+      (message) => pushed.push(message),
+    );
+
+    const idleBeforeRelease = await Promise.race([
+      orchestrator.waitForThreadIdle("thread-prepare-steer").then(() => "idle"),
+      new Promise((resolve) => setTimeout(() => resolve("still-running"), 10)),
+    ]);
+    expect(idleBeforeRelease).toBe("still-running");
+
+    beforeRunGate.resolve();
+    await orchestrator.waitForThreadIdle("thread-prepare-steer");
+
+    expect(runtimeCalls).toEqual([
+      [{ role: "user", content: "first" }],
+      [
+        { role: "user", content: "first" },
+        { role: "user", content: "second" },
+        { role: "assistant", content: "reply 1" },
+      ],
+    ]);
+    expect(eventTypes(pushed).filter((type) => type === "turn.started")).toHaveLength(1);
+    expect(eventTypes(pushed).filter((type) => type === "turn.completed")).toHaveLength(1);
+  });
+
+  it("keeps input steered during follow-up preparation out of that follow-up snapshot", async () => {
+    const runtimeCalls: AgentMessage[][] = [];
+    const firstRunGate = createDeferred();
+    const secondBeforeRunGate = createDeferred();
+    let beforeRunCount = 0;
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
+      () => "2026-06-07T00:00:00.000Z",
+    );
+    const orchestrator = new ThreadRuntimeOrchestrator(
+      {
+        async runWithMessages(messages) {
+          runtimeCalls.push(messages.map((message) => ({ ...message })));
+          if (runtimeCalls.length === 1) {
+            await firstRunGate.promise;
+          }
+          return {
+            messages: [
+              ...messages,
+              {
+                role: "assistant" as const,
+                content: `reply ${runtimeCalls.length}`,
+              },
+            ],
+          };
+        },
+      },
+      persistence,
+      () => "2026-06-07T00:00:00.000Z",
+      async () => {
+        beforeRunCount += 1;
+        if (beforeRunCount === 2) {
+          await secondBeforeRunGate.promise;
+        }
+      },
+    );
+
+    await persistence.ensureThread("thread-follow-up-steer");
+    await orchestrator.handleUserMessage(
+      createUserMessage("thread-follow-up-steer", "first", "user-1"),
+      () => {},
+    );
+    await waitUntil(() => runtimeCalls.length === 1, "first runtime call");
+    await orchestrator.handleUserMessage(
+      createUserMessage("thread-follow-up-steer", "second", "user-2"),
+      () => {},
+    );
+    firstRunGate.resolve();
+    await waitUntil(() => beforeRunCount === 2, "second beforeRun");
+    await orchestrator.handleUserMessage(
+      createUserMessage("thread-follow-up-steer", "third", "user-3"),
+      () => {},
+    );
+
+    secondBeforeRunGate.resolve();
+    await orchestrator.waitForThreadIdle("thread-follow-up-steer");
+
+    expect(runtimeCalls).toEqual([
+      [{ role: "user", content: "first" }],
+      [
+        { role: "user", content: "first" },
+        { role: "user", content: "second" },
+        { role: "assistant", content: "reply 1" },
+      ],
+      [
+        { role: "user", content: "first" },
+        { role: "user", content: "second" },
+        { role: "assistant", content: "reply 1" },
+        { role: "user", content: "third" },
+        { role: "assistant", content: "reply 2" },
+      ],
+    ]);
+  });
+
   it("pushes assistant events and persists final user + assistant messages", async () => {
     const pushed: ThreadNotification[] = [];
     const runtimeCalls: AgentMessage[][] = [];
@@ -89,6 +331,7 @@ describe("ThreadRuntimeOrchestrator", () => {
       createUserMessage("Thread-1", "第一句", "user-1"),
       (message) => pushed.push(message),
     );
+    await orchestrator.waitForThreadIdle("Thread-1");
 
     expect(runtimeCalls).toEqual([
       [
@@ -183,10 +426,12 @@ describe("ThreadRuntimeOrchestrator", () => {
       createUserMessage("Thread-2", "第一句", "user-1"),
       () => {},
     );
+    await orchestrator.waitForThreadIdle("Thread-2");
     await orchestrator.handleUserMessage(
       createUserMessage("Thread-2", "第二句", "user-2"),
       () => {},
     );
+    await orchestrator.waitForThreadIdle("Thread-2");
 
     expect(runtimeCalls).toEqual([
       [
@@ -248,6 +493,7 @@ describe("ThreadRuntimeOrchestrator", () => {
       createUserMessage("Thread-summary", "第一句", "user-1"),
       () => {},
     );
+    await orchestrator.waitForThreadIdle("Thread-summary");
 
     expect(runtimeCalls).toEqual([
       [
@@ -256,6 +502,56 @@ describe("ThreadRuntimeOrchestrator", () => {
       ],
     ]);
     expect(order).toEqual(["refresh:Thread-summary", "summary", "runtime"]);
+  });
+
+  it("pushes and records a failed turn when summary preparation fails", async () => {
+    const pushed: ThreadNotification[] = [];
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
+      () => "2026-06-07T00:00:00.000Z",
+    );
+    const orchestrator = new ThreadRuntimeOrchestrator(
+      {
+        async waitForPendingSummaries() {
+          throw new Error("summary unavailable");
+        },
+        async runWithMessages(messages) {
+          return { messages };
+        },
+      },
+      persistence,
+      () => "2026-06-07T00:00:00.000Z",
+    );
+
+    await persistence.ensureThread("Thread-summary-error");
+    await orchestrator.handleUserMessage(
+      createUserMessage("Thread-summary-error", "第一句", "user-1"),
+      (message) => pushed.push(message),
+    );
+    await orchestrator.waitForThreadIdle("Thread-summary-error");
+
+    expectTypes(pushed, [
+      "user.message.recorded",
+      "turn.started",
+      "thread.error",
+      "turn.completed",
+      "thread.status.changed",
+    ]);
+    expect(pushed[2]).toMatchObject({
+      type: "thread.error",
+      payload: { message: "summary unavailable" },
+    });
+    expect(pushed[3]).toMatchObject({
+      type: "turn.completed",
+      payload: { status: "failed" },
+    });
+    expect((await persistence.getThread("Thread-summary-error"))?.events).toEqual([
+      {
+        type: "error",
+        timestamp: "2026-06-07T00:00:00.000Z",
+        message: "summary unavailable",
+      },
+    ]);
   });
 
   it("passes image attachments to runtime as multimodal content while persisting stubs", async () => {
@@ -295,6 +591,7 @@ describe("ThreadRuntimeOrchestrator", () => {
       },
       () => {},
     );
+    await orchestrator.waitForThreadIdle("Thread-image");
 
     expect(runtimeCalls).toEqual([
       [
@@ -369,6 +666,7 @@ describe("ThreadRuntimeOrchestrator", () => {
       createUserMessage("Thread-tool", "读取文件", "user-1"),
       (message) => pushed.push(message),
     );
+    await orchestrator.waitForThreadIdle("Thread-tool");
 
     expectTypes(pushed, [
       "user.message.recorded",
@@ -503,6 +801,7 @@ describe("ThreadRuntimeOrchestrator", () => {
       createUserMessage("Thread-tool-running", "列出工作区", "user-1"),
       (message) => pushed.push(message),
     );
+    await orchestrator.waitForThreadIdle("Thread-tool-running");
 
     expectTypes(pushed, [
       "user.message.recorded",
@@ -657,6 +956,7 @@ describe("ThreadRuntimeOrchestrator", () => {
     );
     await runStarted.promise;
 
+    expect(orchestrator.isThreadRunning("Thread-never-started")).toBe(false);
     expect(orchestrator.isThreadRunning("Thread-delete-running")).toBe(true);
     await orchestrator.interruptAndWait("Thread-delete-running", (message) => pushed.push(message));
     await runPromise;
@@ -699,9 +999,19 @@ describe("ThreadRuntimeOrchestrator", () => {
       () => "2026-05-22T00:00:00.000Z",
     );
     const runStarted = Promise.withResolvers<void>();
+    let runtimeCallCount = 0;
     const orchestrator = new ThreadRuntimeOrchestrator(
       {
-        runWithMessages() {
+        runWithMessages(messages) {
+          runtimeCallCount += 1;
+          if (runtimeCallCount > 1) {
+            return Promise.resolve({
+              messages: [
+                ...messages,
+                { role: "assistant", content: "after timeout" },
+              ],
+            });
+          }
           runStarted.resolve();
           return new Promise(() => {});
         },
@@ -753,6 +1063,201 @@ describe("ThreadRuntimeOrchestrator", () => {
         code: "run_interrupted",
       },
     ]);
+
+    await orchestrator.handleUserMessage(
+      createUserMessage("Thread-stubborn-runtime", "继续", "user-2"),
+      (message) => pushed.push(message),
+    );
+    await orchestrator.waitForThreadIdle("Thread-stubborn-runtime");
+
+    expect(await persistence.getMessages("Thread-stubborn-runtime")).toEqual([
+      { role: "user", content: "删除中" },
+      { role: "user", content: "继续" },
+      { role: "assistant", content: "after timeout" },
+    ]);
+  });
+
+  it("resolves idle waiters when interrupt cleanup times out", async () => {
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
+      () => "2026-06-07T00:00:00.000Z",
+    );
+    const runStarted = Promise.withResolvers<void>();
+    const orchestrator = new ThreadRuntimeOrchestrator(
+      {
+        runWithMessages() {
+          runStarted.resolve();
+          return new Promise(() => {});
+        },
+      },
+      persistence,
+      () => "2026-06-07T00:00:00.000Z",
+      () => {},
+      { interruptWaitTimeoutMs: 20, interruptPollIntervalMs: 1 },
+    );
+
+    await persistence.ensureThread("Thread-timeout-idle-waiter");
+    void orchestrator.handleUserMessage(
+      createUserMessage("Thread-timeout-idle-waiter", "删除中", "user-1"),
+      () => {},
+    );
+    await runStarted.promise;
+
+    const idlePromise = orchestrator.waitForThreadIdle("Thread-timeout-idle-waiter");
+    await orchestrator.interruptAndWait("Thread-timeout-idle-waiter");
+
+    await expect(Promise.race([
+      idlePromise.then(() => "idle"),
+      new Promise((resolve) => setTimeout(() => resolve("timed-out"), 100)),
+    ])).resolves.toBe("idle");
+  });
+
+  it("replays input queued while interrupted runtime is waiting for timeout cleanup", async () => {
+    const pushed: ThreadNotification[] = [];
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
+      () => "2026-06-07T00:00:00.000Z",
+    );
+    const runStarted = createDeferred();
+    let runtimeCallCount = 0;
+    const orchestrator = new ThreadRuntimeOrchestrator(
+      {
+        runWithMessages(messages) {
+          runtimeCallCount += 1;
+          if (runtimeCallCount === 1) {
+            runStarted.resolve();
+            return new Promise(() => {});
+          }
+          return Promise.resolve({
+            messages: [
+              ...messages,
+              { role: "assistant", content: "after interrupted timeout" },
+            ],
+          });
+        },
+      },
+      persistence,
+      () => "2026-06-07T00:00:00.000Z",
+      () => {},
+      { interruptWaitTimeoutMs: 20, interruptPollIntervalMs: 1 },
+    );
+
+    await persistence.ensureThread("Thread-timeout-replay");
+    void orchestrator.handleUserMessage(
+      createUserMessage("Thread-timeout-replay", "first", "user-1"),
+      (message) => pushed.push(message),
+    );
+    await runStarted.promise;
+
+    const interruptPromise = orchestrator.interruptAndWait(
+      "Thread-timeout-replay",
+      (message) => pushed.push(message),
+    );
+    await waitUntil(
+      () => eventTypes(pushed).includes("turn.completed"),
+      "interrupt notification",
+    );
+    await orchestrator.handleUserMessage(
+      createUserMessage("Thread-timeout-replay", "second", "user-2"),
+      (message) => pushed.push(message),
+    );
+
+    await interruptPromise;
+    await orchestrator.waitForThreadIdle("Thread-timeout-replay");
+
+    expect(runtimeCallCount).toBe(2);
+    expect(await persistence.getMessages("Thread-timeout-replay")).toEqual([
+      { role: "user", content: "first" },
+      { role: "user", content: "second" },
+      { role: "assistant", content: "after interrupted timeout" },
+    ]);
+  });
+
+  it("clears input that finishes enqueueing during interrupt cleanup", async () => {
+    const pushed: ThreadNotification[] = [];
+    const runtimeCalls: AgentMessage[][] = [];
+    const secondPersistStarted = createDeferred();
+    const releaseSecondPersist = createDeferred();
+    const store = new InMemoryThreadStore();
+    class DelayedSecondUserPersistence extends ThreadPersistence {
+      private persistCount = 0;
+
+      override async persistUserMessage(
+        threadId: string,
+        text: string,
+        attachments?: ThreadAttachment[],
+      ): Promise<void> {
+        this.persistCount += 1;
+        if (this.persistCount === 2) {
+          secondPersistStarted.resolve();
+          await releaseSecondPersist.promise;
+        }
+        await super.persistUserMessage(threadId, text, attachments);
+      }
+    }
+    const persistence = new DelayedSecondUserPersistence(
+      store,
+      () => "2026-06-07T00:00:00.000Z",
+    );
+    let firstRunFinish: (() => void) | undefined;
+    const runStarted = createDeferred();
+    const orchestrator = new ThreadRuntimeOrchestrator(
+      {
+        runWithMessages(messages, _onEvent, runOptions) {
+          runtimeCalls.push(messages.map((message) => ({ ...message })));
+          if (runtimeCalls.length === 1) {
+            runOptions?.signal.addEventListener("abort", () => {
+              firstRunFinish?.();
+            });
+            runStarted.resolve();
+            return new Promise((resolve) => {
+              firstRunFinish = () => resolve({ messages });
+            });
+          }
+          return Promise.resolve({
+            messages: [
+              ...messages,
+              { role: "assistant", content: "should not run" },
+            ],
+          });
+        },
+      },
+      persistence,
+      () => "2026-06-07T00:00:00.000Z",
+    );
+
+    await persistence.ensureThread("Thread-interrupt-enqueue");
+    const runPromise = orchestrator.handleUserMessage(
+      createUserMessage("Thread-interrupt-enqueue", "first", "user-1"),
+      (message) => pushed.push(message),
+    );
+    await runStarted.promise;
+
+    const secondInputPromise = orchestrator.handleUserMessage(
+      createUserMessage("Thread-interrupt-enqueue", "second", "user-2"),
+      (message) => pushed.push(message),
+    );
+    await secondPersistStarted.promise;
+    const interruptPromise = orchestrator.interruptAndWait(
+      "Thread-interrupt-enqueue",
+      (message) => pushed.push(message),
+    );
+
+    releaseSecondPersist.resolve();
+    await Promise.all([secondInputPromise, interruptPromise, runPromise]);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(runtimeCalls).toHaveLength(1);
+    expect(await persistence.getMessages("Thread-interrupt-enqueue")).toEqual([
+      { role: "user", content: "first" },
+      { role: "user", content: "second" },
+    ]);
+    expect(eventTypes(pushed).filter((type) => type === "turn.completed")).toEqual([
+      "turn.completed",
+    ]);
+    expect(pushed.find((message) => message.type === "turn.completed")).toMatchObject({
+      payload: { status: "interrupted" },
+    });
   });
 
   it("records interrupted instead of runtime error when an aborted run rejects without AbortError", async () => {
@@ -843,6 +1348,7 @@ describe("ThreadRuntimeOrchestrator", () => {
       createUserMessage("Thread-4", "你好", "user-1"),
       (message) => pushed.push(message),
     );
+    await orchestrator.waitForThreadIdle("Thread-4");
 
     expectTypes(pushed, [
       "user.message.recorded",
@@ -907,6 +1413,7 @@ describe("ThreadRuntimeOrchestrator activation hook", () => {
       createUserMessage("s1", "hi", "user-1"),
       () => {},
     );
+    await orchestrator.waitForThreadIdle("s1");
 
     // beforeRun must fire before runWithMessages, and receive the correct threadId
     expect(calls[0]).toBe("before:s1");
@@ -950,10 +1457,12 @@ describe("ThreadRuntimeOrchestrator activation hook", () => {
       createUserMessage("s1", "one", "user-1"),
       () => {},
     );
+    await orchestrator.waitForThreadIdle("s1");
     await orchestrator.handleUserMessage(
       createUserMessage("s2", "two", "user-2"),
       () => {},
     );
+    await orchestrator.waitForThreadIdle("s2");
 
     expect(calls).toEqual([
       "before:s1",

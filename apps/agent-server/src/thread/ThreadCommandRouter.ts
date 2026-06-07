@@ -59,8 +59,7 @@ export class ThreadCommandRouter {
       case "turn.start":
         return this.handleTurnStart(command, connectionId);
       case "turn.interrupt":
-        this.interruptThread(command.threadId);
-        return;
+        return this.interruptThread(command.threadId);
       case "thread.list":
         return this.handleListThreads(command, connectionId);
       case "thread.delete":
@@ -81,10 +80,15 @@ export class ThreadCommandRouter {
     }
   }
 
-  interruptThread(threadId: string): void {
-    this.orchestrator.interruptThread?.(threadId, (event) => {
+  async interruptThread(threadId: string): Promise<void> {
+    const push = (event: ThreadNotification) => {
       this.publisher.publish(event);
-    });
+    };
+    if (this.orchestrator.interruptAndWait) {
+      await this.orchestrator.interruptAndWait(threadId, push);
+      return;
+    }
+    this.orchestrator.interruptThread?.(threadId, push);
   }
 
   private async handleCreateThread(

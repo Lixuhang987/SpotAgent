@@ -59,7 +59,7 @@ if (message.type === "turn.start") {
 
 `turn.start` 是 permission / workspace 回流的绑定时机。当前连接在收到带 `threadId` 的命令后会建立该 thread 的通知路由。socket close 时会按 token 解绑，旧 socket 只能取消自己 token 下的 pending 请求；如果同一 thread 已被新 socket 绑定，旧 socket close 不会清掉新绑定。
 
-`ThreadNotificationPublisher` 负责 `connectionId -> subscribed threadIds` 映射，所以一条 desktop 连接可以同时接收多个 thread 的通知，并靠 `thread.snapshot` 恢复各自状态。
+`ThreadNotificationPublisher` 负责 `connectionId -> subscribed threadIds` 映射，所以一条 desktop 连接可以同时接收多个 thread 的通知，并靠 `thread.snapshot` 恢复各自状态。若关闭的 socket 仍持有某个 thread 的 permission binding，server 会异步触发 `commandRouter.interruptThread(threadId)` 并清理该 thread 的临时权限规则；若 binding 已被新 socket 接管，旧 socket close 不会中断新连接。
 
 ### 组合根
 

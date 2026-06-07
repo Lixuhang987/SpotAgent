@@ -6,7 +6,7 @@
 - **保留四个字段**：迁移到 manual-qa.md 时务必保留 完成日期 / 关键 commit / 实现位置 / 验收结果 四个字段，便于事后追溯。
 - **同步更新模块文档**：若条目跨多个模块，迁移时同步更新对应 `<dir>.md` 索引。
 
-最后核对日期：2026-06-06。
+最后核对日期：2026-06-07。
 
 ---
 
@@ -22,6 +22,8 @@
   - goal / budget：目标状态、预算、用量统计及 UI 呈现。
   - realtime：语音、低延迟流式输入输出或实时通道。
   - codex-style `item.*`：细粒度 item 生命周期、局部更新、折叠与重放语义。
+  - 前端输入协议改造：Swift `ThreadProtocolClient` 后续从兼容旧 `turn.start` 切到更明确的 `input.submit` / `turn.steer` 或同等语义，补充运行中输入 ack、steered / queued 状态展示。
+  - 破坏性清理：后端完成常驻 input queue 后，移除旧的“同 thread 新 turn 默认 abort 旧 run”语义，把命令命名、通知命名和文档统一到 input item / active turn 模型。
   - archived/list/search：归档 thread 的列表、搜索、恢复和删除管理。
   - thread-level event replay、notification 去重与 request 生命周期。
   - auth refresh request / response：server 触发鉴权刷新、desktop 回执结果的 `ServerRequest` / `ClientResponse` 语义。
