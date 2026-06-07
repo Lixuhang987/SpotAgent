@@ -173,6 +173,7 @@ function isThreadCommand(message: unknown): message is ThreadCommand {
     "thread.delete",
     "turn.start",
     "turn.interrupt",
+    "workspace.list",
   ].includes((message as { type?: string }).type ?? "");
 }
 
@@ -435,6 +436,8 @@ export async function startDefaultServer(port = 4317) {
       threadScopedTools.forgetThread(threadId);
       runtimeByThread.delete(threadId);
     },
+    {},
+    workspaceRegistry,
   );
 
   return startServer({
