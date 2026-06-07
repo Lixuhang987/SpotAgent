@@ -57,13 +57,31 @@ describe("ThreadInputQueue", () => {
     });
   });
 
-  it("clears pending input without resolving future waits", () => {
+  it("clears pending input without resolving future waits", async () => {
     const queue = new ThreadInputQueue();
 
     queue.enqueue(userItem("u1", "discard"));
     queue.clear();
 
     expect(queue.takeAll()).toEqual([]);
+    expect(queue.hasPending()).toBe(false);
+
+    const waiter = queue.waitForItems();
+    const timeout = Symbol("timeout");
+
+    await expect(
+      Promise.race([
+        waiter.then(() => "resolved"),
+        new Promise((resolve) => {
+          setTimeout(() => resolve(timeout), 10);
+        }),
+      ]),
+    ).resolves.toBe(timeout);
+
+    const nextItem = userItem("u2", "after-clear");
+    queue.enqueue(nextItem);
+
+    await expect(waiter).resolves.toEqual([nextItem]);
     expect(queue.hasPending()).toBe(false);
   });
 });
