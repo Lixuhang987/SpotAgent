@@ -38,24 +38,33 @@ HistorySidebar
     └── DefaultGroup（workspaceId: null 的 thread，固定在最下方，默认展开）
 ```
 
-### 右侧对话区
+### 右侧对话区（GPT 风格布局）
 
 ```
 ThreadWorkspace
-├── TabBar（tab 切换，Tailwind 样式）
-├── MessageList
-│   └── MessageBubble（Claude warm-canvas 消息卡）
-│       ├── BubbleContent（消息内容 + markdown 渲染）
-│       └── MessageActions（操作按钮栏：复制/编辑/重新生成）
-└── Composer
-    └── AutoResizeTextarea（自动增高输入框，最大 6 行）
+├── TabBar（浏览器风格 tab 切换）
+├── MessageList（720pt 居中）
+│   └── MessageBubble（GPT 风格消息展示）
+│       ├── BubbleContent（消息内容）
+│       │   ├── assistant: 透明无背景，全宽
+│       │   ├── user: 右对齐，85% 宽，圆角背景
+│       │   └── tool: 低调半透明，代码字体
+│       ├── TypingIndicator（运行中最后一条 assistant 消息底部）
+│       └── MessageActions（hover 显示：复制/编辑/重新生成）
+└── Composer（pill 形大圆角输入栏）
+    └── 内嵌布局：[附件按钮] [文本输入] [发送/停止按钮]
 ```
 
 ### 核心组件说明
 
+- **MessageBubble (GPT 风格)**: 
+  - assistant 消息完全透明融入背景，user 消息右对齐带 `surface-card` 背景
+  - 操作按钮 hover 时显示（user 消息始终显示）
+  - 字号：assistant/user 15px，tool 13px
+- **TypingIndicator**: 三个跳动的点，错峰延迟动画，只在运行中的最后一条 assistant 消息显示
+- **Composer (pill 形)**: 24pt 圆角容器，内嵌附件/发送/停止按钮，与消息区同宽（720pt）
+- **TabBar (浏览器风格)**: 活跃 tab 与内容区融合（`bg-surface-dark`），非活跃 tab 视觉下沉，关闭按钮 hover 显示
 - **WorkspaceGroup**: 使用 Radix Accordion 实现可折叠的 workspace 分组，展开状态持久化到 store
-- **MessageBubble**: 在深色 product surface 上承载 cream assistant card、coral-tinted user card 与 dark code-style tool card，操作按钮栏始终显示
-- **Composer**: 输入框自动增高（最小 52px，最大 6 行后滚动），支持 Shift+Return 换行
 
 ## 设计系统
 

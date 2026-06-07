@@ -130,23 +130,71 @@
 5. 确认 user 消息是 coral-tinted cream card，assistant 消息是 cream card，tool 消息是 dark code-style card 并使用 monospace。
 6. 将窗口缩到最小尺寸附近，确认历史标题、tab 标题、消息、按钮文字没有互相遮挡或溢出容器。
 
-#### 场景 6: 消息操作按钮验证
+#### 场景 6: GPT 风格布局验证
 
-1. 确认每条消息下方始终显示操作按钮栏（不需要 hover）
-2. 点击"复制"按钮，确认消息内容复制到剪贴板
-3. 确认"编辑"和"重新生成"按钮显示但禁用，hover 时显示 tooltip "即将推出"
-4. 确认操作按钮栏在深色 workspace 上使用低对比度 cream 文本，不干扰阅读
+**验收目标**: 确认 ThreadWindow 已按 `docs/superpowers/specs/2026-06-08-session-window-chatgpt-style-ui.md` 改造为 ChatGPT 风格布局，同时保留 DESIGN.md 配色。
 
-#### 场景 7: Composer 自动增高输入框验证
+**前提条件**:
+- 已执行 `pnpm --filter handagent-thread-window-web build`
+- 启动 desktop app：`bash ./scripts/swiftw run HandAgentDesktop`
+- 提交一个 prompt，打开 ThreadWindow
+
+**消息展示 (MessageBubble)**:
+- [ ] assistant 消息完全透明无背景，文本直接铺在 `surface-dark` (#181715) 背景上
+- [ ] user 消息右对齐，最大宽度约 85%，带圆角背景（warm cream 色 `surface-card` #efe9de）
+- [ ] tool 消息左对齐，半透明深色背景，使用代码字体
+- [ ] 操作按钮（复制/编辑/重新生成）hover 时显示（user 消息始终显示）
+- [ ] assistant/user 消息字号 15px，tool 消息字号 13px
+
+**内容区布局 (MessageList)**:
+- [ ] 消息区域水平居中，最大宽度 720pt
+- [ ] 消息间距统一（12px / gap-sm）
+
+**输入栏 (Composer)**:
+- [ ] pill 形大圆角容器（24pt / rounded-3xl）
+- [ ] 边框 `border-white/10`，聚焦时变为 `border-white/20`
+- [ ] 输入栏与消息区同宽（720pt），水平居中
+- [ ] 右侧内嵌按钮：附件按钮（占位 disabled）+ 发送/停止按钮
+- [ ] 空闲时显示发送按钮（箭头向上图标），运行时显示停止按钮（方形图标）
+
+**Tab 栏 (TabBar)**:
+- [ ] 浏览器风格 tab：活跃 tab 与内容区背景融合（`bg-surface-dark` #181715）
+- [ ] 非活跃 tab 视觉下沉（`bg-surface-dark-soft` #1f1e1b）
+- [ ] tab 顶部圆角（8px / rounded-t-lg）
+- [ ] 关闭按钮 hover 时显示（group-hover:opacity-100）
+- [ ] 去除状态点，只保留标题
+
+**运行状态指示器 (TypingIndicator)**:
+- [ ] 提交一个需要 LLM 响应的 prompt
+- [ ] 运行中时，最后一条 assistant 消息底部显示三个跳动的点
+- [ ] 点的动画错峰延迟（0ms / 150ms / 300ms）
+- [ ] 运行完成后打字指示器消失
+
+**配色验证（保留 DESIGN.md）**:
+- [ ] 主背景使用 `#181715` (surface-dark)，不是 spec 中的 `#212121`
+- [ ] 侧边栏使用 `#efe9de` (surface-card, warm cream)，不是 spec 中的 `#2F2F2F`
+- [ ] user 消息背景使用 `#efe9de` (surface-card, warm cream)，不是 spec 中的 `#3A3A3A`
+- [ ] 主按钮使用 `#cc785c` (primary, coral)
+
+#### 场景 7: 消息操作按钮验证（GPT 风格）
+
+1. 确认 assistant 和 tool 消息的操作按钮默认不显示
+2. hover assistant 或 tool 消息，确认操作按钮显示
+3. 确认 user 消息的操作按钮始终显示（不需要 hover）
+4. 点击"复制"按钮，确认消息内容复制到剪贴板
+5. 确认"编辑"和"重新生成"按钮显示但禁用，hover 时显示 tooltip "即将推出"
+6. 确认操作按钮栏在深色 workspace 上使用低对比度 cream 文本，不干扰阅读
+
+#### 场景 8: Composer 自动增高输入框验证（GPT 风格）
 
 1. 在输入框输入单行文本，确认高度为最小值（52px）
-2. 按 Shift+Return 插入换行，继续输入到第 2、3、4、5、6 行
-3. 确认输入框随内容自动增高
-4. 继续输入第 7 行，确认输入框停止增高，出现垂直滚动条
-5. 确认最大高度约 144px（6 行 × 24px 行高）
-6. 按 Return（无修饰键）确认提交消息，输入框清空并恢复最小高度
+2. 按 Shift+Return 插入换行，继续输入到第 2、3、4、5 行
+3. 确认输入框随内容自动增高，最大 5 行（120px）
+4. 继续输入第 6 行，确认输入框停止增高，出现垂直滚动条
+5. 按 Return（无修饰键）确认提交消息，输入框清空并恢复最小高度
+6. 确认输入栏保持 pill 形，居中，最大宽度 720pt
 
-#### 场景 8: 视觉一致性验证
+#### 场景 9: 视觉一致性验证
 
 1. 确认 ThreadWindow 整体不再是 dark-only Raycast Glass 风格，而是 cream sidebar + dark product workspace 的双 surface 节奏。
 2. 确认顶部工具栏不再显示 connection pill（已移除），tab 状态点仍能区分 running / failed / interrupted / idle。

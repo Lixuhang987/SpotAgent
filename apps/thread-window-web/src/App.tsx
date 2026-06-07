@@ -102,7 +102,11 @@ export function App() {
         {activeTab ? (
           <>
             <div className="grid grid-rows-[1fr_auto] min-w-0 min-h-0 overflow-hidden">
-              <MessageList messages={activeTab.messages} errorMessage={activeTab.errorMessage} />
+              <MessageList
+                messages={activeTab.messages}
+                errorMessage={activeTab.errorMessage}
+                isRunning={activeTab.status === 'running'}
+              />
               <RequestPanels
                 permissionRequests={activeTab.permissionRequests}
                 workspaceRequests={activeTab.workspaceRequests}
