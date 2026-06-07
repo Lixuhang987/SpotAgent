@@ -197,6 +197,33 @@ describe("ThreadPersistence", () => {
     ]);
   });
 
+  it("appends runtime output without dropping user input recorded during the run", async () => {
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
+      () => "2026-06-07T00:00:00.000Z",
+    );
+    await persistence.ensureThread("thread-delta");
+    await persistence.persistUserMessage("thread-delta", "first");
+    const baseMessages = await persistence.getMessages("thread-delta");
+
+    await persistence.persistUserMessage("thread-delta", "steered while running");
+    await persistence.persistRunDelta(
+      "thread-delta",
+      baseMessages.length,
+      [
+        ...baseMessages,
+        { role: "assistant", content: "reply to first" },
+      ],
+      [],
+    );
+
+    expect(await persistence.getMessages("thread-delta")).toEqual([
+      { role: "user", content: "first" },
+      { role: "user", content: "steered while running" },
+      { role: "assistant", content: "reply to first" },
+    ]);
+  });
+
   it("persists runtime errors as audit events", async () => {
     const persistence = new ThreadPersistence(
       new InMemoryThreadStore(),

@@ -155,6 +155,26 @@ export class ThreadPersistence {
     }
   }
 
+  async persistRunDelta(
+    threadId: string,
+    baseMessageCount: number,
+    runtimeMessages: AgentMessage[],
+    events: ThreadAuditEvent[],
+  ): Promise<void> {
+    const generatedMessages = runtimeMessages.slice(baseMessageCount);
+    if (generatedMessages.length > 0) {
+      const currentMessages = await this.getMessages(threadId);
+      await this.store.setMessages(
+        threadId,
+        [...currentMessages, ...generatedMessages],
+        this.now(),
+      );
+    }
+    if (events.length > 0) {
+      await this.store.appendEvents(threadId, events);
+    }
+  }
+
   async persistError(threadId: string, errorMessage: string, code?: string): Promise<void> {
     const event: ThreadAuditEvent = {
       type: "error",
