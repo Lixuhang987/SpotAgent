@@ -22,8 +22,9 @@ struct WorkspaceSettingsView: View {
                     showingAdd = true
                 }
                 .buttonStyle(.plain)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
+                .foregroundStyle(theme.colors.accent)
+                .padding(.horizontal, theme.spacing.xl)
+                .padding(.vertical, theme.spacing.md)
 
                 Spacer(minLength: 0)
             }
@@ -103,11 +104,12 @@ struct WorkspaceSettingsView: View {
     private func editSheet(_ ws: WorkspaceEntry) -> some View {
         VStack(spacing: 16) {
             Text("编辑 Workspace")
-                .font(theme.typography.bodyFont)
+                .font(theme.typography.titleFont)
+                .foregroundStyle(theme.colors.ink)
             TextField("名称", text: $editName)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(SettingsFieldStyle())
             TextField("描述（200 字以内）", text: $editDescription)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(SettingsFieldStyle())
             Text("\(editDescription.count)/200")
                 .font(theme.typography.captionFont)
                 .foregroundStyle(editDescription.count > 200 ? theme.colors.error : theme.colors.textSecondary)
@@ -121,8 +123,9 @@ struct WorkspaceSettingsView: View {
                 .disabled(editName.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }
-        .padding(20)
+        .padding(theme.spacing.xl)
         .frame(width: 360)
+        .background(theme.colors.canvas)
     }
 
     private func addImportedWorkspace(_ result: Result<[URL], Error>) {

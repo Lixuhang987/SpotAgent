@@ -47,8 +47,8 @@ struct ToolSettingsView: View {
 
     private func riskColor(_ risk: BuiltinToolSetting.Risk) -> Color {
         switch risk {
-        case .low: return theme.colors.accent
-        case .medium: return .orange
+        case .low: return theme.colors.accentTeal
+        case .medium: return theme.colors.warning
         case .high: return theme.colors.error
         }
     }

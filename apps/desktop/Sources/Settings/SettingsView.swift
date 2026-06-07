@@ -19,8 +19,7 @@ struct SettingsView: View {
             tabContent
         }
         .frame(width: 660, height: 520)
-        .background(.ultraThinMaterial)
-        .background(theme.colors.background.opacity(0.85))
+        .background(theme.colors.canvas)
     }
 
     @ViewBuilder

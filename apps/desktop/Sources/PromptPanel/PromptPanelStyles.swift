@@ -7,9 +7,13 @@ struct PromptPanelContainerModifier: ViewModifier {
         content
             .padding(theme.spacing.xl)
             .frame(minWidth: 640, minHeight: 420)
-            .background(.ultraThinMaterial)
-            .background(theme.colors.background.opacity(0.85))
-            .borderedCard(fill: .clear, border: theme.colors.border, cornerRadius: theme.radius.lg)
+            .background(theme.colors.canvas.opacity(0.96))
+            .clipShape(RoundedRectangle(cornerRadius: theme.radius.lg))
+            .overlay(
+                RoundedRectangle(cornerRadius: theme.radius.lg)
+                    .strokeBorder(theme.colors.hairline, lineWidth: 0.8)
+            )
+            .shadow(color: theme.colors.ink.opacity(0.16), radius: 24, x: 0, y: 18)
     }
 }
 
@@ -23,7 +27,11 @@ struct ActionRowModifier: ViewModifier {
             .padding(.horizontal, theme.spacing.md)
             .background(
                 RoundedRectangle(cornerRadius: theme.radius.md)
-                    .fill(isHighlighted ? theme.colors.accentSubtle : Color.clear)
+                    .fill(isHighlighted ? theme.colors.surfaceCard : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: theme.radius.md)
+                    .strokeBorder(isHighlighted ? theme.colors.accentRing : Color.clear, lineWidth: 0.8)
             )
             .contentShape(RoundedRectangle(cornerRadius: theme.radius.md))
     }

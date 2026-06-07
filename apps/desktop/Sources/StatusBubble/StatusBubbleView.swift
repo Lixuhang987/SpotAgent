@@ -8,17 +8,17 @@ struct StatusBubbleView: View {
     var body: some View {
         HStack(spacing: theme.spacing.md) {
             Circle()
-                .fill(viewModel.isRunning ? theme.colors.accent : theme.colors.textSecondary.opacity(0.4))
+                .fill(viewModel.isRunning ? theme.colors.accentTeal : theme.colors.mutedSoft)
                 .frame(width: 10, height: 10)
                 .scaleEffect(glowPulse && viewModel.isRunning ? 1.3 : 1.0)
             VStack(alignment: .leading, spacing: 4) {
                 Text(viewModel.isRunning ? "Running" : "Idle")
                     .font(theme.typography.captionFont)
                     .fontWeight(.medium)
-                    .foregroundStyle(viewModel.isRunning ? theme.colors.accent : theme.colors.textPrimary)
+                    .foregroundStyle(viewModel.isRunning ? theme.colors.accent : theme.colors.ink)
                 Text(viewModel.latestSummary)
                     .font(theme.typography.captionFont)
-                    .foregroundStyle(theme.colors.textSecondary)
+                    .foregroundStyle(theme.colors.muted)
                     .lineLimit(2)
             }
             Spacer(minLength: 0)

@@ -53,8 +53,9 @@ struct SettingsTabBar: View {
             }
         }
         .padding(.horizontal, theme.spacing.lg)
-        .padding(.top, 6)
+        .padding(.top, theme.spacing.sm)
         .padding(.bottom, theme.spacing.sm)
+        .background(theme.colors.surfaceSoft)
     }
 
     private func tabButton(_ tab: SettingsTab) -> some View {
@@ -69,13 +70,19 @@ struct SettingsTabBar: View {
                 Text(tab.title)
                     .font(.system(size: 11))
             }
-            .foregroundStyle(isSelected ? theme.colors.textPrimary : theme.colors.textSecondary)
+            .foregroundStyle(isSelected ? theme.colors.ink : theme.colors.muted)
             .frame(width: 72, height: 56)
             .borderedCard(
-                fill: isSelected ? theme.colors.surface : Color.clear,
-                border: isSelected ? theme.colors.border : Color.clear,
+                fill: isSelected ? theme.colors.canvas : Color.clear,
+                border: isSelected ? theme.colors.accentRing : Color.clear,
                 cornerRadius: theme.radius.md
             )
+            .overlay(alignment: .bottom) {
+                RoundedRectangle(cornerRadius: theme.radius.pill)
+                    .fill(isSelected ? theme.colors.accent : Color.clear)
+                    .frame(width: 28, height: 2)
+                    .offset(y: -4)
+            }
             .contentShape(RoundedRectangle(cornerRadius: theme.radius.md))
         }
         .buttonStyle(.plain)
@@ -95,7 +102,7 @@ struct SettingsSectionHeader: View {
     var body: some View {
         Text(title)
             .font(theme.typography.captionFont.weight(.semibold))
-            .foregroundStyle(theme.colors.textSecondary)
+            .foregroundStyle(theme.colors.muted)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, theme.spacing.xxl)
             .padding(.top, theme.spacing.lg)
@@ -149,7 +156,7 @@ struct SettingsRow<Control: View>: View {
         HStack(alignment: .center, spacing: theme.spacing.xl) {
             Text(label)
                 .font(theme.typography.bodyFont)
-                .foregroundStyle(theme.colors.textSecondary)
+                .foregroundStyle(theme.colors.body)
                 .frame(width: 120, alignment: .trailing)
             control()
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -165,7 +172,7 @@ struct SettingsRowDivider: View {
 
     var body: some View {
         Divider()
-            .overlay(theme.colors.border)
+            .overlay(theme.colors.hairline)
             .padding(.leading, 152)
     }
 }
@@ -185,11 +192,11 @@ struct SettingsFieldStyle: TextFieldStyle {
             .frame(maxWidth: 340)
             .background(
                 RoundedRectangle(cornerRadius: theme.radius.sm)
-                    .fill(theme.colors.surface)
+                    .fill(theme.colors.surfaceSoft)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: theme.radius.sm)
-                    .strokeBorder(theme.colors.border, lineWidth: 0.5)
+                    .strokeBorder(theme.colors.hairline, lineWidth: 0.8)
             )
     }
 }
@@ -204,7 +211,7 @@ struct SettingsTextEditor: View {
             if text.isEmpty {
                 Text(placeholder)
                     .font(theme.typography.captionFont)
-                    .foregroundStyle(theme.colors.textSecondary)
+                    .foregroundStyle(theme.colors.muted)
                     .padding(.horizontal, theme.spacing.md)
                     .padding(.vertical, theme.spacing.sm)
                     .allowsHitTesting(false)
@@ -218,8 +225,8 @@ struct SettingsTextEditor: View {
         }
         .frame(maxWidth: 340, minHeight: 92)
         .borderedCard(
-            fill: theme.colors.surface,
-            border: theme.colors.border,
+            fill: theme.colors.surfaceSoft,
+            border: theme.colors.hairline,
             cornerRadius: theme.radius.sm
         )
     }
@@ -232,7 +239,7 @@ struct SettingsSectionSeparator: View {
 
     var body: some View {
         Rectangle()
-            .fill(theme.colors.border)
+            .fill(theme.colors.hairline)
             .frame(height: 0.5)
     }
 }

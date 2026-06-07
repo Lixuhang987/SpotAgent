@@ -59,7 +59,8 @@ Action prompt 的参数与提交流程：
 - **Action 全局快捷键**：每个 `ActionDefinition` 通过 `shortcutName = "action.<id>"` 获得可配置全局快捷键名；plugin manifest 可通过 prompt 级 `globalShortcut` 声明默认值，用户改过后不覆盖。
 - **动态 action 刷新**：Controller 可多次 `register(actions:)`；首次创建 ViewModel，后续只刷新 ViewModel action 列表。Coordinator 同步刷新 Action 全局快捷键注册。新增动态 action 不要覆盖已有用户自定义快捷键。
 - **Styles 抽取阈值**：跨 View 复用的样式才放 `PromptPanelStyles.swift`；一次性样式写在 View 里，避免 ViewModifier 爆炸。
-- **窗口与拖动区域**：`NSPanel` 自身设为 `isOpaque = false` + `backgroundColor = .clear`，可见背景全部由 SwiftUI `promptPanelContainer()` 的圆角 + ultraThinMaterial 提供，避免顶部"标题栏条"和主体颜色不一致。`isMovableByWindowBackground = true` 让任何空白处都能拖；首行左侧 input 不显示独立图标，也不绘制独立卡片、背景或边框，视觉上直接落在面板背景里。`draft` 没有可见内容时 `NSTextView` 只覆盖 placeholder 附近，右侧从文字区域外到设置按钮左侧都保持可拖动背景；`draft` 有可见内容后 input 占满设置按钮左侧剩余空间。新增首行控件时不要破坏这个空态拖动区 / 有内容扩展区切换。
+- **窗口与拖动区域**：`NSPanel` 自身设为 `isOpaque = false` + `backgroundColor = .clear`，可见背景全部由 SwiftUI `promptPanelContainer()` 的 warm cream 圆角面板、hairline 描边和柔和阴影提供，避免顶部"标题栏条"和主体颜色不一致。`isMovableByWindowBackground = true` 让任何空白处都能拖；首行左侧 input 不显示独立图标，也不绘制独立卡片、背景或边框，视觉上直接落在面板背景里。`draft` 没有可见内容时 `NSTextView` 只覆盖 placeholder 附近，右侧从文字区域外到设置按钮左侧都保持可拖动背景；`draft` 有可见内容后 input 占满设置按钮左侧剩余空间。新增首行控件时不要破坏这个空态拖动区 / 有内容扩展区切换。
+- **视觉风格**：PromptPanel 使用 `DESIGN.md` 的 cream canvas、coral emphasis、warm card hover 状态；附件 chip、server 不可用提示和 action hover 都走 `Theme` token，不回退到旧暗色玻璃或 Mango Amber。
 - **输入框高度**：PromptPanel 输入使用 `PromptPanelGrowingTextView` 包装 AppKit `NSTextView + NSScrollView`。输入框随文本自动增高，最多显示 5 行；超过 5 行后固定高度并出现垂直滚动条。普通 Return 提交；Shift/Option + Return 插入换行。
 - **Action 匹配大小写不敏感**：trigger 使用前缀匹配，title / description 使用包含匹配；trigger 冲突按 plugin id 稳定排序保留第一个。
 - **server 不可用时不丢草稿**：`submissionDisabledMessage != nil` 时输入框禁用并显示提示，`submit()` 直接返回，不清空 `draft` / `attachments`。
