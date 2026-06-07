@@ -14,10 +14,17 @@ export function MessageList({ messages, errorMessage }: MessageListProps) {
   };
 
   return (
-    <div className="flex flex-col gap-3 min-h-0 overflow-y-auto px-5 py-4">
+    <div className="flex min-h-0 flex-col gap-sm overflow-y-auto bg-surface-dark px-lg py-md">
       {messages.length === 0 ? (
-        <div className="flex items-center justify-center h-full text-sm text-text-secondary">
-          等待输入
+        <div className="flex h-full items-center justify-center text-sm text-on-dark-soft">
+          <div className="rounded-lg border border-white/10 bg-surface-dark-elevated px-lg py-md text-center shadow-product-inner">
+            <div className="font-display text-[28px] font-normal tracking-[-0.02em] text-on-dark">
+              等待输入
+            </div>
+            <div className="mt-xs text-sm text-on-dark-soft">
+              从下方输入框开始一个 thread
+            </div>
+          </div>
         </div>
       ) : null}
 
@@ -30,7 +37,7 @@ export function MessageList({ messages, errorMessage }: MessageListProps) {
       ))}
 
       {errorMessage && (
-        <div className="max-w-3xl mx-auto w-full rounded-bubble border border-error/30 bg-error/10 px-4 py-3 text-sm text-error">
+        <div className="mx-auto w-full max-w-3xl rounded-lg border border-error/30 bg-error/10 px-md py-sm text-sm text-error">
           {errorMessage}
         </div>
       )}

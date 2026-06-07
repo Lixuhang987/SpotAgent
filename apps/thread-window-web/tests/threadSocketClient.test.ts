@@ -44,6 +44,7 @@ describe("ThreadSocketClient", () => {
       WebSocketImpl: FakeWebSocket as never,
       now: () => "2026-06-06T00:00:00.000Z",
       id: vi.fn()
+        .mockReturnValueOnce("workspace-list-1")
         .mockReturnValueOnce("list-1")
         .mockReturnValueOnce("resume-1"),
       reconnectDelayMs: 0,
@@ -67,6 +68,7 @@ describe("ThreadSocketClient", () => {
 
     expect(events).toEqual(["state:connecting", "state:connected", "thread.listed"]);
     expect(socket.sent.map((raw) => JSON.parse(raw))).toMatchObject([
+      { type: "workspace.list", commandId: "workspace-list-1" },
       { type: "thread.list", commandId: "list-1" },
       { type: "thread.resume", threadId: "thread-1", commandId: "resume-1" },
     ]);
@@ -78,6 +80,7 @@ describe("ThreadSocketClient", () => {
       WebSocketImpl: FakeWebSocket as never,
       now: () => "2026-06-06T00:00:00.000Z",
       id: vi.fn()
+        .mockReturnValueOnce("workspace-list-1")
         .mockReturnValueOnce("list-1")
         .mockReturnValueOnce("resume-1")
         .mockReturnValueOnce("turn-1"),
@@ -109,8 +112,9 @@ describe("ThreadSocketClient", () => {
     });
 
     expect(socket.sent.map((raw) => JSON.parse(raw))).toMatchObject([
+      { type: "workspace.list", commandId: "workspace-list-1" },
       { type: "thread.list", commandId: "list-1" },
-      { type: "thread.start", commandId: "prompt-1", payload: { actionBinding: null } },
+      { type: "thread.start", commandId: "prompt-1", payload: { actionBinding: null, workspaceId: null } },
       { type: "thread.resume", threadId: "thread-1", commandId: "resume-1" },
       { type: "turn.start", threadId: "thread-1", commandId: "turn-1", payload: { text: "hello" } },
     ]);
@@ -174,6 +178,7 @@ describe("ThreadSocketClient", () => {
       WebSocketImpl: FakeWebSocket as never,
       now: () => "2026-06-06T00:00:00.000Z",
       id: vi.fn()
+        .mockReturnValueOnce("workspace-list-1")
         .mockReturnValueOnce("list-1")
         .mockReturnValueOnce("resume-1"),
       reconnectDelayMs: 0,
@@ -193,6 +198,7 @@ describe("ThreadSocketClient", () => {
 
     expect(FakeWebSocket.instances).toHaveLength(1);
     expect(socket.sent.map((raw) => JSON.parse(raw))).toMatchObject([
+      { type: "workspace.list", commandId: "workspace-list-1" },
       { type: "thread.list", commandId: "list-1" },
       { type: "thread.resume", threadId: "thread-1", commandId: "resume-1" },
     ]);
@@ -276,6 +282,7 @@ describe("ThreadSocketClient", () => {
       WebSocketImpl: FakeWebSocket as never,
       now: () => "2026-06-06T00:00:00.000Z",
       id: vi.fn()
+        .mockReturnValueOnce("workspace-list-1")
         .mockReturnValueOnce("list-1")
         .mockReturnValueOnce("resume-1")
         .mockReturnValueOnce("turn-1"),
@@ -310,7 +317,8 @@ describe("ThreadSocketClient", () => {
     });
 
     expect(socket.sent.map((raw) => JSON.parse(raw))).toMatchObject([
-      { type: "thread.start", commandId: "prompt-1" },
+      { type: "thread.start", commandId: "prompt-1", payload: { actionBinding: null, workspaceId: null } },
+      { type: "workspace.list", commandId: "workspace-list-1" },
       { type: "thread.list", commandId: "list-1" },
       { type: "thread.resume", threadId: "thread-1", commandId: "resume-1" },
       { type: "turn.start", threadId: "thread-1", commandId: "turn-1", payload: { text: "hello before open" } },
@@ -354,6 +362,7 @@ describe("ThreadSocketClient", () => {
       WebSocketImpl: FakeWebSocket as never,
       now: () => "2026-06-06T00:00:00.000Z",
       id: vi.fn()
+        .mockReturnValueOnce("workspace-list-1")
         .mockReturnValueOnce("list-1")
         .mockReturnValueOnce("resume-1")
         .mockReturnValueOnce("turn-1"),
@@ -415,8 +424,9 @@ describe("ThreadSocketClient", () => {
 
     const sent = socket.sent.map((raw) => JSON.parse(raw));
     expect(sent).toMatchObject([
+      { type: "workspace.list", commandId: "workspace-list-1" },
       { type: "thread.list", commandId: "list-1" },
-      { type: "thread.start", commandId: "prompt-1" },
+      { type: "thread.start", commandId: "prompt-1", payload: { actionBinding: null, workspaceId: null } },
     ]);
     expect(sent.some((command) => command.type === "turn.start")).toBe(false);
     expect(sent.some((command) => command.type === "thread.resume" && command.threadId === "thread-1")).toBe(false);
@@ -428,6 +438,7 @@ describe("ThreadSocketClient", () => {
       WebSocketImpl: FakeWebSocket as never,
       now: () => "2026-06-06T00:00:00.000Z",
       id: vi.fn()
+        .mockReturnValueOnce("workspace-list-1")
         .mockReturnValueOnce("list-1")
         .mockReturnValueOnce("resume-1")
         .mockReturnValueOnce("turn-1"),
@@ -467,8 +478,9 @@ describe("ThreadSocketClient", () => {
     });
 
     expect(socket.sent.map((raw) => JSON.parse(raw))).toMatchObject([
+      { type: "workspace.list", commandId: "workspace-list-1" },
       { type: "thread.list", commandId: "list-1" },
-      { type: "thread.start", commandId: "prompt-1" },
+      { type: "thread.start", commandId: "prompt-1", payload: { actionBinding: null, workspaceId: null } },
       { type: "thread.resume", threadId: "thread-1", commandId: "resume-1" },
       { type: "turn.start", threadId: "thread-1", commandId: "turn-1", payload: { text: "first" } },
     ]);

@@ -23,19 +23,22 @@ export function WorkspaceGroup({
   onDeleteThread,
 }: WorkspaceGroupProps) {
   return (
-    <Accordion.Item value={workspace.id} className="mb-1.5">
+    <Accordion.Item value={workspace.id} className="mb-xs">
       <Accordion.Header>
         <Accordion.Trigger
           onClick={onToggle}
-          className="w-full flex items-center justify-between px-2.5 py-2 rounded-lg hover:bg-surface text-left text-sm text-text-primary"
+          className="flex w-full items-center justify-between rounded-md px-sm py-xs text-left text-sm text-ink transition-colors hover:bg-surface-soft"
         >
-          <span className="font-medium truncate">{workspace.name}</span>
+          <span className="min-w-0">
+            <span className="block truncate font-medium">{workspace.name}</span>
+            <span className="block truncate text-[11px] text-muted">{workspace.rootPath}</span>
+          </span>
           <svg
             width="12"
             height="12"
             viewBox="0 0 12 12"
             className={cn(
-              'transition-transform text-text-secondary',
+              'ml-xs flex-shrink-0 text-muted transition-transform',
               isExpanded && 'rotate-180'
             )}
           >
@@ -51,9 +54,9 @@ export function WorkspaceGroup({
         </Accordion.Trigger>
       </Accordion.Header>
       <Accordion.Content className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down">
-        <div className="flex flex-col gap-1.5 pt-1">
+        <div className="flex flex-col gap-xs pt-xs">
           {threads.length === 0 ? (
-            <p className="px-2.5 py-2 text-xs text-text-secondary">
+            <p className="px-sm py-xs text-xs text-muted">
               暂无对话
             </p>
           ) : (
@@ -82,29 +85,40 @@ interface ThreadItemProps {
 }
 
 function ThreadItem({ thread, isActive, onOpen, onDelete }: ThreadItemProps) {
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onOpen();
+    }
+  };
+
   return (
     <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={handleKeyDown}
       className={cn(
-        'grid grid-cols-[1fr_28px] items-center gap-1 px-2.5 py-2 rounded-lg border',
+        'grid grid-cols-[1fr_28px] items-stretch gap-xs rounded-md border transition-colors focus:outline-none focus:ring-4 focus:ring-accent-ring',
         isActive
-          ? 'border-border bg-surface'
-          : 'border-transparent hover:bg-surface/50'
+          ? 'border-hairline bg-canvas shadow-soft'
+          : 'border-transparent hover:bg-surface-soft'
       )}
     >
-      <button
-        onClick={onOpen}
-        className="min-w-0 text-left flex flex-col gap-0.5"
-      >
-        <span className="text-[13px] text-text-primary truncate">
+      <div className="min-w-0 rounded-md px-sm py-xs text-left">
+        <span className="block truncate text-[13px] font-medium text-ink">
           {thread.preview || '新对话'}
         </span>
-        <small className="text-[11px] text-text-secondary">
+        <small className="block text-[11px] text-muted">
           {new Date(thread.updatedAt).toLocaleDateString('zh-CN')}
         </small>
-      </button>
+      </div>
       <button
-        onClick={onDelete}
-        className="w-[26px] h-[26px] rounded-md hover:bg-surface text-text-secondary hover:text-text-primary transition-colors"
+        onClick={(event) => {
+          event.stopPropagation();
+          onDelete();
+        }}
+        className="my-auto h-[26px] w-[26px] rounded-sm text-muted transition-colors hover:bg-surface-cream-strong hover:text-ink"
         aria-label="删除对话"
       >
         <svg width="14" height="14" viewBox="0 0 14 14" className="mx-auto">

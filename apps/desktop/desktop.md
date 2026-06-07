@@ -32,7 +32,8 @@
 
 - 所有颜色、字体、间距、圆角、动画时长**必须**走 `theme.colors.*` / `theme.typography.*` / `theme.spacing.*` / `theme.radius.*` / `theme.animation.*`。
 - View / Styles 中**禁止**硬编码 `Color(...)` / 字号 / `padding(20)` 等魔法数字。Token 缺失先扩 [Theme](Sources/Theme/theme.md)。
-- 当前 dark-only + Raycast Glass + Mango Amber，目标 macOS 15+，不为旧系统加 fallback。
+- 当前 SwiftUI 原生界面仍使用 dark-only + Raycast Glass + Mango Amber，目标 macOS 15+，不为旧系统加 fallback。
+- React ThreadWindow 的视觉 token 不走 Swift `Theme`，由 [thread-window-web.md](/Users/mu9/proj/handAgent/apps/thread-window-web/thread-window-web.md) 和根目录 `DESIGN.md` 约束。
 
 ### 5. 输入边界（产品红线）
 

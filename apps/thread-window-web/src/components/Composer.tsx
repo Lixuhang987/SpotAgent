@@ -47,7 +47,7 @@ export function Composer({ disabled, stopDisabled, onSubmit, onStop }: ComposerP
   return (
     <form
       onSubmit={handleSubmit}
-      className="grid grid-cols-[1fr_auto] gap-2.5 border-t border-border bg-surface/50 px-3 py-3"
+      className="grid grid-cols-[1fr_auto] gap-sm border-t border-white/10 bg-surface-dark-soft px-sm py-sm"
     >
       <textarea
         ref={textareaRef}
@@ -56,14 +56,14 @@ export function Composer({ disabled, stopDisabled, onSubmit, onStop }: ComposerP
         onKeyDown={handleKeyDown}
         placeholder="Ask HandAgent"
         disabled={disabled}
-        className="min-h-[52px] max-h-[144px] resize-none overflow-y-auto rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-text-primary leading-relaxed placeholder:text-text-secondary disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-accent-ring"
+        className="min-h-[52px] max-h-[144px] resize-none overflow-y-auto rounded-lg border border-hairline bg-canvas px-sm py-xs text-sm leading-[1.6] text-ink placeholder:text-muted-soft outline-none transition-shadow disabled:cursor-not-allowed disabled:bg-primary-disabled disabled:text-muted focus:border-primary focus:ring-4 focus:ring-accent-ring"
         style={{ minHeight: '52px', maxHeight: `${MAX_ROWS * LINE_HEIGHT}px` }}
       />
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-xs">
         <button
           type="submit"
           disabled={disabled || !text.trim()}
-          className="h-10 px-4 rounded-lg bg-accent hover:bg-accent-hover active:bg-accent-pressed disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-background transition-colors"
+          className="h-10 rounded-md bg-primary px-md text-sm font-medium text-on-primary transition-colors hover:bg-primary-active active:bg-accent-pressed disabled:cursor-not-allowed disabled:bg-primary-disabled disabled:text-muted"
         >
           发送
         </button>
@@ -71,7 +71,7 @@ export function Composer({ disabled, stopDisabled, onSubmit, onStop }: ComposerP
           type="button"
           onClick={onStop}
           disabled={stopDisabled}
-          className="h-10 px-4 rounded-lg border border-border bg-surface hover:bg-surface/80 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-text-primary transition-colors"
+          className="h-10 rounded-md border border-white/10 bg-surface-dark-elevated px-md text-sm font-medium text-on-dark transition-colors hover:bg-surface-dark disabled:cursor-not-allowed disabled:text-on-dark-soft/50"
         >
           停止
         </button>

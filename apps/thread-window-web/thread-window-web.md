@@ -5,7 +5,7 @@
 ## 技术栈
 
 - **UI 框架**: React + TypeScript
-- **样式系统**: Tailwind CSS 3.4+ (遵循 Raycast Glass + Mango Amber 设计语言)
+- **样式系统**: Tailwind CSS 3.4+（遵循 Claude warm-canvas / coral / dark product surface 设计语言）
 - **组件库**: Radix UI (Accordion, DropdownMenu, ScrollArea 等无样式可访问组件)
 - **状态管理**: Zustand + Immer
 - **构建工具**: Vite + PostCSS
@@ -44,7 +44,7 @@ HistorySidebar
 ThreadWorkspace
 ├── TabBar（tab 切换，Tailwind 样式）
 ├── MessageList
-│   └── MessageBubble（ChatGPT 风格消息气泡）
+│   └── MessageBubble（Claude warm-canvas 消息卡）
 │       ├── BubbleContent（消息内容 + markdown 渲染）
 │       └── MessageActions（操作按钮栏：复制/编辑/重新生成）
 └── Composer
@@ -54,19 +54,20 @@ ThreadWorkspace
 ### 核心组件说明
 
 - **WorkspaceGroup**: 使用 Radix Accordion 实现可折叠的 workspace 分组，展开状态持久化到 store
-- **MessageBubble**: 采用 ChatGPT 布局密度（`px-6 py-4`、`leading-relaxed`），操作按钮栏始终显示
+- **MessageBubble**: 在深色 product surface 上承载 cream assistant card、coral-tinted user card 与 dark code-style tool card，操作按钮栏始终显示
 - **Composer**: 输入框自动增高（最小 52px，最大 6 行后滚动），支持 Shift+Return 换行
 
 ## 设计系统
 
-遵循 **Raycast Glass + Mango Amber** 视觉语言：
+遵循根目录 `DESIGN.md` 中的 **Claude warm-canvas editorial** 视觉语言：
 
-- **配色**: Dark-only 主题，`#0B0B0F` 背景，玻璃质感表面（`rgba(255, 255, 255, 0.04)`），Mango Amber 强调色（`#FFA947`）
-- **布局密度**: 采用 ChatGPT 风格的舒适间距（消息 `px-6 py-4`，消息间距 `space-y-3`）
-- **字体**: SF Pro 系统字体，行高 `leading-relaxed` (1.625)
-- **圆角**: 面板 `12px`，消息气泡 `8px`
+- **配色**: 左侧历史栏使用 warm cream canvas（`#faf9f5` / `#efe9de`），右侧 thread workspace 使用 dark product surface（`#181715` / `#252320`），主按钮使用 coral primary（`#cc785c`）。
+- **字体**: display 使用 `Tiempos Headline / Cormorant Garamond / EB Garamond` fallback，正文使用 `Inter / system`，tool 内容使用 `JetBrains Mono / ui-monospace`。
+- **布局密度**: 保留桌面工具密度；历史 row 和 tab 使用 8px 圆角，消息卡使用 12px 圆角与 24px / 16px 级别内边距。
+- **交互边界**: 历史项的 hover / focus / active 视觉边界与打开动作绑定在同一层；删除按钮阻止冒泡，避免误打开 thread。
+- **状态色**: running / failed / interrupted / idle 使用 `success` / `error` / `warning` / `on-dark-soft` token。
 
-Tailwind 主题配置见 `tailwind.config.js`，所有设计 token 已映射为 Tailwind utilities。
+Tailwind 主题配置见 `tailwind.config.js`，关键 token 由 `tests/designTokens.test.ts` 校验，防止回退到旧 dark-only 配色。
 
 ## 协议扩展
 

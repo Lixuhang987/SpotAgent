@@ -18,30 +18,30 @@ export function RequestPanels({
   }
 
   return (
-    <div className="flex gap-2.5 overflow-x-auto border-t border-border bg-surface/30 px-3 py-2.5">
+    <div className="flex gap-sm overflow-x-auto border-t border-white/10 bg-surface-dark px-sm py-sm">
       {permissionRequests.map((request) => (
         <section
           key={request.id}
-          className="flex-shrink-0 basis-[420px] max-w-[80vw] rounded-lg border border-border bg-surface px-2.5 py-2.5"
+          className="max-w-[80vw] flex-shrink-0 basis-[420px] rounded-lg border border-white/10 bg-surface-dark-elevated px-sm py-sm shadow-product-inner"
         >
-          <strong className="block mb-2 text-sm text-text-primary">
+          <strong className="mb-xs block text-sm font-medium text-on-dark">
             权限请求: {request.toolName}
           </strong>
-          <pre className="max-h-[140px] mb-2.5 overflow-auto text-xs text-text-secondary whitespace-pre-wrap">
+          <pre className="mb-sm max-h-[140px] overflow-auto rounded-md bg-surface-dark-soft p-sm font-code text-xs text-on-dark-soft whitespace-pre-wrap">
             {request.argumentsJSON}
           </pre>
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex flex-wrap gap-xs">
             <button
               type="button"
               onClick={() => onAnswerPermission(request.id, 'allow')}
-              className="px-2.5 py-1.5 rounded-lg border border-accent/30 bg-accent/10 hover:bg-accent/20 text-sm text-accent transition-colors"
+              className="rounded-md bg-primary px-sm py-xs text-sm font-medium text-on-primary transition-colors hover:bg-primary-active"
             >
               允许
             </button>
             <button
               type="button"
               onClick={() => onAnswerPermission(request.id, 'deny')}
-              className="px-2.5 py-1.5 rounded-lg border border-border bg-surface hover:bg-surface/80 text-sm text-text-primary transition-colors"
+              className="rounded-md border border-white/10 bg-surface-dark-soft px-sm py-xs text-sm font-medium text-on-dark transition-colors hover:bg-surface-dark"
             >
               拒绝
             </button>
@@ -51,18 +51,18 @@ export function RequestPanels({
       {workspaceRequests.map((request) => (
         <section
           key={request.id}
-          className="flex-shrink-0 basis-[420px] max-w-[80vw] rounded-lg border border-border bg-surface px-2.5 py-2.5"
+          className="max-w-[80vw] flex-shrink-0 basis-[420px] rounded-lg border border-white/10 bg-surface-dark-elevated px-sm py-sm shadow-product-inner"
         >
-          <strong className="block mb-2 text-sm text-text-primary">
+          <strong className="mb-sm block text-sm font-medium text-on-dark">
             {request.prompt}
           </strong>
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex flex-wrap gap-xs">
             {request.candidates.map((candidate) => (
               <button
                 type="button"
                 key={candidate.id}
                 onClick={() => onAnswerWorkspace(request.id, candidate.id)}
-                className="px-2.5 py-1.5 rounded-lg border border-accent/30 bg-accent/10 hover:bg-accent/20 text-sm text-accent transition-colors"
+                className="rounded-md bg-primary px-sm py-xs text-sm font-medium text-on-primary transition-colors hover:bg-primary-active"
               >
                 {candidate.name}
               </button>
@@ -70,7 +70,7 @@ export function RequestPanels({
             <button
               type="button"
               onClick={() => onAnswerWorkspace(request.id, null)}
-              className="px-2.5 py-1.5 rounded-lg border border-border bg-surface hover:bg-surface/80 text-sm text-text-primary transition-colors"
+              className="rounded-md border border-white/10 bg-surface-dark-soft px-sm py-xs text-sm font-medium text-on-dark transition-colors hover:bg-surface-dark"
             >
               取消
             </button>

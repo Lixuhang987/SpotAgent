@@ -1,4 +1,3 @@
-import * as Accordion from '@radix-ui/react-accordion';
 import { useMemo } from 'react';
 import { createThreadWindowStore } from '../store/threadWindowStore.ts';
 import { groupThreadsByWorkspace } from '../utils/groupThreads.ts';
@@ -33,14 +32,22 @@ export function HistorySidebar({
   );
 
   return (
-    <aside className="min-h-screen border-r border-border bg-surface/50 p-3.5 overflow-hidden flex flex-col">
-      <header className="mb-3">
-        <h1 className="text-[13px] font-semibold text-accent leading-5">
-          HandAgent
-        </h1>
+    <aside className="min-h-screen border-r border-hairline bg-surface-card p-sm overflow-hidden flex flex-col">
+      <header className="mb-sm">
+        <div className="flex items-center gap-xs">
+          <span className="grid h-6 w-6 place-items-center rounded-full bg-ink text-canvas text-[15px] leading-none" aria-hidden="true">
+            ✣
+          </span>
+          <h1 className="font-display text-[25px] font-normal leading-none tracking-[-0.02em] text-ink">
+            HandAgent
+          </h1>
+        </div>
+        <p className="mt-xs text-xs text-muted">
+          本地 thread 工作台
+        </p>
         <button
           onClick={onNewThread}
-          className="mt-3 w-full h-8 rounded-lg bg-accent/10 hover:bg-accent/20 text-accent text-sm font-medium transition-colors"
+          className="mt-sm h-10 w-full rounded-md bg-primary px-sm text-sm font-medium text-on-primary transition-colors hover:bg-primary-active disabled:bg-primary-disabled disabled:text-muted"
         >
           新建对话
         </button>
@@ -51,11 +58,11 @@ export function HistorySidebar({
         placeholder="搜索对话..."
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
-        className="w-full h-[30px] px-2.5 mb-2.5 rounded-lg border border-border bg-background text-text-primary text-sm placeholder:text-text-secondary"
+        className="mb-sm h-10 w-full rounded-md border border-hairline bg-canvas px-sm text-sm text-ink placeholder:text-muted-soft outline-none transition-shadow focus:border-primary focus:ring-4 focus:ring-accent-ring"
       />
 
       {/* Workspace 分组和默认分组 */}
-      <div className="flex-1 overflow-y-auto space-y-1">
+      <div className="flex-1 overflow-y-auto space-y-xs pr-1">
         {/* Workspace 分组 */}
         {grouped.workspaceGroups.map((group) => (
           <WorkspaceGroup
@@ -72,11 +79,11 @@ export function HistorySidebar({
 
         {/* 默认分组 - 固定在底部 */}
         {grouped.defaultGroup.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-border">
-            <h3 className="px-2.5 py-2 text-xs font-medium text-text-secondary">
+          <div className="mt-md border-t border-hairline pt-sm">
+            <h3 className="px-sm py-xs text-xs font-medium text-muted">
               默认对话
             </h3>
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-xs">
               {grouped.defaultGroup.map((thread) => (
                 <ThreadItem
                   key={thread.id}
@@ -91,7 +98,7 @@ export function HistorySidebar({
         )}
 
         {history.length === 0 && (
-          <p className="px-2.5 py-4 text-sm text-text-secondary">
+          <p className="rounded-md border border-hairline bg-canvas px-sm py-md text-sm text-muted">
             暂无对话历史
           </p>
         )}
@@ -109,29 +116,40 @@ interface ThreadItemProps {
 }
 
 function ThreadItem({ thread, isActive, onOpen, onDelete }: ThreadItemProps) {
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onOpen();
+    }
+  };
+
   return (
     <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={handleKeyDown}
       className={cn(
-        'grid grid-cols-[1fr_28px] items-center gap-1 px-2.5 py-2 rounded-lg border',
+        'grid grid-cols-[1fr_28px] items-stretch gap-xs rounded-md border transition-colors focus:outline-none focus:ring-4 focus:ring-accent-ring',
         isActive
-          ? 'border-border bg-surface'
-          : 'border-transparent hover:bg-surface/50'
+          ? 'border-hairline bg-canvas shadow-soft'
+          : 'border-transparent hover:bg-surface-soft'
       )}
     >
-      <button
-        onClick={onOpen}
-        className="min-w-0 text-left flex flex-col gap-0.5"
-      >
-        <span className="text-[13px] text-text-primary truncate">
+      <div className="min-w-0 rounded-md px-sm py-xs text-left">
+        <span className="block truncate text-[13px] font-medium text-ink">
           {thread.preview || '新对话'}
         </span>
-        <small className="text-[11px] text-text-secondary">
+        <small className="block text-[11px] text-muted">
           {new Date(thread.updatedAt).toLocaleDateString('zh-CN')}
         </small>
-      </button>
+      </div>
       <button
-        onClick={onDelete}
-        className="w-[26px] h-[26px] rounded-md hover:bg-surface text-text-secondary hover:text-text-primary transition-colors"
+        onClick={(event) => {
+          event.stopPropagation();
+          onDelete();
+        }}
+        className="my-auto h-[26px] w-[26px] rounded-sm text-muted transition-colors hover:bg-surface-cream-strong hover:text-ink"
         aria-label="删除对话"
       >
         <svg width="14" height="14" viewBox="0 0 14 14" className="mx-auto">

@@ -70,8 +70,8 @@
 1. 执行 `pnpm --filter handagent-thread-window-web build`
 2. 确认 `apps/thread-window-web/dist/` 生成包含 Tailwind utilities 的 CSS
 3. 确认构建输出无 PostCSS 或 Tailwind 配置错误
-4. 检查 `dist/assets/*.css` 文件，确认包含 Raycast Glass 自定义 theme tokens（如 `text-accent`、`bg-surface`、`bg-user-bubble`）
-5. 启动 desktop app，用开发者工具检查 DOM，确认组件使用 Tailwind 类名（如 `px-6 py-4`、`rounded-bubble`）
+4. 检查 `dist/assets/*.css` 文件，确认包含 Claude warm-canvas theme tokens 对应的 CSS（如 `bg-canvas`、`bg-surface-dark`、`bg-primary`、`bg-user-bubble`）
+5. 启动 desktop app，用开发者工具检查 DOM，确认组件使用 Tailwind 类名（如 `bg-canvas`、`bg-surface-dark`、`rounded-lg`）
 
 #### 场景 2: workspaceId 向后兼容验证
 
@@ -121,24 +121,21 @@
 8. 点击"新建对话"按钮，确认创建空白 thread 并自动切换到新 tab
 9. 点击历史项，确认激活或创建对应 tab
 
-#### 场景 5: 右侧对话区 ChatGPT 风格布局验证
+#### 场景 5: ThreadWindow Claude warm-canvas 视觉验证
 
 1. 创建新 thread，发送若干消息（user / assistant / tool）
-2. 确认消息气泡使用 ChatGPT 布局密度：
-   - 消息内边距为 24px 水平、16px 垂直（`px-6 py-4`）
-   - 消息之间间距为 12px（`space-y-3`）
-   - 消息行高为 1.625（`leading-relaxed`）
-   - 消息最大宽度 768px，居中显示（`max-w-3xl mx-auto`）
-3. 确认 user 消息使用 Mango Amber 色调背景（`bg-user-bubble`）
-4. 确认 assistant 消息使用玻璃质感背景（`bg-assistant-bubble`）
-5. 确认 tool 消息显示 tool 名称标签
+2. 确认左侧历史栏是 warm cream surface：整体为 `#efe9de`，搜索框和选中 thread 为 `#faf9f5`，边线为浅 cream hairline。
+3. 确认右侧 thread workspace 是 dark product surface：主背景为 `#181715`，顶部 tab bar 和 composer 区域为更深/更高的 dark surface。
+4. 确认 "新建对话" 与 "发送" 是 coral primary（`#cc785c`），hover/active 会变深，不再使用 Mango Amber。
+5. 确认 user 消息是 coral-tinted cream card，assistant 消息是 cream card，tool 消息是 dark code-style card 并使用 monospace。
+6. 将窗口缩到最小尺寸附近，确认历史标题、tab 标题、消息、按钮文字没有互相遮挡或溢出容器。
 
 #### 场景 6: 消息操作按钮验证
 
 1. 确认每条消息下方始终显示操作按钮栏（不需要 hover）
 2. 点击"复制"按钮，确认消息内容复制到剪贴板
 3. 确认"编辑"和"重新生成"按钮显示但禁用，hover 时显示 tooltip "即将推出"
-4. 确认操作按钮栏使用低对比度颜色（`text-text-secondary`），不干扰阅读
+4. 确认操作按钮栏在深色 workspace 上使用低对比度 cream 文本，不干扰阅读
 
 #### 场景 7: Composer 自动增高输入框验证
 
@@ -151,14 +148,10 @@
 
 #### 场景 8: 视觉一致性验证
 
-1. 确认 ThreadWindow 整体使用 Raycast Glass 视觉风格：
-   - 背景色 `#0B0B0F`
-   - 玻璃质感表面（半透明白色叠加）
-   - Mango Amber 强调色 `#FFA947`（按钮、user 消息边框）
-   - SF Pro 系统字体
-2. 确认顶部工具栏不再显示 connection pill（已移除）
-3. 确认所有交互元素有 hover 状态和过渡动画
-4. 确认 dark-only 主题（无 light mode）
+1. 确认 ThreadWindow 整体不再是 dark-only Raycast Glass 风格，而是 cream sidebar + dark product workspace 的双 surface 节奏。
+2. 确认顶部工具栏不再显示 connection pill（已移除），tab 状态点仍能区分 running / failed / interrupted / idle。
+3. 确认历史项的 hover / focus / active 视觉边界与点击边界一致：点击 row 空白区域会打开 thread，点击删除图标只触发删除确认。
+4. 触发 permission 或 workspace 请求，确认请求面板是 dark product card，主动作使用 coral，参数 JSON 区域使用 monospace dark code block。
 
 ## 开发脚本依赖与打包反馈 smoke（P2）
 

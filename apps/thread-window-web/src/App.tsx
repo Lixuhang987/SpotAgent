@@ -70,7 +70,7 @@ export function App() {
   };
 
   return (
-    <main className="grid grid-cols-[260px_1fr] w-screen min-h-screen overflow-hidden bg-background text-text-primary">
+    <main className="grid grid-cols-[280px_1fr] w-screen min-h-screen overflow-hidden bg-canvas text-ink font-body">
       <HistorySidebar
         history={state.history}
         activeTabId={state.activeTabId}
@@ -83,8 +83,8 @@ export function App() {
         }}
         onNewThread={handleNewThread}
       />
-      <section className="grid grid-rows-[auto_auto_1fr_auto] min-w-0 min-h-screen overflow-hidden bg-surface/30" aria-label="Thread workspace">
-        <header className="flex items-center gap-3 min-h-[48px] border-b border-border px-3 py-2">
+      <section className="grid grid-rows-[auto_auto_1fr_auto] min-w-0 min-h-screen overflow-hidden bg-surface-dark text-on-dark shadow-product-inner" aria-label="Thread workspace">
+        <header className="flex items-center gap-3 min-h-[52px] border-b border-white/10 bg-surface-dark-soft px-sm py-xs">
           <TabBar
             tabs={tabs}
             activeTabId={state.activeTabId}
@@ -94,7 +94,7 @@ export function App() {
         </header>
 
         {state.windowErrorMessage ? (
-          <div className="mx-3 mt-2.5 rounded-lg border border-error/30 bg-error/10 px-3 py-2 text-sm text-error">
+          <div className="mx-sm mt-xs rounded-md border border-error/30 bg-error/10 px-sm py-xs text-sm text-error">
             {state.windowErrorMessage}
           </div>
         ) : null}
@@ -142,8 +142,10 @@ export function App() {
             />
           </>
         ) : (
-          <div className="flex items-center justify-center text-sm text-text-secondary">
-            准备开始
+          <div className="flex items-center justify-center text-sm text-on-dark-soft">
+            <div className="rounded-lg border border-white/10 bg-surface-dark-elevated px-lg py-md">
+              准备开始
+            </div>
           </div>
         )}
         {deleteTargetThreadId ? (
