@@ -4,11 +4,12 @@
 
 `apps` 层负责可执行产品入口与用户交互壳层，不承载跨平台业务规则。
 
-当前包含两个可执行单元和一个 Web 前端包：
+当前包含三个可执行单元和一个 Web 前端包：
 
 - [desktop/desktop.md](/Users/mu9/proj/handAgent/apps/desktop/desktop.md) —— macOS 宿主壳（Swift / SwiftUI）。
 - [thread-window-web/thread-window-web.md](/Users/mu9/proj/handAgent/apps/thread-window-web/thread-window-web.md) —— WKWebView 承载的 React ThreadWindow 前端。
 - [agent-server/agent-server.md](/Users/mu9/proj/handAgent/apps/agent-server/agent-server.md) —— 本地 WebSocket thread 桥（Node / TypeScript），由 desktop 派生为子进程。
+- [electron-shell/electron-shell.md](/Users/mu9/proj/handAgent/apps/electron-shell/electron-shell.md) —— Phase 0 Electron UI shell workspace；目标是在 feature flag 路径下监督 agent-server 并预热隐藏 ThreadWindow。
 
 ## 在整体架构中的位置
 
