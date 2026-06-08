@@ -28,6 +28,8 @@ HandAgent 是一个 macOS 优先的桌面 Agent Runtime MVP。当前桌面壳使
 - Swift tests：`bash ./scripts/swiftw test`
 - Swift build：`bash ./scripts/swiftw build`
 
+`swiftw` 默认复用主 checkout 的 `.cache/swiftpm/` 作为 SwiftPM 依赖缓存。新 worktree 的默认基线可先跑 `bash ./scripts/test.sh`；涉及桌面宿主、Swift 包或打包链路时再追加 Swift build。
+
 ## 模型配置
 
 当前模型配置不再读取环境变量，而是统一由桌面端设置页写入 `~/.spotAgent/settings.json`。可配置项包括：

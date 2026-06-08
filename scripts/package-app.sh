@@ -3,7 +3,8 @@ set -euo pipefail
 
 APP_NAME="HandAgentDesktop"
 BUNDLE_ID="com.yourname.HandAgentDesktop"
-ROOT_DIR="${HANDAGENT_PACKAGE_ROOT_DIR:-.}"
+SCRIPT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="${HANDAGENT_PACKAGE_ROOT_DIR:-$SCRIPT_ROOT}"
 BUILD_DIR="${HANDAGENT_PACKAGE_BUILD_DIR:-.build/release}"
 DIST_DIR="${HANDAGENT_PACKAGE_DIST_DIR:-dist}"
 APP_DIR="$DIST_DIR/$APP_NAME.app"
@@ -12,7 +13,34 @@ SWIFT_BIN="${HANDAGENT_PACKAGE_SWIFT_BIN:-swift}"
 CODESIGN_BIN="${HANDAGENT_PACKAGE_CODESIGN_BIN:-codesign}"
 CODESIGN_IDENTITY="${HANDAGENT_PACKAGE_CODESIGN_IDENTITY:--}"
 CODESIGN_REQUIREMENT="${HANDAGENT_PACKAGE_CODESIGN_REQUIREMENT:-=designated => identifier \"$BUNDLE_ID\"}"
+
+resolve_shared_cache_root() {
+  local common_git_dir
+
+  if common_git_dir="$(git -C "$SCRIPT_ROOT" rev-parse --git-common-dir 2>/dev/null)"; then
+    if [[ "$common_git_dir" != /* ]]; then
+      common_git_dir="$SCRIPT_ROOT/$common_git_dir"
+    fi
+
+    if [[ -d "$common_git_dir" ]]; then
+      cd "$(dirname "$common_git_dir")" && pwd
+      return
+    fi
+  fi
+
+  printf '%s\n' "$SCRIPT_ROOT"
+}
+
+SHARED_CACHE_ROOT="${HANDAGENT_SHARED_CACHE_ROOT:-$(resolve_shared_cache_root)}"
+SWIFT_MODULE_CACHE_DIR="${HANDAGENT_SWIFT_MODULE_CACHE_DIR:-${HANDAGENT_SWIFT_CACHE_DIR:-$SCRIPT_ROOT/.cache/swift}}"
+SWIFTPM_CACHE_DIR="${HANDAGENT_SWIFTPM_CACHE_DIR:-$SHARED_CACHE_ROOT/.cache/swiftpm}"
+CLANG_CACHE_DIR="$SWIFT_MODULE_CACHE_DIR/clang-module-cache"
+SWIFT_CACHE_DIR="$SWIFT_MODULE_CACHE_DIR/swift-module-cache"
 MOCK_LLM=0
+
+mkdir -p "$CLANG_CACHE_DIR" "$SWIFT_CACHE_DIR" "$SWIFTPM_CACHE_DIR"
+export CLANG_MODULE_CACHE_PATH="$CLANG_CACHE_DIR"
+export SWIFT_MODULECACHE_PATH="$SWIFT_CACHE_DIR"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -55,7 +83,7 @@ if [[ -z "${HANDAGENT_THREAD_WINDOW_WEB_DIST_DIR:-}" ]]; then
 fi
 
 echo "[package-app] Building $APP_NAME release binary..."
-if ! "$SWIFT_BIN" build -c release --product "$APP_NAME" >"$tmp_log" 2>&1; then
+if ! "$SWIFT_BIN" build --cache-path "$SWIFTPM_CACHE_DIR" -c release --product "$APP_NAME" >"$tmp_log" 2>&1; then
   cat "$tmp_log"
   exit 1
 fi
