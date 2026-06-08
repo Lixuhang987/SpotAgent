@@ -37,6 +37,7 @@ const prewarmer = new ThreadWindowPrewarmer({
       channel: "electron_shell",
       type: "thread_window.closed",
       timestamp: now(),
+      wasVisible: false,
     });
     if (wasPrepared && hasAgentServerHealth) {
       void prepareThreadWindowAfterServerReady();

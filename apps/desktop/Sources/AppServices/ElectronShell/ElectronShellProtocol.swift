@@ -26,6 +26,7 @@ struct ElectronInitialPromptPayload: Encodable, Equatable {
 enum ElectronShellCommand: Encodable, Equatable {
     case openInitialPrompt(commandId: String, payload: ElectronInitialPromptPayload)
     case openHistory(commandId: String)
+    case prepare(commandId: String)
     case focus(commandId: String, threadId: String?)
     case showActivityWindow(commandId: String)
     case shutdown(commandId: String)
@@ -44,6 +45,9 @@ enum ElectronShellCommand: Encodable, Equatable {
             try container.encode(payload, forKey: .payload)
         case .openHistory(let commandId):
             try container.encode("thread_window.open_history", forKey: .type)
+            try container.encode(commandId, forKey: .commandId)
+        case .prepare(let commandId):
+            try container.encode("thread_window.prepare", forKey: .type)
             try container.encode(commandId, forKey: .commandId)
         case .focus(let commandId, let threadId):
             try container.encode("thread_window.focus", forKey: .type)
@@ -64,12 +68,12 @@ enum ElectronShellEvent: Decodable, Equatable {
     case threadWindowPrepared(timestamp: String)
     case threadWindowPrepareFailed(message: String)
     case commandAck(commandId: String, ok: Bool, error: String?)
-    case threadWindowClosed(timestamp: String)
+    case threadWindowClosed(timestamp: String, wasVisible: Bool)
     case rendererCrashed(window: ElectronShellRendererWindow, reason: String)
     case agentServerHealth(available: Bool, message: String?)
 
     private enum CodingKeys: String, CodingKey {
-        case channel, type, timestamp, commandId, ok, error, window, reason, available, message
+        case channel, type, timestamp, commandId, ok, error, window, reason, available, message, wasVisible
     }
 
     init(from decoder: Decoder) throws {
@@ -97,7 +101,10 @@ enum ElectronShellEvent: Decodable, Equatable {
                 error: try container.decodeIfPresent(String.self, forKey: .error)
             )
         case "thread_window.closed":
-            self = .threadWindowClosed(timestamp: try container.decode(String.self, forKey: .timestamp))
+            self = .threadWindowClosed(
+                timestamp: try container.decode(String.self, forKey: .timestamp),
+                wasVisible: try container.decode(Bool.self, forKey: .wasVisible)
+            )
         case "renderer.crashed":
             self = .rendererCrashed(
                 window: try container.decode(ElectronShellRendererWindow.self, forKey: .window),

@@ -37,6 +37,16 @@ describe("electronShellProtocol", () => {
     }))).toThrow("unsupported electron shell command");
   });
 
+  it("parses prepare commands", () => {
+    const command = parseCommand(JSON.stringify({
+      channel: "electron_shell",
+      type: "thread_window.prepare",
+      commandId: "cmd-prepare",
+    }));
+
+    expect(command.type).toBe("thread_window.prepare");
+  });
+
   it("encodes command acknowledgements", () => {
     expect(encodeEvent({
       channel: "electron_shell",
@@ -45,6 +55,15 @@ describe("electronShellProtocol", () => {
       ok: false,
       error: "renderer unavailable",
     })).toBe("{\"channel\":\"electron_shell\",\"type\":\"command.ack\",\"commandId\":\"cmd-3\",\"ok\":false,\"error\":\"renderer unavailable\"}");
+  });
+
+  it("encodes visible thread window close events", () => {
+    expect(encodeEvent({
+      channel: "electron_shell",
+      type: "thread_window.closed",
+      timestamp: "2026-06-08T00:00:00.000Z",
+      wasVisible: true,
+    })).toBe("{\"channel\":\"electron_shell\",\"type\":\"thread_window.closed\",\"timestamp\":\"2026-06-08T00:00:00.000Z\",\"wasVisible\":true}");
   });
 
   it("rejects malformed initial prompt attachments", () => {
