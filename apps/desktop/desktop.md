@@ -100,7 +100,7 @@ sequenceDiagram
   end
 ```
 
-当 `HANDAGENT_ELECTRON_SHELL=1` 时，`AppServices.defaultRuntime` 会创建同一个 `ElectronBackedAppServer` 实例作为 app-server health source、Electron ThreadWindow command client 和 ActivityWindow command client。此路径下 Swift 不直接启动 `AgentServerService`，也不创建 WKWebView ThreadWindow；Electron shell 作为唯一 supervisor 启动 agent-server，预热隐藏 ThreadWindow，在 PromptPanel submit/openHistory/focus 时展示或聚焦 Electron `BrowserWindow`，并在 app-server available 后通过 `activity_window.show` 展示 Electron React StatusBubble。PromptPanel 的可提交状态仍由 `AgentServerHealth` 控制。
+当 `HANDAGENT_ELECTRON_SHELL=1` 时，`AppServices.defaultRuntime` 会创建同一个 `ElectronBackedAppServer` 实例作为 app-server health source、Electron ThreadWindow command client 和 ActivityWindow command client。此路径下 Swift 不直接启动 `AgentServerService`，也不创建 WKWebView ThreadWindow；Electron shell 作为唯一 supervisor 启动 agent-server，在 agent-server ready 后主动预热隐藏 ThreadWindow，并在 PromptPanel submit/openHistory/focus 时展示或聚焦 Electron `BrowserWindow`。PromptPanel show/toggle 不触发 ThreadWindow prepare；可提交状态仍由 `agent_server.health` 与 `thread_window.prepared` 共同控制。Electron shell 会在 app-server available 后通过 `activity_window.show` 展示 Electron React StatusBubble。
 
 ## 主调用链路
 
@@ -151,6 +151,7 @@ Swift 不订阅 `/api/activity`，也不把 Electron activity 状态写入 `Thre
 - `AgentServerService` 已实现指数退避重启（最多 5 次），多次失败时通过 `onFatalError` 回调上抛 Coordinator 弹原生 alert（详见 [agent-server.md](Sources/AppServices/AgentServer/agent-server.md)）。
 - 设置窗口与 Thread 窗口共享 `AppActivationPolicyCoordinator`，全部关闭后 app 切回 `.accessory`。
 - desktop 不再持有 thread client。`ThreadWindowLifecycle` 只服务默认 WKWebView 路径；Electron flag 路径由 `ElectronThreadWindowLifecycle` 通过 `ThreadWindowCommanding` 发送 Electron command，并把初始 prompt payload 交给 Electron main。
+- PromptPanel show/toggle 只打开原生输入面板，不触发 Electron ThreadWindow 预热。
 - React ThreadWindow 负责 `/api/thread` 上的 command / notification / request / response 编解码和 UI 状态。
 - Electron flag 路径下 ActivityWindow 负责 React StatusBubble；Swift 只发送 `activity_window.show`，在 show command 失败时回退显示 Swift StatusBubble。
 - `PlatformBridgeConnectionClient` 连接 `/api/platform`，发送 `platform_bridge_hello`，并把 `platform_request` 分派给 `PlatformBridgeService`。

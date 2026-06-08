@@ -86,7 +86,7 @@
 1. 默认不设置 `HANDAGENT_ELECTRON_SHELL`，运行 `bash ./scripts/swiftw run HandAgentDesktop`，提交 prompt 后确认仍打开 Swift `WKWebView` ThreadWindow。
 1. 运行 `pnpm --filter handagent-electron-shell build`。
 1. 设置 `HANDAGENT_ELECTRON_SHELL=1` 后运行桌面 App，确认 Electron shell 和 agent-server 各一份进程。
-1. 通过全局快捷键打开 PromptPanel，确认不会显示 ThreadWindow，但 Electron 已可完成 hidden ThreadWindow prepare；PromptPanel 在 health + prepared 前不可提交。
+1. 通过全局快捷键打开 PromptPanel，确认不会显示 ThreadWindow；hidden ThreadWindow 已由 Electron main 在 app-server ready 后预热，PromptPanel show/toggle 本身不发送 prepare command。PromptPanel 在 health + prepared 前不可提交。
 1. 提交 `ELECTRON_PHASE1_INITIAL_PROMPT_QA_20260608`，确认打开的是 Electron ThreadWindow，而不是 Swift WKWebView ThreadWindow。
 1. 确认 Electron ThreadWindow 创建新 tab/thread，并显示该 user message；`~/.spotAgent/threads/` 中对应 thread 文件包含该首条 user message。
 1. 再次打开 PromptPanel 连续提交第二条不同 prompt，确认复用同一个 Electron ThreadWindow，但创建新的 tab/thread。
@@ -110,6 +110,21 @@
 1. 断开并重连 `/api/activity` subscriber，确认新连接立即收到 `activity.snapshot`，不会影响 `/api/thread` 消息流。
 1. 确认 ActivityWindow 非激活展示：点击气泡不把 ActivityWindow 变成 key window，且不会出现在 Cmd+Tab。
 1. 退出 HandAgent 后确认 Electron、Node agent-server 和 activity renderer 进程不残留。
+
+## Electron UI Shell Phase 3 Supervision Hardening（P2）
+
+**实施状态**：未通过实机 QA；本节为待验收项，不得归档为已通过。
+
+1. 运行 `pnpm --filter handagent-electron-shell build`。
+1. 设置 `HANDAGENT_ELECTRON_SHELL=1` 后运行桌面 App，确认启动日志包含 agent-server supervisor description，并明确 `mode`、`coreRuntimeHost` 与 `utilityProcessBlocker`。
+1. 打开 PromptPanel 多次，确认没有发送 `thread_window.prepare` command；ThreadWindow hidden prewarm 已在 app-server ready 后完成。
+1. 提交 prompt，确认 Electron ThreadWindow 打开新 thread，首条 user message 不丢失。
+1. 关闭 visible ThreadWindow，确认 agent-server 进程仍存在；再次打开 PromptPanel 并提交，确认仍通过同一后台服务执行。
+1. 关闭 Electron StatusBubble，确认 agent-server 进程仍存在，ThreadWindow 仍可继续对话。
+1. 模拟 agent-server 非零退出，确认 supervisor 按退避重启；超过最大次数后 Swift 显示明确 fatal/diagnostic 文案。
+1. 执行 `bash ./scripts/package-app.sh --mock-llm`，确认 `.app/Contents/Resources/ElectronShell/dist/main/main.js` 存在。
+1. 使用 mock LLM packaged app 路径启动 Electron flag，确认 prompt 返回 mock assistant，不访问真实 LLM。
+1. 退出 HandAgent 后确认 Electron、agent-server 和 renderer 进程不残留。
 
 ## ThreadWindow UI 重构完整验收（P2）
 

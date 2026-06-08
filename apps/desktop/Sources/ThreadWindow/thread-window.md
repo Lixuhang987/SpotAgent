@@ -34,7 +34,7 @@ Swift 在 `WKUserScript.atDocumentStart` 注入 `window.handAgentThreadWindowCon
 
 ## 调试前提
 
-- 默认路径下，仅通过全局快捷键打开 `PromptPanel`，**不会**触发 Swift `ThreadWindow` 创建或 `WKWebView` 加载。Electron flag 路径下，PromptPanel show 会请求 Electron 预热隐藏 `BrowserWindow`，但不会显示可见 ThreadWindow。
+- 默认路径下，仅通过全局快捷键打开 `PromptPanel`，**不会**触发 Swift `ThreadWindow` 创建或 `WKWebView` 加载。Electron flag 路径下，PromptPanel show/toggle 也不会请求 ThreadWindow 预热；hidden `BrowserWindow` 由 Electron main 在 agent-server ready 后主动预热。
 - `ThreadWindow` 的加载链路只会在以下入口触发：
   - 用户在 `PromptPanel` 中输入内容并提交（回车）；
   - Coordinator 显式调用历史入口 `openOrFocusHistory(...)`。

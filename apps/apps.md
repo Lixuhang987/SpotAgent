@@ -9,7 +9,7 @@
 - [desktop/desktop.md](/Users/mu9/proj/handAgent/apps/desktop/desktop.md) —— macOS 宿主壳（Swift / SwiftUI）。
 - [thread-window-web/thread-window-web.md](/Users/mu9/proj/handAgent/apps/thread-window-web/thread-window-web.md) —— React ThreadWindow 前端；默认由 WKWebView 承载，Electron flag 路径由 Electron `BrowserWindow` 承载同一 bundle。
 - [agent-server/agent-server.md](/Users/mu9/proj/handAgent/apps/agent-server/agent-server.md) —— 本地 WebSocket thread 桥（Node / TypeScript）；默认路径由 desktop 派生为子进程，Electron flag 路径由 electron-shell 监督。
-- [electron-shell/electron-shell.md](/Users/mu9/proj/handAgent/apps/electron-shell/electron-shell.md) —— Phase 2 Electron UI shell；feature flag 路径下监督 agent-server，承载 Electron ThreadWindow 和 React StatusBubble。
+- [electron-shell/electron-shell.md](/Users/mu9/proj/handAgent/apps/electron-shell/electron-shell.md) —— Phase 3 Electron UI shell；feature flag 路径下监督 agent-server，承载 Electron ThreadWindow 和 React StatusBubble。
 
 ## 在整体架构中的位置
 
@@ -37,7 +37,7 @@ flowchart LR
 
 - 用户提交 prompt 后，`AppCoordinator` 通过 `ThreadWindowManaging` 创建或聚焦 `ThreadWindow`。
 - 默认路径下 Swift `ThreadWindowLifecycle` 创建 `WKWebView`，加载 `apps/thread-window-web` bundle，并注入 `/api/thread` URL 与初始 prompt 队列。
-- 当 `HANDAGENT_ELECTRON_SHELL=1` 时，Swift 不创建 `WKWebView` ThreadWindow；PromptPanel show 会请求 Electron 预热隐藏 `BrowserWindow`，PromptPanel submit、openHistory 和 focus 会通过 Electron command bridge 展示或聚焦同一个 React ThreadWindow。
+- 当 `HANDAGENT_ELECTRON_SHELL=1` 时，Swift 不创建 `WKWebView` ThreadWindow；Electron main 在 agent-server ready 后主动预热隐藏 `BrowserWindow`，PromptPanel show/toggle 不触发预热，PromptPanel submit、openHistory 和 focus 会通过 Electron command bridge 展示或聚焦同一个 React ThreadWindow。
 - React ThreadWindow 接收初始 prompt 后，通过 `/api/thread` 发送 `thread.start`，收到 `thread.started` 后发送首轮 `input.submit` 和 attachments；后续 composer 追问也由 React 发送 `input.submit`，运行中输入会进入 active turn 的队列。
 - React ThreadWindow 负责 `ThreadCommand` / `ClientResponse` 编码、`ThreadNotification` / `ServerRequest` 接收，以及 tabs、消息、请求面板和 composer 状态。
 - ThreadWindow 左侧历史列表通过 thread 协议读取 `~/.spotAgent/threads/`，用于搜索、预览、恢复和删除持久化 thread。
