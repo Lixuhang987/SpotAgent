@@ -8,7 +8,7 @@
 |------|------|------|
 | `ws://127.0.0.1:4317/api/thread` | React ThreadWindow | 接收 `ThreadCommand` / `ClientResponse`，发送 `ThreadNotification` / `ServerRequest` |
 | `ws://127.0.0.1:4317/api/platform` | Swift desktop | 只承载 `PlatformBridgeMessage`，用于 core platform tool 反向请求 desktop |
-| `http://127.0.0.1:4317/thread-window/*` | `WKWebView` | 返回 React 静态资源，不参与 thread 协议 |
+| `http://127.0.0.1:4317/thread-window/*` | `WKWebView`；Phase 0 Electron hidden `BrowserWindow` | 返回 React 静态资源，不参与 thread 协议；Electron flag 路径当前只用于隐藏预热 |
 
 ## 直接子节点
 

@@ -96,6 +96,8 @@ sequenceDiagram
   Coord->>Coord: statusBubbleController.show()
 ```
 
+当 `HANDAGENT_ELECTRON_SHELL=1` 时，`AppServices.defaultAppServer` 改用 `ElectronBackedAppServer`。此路径下 Swift 不直接启动 `AgentServerService`，而是启动 Electron shell；Electron shell 再作为唯一 supervisor 启动 agent-server，并在隐藏 ThreadWindow 预热完成后向 Swift 回报 `thread_window.prepared`。PromptPanel 的可提交状态仍由 `AgentServerHealth` 控制，真实提交窗口仍是 Swift `WKWebView` ThreadWindow。
+
 ## 主调用链路
 
 ```mermaid

@@ -7,6 +7,7 @@
 | 目录 | 文档 | 职责 |
 |------|------|------|
 | `AgentServer/` | [agent-server.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/AgentServer/agent-server.md) | `AppServer` 统一内核：启动 node 子进程、维护 `/api/platform` WebSocket、协调平台桥接与健康状态 |
+| `ElectronShell/` | [electron-shell.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/ElectronShell/electron-shell.md) | feature flag 路径下的 Swift 到 Electron 进程桥、event 解码和 app-server 可用性门控 |
 | `AgentSettings/` | [agent-settings.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/AgentSettings/agent-settings.md) | `~/.spotAgent/settings.json` 读写 + 500ms 轮询；模型配置 UI |
 | `Hotkey/` | [hotkey.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Hotkey/hotkey.md) | 固定系统入口快捷键（`showPromptPanel` / `captureSelection` / `captureRegion`）与 manifest Action 全局快捷键注册 |
 | `Lifecycle/` | [lifecycle.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Lifecycle/lifecycle.md) | 根据 ThreadWindow / SettingsWindow 计数切换激活策略 |
@@ -18,7 +19,7 @@
 
 | 文件 | 职责 |
 |------|------|
-| `AppServices.swift` | DI 容器：持有 `appServer` / `threadRegistry` / `settingsStore` / `threadHistoryStore` / `actionManifestStore` / `appServerURL` / `platformServerURL` / `threadWindowWebAppURL` / `hotkeyRegistrar` / `threadWindowPresenter` / `settingsWindowPresenter` / `fatalAlertPresenter` / `setActivationPolicy` / `showsStatusBubble`。`appServerURL` 是 React ThreadWindow 使用的 `/api/thread` URL，`platformServerURL` 是 Swift 平台桥使用的 `/api/platform` URL，`threadWindowWebAppURL` 是 WKWebView 加载的 React 入口。生产由 `init()` 默认参数装配，测试用 `AppServices.testing()` 注入 nop 替身。同文件还定义 `ThreadWindowPresenting` / `SettingsWindowPresenting` / `HotkeyRegistering` / `FatalAlertPresenting` 协议与 `Nop*` 测试替身 |
+| `AppServices.swift` | DI 容器：持有 `appServer` / `threadRegistry` / `settingsStore` / `threadHistoryStore` / `actionManifestStore` / `appServerURL` / `platformServerURL` / `threadWindowWebAppURL` / `hotkeyRegistrar` / `threadWindowPresenter` / `settingsWindowPresenter` / `fatalAlertPresenter` / `setActivationPolicy` / `showsStatusBubble`。`appServerURL` 是 React ThreadWindow 使用的 `/api/thread` URL，`platformServerURL` 是 Swift 平台桥使用的 `/api/platform` URL，`threadWindowWebAppURL` 是 WKWebView 加载的 React 入口。生产由 `init()` 默认参数装配；`defaultAppServer` 在 `HANDAGENT_ELECTRON_SHELL=1` 时选择 `ElectronBackedAppServer`，否则选择默认 `AppServer`。测试用 `AppServices.testing()` 注入 nop 替身。同文件还定义 `ThreadWindowPresenting` / `SettingsWindowPresenting` / `HotkeyRegistering` / `FatalAlertPresenting` 协议与 `Nop*` 测试替身 |
 | `AppServicesProductionImpls.swift` | 生产实现：`ProductionHotkeyRegistrar` / `ProductionThreadWindowPresenter` / `ProductionSettingsWindowPresenter` / `ProductionFatalAlertPresenter`；window presenter 通过 `WindowCloseObservation` 持有和释放关闭通知 token |
 
 `ProductionThreadWindowPresenter` 只负责构建承载 React ThreadWindow 的 `NSWindow` + `NSHostingController`，不持有 thread 协议状态；视觉由 WKWebView 内 React 前端负责。
@@ -30,6 +31,7 @@
 | 协议 | 生产实现 | 测试替身 |
 |------|---------|---------|
 | `AppServerManaging`（在 `AgentServer/AppServer.swift`）| `AppServer` | `NopAppServer` |
+| `ElectronShellProcessing`（在 `ElectronShell/ElectronShellProcess.swift`）| `ElectronShellProcess` | 测试内 recording shell |
 | `HotkeyRegistering` | `ProductionHotkeyRegistrar` | `NopHotkeyRegistrar` |
 | `ThreadWindowPresenting` | `ProductionThreadWindowPresenter` | `NopThreadWindowPresenter` |
 | `SettingsWindowPresenting` | `ProductionSettingsWindowPresenter` | `NopSettingsWindowPresenter` |
