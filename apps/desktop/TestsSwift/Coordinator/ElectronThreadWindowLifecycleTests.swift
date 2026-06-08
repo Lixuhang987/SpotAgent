@@ -3,15 +3,6 @@ import XCTest
 
 @MainActor
 final class ElectronThreadWindowLifecycleTests: XCTestCase {
-    func testPrepareSendsPrepareCommand() {
-        let client = RecordingThreadWindowCommandClient()
-        let lifecycle = ElectronThreadWindowLifecycle(client: client)
-
-        lifecycle.prepareForPromptPanel()
-
-        XCTAssertEqual(client.prepareCount, 1)
-    }
-
     func testInitialPromptSendsOpenInitialPromptAndMarksOpen() throws {
         let client = RecordingThreadWindowCommandClient()
         let lifecycle = ElectronThreadWindowLifecycle(client: client)
@@ -120,16 +111,10 @@ final class ElectronThreadWindowLifecycleTests: XCTestCase {
 private final class RecordingThreadWindowCommandClient: ThreadWindowCommanding {
     var onThreadWindowClosed: (() -> Void)?
     var onCommandResult: ((ThreadWindowCommandResult) -> Void)?
-    private(set) var prepareCount = 0
     private(set) var openedPrompts: [PromptSubmission] = []
     private(set) var openHistoryCount = 0
     private(set) var focusedThreadIDs: [String?] = []
     private var commandCounters: [ThreadWindowCommandKind: Int] = [:]
-
-    func prepareThreadWindow() throws -> String {
-        prepareCount += 1
-        return nextCommandId(for: .prepare)
-    }
 
     func openInitialPrompt(_ prompt: PromptSubmission) throws -> String {
         openedPrompts.append(prompt)
@@ -166,8 +151,6 @@ private final class RecordingThreadWindowCommandClient: ThreadWindowCommanding {
         let next = (commandCounters[kind] ?? 0) + 1
         commandCounters[kind] = next
         switch kind {
-        case .prepare:
-            return "prepare-\(next)"
         case .openInitialPrompt:
             return "open-initial-prompt-\(next)"
         case .openHistory:

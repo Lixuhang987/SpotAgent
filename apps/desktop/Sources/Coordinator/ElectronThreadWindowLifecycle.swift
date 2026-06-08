@@ -21,10 +21,6 @@ final class ElectronThreadWindowLifecycle: ThreadWindowManaging {
         }
     }
 
-    func prepareForPromptPanel() {
-        try? client.prepareThreadWindow()
-    }
-
     func openOrFocusHistory(
         onOpened: @escaping @MainActor () -> Void,
         onFailed: @escaping @MainActor (String) -> Void,
@@ -111,8 +107,6 @@ final class ElectronThreadWindowLifecycle: ThreadWindowManaging {
                 isOpen = false
                 onFailure()
             }
-        case .prepare:
-            break
         }
     }
 }

@@ -78,11 +78,6 @@ final class ElectronBackedAppServer: AppServerManaging, ThreadWindowCommanding, 
     }
 
     @discardableResult
-    func prepareThreadWindow() throws -> String {
-        try sendThreadWindowCommand(.prepare) { .prepare(commandId: $0) }
-    }
-
-    @discardableResult
     func openInitialPrompt(_ prompt: PromptSubmission) throws -> String {
         try sendThreadWindowCommand(.openInitialPrompt) {
             .openInitialPrompt(
@@ -135,11 +130,6 @@ final class ElectronBackedAppServer: AppServerManaging, ThreadWindowCommanding, 
             hasPreparedThreadWindow = true
             threadWindowErrorMessage = nil
             publishAvailability()
-
-        case .threadWindowPrepareFailed(let message):
-            hasPreparedThreadWindow = false
-            threadWindowErrorMessage = message
-            publishAvailability(force: true)
 
         case .threadWindowClosed(_, let wasVisible):
             hasPreparedThreadWindow = false

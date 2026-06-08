@@ -3,18 +3,6 @@ import XCTest
 
 @MainActor
 final class ElectronBackedAppServerTests: XCTestCase {
-    func testPrepareThreadWindowSendsPrepareCommand() throws {
-        let shell = RecordingElectronShellProcess()
-        let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
-
-        let commandId = try appServer.prepareThreadWindow()
-
-        guard case .prepare(let sentCommandId) = shell.sentCommands.first else {
-            return XCTFail("expected prepare command")
-        }
-        XCTAssertEqual(sentCommandId, commandId)
-    }
-
     func testOpenInitialPromptSendsElectronPayload() throws {
         let shell = RecordingElectronShellProcess()
         let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
@@ -199,21 +187,6 @@ final class ElectronBackedAppServerTests: XCTestCase {
 
         XCTAssertFalse(appServer.isAvailable)
         XCTAssertEqual(appServer.startupErrorMessage, "port 4317 unavailable")
-        XCTAssertEqual(availability, [false])
-    }
-
-    func testThreadWindowPrepareFailureKeepsServerUnavailable() {
-        let shell = RecordingElectronShellProcess()
-        let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
-        var availability: [Bool] = []
-        appServer.onAvailabilityChange = { availability.append($0) }
-
-        appServer.start()
-        shell.emit(.agentServerHealth(available: true, message: nil))
-        shell.emit(.threadWindowPrepareFailed(message: "prewarm failed"))
-
-        XCTAssertFalse(appServer.isAvailable)
-        XCTAssertEqual(appServer.startupErrorMessage, "prewarm failed")
         XCTAssertEqual(availability, [false])
     }
 

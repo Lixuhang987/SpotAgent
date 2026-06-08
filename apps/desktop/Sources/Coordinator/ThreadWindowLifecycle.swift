@@ -37,8 +37,6 @@ final class ThreadWindowLifecycle: ThreadWindowManaging {
         onOpened()
     }
 
-    func prepareForPromptPanel() {}
-
     func createTabWithInitialPrompt(
         _ prompt: PromptSubmission,
         onOpened: @escaping @MainActor () -> Void,

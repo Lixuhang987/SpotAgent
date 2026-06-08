@@ -93,13 +93,11 @@ final class AppCoordinator {
         switch action {
         case .showPromptPanel:
             refreshActionDefinitions()
-            threadWindowLifecycle.prepareForPromptPanel()
             promptPanelController.show()
         case .hidePromptPanel:
             promptPanelController.hide()
         case .togglePromptPanel:
             refreshActionDefinitions()
-            threadWindowLifecycle.prepareForPromptPanel()
             promptPanelController.toggle()
         case .submitPrompt(let draft, let attachments):
             handleSubmitPrompt(draft, attachments: attachments)

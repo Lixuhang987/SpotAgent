@@ -99,14 +99,14 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
-    func testElectronShowAndTogglePrepareThreadWindow() {
+    func testElectronShowAndToggleDoNotSendThreadWindowCommand() {
         let client = RecordingThreadWindowCommandClient()
         let coordinator = AppCoordinator(services: electronServices(commandClient: client))
 
         coordinator.send(.showPromptPanel)
         coordinator.send(.togglePromptPanel)
 
-        XCTAssertEqual(client.prepareCount, 2)
+        XCTAssertEqual(client.commandCount, 0)
     }
 
     @MainActor
@@ -474,15 +474,13 @@ private final class TriggerableAppServer: AppServerManaging {
 private final class RecordingThreadWindowCommandClient: ThreadWindowCommanding {
     var onThreadWindowClosed: (() -> Void)?
     var onCommandResult: ((ThreadWindowCommandResult) -> Void)?
-    private(set) var prepareCount = 0
     private(set) var openedPrompts: [PromptSubmission] = []
     private(set) var openHistoryCount = 0
     private(set) var focusedThreadIDs: [String?] = []
     private var commandCounters: [ThreadWindowCommandKind: Int] = [:]
 
-    func prepareThreadWindow() throws -> String {
-        prepareCount += 1
-        return nextCommandId(for: .prepare)
+    var commandCount: Int {
+        openedPrompts.count + openHistoryCount + focusedThreadIDs.count
     }
 
     func openInitialPrompt(_ prompt: PromptSubmission) throws -> String {
@@ -520,8 +518,6 @@ private final class RecordingThreadWindowCommandClient: ThreadWindowCommanding {
         let next = (commandCounters[kind] ?? 0) + 1
         commandCounters[kind] = next
         switch kind {
-        case .prepare:
-            return "prepare-\(next)"
         case .openInitialPrompt:
             return "open-initial-prompt-\(next)"
         case .openHistory:

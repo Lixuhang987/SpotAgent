@@ -1,7 +1,6 @@
 import Foundation
 
 enum ThreadWindowCommandKind: Equatable {
-    case prepare
     case openInitialPrompt
     case openHistory
     case focus
@@ -18,9 +17,6 @@ struct ThreadWindowCommandResult: Equatable {
 protocol ThreadWindowCommanding: AnyObject {
     var onThreadWindowClosed: (() -> Void)? { get set }
     var onCommandResult: ((ThreadWindowCommandResult) -> Void)? { get set }
-
-    @discardableResult
-    func prepareThreadWindow() throws -> String
 
     @discardableResult
     func openInitialPrompt(_ prompt: PromptSubmission) throws -> String

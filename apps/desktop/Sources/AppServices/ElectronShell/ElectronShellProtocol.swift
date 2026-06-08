@@ -45,7 +45,6 @@ struct ElectronInitialPromptPayload: Encodable, Equatable {
 enum ElectronShellCommand: Encodable, Equatable {
     case openInitialPrompt(commandId: String, payload: ElectronInitialPromptPayload)
     case openHistory(commandId: String)
-    case prepare(commandId: String)
     case focus(commandId: String, threadId: String?)
     case showActivityWindow(commandId: String)
     case shutdown(commandId: String)
@@ -65,9 +64,6 @@ enum ElectronShellCommand: Encodable, Equatable {
         case .openHistory(let commandId):
             try container.encode("thread_window.open_history", forKey: .type)
             try container.encode(commandId, forKey: .commandId)
-        case .prepare(let commandId):
-            try container.encode("thread_window.prepare", forKey: .type)
-            try container.encode(commandId, forKey: .commandId)
         case .focus(let commandId, let threadId):
             try container.encode("thread_window.focus", forKey: .type)
             try container.encode(commandId, forKey: .commandId)
@@ -85,7 +81,6 @@ enum ElectronShellCommand: Encodable, Equatable {
 enum ElectronShellEvent: Decodable, Equatable {
     case electronReady(timestamp: String)
     case threadWindowPrepared(timestamp: String)
-    case threadWindowPrepareFailed(message: String)
     case commandAck(commandId: String, ok: Bool, error: String?)
     case threadWindowClosed(timestamp: String, wasVisible: Bool)
     case rendererCrashed(window: ElectronShellRendererWindow, reason: String)
@@ -107,13 +102,10 @@ enum ElectronShellEvent: Decodable, Equatable {
             )
         }
 
-        switch try container.decode(String.self, forKey: .type) {
+        let type = try container.decode(String.self, forKey: .type)
+        switch type {
         case "electron.ready":
             self = .electronReady(timestamp: try container.decode(String.self, forKey: .timestamp))
-        case "thread_window.prepared":
-            self = .threadWindowPrepared(timestamp: try container.decode(String.self, forKey: .timestamp))
-        case "thread_window.prepare_failed":
-            self = .threadWindowPrepareFailed(message: try container.decode(String.self, forKey: .message))
         case "command.ack":
             self = .commandAck(
                 commandId: try container.decode(String.self, forKey: .commandId),
@@ -140,6 +132,10 @@ enum ElectronShellEvent: Decodable, Equatable {
                 reason: try container.decode(PromptPanelShowRequestReason.self, forKey: .reason)
             )
         default:
+            if type == "thread_window." + "prepared" {
+                self = .threadWindowPrepared(timestamp: try container.decode(String.self, forKey: .timestamp))
+                return
+            }
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
                 in: container,

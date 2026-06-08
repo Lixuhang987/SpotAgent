@@ -4,7 +4,6 @@ import Foundation
 protocol ThreadWindowManaging: AnyObject {
     var webHost: ThreadWindowWebHost? { get }
 
-    func prepareForPromptPanel()
     func openOrFocusHistory(
         onOpened: @escaping @MainActor () -> Void,
         onFailed: @escaping @MainActor (String) -> Void,

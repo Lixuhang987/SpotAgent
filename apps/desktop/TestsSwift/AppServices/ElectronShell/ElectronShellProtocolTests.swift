@@ -24,17 +24,6 @@ final class ElectronShellProtocolTests: XCTestCase {
         XCTAssertTrue(encodedPayload["actionBinding"] is NSNull)
     }
 
-    func testEncodesPrepareCommand() throws {
-        let command = ElectronShellCommand.prepare(commandId: "cmd-prepare")
-
-        let data = try JSONEncoder().encode(command)
-        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-
-        XCTAssertEqual(object["channel"] as? String, "electron_shell")
-        XCTAssertEqual(object["type"] as? String, "thread_window.prepare")
-        XCTAssertEqual(object["commandId"] as? String, "cmd-prepare")
-    }
-
     func testDecodesAgentServerHealthEvent() throws {
         let data = """
         {"channel":"electron_shell","type":"agent_server.health","available":true}
@@ -59,14 +48,14 @@ final class ElectronShellProtocolTests: XCTestCase {
         XCTAssertEqual(event, .rendererCrashed(window: .thread, reason: "gone"))
     }
 
-    func testDecodesThreadWindowPrepareFailedEvent() throws {
+    func testDecodesThreadWindowPreparedEvent() throws {
         let data = """
-        {"channel":"electron_shell","type":"thread_window.prepare_failed","message":"load failed"}
+        {"channel":"electron_shell","type":"thread_window.prepared","timestamp":"2026-06-08T00:00:00.000Z"}
         """.data(using: .utf8)!
 
         let event = try JSONDecoder().decode(ElectronShellEvent.self, from: data)
 
-        XCTAssertEqual(event, .threadWindowPrepareFailed(message: "load failed"))
+        XCTAssertEqual(event, .threadWindowPrepared(timestamp: "2026-06-08T00:00:00.000Z"))
     }
 
     func testDecodesVisibleThreadWindowClosedEvent() throws {
