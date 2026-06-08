@@ -61,6 +61,18 @@
 
 **实施状态**：未通过实机 QA；本节为待验收项，不得归档为已通过。
 
+**2026-06-09 已验证子项**：
+
+- Electron flag packaged app 在 mock LLM 下可启动为 Swift / Electron main / agent-server 各一份进程，`127.0.0.1:4317` 由 Electron 监督的 agent-server 监听；启动后只显示 Electron `HandAgent Activity`，PromptPanel show/toggle 不展示 ThreadWindow。
+- `open_history` command 聚焦 Electron `HandAgent ThreadWindow` 并显示历史侧栏；`HandAgentDesktop` 无 Swift WKWebView 标准窗口。
+- `ELECTRON_PLATFORM_BRIDGE_FIXED_QA_20260609 [mock:clipboard-read]` 已证明 Electron flag 路径下 platform tool 通过 Swift `/api/platform` 回写，thread 文件为 `~/.spotAgent/threads/thread-1780946481700-4m0hzp.json`。
+- Electron ActivityWindow 状态截图：idle `/tmp/handagent-qa/electron-status-idle-after-waiting.png`；running `/tmp/handagent-qa/status-bubble-activity-fixed.png`；completed `/var/folders/m7/6b3swwk92mb0zthbzy5pfjvc0000gn/T/codex-shot-2026-06-09_03-11-19.png`；error `/tmp/handagent-qa/electron-error-activity.png`。
+- `ELECTRON_ERROR_STATUS_QA_20260609 [mock:llm-error]` 已验证 `/api/activity` 返回 `status: "error"` / `latestSummary: "运行失败"`，ThreadWindow 显示红色错误气泡，截图 `/tmp/handagent-qa/electron-error-threadwindow.png`，thread 文件 `~/.spotAgent/threads/thread-1780946934566-sz2ewd.json`。
+- `ELECTRON_WORKSPACE_WAITING_QA_20260609 [mock:workspace-ask]` 已验证 permission waiting 与 workspace waiting：ActivityWindow 截图 `/tmp/handagent-qa/electron-permission-waiting-activity.png`、`/tmp/handagent-qa/electron-workspace-waiting-activity.png`，ThreadWindow 内联面板截图 `/tmp/handagent-qa/electron-permission-waiting-threadwindow.png`、`/tmp/handagent-qa/electron-workspace-waiting-threadwindow.png`。
+- 关闭 visible Electron ThreadWindow 后，agent-server 保持运行；再次 PromptPanel submit 可复用后台服务创建新的 Electron ThreadWindow。
+- kill agent-server 后 Electron supervisor 会重启新的 agent-server，`/api/activity` 新连接立即收到 snapshot，`/api/thread` 可继续处理新 prompt。
+- `ELECTRON_SHUTDOWN_CLEANUP_QA_20260609 [mock:assistant-ok]` 已验证标准 quit 后无 Electron main / Electron Helper renderer / agent-server 残留，`127.0.0.1:4317` 无监听输出，thread 文件 `~/.spotAgent/threads/thread-1780946798569-bwztm6.json`。
+
 1. 运行 `pnpm --filter handagent-electron-shell build`。
 1. 设置 `HANDAGENT_ELECTRON_SHELL=1` 后运行桌面 App，确认 Electron shell 和 agent-server 只有各一份进程，`127.0.0.1:4317` 没有第二份 server 冲突。
 1. 使用 packaged app + `HANDAGENT_ELECTRON_BINARY` 启动 Electron flag 路径，确认 Electron main 不因 Swift command bridge 阻塞在 stdin，启动后能上报 `electron.ready` 并继续拉起 agent-server。
