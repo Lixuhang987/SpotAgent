@@ -24,7 +24,7 @@
 - 链路证明：`e6901d2` 主仓库 packaged 回归证明 `before-mouse-event` 兜底仍未收到同 App / AXMain ActivityWindow 点击；packaged 产物已包含 `before-mouse-event`、`event.preventDefault()` 与 `onNativeMouseDown?.()`，但关闭 visible Electron ThreadWindow 后 ActivityWindow 保持 `AXMain=true / AXFocused=false`，立即点击中心仍不打开 Swift PromptPanel。失败边界继续上移到 native window 状态 / hit testing：点击没有进入 renderer，也没有进入 Electron webContents。
 - 修复结论：visible ThreadWindow 关闭时，runtime 现在调用 ActivityWindow `blur()` 释放 native focus / AXMain 状态，让后续点击重新产生 focus 或 mouse event，再进入既有 native focus / mouse down 兜底链路。hidden prewarm close 不释放 ActivityWindow focus；释放动作不创建 ActivityWindow、不调用 `showInactive()`、不直接请求 PromptPanel，因此不会导致 ActivityWindow 展示时立即打开 PromptPanel，也不会在 visible ThreadWindow 可聚焦时误开 PromptPanel。
 - 自动化验证：`pnpm --filter handagent-electron-shell exec vitest run tests/windows/activityWindowController.test.ts tests/main/electronShellRuntime.test.ts` 覆盖 ActivityWindow `blur()` 包装、无窗口时释放为 no-op、visible ThreadWindow close 调用释放、hidden prewarm close 不调用释放。
-- 主仓库 live 回归状态：未在主仓库 packaged app 执行本轮追加修复后的实机回归；不得声称已通过。合入后需重新 build/package，并按下方 Electron UI Shell 最终态待回归项验证关闭 visible Electron ThreadWindow 后立即点击 ActivityWindow 是否打开 Swift PromptPanel。
+- 主仓库 live 回归结果：2026-06-09 合入 `a030945` 后重新执行 `pnpm --filter handagent-electron-shell exec vitest run tests/windows/activityWindowController.test.ts tests/main/electronShellRuntime.test.ts`、`pnpm --filter handagent-electron-shell test`、`pnpm --filter handagent-electron-shell build`、`bash ./scripts/test.sh` 与 `bash ./scripts/package-app.sh --mock-llm`；packaged app 已包含 `releaseNativeFocusForNextClick()`、`this.window?.blur()` 和 visible ThreadWindow close 时的 `activityWindow.releaseNativeFocusForNextClick()`。提交 `ELECTRON_STATUSBUBBLE_BLUR_QA_20260609 [mock:assistant-ok]` 后生成 `~/.spotAgent/threads/thread-1780951790475-hbjfka.json`，`/api/activity` snapshot 为 `activeThreadId: "thread-1780951790475-hbjfka"`、`status: "idle"`、`latestSummary: "点击开始"`。关闭 Electron `HandAgent ThreadWindow` 后只剩 `HandAgent Activity`，ActivityWindow 仍为 `AXMain=true` / `AXFocused=false`；立即用 CGEvent 点击 `{1280,870}` 后，Swift `PromptPanel` 仍未出现，截图 `/tmp/handagent-qa/electron-statusbubble-blur-after-click.png`。结论：Electron `BrowserWindow.blur()` 没有释放该路径下的 native main window 状态；缺陷已继续写入 `docs/bugs.md`，退出 QA app 后无 HandAgent / Electron / agent-server 残留，`127.0.0.1:4317` 无监听。
 
 ### Electron StatusBubble 已 AXMain 后 mouse down 回退 PromptPanel 修复
 
@@ -133,7 +133,7 @@
 
 **2026-06-09 待回归修复项**：
 
-- 关闭可见 Electron ThreadWindow 后，ActivityWindow 仍显示且 agent-server 继续监听 `127.0.0.1:4317` 时，用 CGEvent 点击 ActivityWindow 中心应打开 Swift `PromptPanel`。`2af9ba0` 的 `acceptFirstMouse: true` 修复不足；`412e1e9` 的 `focusable: true` + `acceptFirstMouse: true` 也已在主仓库 packaged app 实机回归失败；`366a706` 的 native focus 兜底只覆盖从其他前台 App 点击回来；`e6901d2` 的 native mouse down 兜底仍收不到已 AXMain ActivityWindow 的同 App 点击。本轮 worktree 追加 visible ThreadWindow close 后释放 ActivityWindow native focus，仍需合入主仓库并重新执行 packaged app 实机回归。
+- 关闭可见 Electron ThreadWindow 后，ActivityWindow 仍显示且 agent-server 继续监听 `127.0.0.1:4317` 时，用 CGEvent 点击 ActivityWindow 中心应打开 Swift `PromptPanel`。`2af9ba0` 的 `acceptFirstMouse: true` 修复不足；`412e1e9` 的 `focusable: true` + `acceptFirstMouse: true` 也已在主仓库 packaged app 实机回归失败；`366a706` 的 native focus 兜底只覆盖从其他前台 App 点击回来；`e6901d2` 的 native mouse down 兜底仍收不到已 AXMain ActivityWindow 的同 App 点击；`a030945` 在 visible ThreadWindow close 后调用 `BrowserWindow.blur()`，但主仓库 packaged 回归中 ActivityWindow 仍为 `AXMain=true` / `AXFocused=false`，立即点击仍不打开 Swift PromptPanel。
 
 **2026-06-09 阻塞子项**：
 
