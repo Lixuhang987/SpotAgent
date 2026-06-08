@@ -987,3 +987,11 @@
 - **验证过程**：`~/.spotAgent/workspaces.json` registry 原序为 `default -> tmp -> qa-workspace -> handagent-test`，历史侧栏显示排序为 `default -> handagent-test -> qa-workspace -> tmp -> 默认对话`，确认 workspace 分组按字母排序且“默认对话”固定在最下方。历史边栏顶部显示“新建对话”按钮和搜索框；搜索可过滤所有分组 thread，清空后恢复完整列表。修复 workspace 展开状态后，重新打包提交 `THREADWINDOW_SCENE4_EXPAND_FIX_QA_20260609 [mock:assistant-ok]` 与 `THREADWINDOW_SCENE4_PERSISTENCE_QA_20260609 [mock:assistant-ok]`，`/api/thread thread.list` 返回的四个 `qa-scene4-*` fixture 分别匹配真实 workspaceId；点击 `default`、`handagent-test`、`qa-workspace`、`tmp` 标题后均可展开并显示对应历史项，再次点击 `default` 可收起；点击 `SCENE4_DEFAULT...` 历史项会激活该 thread/tab。关闭 ThreadWindow 并重新提交 prompt 后，新建 WKWebView 恢复 `handagent-test`、`qa-workspace`、`tmp` 展开和 `default` 收起状态。
 - **证据**：截图 `/tmp/handagent-qa/threadwindow-scenario4-expand-fix-all-expanded.png`、`/tmp/handagent-qa/threadwindow-scenario4-expand-fix-qa-expanded.png`、`/tmp/handagent-qa/threadwindow-scenario4-expand-fix-default-collapsed.png`、`/tmp/handagent-qa/threadwindow-scenario4-expand-fix-reopen-persisted.png`；thread 文件 `~/.spotAgent/threads/thread-1780955175109-a0tl2r.json`、`~/.spotAgent/threads/thread-1780955402861-qedb4a.json`。
 - **结论**：通过。
+
+### ThreadWindow 场景 5：左侧边栏响应式缩放与隐藏
+
+- **验证日期**：2026-06-09
+- **验证环境**：默认 WKWebView packaged app，`mock-llm`
+- **验证过程**：提交 `THREADWINDOW_SCENE5_RESPONSIVE_QA_20260609 [mock:assistant-ok]` 后生成 `~/.spotAgent/threads/thread-1780954592680-hdn67v.json`。用 AX 调整 `HandAgent` 窗口尺寸并读取 sidebar `complementary` 区域：窗口 920x640 时 sidebar 为 276x612，接近窗口宽度 30%；窗口放大到实际 1280x640 时 sidebar 为 320x612，达到最大宽度上限；窗口 800x640 时 sidebar 为 240x612，仍接近 30% 且高于 220；窗口 740x640 时 main 只有右侧 region，sidebar 隐藏；重新放回 920x640 后 main 恢复为 2 个区域，sidebar 为 276x612，搜索框仍存在且为空。
+- **证据**：thread 文件 `~/.spotAgent/threads/thread-1780954592680-hdn67v.json`；截图 `/tmp/handagent-qa/threadwindow-scenario5-width-920.png`、`/tmp/handagent-qa/threadwindow-scenario5-width-1300.png`、`/tmp/handagent-qa/threadwindow-scenario5-width-800.png`、`/tmp/handagent-qa/threadwindow-scenario5-width-740.png`、`/tmp/handagent-qa/threadwindow-scenario5-width-920-restored.png`。
+- **结论**：通过。
