@@ -12,6 +12,7 @@ final class ThreadWindowLifecycle {
     @ObservationIgnored private let activationPolicy: AppActivationPolicyCoordinator
     @ObservationIgnored private let setActivationPolicy: @MainActor (NSApplication.ActivationPolicy) -> Void
     @ObservationIgnored private var window: NSWindow?
+    @ObservationIgnored private var visibleWindowIsOpen = false
 
     init(
         threadWebSocketURL: URL,
@@ -29,14 +30,18 @@ final class ThreadWindowLifecycle {
     }
 
     func openOrFocusHistory(onClosed: @escaping @MainActor () -> Void) {
-        _ = ensureWindow(onClosed: onClosed)
+        _ = ensureVisibleWindow(onClosed: onClosed)
+    }
+
+    func prepareHiddenWindow(onClosed: @escaping @MainActor () -> Void) {
+        _ = ensurePreparedWindow(onClosed: onClosed)
     }
 
     func createTabWithInitialPrompt(
         _ prompt: PromptSubmission,
         onClosed: @escaping @MainActor () -> Void
     ) {
-        ensureWindow(onClosed: onClosed).enqueue(initialPrompt: prompt)
+        ensureVisibleWindow(onClosed: onClosed).enqueue(initialPrompt: prompt)
     }
 
     func createNewTabWithInitialPrompt(
@@ -49,37 +54,51 @@ final class ThreadWindowLifecycle {
     @discardableResult
     func focus() -> Bool {
         guard let window else { return false }
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        show(window)
         return true
     }
 
     func close() {
         webHost = nil
-        if window != nil {
-            window = nil
+        window = nil
+        if visibleWindowIsOpen {
+            visibleWindowIsOpen = false
             setActivationPolicy(activationPolicy.policyAfterUpdatingOpenThreadWindows(by: -1))
         }
     }
 
-    private func ensureWindow(onClosed: @escaping @MainActor () -> Void) -> ThreadWindowWebHost {
-        if let window, let webHost {
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return webHost
-        }
-
-        let host = ThreadWindowWebHost(
-            threadWebSocketURL: threadWebSocketURL,
-            webAppURL: webAppURL
-        )
-        webHost = host
-        window = windowPresenter.present(host: host) {
-            Task { @MainActor in onClosed() }
-        }
-        if window != nil {
-            setActivationPolicy(activationPolicy.policyAfterUpdatingOpenThreadWindows(by: 1))
+    private func ensureVisibleWindow(onClosed: @escaping @MainActor () -> Void) -> ThreadWindowWebHost {
+        let host = ensurePreparedWindow(onClosed: onClosed)
+        if let window {
+            show(window)
         }
         return host
+    }
+
+    private func ensurePreparedWindow(onClosed: @escaping @MainActor () -> Void) -> ThreadWindowWebHost {
+        let host: ThreadWindowWebHost
+        if let webHost {
+            host = webHost
+        } else {
+            host = ThreadWindowWebHost(
+                threadWebSocketURL: threadWebSocketURL,
+                webAppURL: webAppURL
+            )
+            webHost = host
+        }
+
+        guard window == nil else { return host }
+        window = windowPresenter.makeWindow(host: host) {
+            Task { @MainActor in onClosed() }
+        }
+        return host
+    }
+
+    private func show(_ window: NSWindow) {
+        windowPresenter.show(window: window)
+        if !visibleWindowIsOpen {
+            visibleWindowIsOpen = true
+            setActivationPolicy(activationPolicy.policyAfterUpdatingOpenThreadWindows(by: 1))
+        }
     }
 }

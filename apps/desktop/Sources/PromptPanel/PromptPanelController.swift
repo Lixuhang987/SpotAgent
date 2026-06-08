@@ -16,6 +16,7 @@ final class PromptPanelController {
     var onSubmit: ((String, [PromptAttachmentResult]) -> Void)?
     var onSubmitAction: ((String, ActionBindingPayload, [PromptAttachmentResult]) -> Void)?
     var onOpenSettings: (() -> Void)?
+    var onDidShow: (() -> Void)?
 
     init<FocusRestorer: PromptPanelFocusRestoring>(
         focusRestorer: FocusRestorer = MacPromptPanelFocusRestorer()
@@ -92,6 +93,7 @@ final class PromptPanelController {
         DispatchQueue.main.async { [weak self] in
             guard let self, self.panel?.isVisible == true else { return }
             self.viewModel?.focusSeed += 1
+            self.onDidShow?()
         }
     }
 
