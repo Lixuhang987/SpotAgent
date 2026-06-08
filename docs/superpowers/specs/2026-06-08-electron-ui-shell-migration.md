@@ -437,6 +437,7 @@ node --experimental-transform-types --experimental-specifier-resolution=node app
 - 端口管理：`127.0.0.1:4317` 冲突时给出明确错误，不静默启动第二个服务。
 - 日志：stdout/stderr 和 fatal error 有可诊断落点。
 - 测试入口保留：agent-server 仍可被 `bash ./scripts/test.sh` 以普通 TypeScript/Node 包方式测试。
+- core runtime 边界：`packages/core` 的 thread/runtime/tool 循环只由受监督 agent-server 进程承载；Electron main 和任何 renderer 都不直接运行 core runtime。关闭 ThreadWindow 或 StatusBubble 不能停止 agent-server，只有 Electron shutdown 才能停止后台服务。
 
 因此，迁移完成后的运行顺序是：
 
@@ -448,7 +449,7 @@ Swift Host starts Electron
   -> Electron main creates hidden ThreadWindow and loads React
   -> hidden ThreadWindow reaches initial-prompt-ready state
   -> Electron sends agent_server.health available=true and thread_window.prepared to Swift
-  -> Swift continues interactive startup and enables PromptPanel submi
+  -> Swift continues interactive startup and enables PromptPanel submit
 ```
 
 ### 后续事项：替换 renderer 与 app-server 的 WebSocket transport
@@ -594,15 +595,22 @@ apps/thread-window-web/
 
 目标：
 
+- 回收 Phase 1/2 旧实现里 PromptPanel 打开时触发预热的语义：删除 `thread_window.prepare` command，删除 Swift `prepareThreadWindow()` / `prepareForPromptPanel()` 路径，PromptPanel show/toggle 不再跨进程触发 ThreadWindow 预热。
+- 把 hidden ThreadWindow 预热收敛到 App 启动阶段：Electron main 在 app ready 且 agent-server ready 后主动预热全局唯一 ThreadWindow；Swift 只等待 `agent_server.health available=true` 和 `thread_window.prepared`，不主动请求 prepare。
 - 固化 Phase 0 的 app-server 后台服务选型，优先落到 `utilityProcess`；如果保留 Node child process，必须在本文档和实现文档中说明阻塞 `utilityProcess` 的具体原因。
 - 完成 dev worktree、打包 `.app`、mock LLM、stdout/stderr、重启和 shutdown 的一致性验证。
 - Swift 只通过 Electron health event 观察 app-server，不直接启动或停止 app-server。
+- 确认 core runtime 始终由后台 agent-server 承载：ThreadWindow、StatusBubble、PromptPanel、Electron main 都不能直接运行 core runtime；关闭任意 UI 窗口不影响 agent-server 常驻，只有 App shutdown 才停止该后台进程。
 
 验证：
 
+- `SwiftToElectronCommand` 和 Swift `ElectronShellCommand` 中不再存在 `thread_window.prepare`。
+- 打开或切换 PromptPanel 不会发送任何 prepare command；App 启动完成前已完成 hidden ThreadWindow 预热。
 - dev worktree 路径正确。
 - mock LLM 打包入口仍可用。
 - server 非零退出后重启策略保留。
+- 关闭 ThreadWindow 和 StatusBubble 后，agent-server 仍保持运行；core runtime 后续 turn 仍通过同一个后台服务执行。
+- `utilityProcess` 可用时使用构建后的 agent-server 入口；不可用时文档记录具体阻塞原因，并保留等价 Node child process supervisor。
 - fatal error 仍能在 Swift 显示原生 alert 或在 Electron UI 显示等效提示。
 
 ## 测试策略
