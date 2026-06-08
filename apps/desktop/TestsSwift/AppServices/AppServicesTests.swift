@@ -38,6 +38,32 @@ final class AppServicesTests: XCTestCase {
     }
 
     @MainActor
+    func testElectronRuntimeProvidesThreadWindowCommandClient() throws {
+        let runtime = AppServices.defaultRuntime(
+            environment: [
+                "HANDAGENT_ELECTRON_SHELL": "1",
+                "HANDAGENT_ELECTRON_MAIN": "apps/electron-shell/dist/main/main.js",
+            ],
+            platformServerURL: URL(string: "ws://127.0.0.1:4317/api/platform")!
+        )
+
+        XCTAssertTrue(runtime.appServer is ElectronBackedAppServer)
+        XCTAssertTrue(runtime.threadWindowCommandClient is ElectronBackedAppServer)
+        XCTAssertTrue((runtime.appServer as AnyObject) === (runtime.threadWindowCommandClient as AnyObject))
+    }
+
+    @MainActor
+    func testDefaultRuntimeDoesNotProvideThreadWindowCommandClientWithoutElectronFlag() throws {
+        let runtime = AppServices.defaultRuntime(
+            environment: [:],
+            platformServerURL: URL(string: "ws://127.0.0.1:4317/api/platform")!
+        )
+
+        XCTAssertTrue(runtime.appServer is AppServer)
+        XCTAssertNil(runtime.threadWindowCommandClient)
+    }
+
+    @MainActor
     func testDefaultElectronShellLaunchUsesPnpmWorkspaceElectron() throws {
         let repoRoot = URL(fileURLWithPath: "/repo/worktree", isDirectory: true)
         let configuration = AppServices.defaultElectronShellLaunchConfiguration(

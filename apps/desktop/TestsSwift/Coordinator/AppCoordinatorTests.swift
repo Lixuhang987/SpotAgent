@@ -46,6 +46,39 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testElectronSubmitPromptSendsCommandWithoutCreatingWebHost() {
+        let client = RecordingThreadWindowCommandClient()
+        let coordinator = AppCoordinator(services: electronServices(commandClient: client))
+
+        coordinator.send(.submitPrompt("hello", attachments: []))
+
+        XCTAssertNil(coordinator.threadWindowWebHost)
+        XCTAssertEqual(client.openedPrompts.map(\.composed), ["hello"])
+    }
+
+    @MainActor
+    func testElectronOpenHistorySendsCommandWithoutCreatingWebHost() {
+        let client = RecordingThreadWindowCommandClient()
+        let coordinator = AppCoordinator(services: electronServices(commandClient: client))
+
+        coordinator.send(.openHistory)
+
+        XCTAssertNil(coordinator.threadWindowWebHost)
+        XCTAssertEqual(client.openHistoryCount, 1)
+    }
+
+    @MainActor
+    func testElectronShowAndTogglePrepareThreadWindow() {
+        let client = RecordingThreadWindowCommandClient()
+        let coordinator = AppCoordinator(services: electronServices(commandClient: client))
+
+        coordinator.send(.showPromptPanel)
+        coordinator.send(.togglePromptPanel)
+
+        XCTAssertEqual(client.prepareCount, 2)
+    }
+
+    @MainActor
     func testThreadClosedRemovesWindowViewModel() {
         let coordinator = AppCoordinator(services: AppServices.testing())
 
@@ -186,6 +219,48 @@ final class AppCoordinatorTests: XCTestCase {
         coordinator.send(.openSettings)
 
         XCTAssertEqual(presenter.lastShortcutActions.map(\.id), ["conflict/settings"])
+    }
+}
+
+@MainActor
+private func electronServices(commandClient: RecordingThreadWindowCommandClient) -> AppServices {
+    AppServices(
+        appServer: NopAppServer(),
+        threadWindowCommandClient: commandClient,
+        appServerURL: URL(string: "ws://127.0.0.1:0/noop")!,
+        platformServerURL: URL(string: "ws://127.0.0.1:0/noop-platform")!,
+        threadWindowWebAppURL: URL(fileURLWithPath: "/tmp/index.html"),
+        hotkeyRegistrar: NopHotkeyRegistrar(),
+        threadWindowPresenter: NopThreadWindowPresenter(),
+        settingsWindowPresenter: NopSettingsWindowPresenter(),
+        fatalAlertPresenter: NopFatalAlertPresenter(),
+        setActivationPolicy: { _ in },
+        showsStatusBubble: false
+    )
+}
+
+@MainActor
+private final class RecordingThreadWindowCommandClient: ThreadWindowCommanding {
+    var onThreadWindowClosed: (() -> Void)?
+    private(set) var prepareCount = 0
+    private(set) var openedPrompts: [PromptSubmission] = []
+    private(set) var openHistoryCount = 0
+    private(set) var focusedThreadIDs: [String?] = []
+
+    func prepareThreadWindow() throws {
+        prepareCount += 1
+    }
+
+    func openInitialPrompt(_ prompt: PromptSubmission) throws {
+        openedPrompts.append(prompt)
+    }
+
+    func openHistory() throws {
+        openHistoryCount += 1
+    }
+
+    func focus(threadId: String?) throws {
+        focusedThreadIDs.append(threadId)
     }
 }
 

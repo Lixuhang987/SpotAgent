@@ -3,7 +3,7 @@ import Foundation
 
 @Observable
 @MainActor
-final class ThreadWindowLifecycle {
+final class ThreadWindowLifecycle: ThreadWindowManaging {
     private(set) var webHost: ThreadWindowWebHost?
 
     @ObservationIgnored private let threadWebSocketURL: URL
@@ -32,6 +32,8 @@ final class ThreadWindowLifecycle {
         _ = ensureWindow(onClosed: onClosed)
     }
 
+    func prepareForPromptPanel() {}
+
     func createTabWithInitialPrompt(
         _ prompt: PromptSubmission,
         onClosed: @escaping @MainActor () -> Void
@@ -47,7 +49,7 @@ final class ThreadWindowLifecycle {
     }
 
     @discardableResult
-    func focus() -> Bool {
+    func focus(threadID: String? = nil) -> Bool {
         guard let window else { return false }
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)

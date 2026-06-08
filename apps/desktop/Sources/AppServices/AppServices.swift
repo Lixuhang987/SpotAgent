@@ -53,8 +53,15 @@ struct ElectronShellLaunchConfiguration: Equatable {
 }
 
 @MainActor
+struct AppServicesRuntime {
+    let appServer: any AppServerManaging
+    let threadWindowCommandClient: (any ThreadWindowCommanding)?
+}
+
+@MainActor
 final class AppServices {
     let appServer: any AppServerManaging
+    let threadWindowCommandClient: (any ThreadWindowCommanding)?
     let threadRegistry: ThreadRegistry
     let settingsStore: AgentSettingsStore
     let threadHistoryStore: ThreadHistoryStore
@@ -71,6 +78,7 @@ final class AppServices {
 
     init(
         appServer: (any AppServerManaging)? = nil,
+        threadWindowCommandClient: (any ThreadWindowCommanding)? = nil,
         threadRegistry: ThreadRegistry = ThreadRegistry(),
         settingsStore: AgentSettingsStore = AgentSettingsStore(),
         threadHistoryStore: ThreadHistoryStore = ThreadHistoryStore(),
@@ -87,7 +95,11 @@ final class AppServices {
         },
         showsStatusBubble: Bool = true
     ) {
-        self.appServer = appServer ?? AppServices.defaultAppServer(platformServerURL: platformServerURL)
+        let runtime = appServer == nil
+            ? AppServices.defaultRuntime(platformServerURL: platformServerURL)
+            : nil
+        self.appServer = appServer ?? runtime!.appServer
+        self.threadWindowCommandClient = threadWindowCommandClient ?? runtime?.threadWindowCommandClient
         self.threadRegistry = threadRegistry
         self.settingsStore = settingsStore
         self.threadHistoryStore = threadHistoryStore
@@ -129,6 +141,13 @@ final class AppServices {
         environment: [String: String] = ProcessInfo.processInfo.environment,
         platformServerURL: URL
     ) -> any AppServerManaging {
+        defaultRuntime(environment: environment, platformServerURL: platformServerURL).appServer
+    }
+
+    static func defaultRuntime(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        platformServerURL: URL
+    ) -> AppServicesRuntime {
         let platformClient = PlatformBridgeConnectionClient(
             connection: AppServerConnection(serverURL: platformServerURL),
             platformBridge: PlatformBridgeService()
@@ -142,12 +161,19 @@ final class AppServices {
                 environment: configuration.environment,
                 currentDirectoryURL: configuration.currentDirectoryURL
             )
-            return ElectronBackedAppServer(shell: shell, platformClient: platformClient)
+            let appServer = ElectronBackedAppServer(shell: shell, platformClient: platformClient)
+            return AppServicesRuntime(
+                appServer: appServer,
+                threadWindowCommandClient: appServer
+            )
         }
 
-        return AppServer(
-            agentServer: AgentServerService(),
-            platformClient: platformClient
+        return AppServicesRuntime(
+            appServer: AppServer(
+                agentServer: AgentServerService(),
+                platformClient: platformClient
+            ),
+            threadWindowCommandClient: nil
         )
     }
 

@@ -27,7 +27,7 @@ final class AppCoordinator {
         AppFeature()
     }
     @ObservationIgnored private let agentServerHealth: AgentServerHealth
-    @ObservationIgnored private let threadWindowLifecycle: ThreadWindowLifecycle
+    @ObservationIgnored private let threadWindowLifecycle: any ThreadWindowManaging
     @ObservationIgnored private let settingsLifecycle: SettingsLifecycle
     @ObservationIgnored private let activationPolicy = AppActivationPolicyCoordinator()
     @ObservationIgnored private var registeredActionShortcutNames: Set<KeyboardShortcuts.Name> = []
@@ -50,13 +50,17 @@ final class AppCoordinator {
             fatalAlertPresenter: services.fatalAlertPresenter,
             showsFatalAlert: services.showsStatusBubble
         )
-        self.threadWindowLifecycle = ThreadWindowLifecycle(
-            threadWebSocketURL: services.appServerURL,
-            webAppURL: services.threadWindowWebAppURL,
-            windowPresenter: services.threadWindowPresenter,
-            activationPolicy: activationPolicy,
-            setActivationPolicy: services.setActivationPolicy
-        )
+        if let threadWindowCommandClient = services.threadWindowCommandClient {
+            self.threadWindowLifecycle = ElectronThreadWindowLifecycle(client: threadWindowCommandClient)
+        } else {
+            self.threadWindowLifecycle = ThreadWindowLifecycle(
+                threadWebSocketURL: services.appServerURL,
+                webAppURL: services.threadWindowWebAppURL,
+                windowPresenter: services.threadWindowPresenter,
+                activationPolicy: activationPolicy,
+                setActivationPolicy: services.setActivationPolicy
+            )
+        }
         self.settingsLifecycle = SettingsLifecycle(
             windowPresenter: services.settingsWindowPresenter,
             activationPolicy: activationPolicy,
@@ -85,11 +89,13 @@ final class AppCoordinator {
         switch action {
         case .showPromptPanel:
             refreshActionDefinitions()
+            threadWindowLifecycle.prepareForPromptPanel()
             promptPanelController.show()
         case .hidePromptPanel:
             promptPanelController.hide()
         case .togglePromptPanel:
             refreshActionDefinitions()
+            threadWindowLifecycle.prepareForPromptPanel()
             promptPanelController.toggle()
         case .submitPrompt(let draft, let attachments):
             handleSubmitPrompt(draft, attachments: attachments)
@@ -219,7 +225,7 @@ final class AppCoordinator {
     }
 
     private func handleStatusBubbleTap(_ threadID: String?) {
-        if threadID != nil, threadWindowLifecycle.focus() { return }
+        if threadWindowLifecycle.focus(threadID: threadID) { return }
         promptPanelController.show()
     }
 
