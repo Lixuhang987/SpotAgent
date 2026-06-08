@@ -71,6 +71,18 @@ export class ElectronShellRuntime {
       return;
     }
 
+    this.requestPromptPanelFromActivityWindow();
+  }
+
+  handleActivityWindowNativeFocus(): void {
+    if (this.options.prewarmer.focus()) {
+      return;
+    }
+
+    this.requestPromptPanelFromActivityWindow();
+  }
+
+  private requestPromptPanelFromActivityWindow(): void {
     this.options.send({
       channel: "electron_shell",
       type: "prompt_panel.show_requested",

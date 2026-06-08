@@ -31,22 +31,6 @@
 
 ## 当前 bug
 
-### Electron StatusBubble 无可聚焦 ThreadWindow 时仍未打开 PromptPanel
-
-- **严重级别**：P1
-- **发现日期**：2026-06-09
-- **复现步骤**：
-  1. 在 `main` 合入 `412e1e9 fix: 允许 Electron ActivityWindow 接收点击` 后执行 `bash ./scripts/package-app.sh --mock-llm`。
-  1. 使用 `HANDAGENT_ELECTRON_SHELL=1` 与 `HANDAGENT_ELECTRON_BINARY=/Users/mu9/proj/handAgent/node_modules/.pnpm/electron@42.3.3/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron` 启动 packaged app。
-  1. 通过全局快捷键打开 PromptPanel，提交 `ELECTRON_STATUSBUBBLE_FOCUSABLE_QA_20260609 [mock:assistant-ok]`。
-  1. 等待 Electron `HandAgent ThreadWindow` 和 `HandAgent Activity` 出现，确认 thread 文件 `~/.spotAgent/threads/thread-1780949594500-gba8h6.json` 包含 user prompt 与 mock assistant。
-  1. 用 `AXPress` 点击 Electron `HandAgent ThreadWindow` 关闭按钮，确认只剩 `HandAgent Activity`，且 `lsof -nP -iTCP:4317 -sTCP:LISTEN` 仍显示 agent-server 监听。
-  1. 使用 CGEvent 点击 ActivityWindow 坐标 `{1280,870}`、`{1165,870}`、`{1235,870}`、`{1320,870}`。
-- **实际结果**：点击后 `HandAgentDesktop` 仍没有可见 `PromptPanel`，Electron 仍只有 `HandAgent Activity`。ActivityWindow 在该状态下为 `AXMain=true` / `AXFocused=false`。截图为 `/tmp/handagent-qa/electron-statusbubble-focusable-before-retry.png` 与 `/tmp/handagent-qa/electron-statusbubble-focusable-after-clicks.png`。
-- **期望结果**：当 Electron StatusBubble 无可聚焦 ThreadWindow 时，应通过 `prompt_panel.show_requested` 请求 Swift 打开 `PromptPanel`。
-- **证据**：packaged app 资源 `dist/HandAgentDesktop.app/Contents/Resources/ElectronShell/dist/main/windows/activityWindowController.js` 已包含 `focusable: true` 和 `acceptFirstMouse: true`；`/api/activity` snapshot 返回 `activeThreadId: "thread-1780949594500-gba8h6"`、`status: "idle"`、`latestSummary: "点击开始"`；thread 文件包含 `ELECTRON_STATUSBUBBLE_FOCUSABLE_QA_20260609 [mock:assistant-ok]` 与 `Mock assistant response: main chain is reachable.`；关闭 ThreadWindow 后 `lsof` 显示 node 仍监听 `127.0.0.1:4317`；退出 QA app 后无 HandAgent / Electron / agent-server 残留，`127.0.0.1:4317` 无监听。
-- **初步调用链 / 根因边界**：已验证 `PromptPanel submit -> Electron ThreadWindow -> agent-server -> /api/activity activeThreadId -> ActivityWindow 可见 -> packaged app 包含 focusable/acceptFirstMouse -> 真实 CGEvent 点击`。点击后未出现 Swift PromptPanel，失败边界仍在 `ActivityWindow renderer click -> activity-window:focus-thread IPC -> ElectronShellRuntime.handleActivityWindowFocusRequest -> prompt_panel.show_requested` 的上游 hop；需要用 `$trace-and-verify-call-chain` 继续证明 renderer click、preload IPC、main IPC 或 runtime fallback 哪一跳未发生。
-
 ### `AI SDK stream finished without assistant content or tool calls`
 
 - **严重级别**：P1

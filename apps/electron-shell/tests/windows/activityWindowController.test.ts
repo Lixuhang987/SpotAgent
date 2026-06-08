@@ -108,6 +108,27 @@ describe("ActivityWindowController", () => {
     expect(onRendererCrashed).toHaveBeenCalledTimes(1);
     expect(onRendererCrashed).toHaveBeenCalledWith("crashed");
   });
+
+  it("emits native focus as an activity click fallback", async () => {
+    const window = new FakeBrowserWindow();
+    const onNativeFocus = vi.fn();
+    const controller = new ActivityWindowController({
+      activityWindowHTMLPath: "/dist/activity-window/index.html",
+      preloadPath: "/dist/preload/activityWindowPreload.js",
+      createWindow: () => window,
+      screenProvider: {
+        getPrimaryWorkArea: () => ({ x: 0, y: 0, width: 1440, height: 900 }),
+      },
+      onNativeFocus,
+    });
+
+    await controller.show();
+    expect(onNativeFocus).not.toHaveBeenCalled();
+
+    window.emit("focus");
+
+    expect(onNativeFocus).toHaveBeenCalledTimes(1);
+  });
 });
 
 class FakeBrowserWindow extends EventEmitter {

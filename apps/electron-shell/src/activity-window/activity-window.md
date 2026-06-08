@@ -24,7 +24,7 @@
 ## 交互边界
 
 - 点击气泡只调用 `window.handAgentActivityWindow.focusThread(activeThreadId ?? null)`；renderer 不直接调用 Electron API。
-- `focusThread` 最终由 main 校验 sender 后处理。没有 active thread 或无法聚焦时，由 main 请求 Swift 打开 PromptPanel。
+- `focusThread` 最终由 main 校验 sender 后处理。没有 active thread 或无法聚焦时，由 main 请求 Swift 打开 PromptPanel。packaged macOS 下如果点击只触发 ActivityWindow native focus 而未送达 renderer IPC，main 侧 native focus 兜底使用同一套聚焦 / PromptPanel 语义。
 - ActivityWindow 通过 `showInactive()` 非激活展示，但窗口必须保持 `focusable: true` 与 `acceptFirstMouse: true`，确保 macOS CGEvent 点击能进入 renderer；UI 仍不能依赖键盘焦点常驻，可访问性文案应放在按钮文本中。
 
 ## 修改约束

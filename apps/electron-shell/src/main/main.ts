@@ -78,6 +78,9 @@ const activityWindow = new ActivityWindowController({
       reason,
     });
   },
+  onNativeFocus: () => {
+    runtime.handleActivityWindowNativeFocus();
+  },
 });
 
 let hasStartedSupervisor = false;

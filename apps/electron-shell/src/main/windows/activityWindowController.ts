@@ -4,7 +4,7 @@ export type BrowserWindowLike = {
   webContents: {
     on(event: "render-process-gone", listener: (event: unknown, details: { reason: string }) => void): unknown;
   };
-  on(event: "closed", listener: () => void): unknown;
+  on(event: "closed" | "focus", listener: () => void): unknown;
   loadFile(filePath: string): Promise<unknown> | unknown;
   setBounds(bounds: Rectangle): void;
   showInactive(): void;
@@ -20,6 +20,7 @@ type Options = {
   createWindow: (options: BrowserWindowConstructorOptions) => BrowserWindowLike;
   screenProvider: ScreenProvider;
   onRendererCrashed?: (reason: string) => void;
+  onNativeFocus?: () => void;
 };
 
 const ACTIVITY_WINDOW_WIDTH = 272;
@@ -81,6 +82,11 @@ export class ActivityWindowController {
       if (this.window === window) {
         this.window = null;
         this.hasLoaded = false;
+      }
+    });
+    window.on("focus", () => {
+      if (this.window === window) {
+        this.options.onNativeFocus?.();
       }
     });
     window.webContents.on("render-process-gone", (_event, details) => {

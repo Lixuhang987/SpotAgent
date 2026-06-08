@@ -23,6 +23,7 @@
 - ActivityWindow 是 frameless、transparent、alwaysOnTop、skipTaskbar、focusable true、acceptFirstMouse true、resizable false 的小窗；`showInactive()` 负责初始非激活展示，`focusable` 不能设为 false，否则 macOS packaged CGEvent 点击可能只激活 Electron 而不触发 StatusBubble renderer IPC。
 - `show()` 每次都会按 primary work area 重新计算右下角 bounds，再用 `showInactive()` 显示，避免抢焦点。
 - ActivityWindow 只 load `dist/activity-window/index.html`；状态数据由 renderer 通过 `/api/activity` 获取。
+- ActivityWindow 的 native `focus` 事件要作为 renderer click IPC 的兜底上报给 runtime：如果 visible ThreadWindow 可聚焦则聚焦 ThreadWindow，否则发送 `prompt_panel.show_requested`。
 - renderer crash 只上报 `renderer.crashed window: "activity"`；Swift 侧可回退 StatusBubble，但不代表 agent-server 不可用。
 
 ## 修改约束

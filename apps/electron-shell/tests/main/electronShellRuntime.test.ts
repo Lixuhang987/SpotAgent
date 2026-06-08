@@ -106,6 +106,32 @@ describe("ElectronShellRuntime", () => {
     });
   });
 
+  it("uses native activity focus as a click fallback when renderer IPC is not delivered", () => {
+    const harness = createHarness({ focusResult: false });
+
+    harness.runtime.handleActivityWindowNativeFocus();
+
+    expect(harness.prewarmer.focus).toHaveBeenCalledTimes(1);
+    expect(harness.events).toContainEqual({
+      channel: "electron_shell",
+      type: "prompt_panel.show_requested",
+      reason: "activity_window.clicked_without_thread",
+    });
+  });
+
+  it("focuses a visible thread window from native activity focus", () => {
+    const harness = createHarness();
+
+    harness.runtime.handleActivityWindowNativeFocus();
+
+    expect(harness.prewarmer.focus).toHaveBeenCalledTimes(1);
+    expect(harness.events).not.toContainEqual({
+      channel: "electron_shell",
+      type: "prompt_panel.show_requested",
+      reason: "activity_window.clicked_without_thread",
+    });
+  });
+
   it("acks focus false when no visible thread window exists", async () => {
     const harness = createHarness({ focusResult: false });
 
