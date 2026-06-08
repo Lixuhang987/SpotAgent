@@ -25,20 +25,6 @@
 - 验收结果：外部用户输入命令统一为 `input.submit`，旧输入命令已从当前 `ThreadCommand` 移除；ThreadWindow composer 在 running 状态下仍可提交输入并保留 Stop，但 running 输入先进入前端本地 FIFO 队列并显示在 Composer 上方，等 thread 离开 running 后逐条发送，避免两个 user input 连续显示；后端公开 `/api/thread input.submit` 在 running 时返回 `thread.error(code: "thread_running")`，普通用户 follow-up 不走后端排队。已通过 `bash ./scripts/test.sh`、`pnpm --filter handagent-thread-window-web test -- tests/threadWindowStore.test.ts`、`pnpm --filter handagent-thread-window-web build`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`。
 
 
-## ThreadWindow WebView + split WebSocket smoke（P2）
-
-1. 从当前 worktree 执行 `bash ./scripts/swiftw run HandAgentDesktop`。
-   - 说明：该命令现在会先自动执行 `pnpm --filter handagent-thread-window-web build`，确保开发态 `WKWebView` 加载的 `apps/thread-window-web/dist/index.html` 已存在。
-1. 在已配置至少一个 workspace 的环境中打开 `http://127.0.0.1:4317/thread-window/index.html`，确认 React ThreadWindow 不白屏，历史侧栏显示 workspace 分组，控制台不出现 `AccordionItem must be used within Accordion`。
-1. 通过 PromptPanel 提交一个普通 prompt，确认打开的是 WKWebView ThreadWindow，React 页面显示新 tab。
-1. 确认 React 建立到 `ws://127.0.0.1:4317/api/thread` 的 WebSocket，Swift 建立到 `ws://127.0.0.1:4317/api/platform` 的 WebSocket。
-1. 在当前 tab 继续追问，确认消息进入同一个 thread。
-1. 打开历史列表，确认 `thread.list`、历史恢复、删除确认可用。
-1. 恢复 thread A，确认 React client 发送的是 `thread.resume`，并收到 `thread.snapshot`；不依赖显式 unsubscribe 协议。
-1. 触发 permission 或 workspace 请求，确认 React 内联面板可回执，且 `permission.requested` / `workspace.requested` 只回到当前 `threadId` 对应视图。
-1. 触发平台能力 tool，例如 `clipboard.read`、`app.frontmost`、`screen.capture` 或 `accessibility.snapshot`，确认 agent-server 通过 `/api/platform` 发出 `platform_request`，Swift 回写 `platform_response`。
-1. 暂停或关闭 platform socket 后确认 platform tool 明确失败，但 thread socket 不因此中断。
-
 ## PromptPanel initial prompt bridge smoke（P2）
 
 1. 从当前 worktree 执行 `bash ./scripts/swiftw run HandAgentDesktop`。
@@ -299,7 +285,7 @@
 1. 在 ThreadWindow 中打开同一 thread，发送新的 user message（例如"再截一次屏"）。
 1. 打开 `~/.spotAgent/log/` 中本轮对应的网络日志条目，确认请求体 `tools` 数组直接是完整工具集，不出现新的 `use_tools` 调用（验证 agent-server 通过历史 tool message 正确推断了激活状态）。
 
-
+### 对于每个可交互的点，都验证一遍，看是否符合预期
 
 - 本文件中对应条目的用户可见行为、持久化记录、错误文案和隔离边界均符合预期。
 - 所有错误路径均有明确文案，不出现静默失败。
