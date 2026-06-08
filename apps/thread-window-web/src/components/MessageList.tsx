@@ -19,7 +19,7 @@ export function MessageList({ messages, errorMessage, isRunning = false }: Messa
   }, -1);
 
   return (
-    <div className="flex min-h-0 flex-col gap-sm overflow-y-auto bg-surface-dark px-lg py-md">
+    <div className="flex min-h-0 min-w-0 flex-col gap-sm overflow-y-auto overflow-x-hidden bg-surface-dark px-lg py-md">
       {messages.length === 0 ? (
         <div className="flex h-full items-center justify-center text-sm text-on-dark-soft">
           <div className="rounded-lg border border-white/10 bg-surface-dark-elevated px-lg py-md text-center shadow-product-inner">
@@ -34,7 +34,7 @@ export function MessageList({ messages, errorMessage, isRunning = false }: Messa
       ) : null}
 
       {/* GPT 风格：消息区域居中，max-width 720pt */}
-      <div className="mx-auto w-full max-w-[720pt] space-y-sm">
+      <div className="mx-auto min-w-0 w-full max-w-[720pt] space-y-sm">
         {messages.map((message, index) => (
           <MessageBubble
             key={message.id}

@@ -18,11 +18,11 @@ export function RequestPanels({
   }
 
   return (
-    <div className="flex gap-sm overflow-x-auto border-t border-white/10 bg-surface-dark px-sm py-sm">
+    <div className="grid min-w-0 gap-sm overflow-hidden border-t border-white/10 bg-surface-dark px-sm py-sm md:grid-cols-2">
       {permissionRequests.map((request) => (
         <section
           key={request.id}
-          className="max-w-[80vw] flex-shrink-0 basis-[420px] rounded-lg border border-white/10 bg-surface-dark-elevated px-sm py-sm shadow-product-inner"
+          className="min-w-0 rounded-lg border border-white/10 bg-surface-dark-elevated px-sm py-sm shadow-product-inner"
         >
           <strong className="mb-xs block text-sm font-medium text-on-dark">
             权限请求: {request.toolName}
@@ -51,7 +51,7 @@ export function RequestPanels({
       {workspaceRequests.map((request) => (
         <section
           key={request.id}
-          className="max-w-[80vw] flex-shrink-0 basis-[420px] rounded-lg border border-white/10 bg-surface-dark-elevated px-sm py-sm shadow-product-inner"
+          className="min-w-0 rounded-lg border border-white/10 bg-surface-dark-elevated px-sm py-sm shadow-product-inner"
         >
           <strong className="mb-sm block text-sm font-medium text-on-dark">
             {request.prompt}

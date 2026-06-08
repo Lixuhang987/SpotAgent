@@ -14,7 +14,7 @@ export function TabBar({ tabs, activeTabId, onActivate, onClose }: TabBarProps) 
   }
 
   return (
-    <div className="flex min-w-0 items-end gap-1 overflow-x-auto px-xs">
+    <div className="flex h-full w-full max-w-full min-w-0 items-end gap-1 overflow-x-auto overflow-y-hidden px-xs">
       {tabs.map((tab) => {
         const isActive = tab.threadId === activeTabId;
 

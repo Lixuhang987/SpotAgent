@@ -81,7 +81,7 @@ export function App() {
 
   return (
     <main
-      className="grid w-screen min-h-screen overflow-hidden bg-canvas text-ink font-body"
+      className="grid h-screen w-full max-w-full overflow-hidden bg-canvas text-ink font-body"
       style={{ gridTemplateColumns: sidebarLayout.gridTemplateColumns }}
     >
       {sidebarLayout.isSidebarVisible ? (
@@ -98,8 +98,8 @@ export function App() {
           onNewThread={handleNewThread}
         />
       ) : null}
-      <section className="grid grid-rows-[auto_auto_1fr_auto] min-w-0 min-h-screen overflow-hidden bg-surface-dark text-on-dark shadow-product-inner" aria-label="Thread workspace">
-        <header className="flex items-center gap-3 min-h-[52px] border-b border-white/10 bg-surface-dark-soft px-sm py-xs">
+      <section className="grid h-screen min-h-0 min-w-0 grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-hidden bg-surface-dark text-on-dark shadow-product-inner" aria-label="Thread workspace">
+        <header className="flex min-h-[52px] min-w-0 items-center gap-3 overflow-hidden border-b border-white/10 bg-surface-dark-soft px-sm py-xs">
           <TabBar
             tabs={tabs}
             activeTabId={state.activeTabId}
@@ -108,15 +108,17 @@ export function App() {
           />
         </header>
 
-        {state.windowErrorMessage ? (
-          <div className="mx-sm mt-xs rounded-md border border-error/30 bg-error/10 px-sm py-xs text-sm text-error">
-            {state.windowErrorMessage}
-          </div>
-        ) : null}
+        <div className="min-h-0 min-w-0 overflow-hidden" data-thread-window-error-slot="true">
+          {state.windowErrorMessage ? (
+            <div className="mx-sm mt-xs rounded-md border border-error/30 bg-error/10 px-sm py-xs text-sm text-error">
+              {state.windowErrorMessage}
+            </div>
+          ) : null}
+        </div>
 
         {activeTab ? (
           <>
-            <div className="grid grid-rows-[1fr_auto] min-w-0 min-h-0 overflow-hidden">
+            <div className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] overflow-hidden">
               <MessageList
                 messages={activeTab.messages}
                 errorMessage={activeTab.errorMessage}
@@ -161,7 +163,7 @@ export function App() {
             />
           </>
         ) : (
-          <div className="flex items-center justify-center text-sm text-on-dark-soft">
+          <div className="flex min-h-0 min-w-0 items-center justify-center overflow-hidden text-sm text-on-dark-soft">
             <div className="rounded-lg border border-white/10 bg-surface-dark-elevated px-lg py-md">
               准备开始
             </div>
