@@ -17,6 +17,12 @@
 
 ## 开发验证记录
 
+### Worktree 基线与 Swift 缓存优化
+
+- 完成日期：2026-06-08
+- 实现位置：`scripts/swiftw`、`scripts/package-app.sh`、`scripts/swiftw.test.sh`、`scripts/package-app.test.sh`、`AGENTS.md`、`README.md`、`docs/dev.md`
+- 验收结果：新 worktree 的默认基线策略调整为先跑 `bash ./scripts/test.sh`，只有涉及 Swift desktop、`Package.swift`、Swift 脚本、打包脚本或桌面启动链路时才在开始阶段追加 `bash ./scripts/swiftw build`。`swiftw` 与 `package-app.sh` 默认使用主 checkout 的 `.cache/swiftpm/` 作为 SwiftPM 依赖缓存，并支持 `HANDAGENT_SWIFTPM_CACHE_DIR` 与 `HANDAGENT_SWIFT_MODULE_CACHE_DIR` 覆盖缓存路径。已通过 `bash ./scripts/test.sh`、`bash ./scripts/swiftw build`、`bash ./scripts/swiftw test`。
+
 ### Thread 输入队列与 input.submit 破坏性迁移
 
 - 完成日期：2026-06-07（后端队列）；2026-06-08（输入协议破坏性迁移）

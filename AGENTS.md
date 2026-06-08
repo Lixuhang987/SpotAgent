@@ -76,7 +76,7 @@
 - `bash ./scripts/swiftw build`
 
 说明：
-- Swift 相关命令默认通过 `bash ./scripts/swiftw` 执行，把模块缓存固定到仓库内 `.cache/swift/`，避免依赖用户目录下的全局缓存写权限。
+- Swift 相关命令默认通过 `bash ./scripts/swiftw` 执行。SwiftPM 依赖缓存默认写到主 checkout 的 `.cache/swiftpm/`，可跨 `.worktrees/` 复用；Swift/Clang module cache 默认仍写到当前 worktree 的 `.cache/swift/`。如需跨 worktree 共享 module cache，可设置 `HANDAGENT_SWIFT_MODULE_CACHE_DIR=/path/to/cache`；如需自定义 SwiftPM 依赖缓存，可设置 `HANDAGENT_SWIFTPM_CACHE_DIR=/path/to/cache`。
 - Codex 的 `Stop` hook 当前只执行 TypeScript 侧 `vitest` 校验，不执行 Swift 校验；
 
 ### Development Workflow
@@ -84,7 +84,7 @@
 - 读取代码，确定任务的范围，涉及的文件。涉及文件所在目录的 `<dir>.md` 必须读取，并沿父目录递归向上直到根目录的 `handAgent.md`，确保理解完整的分层上下文。
 - 需要修改代码的任务，必须先在 `.worktrees/<task-name>/` 目录下创建 worktree（使用 `git worktree add .worktrees/<task-name> -b <branch-name>`，**不要使用 `EnterWorktree` 工具** —— 它会把 worktree 放到 `.claude/worktrees/`，与本仓库约定不符）。纯文档任务或只读任务不需要 worktree。
 - 创建 worktree 后，先完成项目初始化，至少保证 worktree 可独立运行。本仓库默认执行 `pnpm install`，再按需补齐其他依赖初始化。
-- 初始化完成后，先跑一次基线验证（`bash ./scripts/test.sh` 与 `bash ./scripts/swiftw build`）确认 worktree 可用，再开始浏览代码。优先阅读目标目录下同名的架构文档。
+- 初始化完成后，先按改动范围跑一次分层基线，确认 worktree 可用，再开始浏览代码。默认先跑 `bash ./scripts/test.sh`；若任务涉及 `apps/desktop/`、`Package.swift`、Swift 脚本、打包脚本或会影响桌面启动链路，再追加 `bash ./scripts/swiftw build`。优先阅读目标目录下同名的架构文档。
 - 进行代码修改。
 - 验证通过后，更新已有文档。
 - 执行 `git commit` 并在 commit message 中总结改动，不要让完成的工作长时间不提交。

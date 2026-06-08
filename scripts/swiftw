@@ -3,14 +3,44 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CACHE_DIR="$ROOT_DIR/.cache/swift"
+resolve_shared_cache_root() {
+  local common_git_dir
+
+  if common_git_dir="$(git -C "$ROOT_DIR" rev-parse --git-common-dir 2>/dev/null)"; then
+    if [[ "$common_git_dir" != /* ]]; then
+      common_git_dir="$ROOT_DIR/$common_git_dir"
+    fi
+
+    if [[ -d "$common_git_dir" ]]; then
+      cd "$(dirname "$common_git_dir")" && pwd
+      return
+    fi
+  fi
+
+  printf '%s\n' "$ROOT_DIR"
+}
+
+SHARED_CACHE_ROOT="${HANDAGENT_SHARED_CACHE_ROOT:-$(resolve_shared_cache_root)}"
+CACHE_DIR="${HANDAGENT_SWIFT_MODULE_CACHE_DIR:-${HANDAGENT_SWIFT_CACHE_DIR:-$ROOT_DIR/.cache/swift}}"
+SWIFTPM_CACHE_DIR="${HANDAGENT_SWIFTPM_CACHE_DIR:-$SHARED_CACHE_ROOT/.cache/swiftpm}"
 CLANG_CACHE_DIR="$CACHE_DIR/clang-module-cache"
 SWIFT_CACHE_DIR="$CACHE_DIR/swift-module-cache"
 
-mkdir -p "$CLANG_CACHE_DIR" "$SWIFT_CACHE_DIR"
+mkdir -p "$CLANG_CACHE_DIR" "$SWIFT_CACHE_DIR" "$SWIFTPM_CACHE_DIR"
 
 export CLANG_MODULE_CACHE_PATH="$CLANG_CACHE_DIR"
 export SWIFT_MODULECACHE_PATH="$SWIFT_CACHE_DIR"
+
+swift_with_cache() {
+  case "${1:-}" in
+    build|test|run|package)
+      swift "$1" --cache-path "$SWIFTPM_CACHE_DIR" "${@:2}"
+      ;;
+    *)
+      swift "$@"
+      ;;
+  esac
+}
 
 ensure_workspace_dependencies() {
   if [[ -d "$ROOT_DIR/node_modules" ]]; then
@@ -41,7 +71,7 @@ if [[ "${1:-}" == "test" || "${1:-}" == "build" ]]; then
   tmp_log="$(mktemp -t "swiftw-${1:-swift}.XXXXXX")"
   trap 'rm -f "$tmp_log"' EXIT
 
-  if swift "$@" >"$tmp_log" 2>&1; then
+  if swift_with_cache "$@" >"$tmp_log" 2>&1; then
     if [[ "${1:-}" == "build" ]]; then
       echo "success"
     else
@@ -59,4 +89,4 @@ if [[ "${1:-}" == "run" && "${2:-}" == "HandAgentDesktop" ]]; then
   ensure_thread_window_web_build
 fi
 
-exec swift "$@"
+swift_with_cache "$@"

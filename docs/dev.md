@@ -62,6 +62,8 @@ bash ./scripts/swiftw run HandAgentDesktop
 bash ./scripts/test.sh
 ```
 
+- 新 worktree 初始化后的默认基线先跑这一项即可。只有任务涉及 Swift desktop、`Package.swift`、Swift 相关脚本、打包脚本或桌面启动链路时，才在开始阶段追加 Swift build。
+
 ### Swift 宿主
 
 - 修改 `apps/desktop/HandAgentApp.swift` 后，先跑：
@@ -70,6 +72,8 @@ bash ./scripts/test.sh
 bash ./scripts/swiftw build
 ```
 
+- `swiftw` 会把 SwiftPM 依赖缓存写到主 checkout 的 `.cache/swiftpm/`，所以多个 `.worktrees/` 能复用依赖下载缓存。Swift/Clang module cache 默认仍在当前 worktree 的 `.cache/swift/`，避免不同源码状态互相污染。
+- 如果需要主动跨 worktree 共享 module cache，可设置 `HANDAGENT_SWIFT_MODULE_CACHE_DIR=/path/to/cache`；如需自定义 SwiftPM 依赖缓存，可设置 `HANDAGENT_SWIFTPM_CACHE_DIR=/path/to/cache`。两个变量同样适用于 `bash ./scripts/package-app.sh`。
 - 如果需要观察窗口与热键行为，优先用 PromptPanel、ThreadWindow 和状态气泡的可见状态来定位问题。
 - 热键相关问题先确认辅助功能权限是否已授权。
 

@@ -10,6 +10,11 @@ DIST_DIR="$TEST_TMP_DIR/dist"
 WEB_DIST_DIR="$TEST_TMP_DIR/thread-window-web-dist"
 PACKAGE_ROOT_DIR="$TEST_TMP_DIR/package-root"
 LOG_FILE="$TEST_TMP_DIR/calls.log"
+COMMON_GIT_DIR="$(git -C "$ROOT_DIR" rev-parse --git-common-dir)"
+if [[ "$COMMON_GIT_DIR" != /* ]]; then
+  COMMON_GIT_DIR="$ROOT_DIR/$COMMON_GIT_DIR"
+fi
+SHARED_CACHE_ROOT="$(cd "$(dirname "$COMMON_GIT_DIR")" && pwd)"
 
 cleanup() {
   rm -rf "$TEST_TMP_DIR"
@@ -36,6 +41,8 @@ echo mock app
 APP
 chmod +x "$HANDAGENT_PACKAGE_BUILD_DIR/HandAgentDesktop"
 printf 'swift:%s\n' "$*" >>"$HANDAGENT_PACKAGE_LOG_FILE"
+printf 'clang_cache:%s\n' "${CLANG_MODULE_CACHE_PATH:-}" >>"$HANDAGENT_PACKAGE_LOG_FILE"
+printf 'swift_cache:%s\n' "${SWIFT_MODULECACHE_PATH:-}" >>"$HANDAGENT_PACKAGE_LOG_FILE"
 EOF
 chmod +x "$FAKE_BIN_DIR/swift"
 
@@ -76,7 +83,9 @@ test -f "$MARKER_FILE"
 test -f "$APP_DIR/Contents/Resources/ThreadWindowWeb/index.html"
 grep -q '"llmMode":"mock"' "$MARKER_FILE"
 grep -q 'mock web' "$APP_DIR/Contents/Resources/ThreadWindowWeb/index.html"
-grep -q 'swift:build -c release --product HandAgentDesktop' "$LOG_FILE"
+grep -q "swift:build --cache-path $SHARED_CACHE_ROOT/.cache/swiftpm -c release --product HandAgentDesktop" "$LOG_FILE"
+grep -q "clang_cache:$ROOT_DIR/.cache/swift/clang-module-cache" "$LOG_FILE"
+grep -q "swift_cache:$ROOT_DIR/.cache/swift/swift-module-cache" "$LOG_FILE"
 grep -q 'codesign:--force --deep --sign - --requirements =designated => identifier "com.yourname.HandAgentDesktop"' "$LOG_FILE"
 
 rm -rf "$DIST_DIR"
@@ -89,6 +98,8 @@ package_output="$(
     HANDAGENT_PACKAGE_BUILD_DIR="$BUILD_DIR" \
     HANDAGENT_PACKAGE_DIST_DIR="$DIST_DIR" \
     HANDAGENT_PACKAGE_ROOT_DIR="$PACKAGE_ROOT_DIR" \
+    HANDAGENT_SWIFTPM_CACHE_DIR="$TEST_TMP_DIR/shared-swiftpm-cache" \
+    HANDAGENT_SWIFT_MODULE_CACHE_DIR="$TEST_TMP_DIR/shared-module-cache" \
     HANDAGENT_PACKAGE_LOG_FILE="$LOG_FILE" \
     "$ROOT_DIR/scripts/package-app.sh"
 )"
@@ -99,7 +110,9 @@ test -f "$APP_DIR/Contents/Resources/ThreadWindowWeb/index.html"
 grep -q 'built web' "$APP_DIR/Contents/Resources/ThreadWindowWeb/index.html"
 grep -q 'pnpm:install' "$LOG_FILE"
 grep -q 'pnpm:--filter handagent-thread-window-web build' "$LOG_FILE"
-grep -q 'swift:build -c release --product HandAgentDesktop' "$LOG_FILE"
+grep -q "swift:build --cache-path $TEST_TMP_DIR/shared-swiftpm-cache -c release --product HandAgentDesktop" "$LOG_FILE"
+grep -q "clang_cache:$TEST_TMP_DIR/shared-module-cache/clang-module-cache" "$LOG_FILE"
+grep -q "swift_cache:$TEST_TMP_DIR/shared-module-cache/swift-module-cache" "$LOG_FILE"
 grep -q 'codesign:--force --deep --sign - --requirements =designated => identifier "com.yourname.HandAgentDesktop"' "$LOG_FILE"
 
 if [[ "$package_output" != *"[package-app] node_modules missing, running pnpm install..."* ]] ||
