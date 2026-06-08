@@ -2,6 +2,7 @@ import { BrowserWindow, app, ipcMain, screen } from "electron";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ElectronShellRuntime, errorMessage } from "./electronShellRuntime.js";
+import { handleActivityWindowFocusThreadIpc } from "./activityWindowIpc.js";
 import {
   parseCommand,
   type ElectronToSwiftEvent,
@@ -126,8 +127,11 @@ const runtime = new ElectronShellRuntime({
   quit: () => app.quit(),
 });
 
-ipcMain.on("activity-window:focus-thread", (_event, threadId: string | null) => {
-  runtime.handleActivityWindowFocusRequest(threadId);
+ipcMain.on("activity-window:focus-thread", (event, threadId: unknown) => {
+  handleActivityWindowFocusThreadIpc(event, threadId, {
+    activityWebContents: () => activityWindow.currentWebContents(),
+    runtime,
+  });
 });
 
 async function handleCommandLine(line: string): Promise<void> {

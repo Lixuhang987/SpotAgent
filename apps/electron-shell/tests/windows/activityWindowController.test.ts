@@ -17,6 +17,7 @@ describe("ActivityWindowController", () => {
           transparent: true,
           alwaysOnTop: true,
           skipTaskbar: true,
+          focusable: false,
           resizable: false,
           webPreferences: {
             preload: "/dist/preload/activityWindowPreload.js",

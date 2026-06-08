@@ -50,6 +50,10 @@ export class ActivityWindowController {
     window.showInactive();
   }
 
+  currentWebContents(): BrowserWindowLike["webContents"] | null {
+    return this.window?.webContents ?? null;
+  }
+
   private ensureWindow(): BrowserWindowLike {
     if (this.window) {
       return this.window;
@@ -63,6 +67,7 @@ export class ActivityWindowController {
       transparent: true,
       alwaysOnTop: true,
       skipTaskbar: true,
+      focusable: false,
       resizable: false,
       webPreferences: {
         preload: this.options.preloadPath,
