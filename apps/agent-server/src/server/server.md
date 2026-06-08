@@ -49,7 +49,7 @@ socket.close();
 
 - `/api/thread` 接收 `ClientResponse` 和 `ThreadCommand`，其中 `ThreadCommand` 包含 `thread.start`、`thread.resume`、`thread.list`、`thread.delete`、`input.submit`、`turn.interrupt`、`workspace.list`。
 - `/api/activity` 只向 subscriber 发送 `AgentActivityEvent`；连接建立后由 `AgentActivityPublisher.attachConnection()` 立即发送 `activity.snapshot`，后续状态变化发送 `activity.changed`。如果启动测试未注入 activity publisher，该 path 会被关闭。
-- `/api/platform` 接收 `PlatformBridgeMessage`，其中 `platform_bridge_hello` 会为当前 socket 生成 fencing token；之后的 `platform_response` 必须带着这条 socket 当前 token 才能唤醒 pending request，避免旧 socket 的晚到响应污染新连接。
+- `/api/platform` 接收 `PlatformBridgeMessage`，其中首次 `platform_bridge_hello` 会为当前 socket 生成 fencing token；同一 socket 的重复 hello 视为重试并保持幂等，避免 desktop 的 hello 兜底重发替换当前 bridge。之后的 `platform_response` 必须带着这条 socket 当前 token 才能唤醒 pending request，避免旧 socket 的晚到响应污染新连接。
 
 ### thread 绑定与关闭清理
 

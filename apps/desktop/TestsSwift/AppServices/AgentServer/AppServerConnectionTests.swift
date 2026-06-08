@@ -158,6 +158,28 @@ final class PlatformBridgeConnectionClientTests: XCTestCase {
         XCTAssertEqual(sent[0]["type"] as? String, "platform_bridge_hello")
     }
 
+    func testConnectPlatformBridgeRetriesHelloAfterInitialConnect() async throws {
+        let transport = RecordingAppServerConnectionTransport()
+        let connection = AppServerConnection(
+            serverURL: URL(string: "ws://127.0.0.1:4317/api/platform")!,
+            transport: transport,
+            reconnectDelay: 0
+        )
+        let client = PlatformBridgeConnectionClient(
+            connection: connection,
+            platformBridge: PlatformBridgeService(provider: RecordingAppServerClientPlatformProvider())
+        )
+
+        client.connect()
+        try await Task.sleep(nanoseconds: 350_000_000)
+
+        let helloCount = transport.tasks[0].sentObjects.filter { object in
+            object["channel"] as? String == "platform" &&
+                object["type"] as? String == "platform_bridge_hello"
+        }.count
+        XCTAssertEqual(helloCount, 2)
+    }
+
     func testPlatformConnectionHandlesPlatformRequest() async {
         let transport = RecordingAppServerConnectionTransport()
         let connection = AppServerConnection(

@@ -17,6 +17,14 @@
 
 ## 开发验证记录
 
+### Electron flag `/api/platform` bridge 连接修复
+
+- 完成日期：2026-06-09
+- 实现位置：`apps/desktop/Sources/AppServices/AgentServer/AppServer.swift`、`apps/desktop/Sources/AppServices/ElectronShell/ElectronBackedAppServer.swift`、`apps/agent-server/src/server/server.ts`
+- 自动化验证：`bash ./scripts/swiftw test --filter PlatformBridgeConnectionClientTests` 覆盖 `/api/platform` 连接后立即 hello 与短延迟 hello 重试；`bash ./scripts/swiftw test --filter ElectronBackedAppServerTests` 覆盖 Electron flag runtime 在 `agent_server.health available=true` 后启动 platform bridge client；`pnpm --filter handagent-agent-server exec vitest run tests/server/server.test.ts` 覆盖同一 `/api/platform` socket 重复 hello 幂等，不替换已绑定 bridge。
+- 手工回归步骤：使用 mock LLM packaged app + `HANDAGENT_ELECTRON_SHELL=1` + `HANDAGENT_ELECTRON_BINARY` 启动 Electron flag 路径；允许 `clipboard.read {}` 后提交 `ELECTRON_PLATFORM_TOOL_ALLOW_QA_20260609 [mock:clipboard-read]`；确认 `~/.spotAgent/threads/<threadId>.json` 中 `clipboard.read` tool result 不再是 `Platform bridge is not connected (method: clipboard.read)`，而是 Swift `/api/platform` 回写的剪贴板结果。
+- 边界确认：修复只覆盖 Electron flag 路径下 Swift `/api/platform` hello 可靠发送与 agent-server 同 socket hello 幂等；不改变 Electron ThreadWindow、ActivityWindow、权限策略或 platform tool 业务实现。
+
 ### 默认路径 Swift StatusBubble activity 回归修复
 
 - 完成日期：2026-06-09

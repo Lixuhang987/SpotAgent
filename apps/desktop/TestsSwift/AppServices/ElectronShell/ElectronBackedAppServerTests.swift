@@ -251,6 +251,28 @@ final class ElectronBackedAppServerTests: XCTestCase {
         XCTAssertEqual(availability, [true, false])
     }
 
+    func testAgentServerHealthAvailableStartsPlatformBridgeClient() async {
+        let shell = RecordingElectronShellProcess()
+        let transport = RecordingElectronBackedConnectionTransport()
+        let platformClient = PlatformBridgeConnectionClient(
+            connection: AppServerConnection(
+                serverURL: URL(string: "ws://127.0.0.1:4317/api/platform")!,
+                transport: transport,
+                reconnectDelay: 0
+            ),
+            platformBridge: PlatformBridgeService(provider: RecordingElectronBackedPlatformProvider())
+        )
+        let appServer = ElectronBackedAppServer(shell: shell, platformClient: platformClient)
+
+        appServer.start()
+        shell.emit(.agentServerHealth(available: true, message: nil))
+        await Task.yield()
+
+        XCTAssertEqual(transport.tasks.count, 1)
+        XCTAssertEqual(transport.tasks[0].sentObjects.first?["channel"] as? String, "platform")
+        XCTAssertEqual(transport.tasks[0].sentObjects.first?["type"] as? String, "platform_bridge_hello")
+    }
+
     func testStopSendsShutdownDisconnectsPlatformClientAndStopsShell() {
         let shell = RecordingElectronShellProcess()
         let transport = RecordingElectronBackedConnectionTransport()
@@ -418,6 +440,13 @@ private final class RecordingElectronBackedConnectionTransport: AppServerConnect
 
 private final class RecordingElectronBackedConnectionTask: AppServerWebSocketTask {
     private(set) var cancelCount = 0
+    private(set) var sentTexts: [String] = []
+    var sentObjects: [[String: Any]] {
+        sentTexts.compactMap { text in
+            guard let data = text.data(using: .utf8) else { return nil }
+            return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        }
+    }
 
     func resume() {}
 
@@ -429,6 +458,9 @@ private final class RecordingElectronBackedConnectionTask: AppServerWebSocketTas
         _ message: URLSessionWebSocketTask.Message,
         completionHandler: @escaping @Sendable (Error?) -> Void
     ) {
+        if case .string(let text) = message {
+            sentTexts.append(text)
+        }
         completionHandler(nil)
     }
 

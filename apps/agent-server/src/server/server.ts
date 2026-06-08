@@ -147,7 +147,7 @@ export function attachPlatformSocketHandlers(
     }
 
     if (message.type === "platform_bridge_hello" && bridge) {
-      bridgeToken = bridge.attach(sendPlatform);
+      bridgeToken ??= bridge.attach(sendPlatform);
     } else if (message.type === "platform_response") {
       bridge?.handleResponse(message.payload, bridgeToken);
     }

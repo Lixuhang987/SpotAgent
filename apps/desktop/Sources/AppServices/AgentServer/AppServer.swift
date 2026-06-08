@@ -63,14 +63,22 @@ final class AppServer: AppServerManaging {
 final class PlatformBridgeConnectionClient {
     private let connection: AppServerConnection
     private let platformBridge: PlatformBridgeService
+    private let retryHelloDelayNanoseconds: UInt64
+    private var helloRetryTask: Task<Void, Never>?
 
-    init(connection: AppServerConnection, platformBridge: PlatformBridgeService) {
+    init(
+        connection: AppServerConnection,
+        platformBridge: PlatformBridgeService,
+        retryHelloDelayNanoseconds: UInt64 = 250_000_000
+    ) {
         self.connection = connection
         self.platformBridge = platformBridge
+        self.retryHelloDelayNanoseconds = retryHelloDelayNanoseconds
         connection.onStateChange = { [weak self] state in
             Task { @MainActor in
                 guard state == .connected, let self else { return }
-                self.connection.send(text: self.platformBridge.makeHelloMessage())
+                self.sendHello()
+                self.scheduleHelloRetry()
             }
         }
         connection.onTextMessage = { [weak self] text in
@@ -87,6 +95,24 @@ final class PlatformBridgeConnectionClient {
     }
 
     func disconnect() {
+        helloRetryTask?.cancel()
+        helloRetryTask = nil
         connection.disconnect()
+    }
+
+    private func sendHello() {
+        connection.send(text: platformBridge.makeHelloMessage())
+    }
+
+    private func scheduleHelloRetry() {
+        helloRetryTask?.cancel()
+        let delay = retryHelloDelayNanoseconds
+        helloRetryTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: delay)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                self?.sendHello()
+            }
+        }
     }
 }

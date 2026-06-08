@@ -452,6 +452,26 @@ describe("attachThreadSocketHandlers", () => {
     expect(bridge.detach).toHaveBeenCalledWith(501);
   });
 
+  it("treats duplicate hello on the same platform socket as idempotent", async () => {
+    const socket = new FakeSocket();
+    const bridge = {
+      attach: vi.fn().mockReturnValue(501),
+      detach: vi.fn(),
+      handleResponse: vi.fn(),
+    };
+
+    attachPlatformSocketHandlers(socket as never, {
+      bridge: bridge as never,
+    });
+
+    await emitMessage(socket, platformHello("bridge-1"));
+    await emitMessage(socket, platformHello("bridge-1-retry"));
+    socket.emit("close");
+
+    expect(bridge.attach).toHaveBeenCalledTimes(1);
+    expect(bridge.detach).toHaveBeenCalledWith(501);
+  });
+
   it("ignores non-platform and malformed platform socket frames", async () => {
     const socket = new FakeSocket();
     const bridge = {

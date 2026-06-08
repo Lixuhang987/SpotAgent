@@ -11,7 +11,7 @@
 - **上下文边界**：`ocr.read` 只处理 tool 入参里的 `imageBase64`，不会默认读取屏幕、剪贴板或文件；需要先由用户主动提供图片或由 LLM 显式调用 `screen.capture` 获得图片后再传入。
 - **Accessibility 快照限制**：快照返回 `role` / `label` / `title` / `value` / `description` / `frame` / `elementId` / `children`，默认限制深度与子节点数量，上限为 `maxDepth=6`、`maxChildren=50`，避免一次返回巨大无障碍树。
 - **Accessibility 动作限制**：`accessibility.action` 支持 `press`、`click`、`set_value`。元素定位优先使用快照返回的 `elementId`，格式为 `pid:<pid>;path:<childIndex.childIndex>`；`click` 先尝试 AX press，不支持时再按元素 frame 中心点发送鼠标事件。
-- **重连归属**：断线与自动重连由 `/api/platform` 的 `AppServerConnection` 负责；重连成功后 `PlatformBridgeConnectionClient` 会重新发送 `platform_bridge_hello`。
+- **重连归属**：断线与自动重连由 `/api/platform` 的 `AppServerConnection` 负责；重连成功后 `PlatformBridgeConnectionClient` 会立即发送 `platform_bridge_hello`，并短延迟重发一次作为 WebSocket open 时序兜底。
 
 调用链：
 
