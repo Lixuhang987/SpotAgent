@@ -5,6 +5,7 @@ import SwiftUI
 struct PromptPanelGrowingTextView: NSViewRepresentable {
     @Binding var text: String
     @Binding var measuredHeight: CGFloat
+    @Environment(\.appTheme) private var theme
     let placeholder: String
     let fontSize: CGFloat
     let isFocused: Bool
@@ -27,9 +28,9 @@ struct PromptPanelGrowingTextView: NSViewRepresentable {
         let textView = PlaceholderTextView()
         textView.delegate = context.coordinator
         textView.font = nsFont
-        textView.textColor = .labelColor
+        textView.textColor = NSColor(theme.colors.textPrimary)
         textView.placeholder = placeholder
-        textView.placeholderColor = .placeholderTextColor
+        textView.placeholderColor = NSColor(theme.colors.textSecondary)
         textView.backgroundColor = .clear
         textView.drawsBackground = false
         textView.isRichText = false
@@ -63,9 +64,9 @@ struct PromptPanelGrowingTextView: NSViewRepresentable {
             textView.string = text
         }
         textView.font = nsFont
-        textView.textColor = .labelColor
+        textView.textColor = NSColor(theme.colors.textPrimary)
         textView.placeholder = placeholder
-        textView.placeholderColor = .placeholderTextColor
+        textView.placeholderColor = NSColor(theme.colors.textSecondary)
         textView.isEditable = !isDisabled
         textView.isSelectable = !isDisabled
         textView.needsDisplay = true

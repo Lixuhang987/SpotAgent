@@ -233,12 +233,14 @@
 1. 按 Return 确认仍会提交 prompt；按 Shift + Return 或 Option + Return 确认可在输入框内插入换行。
 1. 点击 PromptPanel 外侧任意区域关闭面板，确认焦点回到唤起前的前台 App。
 1. 再次通过全局快捷键打开 PromptPanel，按 `Esc` 或同一全局快捷键收起，确认焦点同样回到唤起前的前台 App。
+1. 将 macOS 系统切到深色模式后再次打开 PromptPanel，确认输入文字与 placeholder 仍保持深色高对比显示。
 
 ## 全前端 DESIGN.md 视觉一致性 smoke（P2）
 
 1. 从当前 worktree 执行 `bash ./scripts/swiftw run HandAgentDesktop`。
 1. 打开 PromptPanel，确认面板是 warm cream canvas，边界是浅 cream hairline，hover action 使用 warm card，强调色为 coral，不再出现旧暗色玻璃或 Mango Amber。
-1. 打开 Settings，确认 Tab 区是 cream/surface-soft，选中态有 coral 强调线；模型、工具、Plugin、Append Prompt、MCP、权限、快捷键、工作区各页字段和分隔线都使用同一套 warm-canvas token。
+1. 打开 Settings，确认 Tab 区是 cream/surface-soft，顶部导航按钮等分铺满整行，选中态有 coral 强调线；模型、工具、Plugin、Append Prompt、MCP、权限、快捷键、工作区各页字段和分隔线都使用同一套 warm-canvas token。
+1. 将 macOS 系统切到深色模式后打开 Settings，确认 Provider / 接口 segmented picker 与文本输入框内容仍保持深色高对比显示。
 1. 观察 StatusBubble，确认空闲态是 cream 小浮窗；运行态状态点为 teal，文字强调为 coral，描边和 glow 不遮挡文本。
 1. 提交 prompt 打开 ThreadWindow，确认 React 左侧历史栏仍是 cream surface，右侧 workspace 仍是 dark product surface，coral primary 与 SwiftUI 原生界面一致。
 1. 将 PromptPanel、Settings、ThreadWindow 都缩到最小可用尺寸附近，确认按钮文字、tab 标题、输入框、状态气泡文本没有重叠、截断到不可读或溢出容器。

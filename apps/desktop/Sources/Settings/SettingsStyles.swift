@@ -47,7 +47,7 @@ struct SettingsTabBar: View {
     @Environment(\.appTheme) private var theme
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: theme.spacing.sm) {
             ForEach(tabs) { tab in
                 tabButton(tab)
             }
@@ -71,7 +71,7 @@ struct SettingsTabBar: View {
                     .font(.system(size: 11))
             }
             .foregroundStyle(isSelected ? theme.colors.ink : theme.colors.muted)
-            .frame(width: 72, height: 56)
+            .frame(maxWidth: .infinity, minHeight: 56)
             .borderedCard(
                 fill: isSelected ? theme.colors.canvas : Color.clear,
                 border: isSelected ? theme.colors.accentRing : Color.clear,

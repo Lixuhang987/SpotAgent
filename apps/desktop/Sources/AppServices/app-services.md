@@ -19,7 +19,7 @@
 | 文件 | 职责 |
 |------|------|
 | `AppServices.swift` | DI 容器：持有 `appServer` / `threadRegistry` / `settingsStore` / `threadHistoryStore` / `actionManifestStore` / `appServerURL` / `hotkeyRegistrar` / `threadWindowPresenter` / `settingsWindowPresenter` / `fatalAlertPresenter` / `setActivationPolicy` / `showsStatusBubble`。生产由 `init()` 默认参数装配，测试用 `AppServices.testing()` 注入 nop 替身。同文件还定义 `ThreadWindowPresenting` / `SettingsWindowPresenting` / `HotkeyRegistering` / `FatalAlertPresenting` 协议与 `Nop*` 测试替身 |
-| `AppServicesProductionImpls.swift` | 生产实现：`ProductionHotkeyRegistrar`（委托 Hotkey 层绑定 `KeyboardShortcuts.Name`）+ `ProductionThreadWindowPresenter` / `ProductionSettingsWindowPresenter`（构建 `NSWindow` + `NSHostingController`，并通过 `WindowCloseObservation` 持有和释放关闭通知 token）+ `ProductionFatalAlertPresenter` |
+| `AppServicesProductionImpls.swift` | 生产实现：`ProductionHotkeyRegistrar`（委托 Hotkey 层绑定 `KeyboardShortcuts.Name`）+ `ProductionThreadWindowPresenter` / `ProductionSettingsWindowPresenter`（构建 `NSWindow` + `NSHostingController`，固定浅色 `NSAppearance(.aqua)` 以匹配 warm-canvas 主题，并通过 `WindowCloseObservation` 持有和释放关闭通知 token）+ `ProductionFatalAlertPresenter` |
 
 ## DI 协议
 
