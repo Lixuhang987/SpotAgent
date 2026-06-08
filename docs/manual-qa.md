@@ -140,6 +140,12 @@
 
 **实施状态**：Phase 1-4 已 100% 完成（2026-06-07 合并到 main）
 
+**2026-06-09 进行中验证证据**：
+
+- 场景 1 已验证构建与主题产物：`pnpm --filter handagent-thread-window-web build` 通过，生成 `apps/thread-window-web/dist/index.html`、`apps/thread-window-web/dist/assets/index-BQgOjT3d.css`、`apps/thread-window-web/dist/assets/index-B5G0hv59.js`；CSS 产物包含 Tailwind utilities、`bg-canvas`、`bg-surface-dark`、`bg-primary`、`rounded-lg`，以及 warm-canvas 色值 `#faf9f5` / `rgb(24 23 21)` / `rgb(239 233 222)` / `rgb(204 120 92)`。
+- 场景 1 已完成默认 WKWebView 路径可视检查：重新执行 `bash ./scripts/package-app.sh --mock-llm` 后启动 packaged app，提交 `THREADWINDOW_SCENARIO1_THEME_QA_20260609 [mock:assistant-ok]`，生成 `~/.spotAgent/threads/thread-1780949983762-ki8lb7.json`；截图 `/tmp/handagent-qa/threadwindow-scenario1-theme.png` 显示左侧 warm cream sidebar、右侧 dark Thread workspace、coral primary 新建对话按钮、cream user bubble、透明 assistant 文本和 pill composer。退出后无 HandAgent / agent-server 残留，`127.0.0.1:4317` 无监听。
+- 场景 1 暂不归档：运行时 DevTools DOM class 检查尚未完成，下一轮需补充确认实际 DOM 使用 `bg-canvas`、`bg-surface-dark`、`rounded-lg` 等类名。
+
 ### 前提条件
 - 已通过 `bash ./scripts/test.sh`
 - 已通过 `bash ./scripts/swiftw build`
