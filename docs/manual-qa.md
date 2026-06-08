@@ -17,6 +17,14 @@
 
 ## 开发验证记录
 
+### Electron StatusBubble 无可聚焦 ThreadWindow 回退 PromptPanel 修复
+
+- 完成日期：2026-06-09
+- 实现位置：`apps/electron-shell/src/main/windows/activityWindowController.ts`、`apps/electron-shell/tests/windows/activityWindowController.test.ts`、`apps/electron-shell/tests/main/electronShellRuntime.test.ts`、`apps/desktop/TestsSwift/AppServices/ElectronShell/ElectronBackedAppServerTests.swift`
+- 修复结论：失败 hop 定位在 `ActivityWindow renderer click`。Electron ActivityWindow 使用 `showInactive()` 且 `focusable: false`，macOS inactive first mouse 可能只激活 Electron，不稳定传给 renderer；因此后续 `activity-window:focus-thread IPC -> ElectronShellRuntime -> prompt_panel.show_requested -> Swift PromptPanel` 链路没有机会执行。ActivityWindow 现在设置 `acceptFirstMouse: true`，让点击 inactive ActivityWindow 时直接进入 renderer click。
+- 自动化验证：`pnpm --filter handagent-electron-shell exec vitest run tests/windows/activityWindowController.test.ts tests/main/electronShellRuntime.test.ts` 覆盖 ActivityWindow `BrowserWindow` options 包含 `acceptFirstMouse: true`，以及 `ThreadWindowPrewarmer.focus()` 返回 false 时发送 `prompt_panel.show_requested`；`bash ./scripts/swiftw test --filter ElectronBackedAppServerTests/testPromptPanelShowRequestStillInvokesCallbackAfterVisibleThreadWindowClosed` 覆盖 visible ThreadWindow 关闭后的 Swift bridge prompt request 不被 availability gate 吞掉。
+- 后续 live 验证方式：合入主仓库后在 `main` 执行 `bash ./scripts/package-app.sh --mock-llm`，用 `HANDAGENT_ELECTRON_SHELL=1` 与 packaged mock app 启动，提交 `ELECTRON_STARTING_SEQUENCE_QA_20260609_C [mock:assistant-ok]`，关闭 visible Electron ThreadWindow，只保留 `HandAgent Activity` 且确认 `127.0.0.1:4317` 仍监听；用 CGEvent 点击 ActivityWindow 中心，确认 Swift `PromptPanel` 可见。
+
 ### Electron flag 退出回收修复
 
 - 完成日期：2026-06-09
@@ -79,9 +87,9 @@
 - packaged app 产物与 mock LLM 路径已验证：`dist/HandAgentDesktop.app/Contents/Resources/ElectronShell/dist/main/main.js` 存在；`HANDAGENT_ELECTRON_BINARY` 指向的 Electron binary 可执行且版本为 `v42.3.3`；`~/.spotAgent/threads/thread-1780947483869-t8ou50.json` 中 assistant 内容为 `Mock assistant response: main chain is reachable.`，确认 mock packaged app 未访问真实 LLM。
 - PromptPanel 连续提交已验证复用同一个 Electron ThreadWindow 并创建不同 thread/tab：第一次提交 `ELECTRON_MULTI_PROMPT_QA_20260609_A [mock:assistant-ok]` 生成 `~/.spotAgent/threads/thread-1780948156864-2ttk2d.json`；第二次提交 `ELECTRON_MULTI_PROMPT_QA_20260609_B [mock:assistant-ok]` 生成 `~/.spotAgent/threads/thread-1780948177419-qwq8of.json`；两次提交后 `HandAgent ThreadWindow` 的 CoreGraphics window number 均为 `43975`，截图 `/tmp/handagent-qa/electron-two-prompt-tabs.png` 显示同一 Electron ThreadWindow 内有两个 tab，当前内容为 B prompt。
 
-**2026-06-09 缺陷记录**：
+**2026-06-09 待回归修复项**：
 
-- 关闭可见 Electron ThreadWindow 后，ActivityWindow 仍显示且 agent-server 继续监听 `127.0.0.1:4317`，但连续两次用 CGEvent 点击 ActivityWindow 中心后，Swift `PromptPanel` 未打开；窗口状态只有 Electron `HandAgent Activity`，HandAgentDesktop 无可见窗口。证据截图：`/tmp/handagent-qa/electron-bubble-after-threadwindow-close-click.png`、`/tmp/handagent-qa/electron-bubble-no-threadwindow-second-click.png`。该缺陷已写入 `docs/bugs.md`。
+- 关闭可见 Electron ThreadWindow 后，ActivityWindow 仍显示且 agent-server 继续监听 `127.0.0.1:4317` 时，用 CGEvent 点击 ActivityWindow 中心应打开 Swift `PromptPanel`。该缺陷已通过 ActivityWindow `acceptFirstMouse: true` 自动化覆盖，仍需在主仓库 packaged app 上实机回归。
 - Electron flag 启动时 supervisor description 未出现在可观察启动日志中：使用 `HANDAGENT_ELECTRON_SHELL=1` 与 packaged mock app 启动后，Swift / Electron main / agent-server 均启动成功，`127.0.0.1:4317` 有 node 监听，`/api/activity` 返回 idle snapshot，但 `/tmp/handagent-qa/electron-log-description-20260609.log` 为 0 行，`log show --last 3m --predicate 'process == "HandAgentDesktop" OR process == "Electron"'` 和 `/tmp/handagent-qa/*.log` 中均未找到 `agent-server supervisor` / `coreRuntimeHost` / `utilityProcessBlocker`。该缺陷已写入 `docs/bugs.md`。
 
 **2026-06-09 阻塞子项**：

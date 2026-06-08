@@ -93,6 +93,19 @@ describe("ElectronShellRuntime", () => {
     });
   });
 
+  it("requests the Swift prompt panel when activity click has a thread id but no visible thread window", () => {
+    const harness = createHarness({ focusResult: false });
+
+    harness.runtime.handleActivityWindowFocusRequest("thread-1");
+
+    expect(harness.prewarmer.focus).toHaveBeenCalledTimes(1);
+    expect(harness.events).toContainEqual({
+      channel: "electron_shell",
+      type: "prompt_panel.show_requested",
+      reason: "activity_window.clicked_without_thread",
+    });
+  });
+
   it("acks focus false when no visible thread window exists", async () => {
     const harness = createHarness({ focusResult: false });
 

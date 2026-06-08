@@ -68,6 +68,7 @@ export class ActivityWindowController {
       alwaysOnTop: true,
       skipTaskbar: true,
       focusable: false,
+      acceptFirstMouse: true,
       resizable: false,
       webPreferences: {
         preload: this.options.preloadPath,

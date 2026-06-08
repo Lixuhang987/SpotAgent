@@ -128,6 +128,21 @@ final class ElectronBackedAppServerTests: XCTestCase {
         XCTAssertEqual(showRequestCount, 1)
     }
 
+    func testPromptPanelShowRequestStillInvokesCallbackAfterVisibleThreadWindowClosed() {
+        let shell = RecordingElectronShellProcess()
+        let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
+        var showRequestCount = 0
+        appServer.onPromptPanelShowRequested = { showRequestCount += 1 }
+
+        appServer.start()
+        shell.emit(.agentServerHealth(available: true, message: nil))
+        shell.emit(.threadWindowPrepared(timestamp: "2026-06-08T00:00:01.000Z"))
+        shell.emit(.threadWindowClosed(timestamp: "2026-06-08T00:00:02.000Z", wasVisible: true))
+        shell.emit(.promptPanelShowRequested(reason: .activityWindowClickedWithoutThread))
+
+        XCTAssertEqual(showRequestCount, 1)
+    }
+
     func testVisibleThreadWindowClosedInvokesWindowClosedCallback() {
         let shell = RecordingElectronShellProcess()
         let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
