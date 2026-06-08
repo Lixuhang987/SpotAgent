@@ -79,7 +79,7 @@ React `App` 挂载后通过 `installInitialPromptReceiver` 替换正式 receiver
 - 右侧 workspace 是固定高度 grid：TabBar、窗口错误提示和 Composer 不参与主滚动；只有 `MessageList` 是对话纵向滚动容器。
 - 窗口错误提示行由常驻 slot 占位，错误为空时高度为 0，避免 active content 与 Composer 因 grid 自动放置而前移。
 - 页面级横向滚动必须保持关闭；右侧唯一允许横向滚动的区域是 TabBar，多个 tab 时由 TabBar 自身 `overflow-x-auto` 承接，消息区、Composer、请求面板均使用 `min-w-0` / `overflow-x-hidden` 或换行布局避免撑宽窗口。
-- `WorkspaceGroup` 当前使用 Radix `Accordion.Item/Header/Trigger/Content`，但父级 `HistorySidebar` 没有包 `Accordion.Root`；不要把它当作完整 Radix Accordion 状态模型。
+- `WorkspaceGroup` 使用 Radix `Accordion.Item/Header/Trigger/Content`，父级 `HistorySidebar` 的滚动列表必须由 `Accordion.Root type="multiple"` 包裹，并以 `expandedWorkspaceIds` 作为受控 `value`，否则 workspace 分组渲染时会因缺少 Radix 上下文导致 React 挂载失败。
 - `Composer` 只负责提交文本和停止当前 running turn；附件按钮、编辑和重新生成仍是 UI 占位，不能在文档或代码中当作已完成能力。
 
 ## 样式前提

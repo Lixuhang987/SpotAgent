@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import * as Accordion from '@radix-ui/react-accordion';
 import { createThreadWindowStore } from '../store/threadWindowStore.ts';
 import { groupThreadsByWorkspace } from '../utils/groupThreads.ts';
 import { cn } from '../utils/cn.ts';
@@ -62,7 +63,11 @@ export function HistorySidebar({
       />
 
       {/* Workspace 分组和默认分组 */}
-      <div className="flex-1 min-h-0 space-y-xs overflow-y-auto overflow-x-hidden pr-1">
+      <Accordion.Root
+        type="multiple"
+        value={Array.from(expandedWorkspaceIds)}
+        className="flex-1 min-h-0 space-y-xs overflow-y-auto overflow-x-hidden pr-1"
+      >
         {/* Workspace 分组 */}
         {grouped.workspaceGroups.map((group) => (
           <WorkspaceGroup
@@ -102,7 +107,7 @@ export function HistorySidebar({
             暂无对话历史
           </p>
         )}
-      </div>
+      </Accordion.Root>
     </aside>
   );
 }
