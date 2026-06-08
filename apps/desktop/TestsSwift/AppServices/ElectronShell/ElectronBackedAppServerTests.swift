@@ -346,6 +346,25 @@ final class ElectronBackedAppServerTests: XCTestCase {
         XCTAssertEqual(fatalMessages, ["renderer gone"])
         XCTAssertEqual(availability, [true, false])
     }
+
+    func testActivityRendererCrashDoesNotMarkServerUnavailable() {
+        let shell = RecordingElectronShellProcess()
+        let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
+        var fatalMessages: [String] = []
+        var availability: [Bool] = []
+        appServer.onFatalError = { fatalMessages.append($0) }
+        appServer.onAvailabilityChange = { availability.append($0) }
+
+        appServer.start()
+        shell.emit(.threadWindowPrepared(timestamp: "2026-06-08T00:00:00.000Z"))
+        shell.emit(.agentServerHealth(available: true, message: nil))
+        shell.emit(.rendererCrashed(window: .activity, reason: "activity renderer gone"))
+
+        XCTAssertTrue(appServer.isAvailable)
+        XCTAssertNil(appServer.startupErrorMessage)
+        XCTAssertTrue(fatalMessages.isEmpty)
+        XCTAssertEqual(availability, [true])
+    }
 }
 
 @MainActor

@@ -149,7 +149,10 @@ final class ElectronBackedAppServer: AppServerManaging, ThreadWindowCommanding, 
             }
             publishAvailability(force: true)
 
-        case .rendererCrashed(_, let reason):
+        case .rendererCrashed(.activity, _):
+            break
+
+        case .rendererCrashed(.thread, let reason):
             threadWindowErrorMessage = reason
             hasAgentServerHealth = false
             platformClient?.disconnect()
