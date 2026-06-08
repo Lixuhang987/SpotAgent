@@ -48,6 +48,7 @@ type ActiveRun = {
   turnId: string;
   controller: AbortController;
   generation: number;
+  nextNotificationSequence: number;
   interrupted: boolean;
   interruptionPersisted: boolean;
 };
@@ -364,6 +365,7 @@ export class ThreadRuntimeOrchestrator {
       turnId,
       controller: new AbortController(),
       generation: this.nextGeneration + 1,
+      nextNotificationSequence: 0,
       interrupted: false,
       interruptionPersisted: false,
     };
@@ -404,17 +406,19 @@ export class ThreadRuntimeOrchestrator {
             if (!this.isActive(session.threadId, activeRun) || activeRun.controller.signal.aborted) {
               return;
             }
+            const timestamp = this.now();
             const outgoing = toThreadNotification(
               session.threadId,
               activeRun.turnId,
               event,
-              this.now(),
+              timestamp,
+              ++activeRun.nextNotificationSequence,
             );
             if (outgoing) {
               session.push(outgoing);
             }
 
-            const auditEvent = toAuditEvent(event, this.now());
+            const auditEvent = toAuditEvent(event, timestamp);
             if (auditEvent) {
               events.push(auditEvent);
             }

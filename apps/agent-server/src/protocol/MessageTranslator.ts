@@ -12,6 +12,7 @@ export function toThreadNotification(
   turnId: string,
   event: AgentRuntimeEvent,
   timestamp: string,
+  notificationSequence?: number,
 ):
   | Extract<
       ThreadNotification,
@@ -26,7 +27,13 @@ export function toThreadNotification(
       return {
         type: "assistant.delta",
         threadId,
-        notificationId: `${threadId}-${event.messageId}-${timestamp}-delta`,
+        notificationId: makeNotificationId(
+          threadId,
+          event.messageId,
+          timestamp,
+          "delta",
+          notificationSequence,
+        ),
         turnId,
         itemId: `${threadId}-${turnId}-${event.messageId}`,
         timestamp,
@@ -36,7 +43,13 @@ export function toThreadNotification(
       return {
         type: "tool.started",
         threadId,
-        notificationId: `${threadId}-${event.toolCallId}-${timestamp}-start`,
+        notificationId: makeNotificationId(
+          threadId,
+          event.toolCallId,
+          timestamp,
+          "start",
+          notificationSequence,
+        ),
         turnId,
         itemId: `${threadId}-${event.toolCallId}`,
         timestamp,
@@ -49,7 +62,13 @@ export function toThreadNotification(
       return {
         type: "tool.finished",
         threadId,
-        notificationId: `${threadId}-${event.toolCallId}-${timestamp}-finish`,
+        notificationId: makeNotificationId(
+          threadId,
+          event.toolCallId,
+          timestamp,
+          "finish",
+          notificationSequence,
+        ),
         turnId,
         itemId: `${threadId}-${event.toolCallId}`,
         timestamp,
@@ -64,7 +83,13 @@ export function toThreadNotification(
       return {
         type: "thread.error",
         threadId,
-        notificationId: `${threadId}-${timestamp}-error`,
+        notificationId: makeNotificationId(
+          threadId,
+          "runtime",
+          timestamp,
+          "error",
+          notificationSequence,
+        ),
         timestamp,
         payload: {
           code: event.code,
@@ -76,6 +101,17 @@ export function toThreadNotification(
     case "permission_decision":
       return null;
   }
+}
+
+function makeNotificationId(
+  threadId: string,
+  itemId: string,
+  timestamp: string,
+  suffix: string,
+  sequence?: number,
+): string {
+  const sequencePart = sequence === undefined ? "" : `-${sequence}`;
+  return `${threadId}-${itemId}-${timestamp}${sequencePart}-${suffix}`;
 }
 
 export function toAuditEvent(event: AgentRuntimeEvent, timestamp: string): ThreadAuditEvent | null {

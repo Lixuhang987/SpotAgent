@@ -389,6 +389,103 @@ describe("ThreadRuntimeOrchestrator", () => {
     ]);
   });
 
+  it("emits unique notification ids for multiple assistant text deltas in the same turn", async () => {
+    const pushed: ThreadNotification[] = [];
+    const store = new InMemoryThreadStore();
+    const persistence = new ThreadPersistence(
+      store,
+      () => "2026-06-09T00:00:00.000Z",
+    );
+    const orchestrator = new ThreadRuntimeOrchestrator(
+      {
+        async runWithMessages(
+          messages: AgentMessage[],
+          onEvent: (event: AgentRuntimeEvent) => void,
+        ) {
+          onEvent({
+            type: "assistant_message_start",
+            messageId: "assistant-1",
+            payload: { role: "assistant" },
+          });
+          onEvent({
+            type: "assistant_message_delta",
+            messageId: "assistant-1",
+            payload: { text: "Mock " },
+          });
+          onEvent({
+            type: "assistant_message_delta",
+            messageId: "assistant-1",
+            payload: { text: "assistant " },
+          });
+          onEvent({
+            type: "assistant_message_delta",
+            messageId: "assistant-1",
+            payload: { text: "response: " },
+          });
+          onEvent({
+            type: "assistant_message_delta",
+            messageId: "assistant-1",
+            payload: { text: "main " },
+          });
+          onEvent({
+            type: "assistant_message_delta",
+            messageId: "assistant-1",
+            payload: { text: "chain " },
+          });
+          onEvent({
+            type: "assistant_message_delta",
+            messageId: "assistant-1",
+            payload: { text: "is " },
+          });
+          onEvent({
+            type: "assistant_message_delta",
+            messageId: "assistant-1",
+            payload: { text: "reachable." },
+          });
+          onEvent({
+            type: "assistant_message_end",
+            messageId: "assistant-1",
+            payload: { status: "completed" },
+          });
+
+          return {
+            messages: [
+              ...messages,
+              {
+                role: "assistant" as const,
+                content: "Mock assistant response: main chain is reachable.",
+              },
+            ],
+          };
+        },
+      },
+      persistence,
+      () => "2026-06-09T00:00:00.000Z",
+    );
+
+    await persistence.ensureThread("Thread-delta-ids");
+    await orchestrator.submitInput(
+      createUserMessage("Thread-delta-ids", "普通 assistant 回复", "user-1"),
+      (message) => pushed.push(message),
+    );
+    await orchestrator.waitForThreadIdle("Thread-delta-ids");
+
+    const assistantDeltas = pushed.filter(
+      (message): message is Extract<ThreadNotification, { type: "assistant.delta" }> =>
+        message.type === "assistant.delta",
+    );
+    expect(assistantDeltas.map((message) => message.payload.text)).toEqual([
+      "Mock ",
+      "assistant ",
+      "response: ",
+      "main ",
+      "chain ",
+      "is ",
+      "reachable.",
+    ]);
+    expect(new Set(assistantDeltas.map((message) => message.notificationId)).size).toBe(7);
+  });
+
   it("passes current thread history and run options into runtime on later turns", async () => {
     const runtimeCalls: AgentMessage[][] = [];
     const seenRunOptions: Array<Record<string, unknown> | undefined> = [];

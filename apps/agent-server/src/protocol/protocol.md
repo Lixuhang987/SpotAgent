@@ -26,7 +26,7 @@ case "assistant_message_delta":
   return {
     type: "assistant.delta",
     threadId,
-    notificationId: `${threadId}-${event.messageId}-${timestamp}-delta`,
+    notificationId: `${threadId}-${event.messageId}-${timestamp}-${notificationSequence}-delta`,
     turnId,
     itemId: `${threadId}-${turnId}-${event.messageId}`,
     timestamp,
@@ -37,7 +37,7 @@ case "tool_result":
   return {
     type: "tool.finished",
     threadId,
-    notificationId: `${threadId}-${event.toolCallId}-${timestamp}-finish`,
+    notificationId: `${threadId}-${event.toolCallId}-${timestamp}-${notificationSequence}-finish`,
     turnId,
     itemId: `${threadId}-${event.toolCallId}`,
     timestamp,
@@ -50,7 +50,7 @@ case "tool_result":
   };
 ```
 
-`AgentRuntime` 的 assistant `messageId` 只保证单次 run 内部递增；同一 thread 后续 turn 可能再次出现 `assistant-1`。因此 `assistant.delta.itemId` 必须拼入 `turnId`，保证 React `ThreadWindow` 的 message identity 在多轮会话中稳定唯一。
+`AgentRuntime` 的 assistant `messageId` 只保证单次 run 内部递增；同一 thread 后续 turn 可能再次出现 `assistant-1`。因此 `assistant.delta.itemId` 必须拼入 `turnId`，保证 React `ThreadWindow` 的 message identity 在多轮会话中稳定唯一。`notificationId` 还必须包含 active run 内单调递增的 `notificationSequence`，避免多段 `assistant_message_delta` 在同一毫秒内共用同一个 ID，被 React store 的重复通知保护误判为重复消息。
 
 core runtime 只知道 `tool_result` 成功或失败；React UI 需要的是 `tool.finished(status)`。这个映射集中在这里，新增工具事件字段时只改一个地方。
 
