@@ -205,18 +205,6 @@
 
 ### 验收场景
 
-#### 场景 4: 左侧边栏 workspace 分组交互
-
-1. 确认历史边栏顶部显示"新建对话"按钮
-2. 确认显示搜索输入框
-3. 准备一个 registry 原序不是字母序的 `~/.spotAgent/workspaces.json`，例如 `default -> tmp -> qa-workspace -> handagent-test`；确认历史侧栏显示为 `default -> handagent-test -> qa-workspace -> tmp -> 默认对话`，即 workspace 分组按字母顺序排列，名为 `default` 的 workspace 不等同于"默认对话"，"默认对话"分组固定在最下方。
-4. 点击 workspace 分组标题，确认可展开/收起，图标有旋转动画
-5. 在搜索框输入关键词，确认过滤所有分组的 thread（按 preview 字段匹配）
-6. 清空搜索，确认恢复完整列表
-7. 展开/收起若干分组后刷新页面，确认展开状态保持（持久化到 store）
-8. 点击"新建对话"按钮，确认创建空白 thread 并自动切换到新 tab
-9. 点击历史项，确认激活或创建对应 tab
-
 #### 场景 5: 左侧边栏响应式缩放与隐藏
 
 1. 打开 ThreadWindow，保持默认窗口宽度，确认左侧历史边栏可见且宽度接近窗口宽度的 30%。
