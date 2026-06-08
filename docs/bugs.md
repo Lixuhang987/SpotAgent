@@ -31,6 +31,21 @@
 
 ## 当前 bug
 
+### ThreadWindow workspace 分组标题无法展开
+
+- **严重级别**：P2
+- **发现日期**：2026-06-09
+- **复现步骤**：
+  1. 确认 `~/.spotAgent/workspaces.json` registry 原序为 `default -> tmp -> qa-workspace -> handagent-test`。
+  1. 在 `~/.spotAgent/threads/` 准备四个 QA fixture：`qa-scene4-default-workspace.json`、`qa-scene4-tmp-workspace.json`、`qa-scene4-qa-workspace.json`、`qa-scene4-handagent-workspace.json`，分别写入对应 workspaceId。
+  1. 启动默认 WKWebView packaged mock app，提交 `THREADWINDOW_SCENE4_REMAINING_QA_20260609 [mock:assistant-ok]` 打开 ThreadWindow。
+  1. 观察左侧历史栏显示 `default -> handagent-test -> qa-workspace -> tmp -> 默认对话`。
+  1. 尝试点击 workspace 分组标题、对 heading trigger 执行 AXPress、聚焦 trigger 后按 Space。
+- **实际结果**：workspace 分组没有展开，fixture 历史项没有显示；AX 读取 `default` trigger 的 `AXExpanded=false`，对应 region 子项数为 0。截图：`/tmp/handagent-qa/threadwindow-scenario4-default-expanded-click.png`、`/tmp/handagent-qa/threadwindow-scenario4-default-expanded-axcoords.png`、`/tmp/handagent-qa/threadwindow-scenario4-default-expanded-keyboard.png`。
+- **期望结果**：点击 workspace 分组标题或用键盘激活 trigger 后，分组应展开并显示该 workspace 下的 thread；再次点击应收起，展开状态应写入 store 并在刷新后保持。
+- **证据**：`/api/thread` 手动发送 `thread.list` 返回 53 个 thread，其中包含四个 `qa-scene4-*` fixture，且 workspaceId 分别匹配 `default`、`tmp`、`qa-workspace`、`handagent-test`；HistorySidebar 已显示四个 workspace 分组，说明 `workspace.listed` 和 workspace 排序已进入 UI。失败边界在 `WorkspaceGroup` trigger 交互到 `toggleWorkspaceExpanded` / Radix Accordion 展开状态之间。退出 QA app 后无 HandAgent / agent-server 残留，`127.0.0.1:4317` 无监听。
+- **初步调用链 / 根因边界**：已验证 `agent-server thread.list -> thread.listed 包含 fixture -> ThreadWindow 历史侧栏显示 workspace 分组`；未验证 `WorkspaceGroup trigger click/keyboard -> toggleWorkspaceExpanded -> expandedWorkspaceIds 更新 -> Accordion.Content 展开`。需要继续用 `$trace-and-verify-call-chain` 定位 trigger 事件未触发、受控 Accordion 状态未更新，还是展开内容渲染被截断。
+
 ### `AI SDK stream finished without assistant content or tool calls`
 
 - **严重级别**：P1
