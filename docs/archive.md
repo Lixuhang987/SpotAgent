@@ -939,3 +939,11 @@
 - **验证过程**：启动 `dist/HandAgentDesktop.app` 后提交 `THREADWINDOW_SCENE8_ACTION_BUTTONS_QA_20260609_R2 [mock:workspace-list]`，生成 workspace.list tool 结果与 final assistant 消息。初始状态下 assistant 和 tool 消息无操作按钮；hover final assistant 后显示 `复制 / 编辑 / 重新生成`，按钮栏使用低对比度 cream 文本且没有推动后续内容；hover tool 结果时 tool 下方不出现独立操作按钮。CoreGraphics 精确点击 final assistant 的复制按钮后，`pbpaste` 返回 `Mock workspace.list completed.`。AX 读取 final assistant 按钮状态为 `复制消息 enabled=true`、`编辑 enabled=false`、`重新生成 enabled=false`，`编辑` 与 `重新生成` 的 `AXHelp` 均为 `即将推出`。
 - **证据**：thread 文件 `~/.spotAgent/threads/thread-1780957822168-ghgnjc.json`；截图 `/tmp/handagent-qa/threadwindow-scenario8-r2-initial.png`、`/tmp/handagent-qa/threadwindow-scenario8-assistant-hover.png`、`/tmp/handagent-qa/threadwindow-scenario8-tool-hover.png`、`/tmp/handagent-qa/threadwindow-scenario8-copy-click-swift-585.png`。
 - **结论**：通过。
+
+### ThreadWindow 场景 9：Composer 自动增高输入框验证（GPT 风格）
+
+- **验证日期**：2026-06-09
+- **验证环境**：默认 WKWebView packaged app，`mock-llm`
+- **验证过程**：在同一 packaged mock app 的 ThreadWindow composer 中，空输入框 AX 尺寸为 `482x64`；输入 1 行后仍为 `482x64`。用 Shift+Return 验证换行可插入后，通过剪贴板粘贴 5 行真实触发 textarea input 事件，输入框增高到 `482x120`；粘贴 6 行后保持 `482x120`，内部出现垂直滚动条，外层 pill 仍居中且宽度不变。按无修饰 Return 后输入框清空并恢复为 `482x52`，thread 文件随后持久化 6 行 user message 与 mock assistant 回复。
+- **证据**：thread 文件 `~/.spotAgent/threads/thread-1780957822168-ghgnjc.json`；截图 `/tmp/handagent-qa/threadwindow-scenario9-composer-paste-1line.png`、`/tmp/handagent-qa/threadwindow-scenario9-composer-paste-5lines.png`、`/tmp/handagent-qa/threadwindow-scenario9-composer-paste-6lines.png`、`/tmp/handagent-qa/threadwindow-scenario9-after-submit.png`。
+- **结论**：通过。
