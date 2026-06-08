@@ -55,57 +55,25 @@
 1. 再次打开 PromptPanel，连续提交第二条不同 prompt，确认复用同一个 ThreadWindow 但创建新的 tab/thread，而不是写入当前 active tab 的 composer thread。
 1. 在 `~/.spotAgent/threads/` 找到对应两个 thread 文件，确认每个文件都包含各自的首条 user message。
 
-## Electron UI Shell Phase 0 基础启动（P2）
-
-本项只保留 Phase 1 仍依赖的 Electron 启动、supervisor 和隐藏预热基础；Electron flag 路径下 PromptPanel submit 已由 Phase 1 改为打开 Electron ThreadWindow。
-
-1. 默认不设置 `HANDAGENT_ELECTRON_SHELL`，运行 `bash ./scripts/swiftw run HandAgentDesktop`，确认 PromptPanel 提交仍打开 Swift `WKWebView` ThreadWindow。
-1. 先运行 `pnpm --filter handagent-electron-shell build`。
-1. 设置 `HANDAGENT_ELECTRON_SHELL=1` 后运行桌面 App；默认应通过 `pnpm --filter handagent-electron-shell exec electron apps/electron-shell/dist/main/main.js` 启动 Electron，不要求全局 `electron` 可执行文件。
-1. 启动后确认 Electron shell 和 agent-server 只有各一份进程，且 `127.0.0.1:4317` 没有第二份 server 冲突。
-1. 启动完成前 PromptPanel 不允许提交；收到 Electron `agent_server.health` 与 `thread_window.prepared` 后 PromptPanel 恢复可提交。
-1. 关闭隐藏 Electron ThreadWindow 时，确认 PromptPanel 重新阻止提交并显示 `Electron ThreadWindow 已关闭，正在重新预热…`；模拟预热失败时确认显示具体失败原因，而不是仅显示泛化的 agent-server 断开文案。
-1. 退出 HandAgent 后确认 Electron 和 Node agent-server 进程不残留。
-
-## Electron UI Shell Phase 1（P2）
-
-1. 默认不设置 `HANDAGENT_ELECTRON_SHELL`，运行 `bash ./scripts/swiftw run HandAgentDesktop`，提交 prompt 后确认仍打开 Swift `WKWebView` ThreadWindow。
-1. 运行 `pnpm --filter handagent-electron-shell build`。
-1. 设置 `HANDAGENT_ELECTRON_SHELL=1` 后运行桌面 App，确认 Electron shell 和 agent-server 各一份进程。
-1. 通过全局快捷键打开 PromptPanel，确认不会显示 ThreadWindow；hidden ThreadWindow 已由 Electron main 在 app-server ready 后预热，PromptPanel show/toggle 本身不发送 prepare command。PromptPanel 在 health + prepared 前不可提交。
-1. 提交 `ELECTRON_PHASE1_INITIAL_PROMPT_QA_20260608`，确认打开的是 Electron ThreadWindow，而不是 Swift WKWebView ThreadWindow。
-1. 确认 Electron ThreadWindow 创建新 tab/thread，并显示该 user message；`~/.spotAgent/threads/` 中对应 thread 文件包含该首条 user message。
-1. 再次打开 PromptPanel 连续提交第二条不同 prompt，确认复用同一个 Electron ThreadWindow，但创建新的 tab/thread。
-1. 触发 `openHistory`，确认聚焦 Electron ThreadWindow 并显示历史侧栏，不创建 Swift WKWebView host。
-1. 关闭 visible Electron ThreadWindow 后，确认 Swift 侧不残留打开窗口状态；再次打开 PromptPanel 时先看到预热 gate，预热完成后可再次提交。
-1. 触发 platform tool，例如 `clipboard.read` 或 `app.frontmost`，确认 agent-server 仍通过 `/api/platform` 请求 Swift 回写结果。
-1. 退出 HandAgent 后确认 Electron 和 Node agent-server 进程不残留。
-
-## Electron UI Shell Phase 2 Activity StatusBubble（P2）
+## Electron UI Shell 最终态验收（P2）
 
 **实施状态**：未通过实机 QA；本节为待验收项，不得归档为已通过。
 
-1. 默认不设置 `HANDAGENT_ELECTRON_SHELL`，运行 `bash ./scripts/swiftw run HandAgentDesktop`，确认右下角显示 Swift StatusBubble，PromptPanel 提交仍打开默认路径或当前分支配置下的 ThreadWindow。
 1. 运行 `pnpm --filter handagent-electron-shell build`。
-1. 设置 `HANDAGENT_ELECTRON_SHELL=1` 后运行桌面 App，确认不再显示 Swift StatusBubble，右下角显示 Electron React StatusBubble。
-1. 提交一个普通 prompt，确认 Electron StatusBubble 从 `idle` 变为 `starting` / `running` / `completed`，ThreadWindow 仍显示正常消息流。
-1. 触发一个 tool 调用，确认 Electron StatusBubble 显示工具运行态，例如 `正在使用 <toolName>`。
-1. 触发 permission 或 workspace 请求，确认 Electron StatusBubble 显示等待确认态，ThreadWindow 内联请求面板仍可回执。
-1. 触发模型配置错误或 provider 错误，确认 Electron StatusBubble 显示 `error` 态，ThreadWindow 错误气泡仍可见。
+1. 设置 `HANDAGENT_ELECTRON_SHELL=1` 后运行桌面 App，确认 Electron shell 和 agent-server 只有各一份进程，`127.0.0.1:4317` 没有第二份 server 冲突。
+1. 确认启动日志包含 agent-server supervisor description，并明确 `mode`、`coreRuntimeHost: "agent-server"` 与 `utilityProcessBlocker`；如果走 Node child fallback，日志必须说明 utilityProcess 的具体 blocker。
+1. 启动完成前 PromptPanel 不允许提交；收到 `agent_server.health available=true` 与 `thread_window.prepared` 后 PromptPanel 才恢复可提交。
+1. 通过全局快捷键打开或切换 PromptPanel 多次，确认不会显示 ThreadWindow，也不会发送 `thread_window.prepare` command；hidden ThreadWindow 预热只由 Electron main 在 app-server ready 后完成。
+1. 提交 `ELECTRON_UI_SHELL_FINAL_QA_20260608`，确认打开的是 Electron ThreadWindow，创建新 tab/thread，并显示该首条 user message；`~/.spotAgent/threads/` 中对应 thread 文件包含同一 user message。
+1. 再次打开 PromptPanel 连续提交第二条不同 prompt，确认复用同一个 Electron ThreadWindow，但创建新的 tab/thread，不写入当前 active tab 的 composer thread。
+1. 触发 `openHistory`，确认聚焦 Electron ThreadWindow 并显示历史侧栏，不创建 Swift WKWebView host。
+1. 触发 platform tool，例如 `clipboard.read`、`app.frontmost`、`screen.capture` 或 `accessibility.snapshot`，确认 agent-server 仍通过 `/api/platform` 请求 Swift 回写结果。
+1. 确认不再显示 Swift StatusBubble，右下角显示 Electron React StatusBubble；提交 prompt 后 Electron StatusBubble 能展示 `starting` / `running` / `completed`。
+1. 触发 tool、permission/workspace request、模型配置错误或 provider 错误，确认 Electron StatusBubble 分别展示 tool running、waiting、error 状态，ThreadWindow 内联请求面板和错误气泡仍正常可见。
 1. 点击 Electron StatusBubble，若 Electron ThreadWindow 可见，确认聚焦 ThreadWindow；若无可聚焦 ThreadWindow，确认 Swift PromptPanel 打开。
 1. 断开并重连 `/api/activity` subscriber，确认新连接立即收到 `activity.snapshot`，不会影响 `/api/thread` 消息流。
 1. 确认 ActivityWindow 非激活展示：点击气泡不把 ActivityWindow 变成 key window，且不会出现在 Cmd+Tab。
-1. 退出 HandAgent 后确认 Electron、Node agent-server 和 activity renderer 进程不残留。
-
-## Electron UI Shell Phase 3 Supervision Hardening（P2）
-
-**实施状态**：未通过实机 QA；本节为待验收项，不得归档为已通过。
-
-1. 运行 `pnpm --filter handagent-electron-shell build`。
-1. 设置 `HANDAGENT_ELECTRON_SHELL=1` 后运行桌面 App，确认启动日志包含 agent-server supervisor description，并明确 `mode`、`coreRuntimeHost` 与 `utilityProcessBlocker`。
-1. 打开 PromptPanel 多次，确认没有发送 `thread_window.prepare` command；ThreadWindow hidden prewarm 已在 app-server ready 后完成。
-1. 提交 prompt，确认 Electron ThreadWindow 打开新 thread，首条 user message 不丢失。
-1. 关闭 visible ThreadWindow，确认 agent-server 进程仍存在；再次打开 PromptPanel 并提交，确认仍通过同一后台服务执行。
+1. 关闭 visible Electron ThreadWindow，确认 agent-server 进程仍存在；再次打开 PromptPanel 并提交，确认仍通过同一后台服务执行。
 1. 关闭 Electron StatusBubble，确认 agent-server 进程仍存在，ThreadWindow 仍可继续对话。
 1. 模拟 agent-server 非零退出，确认 supervisor 按退避重启；超过最大次数后 Swift 显示明确 fatal/diagnostic 文案。
 1. 执行 `bash ./scripts/package-app.sh --mock-llm`，确认 `.app/Contents/Resources/ElectronShell/dist/main/main.js` 存在。
@@ -216,8 +184,7 @@
 - [ ] assistant 消息完全透明无背景，文本直接铺在 `surface-dark` (#181715) 背景上
 - [ ] user 消息右对齐，最大宽度约 85%，带圆角背景（warm cream 色 `surface-card` #efe9de）
 - [ ] tool 消息左对齐，半透明深色背景，使用代码字体
-- [ ] 操作按钮（复制/编辑/重新生成）hover 时显示（user 消息始终显示）
-- [ ] assistant/user 消息字号 15px，tool 消息字号 13px
+- [ ] 操作按钮（复制/编辑/重新生成）hover 时显示（不hover时也占位，不要发生hover后下面的所有消息移位）
 
 **内容区布局 (MessageList)**:
 - [ ] 消息区域水平居中，最大宽度 720pt
@@ -252,8 +219,8 @@
 #### 场景 8: 消息操作按钮验证（GPT 风格）
 
 1. 确认 assistant 和 tool 消息的操作按钮默认不显示
-2. hover assistant 或 tool 消息，确认操作按钮显示
-3. 确认 user 消息的操作按钮始终显示（不需要 hover）
+2. hover assistant 消息，确认操作按钮显示
+3. 确认 hover后 tool下面不显示操作按钮
 4. 点击"复制"按钮，确认消息内容复制到剪贴板
 5. 确认"编辑"和"重新生成"按钮显示但禁用，hover 时显示 tooltip "即将推出"
 6. 确认操作按钮栏在深色 workspace 上使用低对比度 cream 文本，不干扰阅读
@@ -272,14 +239,8 @@
 1. 确认 ThreadWindow 整体不再是 dark-only Raycast Glass 风格，而是 cream sidebar + dark product workspace 的双 surface 节奏。
 2. 确认顶部工具栏不再显示 connection pill（已移除），TabBar 不显示状态点；running / failed / interrupted / idle 不要求通过 tab 状态点区分，应由消息流、发送/停止按钮、错误提示或状态气泡表达。
 3. 确认历史项的 hover / focus / active 视觉边界与点击边界一致：点击 row 空白区域会打开 thread，点击删除图标只触发删除确认。
-4. 触发 permission 或 workspace 请求，确认请求面板是 dark product card，主动作使用 coral，参数 JSON 区域使用 monospace dark code block。
+4. 触发 permission  请求，确认请求面板是 
 
-## 开发脚本依赖与打包反馈 smoke（P2）
-
-1. 在缺少根目录 `node_modules` 的干净 worktree 中执行 `bash ./scripts/swiftw run HandAgentDesktop`，确认脚本先输出 `[swiftw] node_modules missing, running pnpm install...`，再执行 ThreadWindow web build 和 Swift run。
-1. 在缺少根目录 `node_modules` 的干净 worktree 中执行 `bash ./scripts/package-app.sh --mock-llm`，确认脚本先自动执行 `pnpm install`。
-1. 确认打包脚本依次输出 `Building thread-window-web...`、`Building HandAgentDesktop release binary...`、`Code signing app bundle...`，release Swift build 阶段不再表现为 web build 后静默卡住。
-1. 确认最终生成 `dist/HandAgentDesktop.app` 并输出 `success`。
 
 ## Thread 历史路径与状态气泡 smoke（P2）
 
@@ -310,13 +271,7 @@
 1. 提交 prompt 打开 ThreadWindow，确认 React 左侧历史栏仍是 cream surface，右侧 workspace 仍是 dark product surface，coral primary 与 SwiftUI 原生界面一致。
 1. 将 PromptPanel、Settings、ThreadWindow 都缩到最小可用尺寸附近，确认按钮文字、tab 标题、输入框、状态气泡文本没有重叠、截断到不可读或溢出容器。
 
-## 懒加载工具激活（P1）
 
-最近阻塞记录：2026-05-24 使用真实 LLM 模式重试 `HANDAGENT_LAZY_TOOL_QA_20260524`。首轮已验证 `use_tools` 激活后会调到真实工具链；在允许 `screen.capture` / `accessibility.snapshot` 之前，工具先被判定为拒绝。随后在权限弹窗中选择 `始终允许` 再重试 `HANDAGENT_LAZY_TOOL_QA_20260524_RETRY`，旧版窗口已显示 `window.list` 与 `screen.capture` 的工具结果，但最终仍落到 UI 告警 `AI SDK stream finished without assistant content or tool calls.`，对应旧版 thread 记录也写入了同名 error 事件，因此本项当前仍不能归档为通过。
-
-最近阻塞记录：2026-06-06 复查当前 bug 清单，`docs/bugs.md` 仍保留 P1 缺陷 `AI SDK stream finished without assistant content or tool calls`。该缺陷正覆盖本项场景 2–4 的真实 provider 工具调用收尾链路：工具结果已能进入 ThreadWindow，但最终 assistant 总结无法稳定产生。因此在该 P1 缺陷修复前，本项仍不能归档为通过。
-
-最近阻塞记录：2026-05-23 在 `main` 合并 `feat/lazy-tool-activation` 后完成基线验证：`bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build` 均通过。实机 QA 先用 `bash ./scripts/package-app.sh --mock-llm` 验证 App 可打包启动，但 mock LLM 不写真实 network log，也不会生成 `use_tools` 激活调用，因此不能作为本项通过证据。随后使用 settings/真实 LLM 模式重新打包启动，纯聊天首轮请求成功返回，网络日志 `/Users/mu9/.spotAgent/log/2026-05-23/network-001.jsonl` 显示请求体 `tools` 只包含 `use_tools`，且 thread 只有 user/assistant 消息，没有 tool message。继续在同一 thread 发送 `Please read my screen. HANDAGENT_LAZY_TOOL_QA_20260523` 后，日志写入第二轮 request，`tools` 仍只包含 `use_tools`，但超过 1 分钟没有对应 response 行，thread 文件仍只有 3 条消息且 `events: []`。因此场景 1 的“纯聊天不激活真实工具”已有证据，场景 2–4 受真实 LLM 流未返回阻塞，暂不能归档通过。QA 后已停止 `HandAgentDesktop`，`agent-server` 随父进程退出。
 
 ### 场景 0：并发 thread 工具激活隔离
 
