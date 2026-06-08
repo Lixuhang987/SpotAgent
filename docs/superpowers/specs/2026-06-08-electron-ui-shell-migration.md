@@ -214,6 +214,11 @@ agent-server 不负责：
 type SwiftToElectronCommand =
   | {
       channel: "electron_shell";
+      type: "thread_window.prepare";
+      commandId: string;
+    }
+  | {
+      channel: "electron_shell";
       type: "thread_window.open_initial_prompt";
       commandId: string;
       payload: InitialPromptPayload;
@@ -284,10 +289,13 @@ sequenceDiagram
   participant Thread as ThreadWindow renderer
   participant Server as agent-server
 
+  Swift->>Electron: thread_window.prepare
+  Electron->>Thread: create hidden BrowserWindow
+  Thread->>Server: optional early /api/thread connect
   User->>Swift: 输入 prompt 并提交
   Swift->>Swift: PromptSubmission.compose
   Swift->>Electron: thread_window.open_initial_prompt
-  Electron->>Thread: create/focus BrowserWindow
+  Electron->>Thread: show/focus prepared BrowserWindow
   Electron->>Thread: deliver InitialPromptPayload
   Thread->>Server: thread.start
   Server-->>Thread: thread.started
@@ -302,6 +310,24 @@ sequenceDiagram
 - 后续：允许提交，Swift 排队一个 pending initial prompt，Electron ready 后发送。
 
 首版采用禁用提交，降低竞态。
+
+### ThreadWindow 隐藏预热
+
+迁到 Electron 后仍保留“PromptPanel 打开时后台初始化 ThreadWindow 页面，提交时直接展示”的体验。Swift 不直接创建 `BrowserWindow`，只在 PromptPanel 显示后向 Electron main 发送 `thread_window.prepare`。Electron main 负责：
+
+1. 在 `app.whenReady()` 之后创建全局唯一 ThreadWindow。
+2. 使用 `new BrowserWindow({ show: false, webPreferences: { preload, contextIsolation: true, nodeIntegration: false } })`。
+3. 立即 `loadURL` 或 `loadFile`，让 preload、React bundle 和必要的 WebSocket 初始化提前完成。
+4. 不调用 `show()`、`focus()` 或任何会激活应用的动作。
+5. 收到 `thread_window.open_initial_prompt` 后，复用已准备好的窗口，传递 initial prompt，再 `show()` 和 `focus()`。
+
+Electron 的隐藏预热比 WKWebView 更直接，因为 `BrowserWindow` 原生支持 `show: false`。实现时需要注意：
+
+- `BrowserWindow` 只能在 Electron `app.whenReady()` 后创建；Electron 未 ready 时，Swift 继续禁用提交或保留草稿。
+- 不要把 `show()` 当作预热动作。预热只创建隐藏窗口并加载页面。
+- 保持默认 `paintWhenInitiallyHidden: true`，否则 `ready-to-show` 不会触发，预热完成信号会失效。
+- 默认先不关闭 `webPreferences.backgroundThrottling`。只有实测隐藏窗口中的 WebSocket、timer 或 React 初始化被节流影响时，再为 ThreadWindow 单独评估关闭。
+- hidden window 不计入 Swift 的 open ThreadWindow 状态；只有 Electron main 收到 `open_initial_prompt` 并展示窗口后，才向 Swift 回报可见窗口状态。
 
 ## Activity Stream
 
@@ -400,10 +426,12 @@ Swift 只启动 Electron，Electron main 再启动 agent-server。Swift 通过 E
 ### ThreadWindow
 
 - Electron `BrowserWindow` 承载 React ThreadWindow。
+- Electron main 支持隐藏预热：PromptPanel 显示后创建 `show: false` 的 ThreadWindow，提前加载 preload、React bundle 和必要连接；PromptPanel 提交时再 `show/focus`。
 - 开发态可加载 Vite dev server 或 agent-server 静态资源。
 - 生产态加载打包后的本地资源。
 - 首版维持全局唯一 ThreadWindow；多窗口另行设计。
 - PromptPanel 提交总是创建新 thread/tab，不写入当前 active tab。
+- 隐藏预热窗口不算可见 ThreadWindow，不触发 Swift `.regular` 激活策略，也不改变 StatusBubble/桌宠 activity。
 
 ### StatusBubble
 
@@ -496,15 +524,18 @@ apps/thread-window-web/
 
 目标：
 
+- PromptPanel show 通过 Swift -> Electron command bridge 触发 `thread_window.prepare`，Electron 创建隐藏 `BrowserWindow` 并加载 React。
 - PromptPanel submit 通过 Swift -> Electron command bridge 打开 Electron ThreadWindow。
-- Electron ThreadWindow 加载现有 React ThreadWindow bundle。
+- Electron ThreadWindow 复用已预热窗口；如果尚未预热完成，submit 路径负责创建窗口并等待 renderer 可接收 initial prompt。
 - 初始 prompt 通过 Electron main/preload 传给 renderer。
 - React 仍直接连接 `/api/thread`。
 - Swift `ThreadWindowLifecycle` 收缩为 Electron window command client。
 
 验证：
 
+- 打开 PromptPanel 后不会跳出 ThreadWindow，但 Electron 已创建隐藏 ThreadWindow renderer。
 - PromptPanel 提交创建新 thread/tab。
+- 预热完成后提交的首屏延迟低于冷启动路径。
 - 连续提交复用同一个 Electron ThreadWindow，但创建不同 thread/tab。
 - 历史、composer、permission/workspace 请求保持现有行为。
 - WKWebView host 可删除或保留为临时 fallback，但不能长期双写。
