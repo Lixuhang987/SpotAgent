@@ -48,6 +48,81 @@ describe("ThreadWindowPrewarmer", () => {
     expect(window.focusCount).toBe(1);
   });
 
+  it("prepares on demand before opening an initial prompt", async () => {
+    const window = new FakeBrowserWindow();
+    const host = new ThreadWindowPrewarmer({
+      threadWindowURL: "http://127.0.0.1:4317/thread-window/index.html",
+      preloadPath: "/preload.js",
+      createWindow: () => window,
+    });
+
+    const opened = host.openInitialPrompt({
+      clientRequestId: "prompt-1",
+      text: "hello",
+      attachments: [],
+      actionBinding: null,
+    });
+    window.webContents.emit("did-finish-load");
+    await opened;
+
+    expect(window.loadCount).toBe(1);
+    expect(window.executedJavaScript[0]).toContain("window.handAgentReceiveInitialPrompt");
+    expect(window.showCount).toBe(1);
+    expect(window.focusCount).toBe(1);
+  });
+
+  it("opens history without delivering an initial prompt", async () => {
+    const window = new FakeBrowserWindow();
+    const host = new ThreadWindowPrewarmer({
+      threadWindowURL: "http://127.0.0.1:4317/thread-window/index.html",
+      preloadPath: "/preload.js",
+      createWindow: () => window,
+    });
+
+    const opened = host.openHistory();
+    window.webContents.emit("did-finish-load");
+    await opened;
+
+    expect(window.executedJavaScript).toEqual([]);
+    expect(window.showCount).toBe(1);
+    expect(window.focusCount).toBe(1);
+  });
+
+  it("focuses only after the window has been shown", async () => {
+    const window = new FakeBrowserWindow();
+    const host = new ThreadWindowPrewarmer({
+      threadWindowURL: "http://127.0.0.1:4317/thread-window/index.html",
+      preloadPath: "/preload.js",
+      createWindow: () => window,
+    });
+
+    expect(host.focus()).toBe(false);
+    const opened = host.openHistory();
+    window.webContents.emit("did-finish-load");
+    await opened;
+
+    expect(host.focus()).toBe(true);
+    expect(window.focusCount).toBe(2);
+  });
+
+  it("reports whether a closed thread window had been visible", async () => {
+    const window = new FakeBrowserWindow();
+    const closes: boolean[] = [];
+    const host = new ThreadWindowPrewarmer({
+      threadWindowURL: "http://127.0.0.1:4317/thread-window/index.html",
+      preloadPath: "/preload.js",
+      createWindow: () => window,
+      onClosed: (event) => closes.push(event.wasVisible),
+    });
+
+    const opened = host.openHistory();
+    window.webContents.emit("did-finish-load");
+    await opened;
+    window.emit("closed");
+
+    expect(closes).toEqual([true]);
+  });
+
   it("reuses an in-flight prepare request", async () => {
     const window = new FakeBrowserWindow();
     const prewarmer = new ThreadWindowPrewarmer({
@@ -101,12 +176,18 @@ describe("ThreadWindowPrewarmer", () => {
     window.emit("closed");
 
     expect(closedCount).toBe(1);
-    await expect(prewarmer.openInitialPrompt({
+    const reopened = prewarmer.openInitialPrompt({
       clientRequestId: "prompt-1",
       text: "hello",
       attachments: [],
       actionBinding: null,
-    })).rejects.toThrow("thread window is not prepared");
+    });
+    window.webContents.emit("did-finish-load");
+    await reopened;
+
+    expect(window.loadCount).toBe(2);
+    expect(window.showCount).toBe(1);
+    expect(window.focusCount).toBe(1);
   });
 
   it("rejects in-flight prepare when the window closes and allows retry", async () => {

@@ -7,6 +7,11 @@ type InitialPromptPayload = {
   actionBinding: { pluginId: string; promptName: string } | null;
 };
 
+type ThreadWindowClosedEvent = {
+  wasPrepared: boolean;
+  wasVisible: boolean;
+};
+
 type BrowserWindowLike = {
   webContents: {
     once(event: "did-finish-load" | "did-fail-load", listener: () => void): unknown;
@@ -22,12 +27,13 @@ type Options = {
   threadWindowURL: string;
   preloadPath: string;
   createWindow: (options: BrowserWindowConstructorOptions) => BrowserWindowLike;
-  onClosed?: (wasPrepared: boolean) => void;
+  onClosed?: (event: ThreadWindowClosedEvent) => void;
 };
 
 export class ThreadWindowPrewarmer {
   private window: BrowserWindowLike | null = null;
   private prepared = false;
+  private visible = false;
   private preparePromise: Promise<void> | null = null;
   private rejectPrepare: ((error: Error) => void) | null = null;
 
@@ -91,25 +97,49 @@ export class ThreadWindowPrewarmer {
   }
 
   async openInitialPrompt(payload: InitialPromptPayload): Promise<void> {
+    await this.prepare();
     if (!this.window || !this.prepared) {
       throw new Error("thread window is not prepared");
     }
 
     const serialized = JSON.stringify(payload).replace(/</g, "\\u003c");
     await this.window.webContents.executeJavaScript(`window.handAgentReceiveInitialPrompt(${serialized});`);
+    this.showAndFocus();
+  }
+
+  async openHistory(): Promise<void> {
+    await this.prepare();
+    this.showAndFocus();
+  }
+
+  focus(): boolean {
+    if (!this.window || !this.visible) {
+      return false;
+    }
+    this.window.focus();
+    return true;
+  }
+
+  private showAndFocus(): void {
+    if (!this.window) {
+      throw new Error("thread window is not prepared");
+    }
     this.window.show();
     this.window.focus();
+    this.visible = true;
   }
 
   private handleClosed(): void {
     const wasPrepared = this.prepared;
+    const wasVisible = this.visible;
     this.window = null;
     this.prepared = false;
+    this.visible = false;
     const rejectPrepare = this.rejectPrepare;
     this.preparePromise = null;
     this.rejectPrepare = null;
     rejectPrepare?.(new Error("thread window closed before it was prepared"));
-    this.options.onClosed?.(wasPrepared);
+    this.options.onClosed?.({ wasPrepared, wasVisible });
   }
 }
 
