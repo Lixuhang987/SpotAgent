@@ -31,6 +31,21 @@
 
 ## 当前 bug
 
+### Electron StatusBubble 无可聚焦 ThreadWindow 时未打开 PromptPanel
+
+- **严重级别**：P1
+- **发现日期**：2026-06-09
+- **复现步骤**：
+  1. 在 `main` 的 `/Users/mu9/proj/handAgent` 执行 `bash ./scripts/package-app.sh --mock-llm`。
+  1. 使用 `HANDAGENT_ELECTRON_SHELL=1` 与 `HANDAGENT_ELECTRON_BINARY=/Users/mu9/proj/handAgent/node_modules/.pnpm/electron@42.3.3/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron` 启动 `dist/HandAgentDesktop.app/Contents/MacOS/HandAgentDesktop`。
+  1. 提交 `ELECTRON_STARTING_SEQUENCE_QA_20260609_C [mock:assistant-ok]`，确认 Electron `HandAgent ThreadWindow` 与 `HandAgent Activity` 均可见。
+  1. 点击 Electron `HandAgent ThreadWindow` 关闭按钮，确认只剩 `HandAgent Activity`，且 `lsof -nP -iTCP:4317 -sTCP:LISTEN` 仍显示 agent-server 监听。
+  1. 使用 CGEvent 点击 ActivityWindow 中心坐标 `{x: 1280, y: 870}`，重复两次。
+- **实际结果**：点击后前台进程为 Electron，但只有 `HandAgent Activity` 窗口，`HandAgentDesktop` 没有可见 `PromptPanel`。截图为 `/tmp/handagent-qa/electron-bubble-after-threadwindow-close-click.png` 与 `/tmp/handagent-qa/electron-bubble-no-threadwindow-second-click.png`。
+- **期望结果**：当 Electron StatusBubble 无可聚焦 ThreadWindow 时，应通过 `prompt_panel.show_requested` 请求 Swift 打开 `PromptPanel`，让用户能从状态气泡回到输入入口。
+- **证据**：同一 QA run 中，ThreadWindow 可见时点击 ActivityWindow 已证明 StatusBubble 点击链路可触发聚焦：前台切到 Electron，`HandAgent ThreadWindow` 的 `AXMain=true`，`HandAgent Activity` 的 `AXMain=false`。关闭 ThreadWindow 后，`osascript` 只返回 Electron `HandAgent Activity`，HandAgentDesktop 无窗口；`lsof` 确认 `node` 仍监听 `127.0.0.1:4317`。Thread 文件 `~/.spotAgent/threads/thread-1780947483869-t8ou50.json` 包含 prompt 与 mock assistant，说明失败不是 agent-server 不可用。
+- **初步调用链 / 根因边界**：预期链路是 `ActivityWindow renderer click -> activity-window:focus-thread IPC -> ElectronShellRuntime.handleActivityWindowFocusRequest(activeThreadId) -> ThreadWindowPrewarmer.focus() 返回 false -> prompt_panel.show_requested -> ElectronBackedAppServer.onPromptPanelShowRequested -> AppCoordinator.promptPanelController.show()`。当前已验证点击命中 ActivityWindow，且可见 ThreadWindow 分支能聚焦；失败边界在“无可见 ThreadWindow 时发送或处理 `prompt_panel.show_requested`”这一段，需用 `$trace-and-verify-call-chain` 继续定位。
+
 ### `AI SDK stream finished without assistant content or tool calls`
 
 - **严重级别**：P1
