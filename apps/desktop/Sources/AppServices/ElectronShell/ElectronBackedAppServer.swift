@@ -10,6 +10,7 @@ final class ElectronBackedAppServer: AppServerManaging, ThreadWindowCommanding {
     private var isRunning = false
     private var agentServerErrorMessage: String?
     private var threadWindowErrorMessage: String?
+    private var pendingCommandKinds: [String: ThreadWindowCommandKind] = [:]
 
     var startupErrorMessage: String? {
         agentServerErrorMessage ?? threadWindowErrorMessage
@@ -18,6 +19,7 @@ final class ElectronBackedAppServer: AppServerManaging, ThreadWindowCommanding {
     var onAvailabilityChange: ((Bool) -> Void)?
     var onFatalError: ((String) -> Void)?
     var onThreadWindowClosed: (() -> Void)?
+    var onCommandResult: ((ThreadWindowCommandResult) -> Void)?
 
     var isAvailable: Bool {
         hasAgentServerHealth && hasPreparedThreadWindow && startupErrorMessage == nil
@@ -58,6 +60,8 @@ final class ElectronBackedAppServer: AppServerManaging, ThreadWindowCommanding {
         shell.onEvent = nil
         shell.onTermination = nil
         onThreadWindowClosed = nil
+        onCommandResult = nil
+        pendingCommandKinds.removeAll()
         platformClient?.disconnect()
         shell.stop()
         hasAgentServerHealth = false
@@ -67,23 +71,29 @@ final class ElectronBackedAppServer: AppServerManaging, ThreadWindowCommanding {
         publishAvailability(force: lastPublishedAvailability)
     }
 
-    func prepareThreadWindow() throws {
-        try shell.send(.prepare(commandId: UUID().uuidString))
+    @discardableResult
+    func prepareThreadWindow() throws -> String {
+        try sendThreadWindowCommand(.prepare) { .prepare(commandId: $0) }
     }
 
-    func openInitialPrompt(_ prompt: PromptSubmission) throws {
-        try shell.send(.openInitialPrompt(
-            commandId: UUID().uuidString,
-            payload: ElectronInitialPromptPayload(prompt: prompt)
-        ))
+    @discardableResult
+    func openInitialPrompt(_ prompt: PromptSubmission) throws -> String {
+        try sendThreadWindowCommand(.openInitialPrompt) {
+            .openInitialPrompt(
+                commandId: $0,
+                payload: ElectronInitialPromptPayload(prompt: prompt)
+            )
+        }
     }
 
-    func openHistory() throws {
-        try shell.send(.openHistory(commandId: UUID().uuidString))
+    @discardableResult
+    func openHistory() throws -> String {
+        try sendThreadWindowCommand(.openHistory) { .openHistory(commandId: $0) }
     }
 
-    func focus(threadId: String?) throws {
-        try shell.send(.focus(commandId: UUID().uuidString, threadId: threadId))
+    @discardableResult
+    func focus(threadId: String?) throws -> String {
+        try sendThreadWindowCommand(.focus) { .focus(commandId: $0, threadId: threadId) }
     }
 
     private func handle(_ event: ElectronShellEvent) {
@@ -127,7 +137,10 @@ final class ElectronBackedAppServer: AppServerManaging, ThreadWindowCommanding {
             onFatalError?(reason)
             publishAvailability(force: true)
 
-        case .electronReady, .commandAck:
+        case .commandAck(let commandId, let ok, let error):
+            handleCommandAck(commandId: commandId, ok: ok, error: error)
+
+        case .electronReady:
             break
         }
     }
@@ -139,6 +152,7 @@ final class ElectronBackedAppServer: AppServerManaging, ThreadWindowCommanding {
         hasAgentServerHealth = false
         hasPreparedThreadWindow = false
         platformClient?.disconnect()
+        pendingCommandKinds.removeAll()
         onFatalError?(message)
         publishAvailability(force: true)
     }
@@ -150,6 +164,7 @@ final class ElectronBackedAppServer: AppServerManaging, ThreadWindowCommanding {
         threadWindowErrorMessage = nil
         lastPublishedAvailability = false
         isRunning = false
+        pendingCommandKinds.removeAll()
     }
 
     private func publishAvailability(force: Bool = false) {
@@ -157,5 +172,35 @@ final class ElectronBackedAppServer: AppServerManaging, ThreadWindowCommanding {
         guard force || available != lastPublishedAvailability else { return }
         lastPublishedAvailability = available
         onAvailabilityChange?(available)
+    }
+
+    @discardableResult
+    private func sendThreadWindowCommand(
+        _ kind: ThreadWindowCommandKind,
+        build: (String) -> ElectronShellCommand
+    ) throws -> String {
+        let commandId = UUID().uuidString
+        pendingCommandKinds[commandId] = kind
+        do {
+            try shell.send(build(commandId))
+            return commandId
+        } catch {
+            pendingCommandKinds.removeValue(forKey: commandId)
+            throw error
+        }
+    }
+
+    private func handleCommandAck(commandId: String, ok: Bool, error: String?) {
+        guard let kind = pendingCommandKinds.removeValue(forKey: commandId) else {
+            return
+        }
+        onCommandResult?(
+            ThreadWindowCommandResult(
+                commandId: commandId,
+                kind: kind,
+                ok: ok,
+                error: error
+            )
+        )
     }
 }

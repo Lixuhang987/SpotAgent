@@ -14,7 +14,12 @@ final class ThreadWindowLifecycleTests: XCTestCase {
         )
         let prompt = try XCTUnwrap(PromptSubmission.compose(draft: "hello", attachments: []))
 
-        lifecycle.createTabWithInitialPrompt(prompt, onClosed: {})
+        lifecycle.createTabWithInitialPrompt(
+            prompt,
+            onOpened: {},
+            onFailed: { _ in },
+            onClosed: {}
+        )
 
         let host = try XCTUnwrap(lifecycle.webHost)
         XCTAssertTrue(presenter.presentedHost === host)
@@ -34,7 +39,11 @@ final class ThreadWindowLifecycleTests: XCTestCase {
             setActivationPolicy: { _ in }
         )
 
-        lifecycle.openOrFocusHistory(onClosed: {})
+        lifecycle.openOrFocusHistory(
+            onOpened: {},
+            onFailed: { _ in },
+            onClosed: {}
+        )
 
         XCTAssertNotNil(lifecycle.webHost)
         XCTAssertEqual(lifecycle.webHost?.pendingInitialPromptCount, 0)
@@ -53,9 +62,19 @@ final class ThreadWindowLifecycleTests: XCTestCase {
         let first = try XCTUnwrap(PromptSubmission.compose(draft: "first", attachments: []))
         let second = try XCTUnwrap(PromptSubmission.compose(draft: "second", attachments: []))
 
-        lifecycle.createTabWithInitialPrompt(first, onClosed: {})
+        lifecycle.createTabWithInitialPrompt(
+            first,
+            onOpened: {},
+            onFailed: { _ in },
+            onClosed: {}
+        )
         let firstHost = lifecycle.webHost
-        lifecycle.createTabWithInitialPrompt(second, onClosed: {})
+        lifecycle.createTabWithInitialPrompt(
+            second,
+            onOpened: {},
+            onFailed: { _ in },
+            onClosed: {}
+        )
 
         XCTAssertTrue(lifecycle.webHost === firstHost)
         XCTAssertEqual(presenter.presentCount, 1)

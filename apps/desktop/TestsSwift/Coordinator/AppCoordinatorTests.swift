@@ -73,9 +73,29 @@ final class AppCoordinatorTests: XCTestCase {
         let coordinator = AppCoordinator(services: electronServices(commandClient: client))
 
         coordinator.send(.openHistory)
+        client.complete(commandId: "open-history-1", kind: .openHistory, ok: true)
         coordinator.send(.statusBubbleTapped(nil))
 
         XCTAssertTrue(client.focusedThreadIDs.isEmpty)
+    }
+
+    @MainActor
+    func testElectronStatusBubbleFocusFailureAllowsPromptFallback() {
+        let client = RecordingThreadWindowCommandClient()
+        let coordinator = AppCoordinator(services: electronServices(commandClient: client))
+
+        coordinator.send(.openHistory)
+        client.complete(commandId: "open-history-1", kind: .openHistory, ok: true)
+        coordinator.send(.statusBubbleTapped("thread-1"))
+        client.complete(
+            commandId: "focus-1",
+            kind: .focus,
+            ok: false,
+            error: "thread window is not visible"
+        )
+        coordinator.send(.statusBubbleTapped("thread-1"))
+
+        XCTAssertEqual(client.focusedThreadIDs, ["thread-1"])
     }
 
     @MainActor
@@ -253,25 +273,62 @@ private func electronServices(commandClient: RecordingThreadWindowCommandClient)
 @MainActor
 private final class RecordingThreadWindowCommandClient: ThreadWindowCommanding {
     var onThreadWindowClosed: (() -> Void)?
+    var onCommandResult: ((ThreadWindowCommandResult) -> Void)?
     private(set) var prepareCount = 0
     private(set) var openedPrompts: [PromptSubmission] = []
     private(set) var openHistoryCount = 0
     private(set) var focusedThreadIDs: [String?] = []
+    private var commandCounters: [ThreadWindowCommandKind: Int] = [:]
 
-    func prepareThreadWindow() throws {
+    func prepareThreadWindow() throws -> String {
         prepareCount += 1
+        return nextCommandId(for: .prepare)
     }
 
-    func openInitialPrompt(_ prompt: PromptSubmission) throws {
+    func openInitialPrompt(_ prompt: PromptSubmission) throws -> String {
         openedPrompts.append(prompt)
+        return nextCommandId(for: .openInitialPrompt)
     }
 
-    func openHistory() throws {
+    func openHistory() throws -> String {
         openHistoryCount += 1
+        return nextCommandId(for: .openHistory)
     }
 
-    func focus(threadId: String?) throws {
+    func focus(threadId: String?) throws -> String {
         focusedThreadIDs.append(threadId)
+        return nextCommandId(for: .focus)
+    }
+
+    func complete(
+        commandId: String,
+        kind: ThreadWindowCommandKind,
+        ok: Bool,
+        error: String? = nil
+    ) {
+        onCommandResult?(
+            ThreadWindowCommandResult(
+                commandId: commandId,
+                kind: kind,
+                ok: ok,
+                error: error
+            )
+        )
+    }
+
+    private func nextCommandId(for kind: ThreadWindowCommandKind) -> String {
+        let next = (commandCounters[kind] ?? 0) + 1
+        commandCounters[kind] = next
+        switch kind {
+        case .prepare:
+            return "prepare-\(next)"
+        case .openInitialPrompt:
+            return "open-initial-prompt-\(next)"
+        case .openHistory:
+            return "open-history-\(next)"
+        case .focus:
+            return "focus-\(next)"
+        }
     }
 }
 

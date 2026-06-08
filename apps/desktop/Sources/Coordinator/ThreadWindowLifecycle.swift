@@ -28,28 +28,41 @@ final class ThreadWindowLifecycle: ThreadWindowManaging {
         setActivationPolicy(activationPolicy.policyAfterUpdatingOpenThreadWindows(by: 0))
     }
 
-    func openOrFocusHistory(onClosed: @escaping @MainActor () -> Void) {
+    func openOrFocusHistory(
+        onOpened: @escaping @MainActor () -> Void,
+        onFailed: @escaping @MainActor (String) -> Void,
+        onClosed: @escaping @MainActor () -> Void
+    ) {
         _ = ensureWindow(onClosed: onClosed)
+        onOpened()
     }
 
     func prepareForPromptPanel() {}
 
     func createTabWithInitialPrompt(
         _ prompt: PromptSubmission,
+        onOpened: @escaping @MainActor () -> Void,
+        onFailed: @escaping @MainActor (String) -> Void,
         onClosed: @escaping @MainActor () -> Void
     ) {
         ensureWindow(onClosed: onClosed).enqueue(initialPrompt: prompt)
+        onOpened()
     }
 
     func createNewTabWithInitialPrompt(
         _ prompt: PromptSubmission,
         onClosed: @escaping @MainActor () -> Void
     ) {
-        createTabWithInitialPrompt(prompt, onClosed: onClosed)
+        createTabWithInitialPrompt(
+            prompt,
+            onOpened: {},
+            onFailed: { _ in },
+            onClosed: onClosed
+        )
     }
 
     @discardableResult
-    func focus(threadID: String? = nil) -> Bool {
+    func focus(threadID: String? = nil, onFailure: @escaping @MainActor () -> Void = {}) -> Bool {
         guard let window else { return false }
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)

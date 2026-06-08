@@ -194,11 +194,20 @@ final class AppCoordinator {
             attachments: attachments,
             actionBinding: actionBinding
         ) else { return }
-        promptPanelController.hide()
-        threadWindowLifecycle.createTabWithInitialPrompt(prompt) { [weak self] in
-            self?.send(.threadWindowClosed)
-        }
-        store.send(.threadWindowOpened)
+        threadWindowLifecycle.createTabWithInitialPrompt(
+            prompt,
+            onOpened: { [weak self] in
+                guard let self else { return }
+                self.promptPanelController.hide()
+                self.store.send(.threadWindowOpened)
+            },
+            onFailed: { [weak self] message in
+                self?.handleThreadWindowOpenFailure(message)
+            },
+            onClosed: { [weak self] in
+                self?.send(.threadWindowClosed)
+            }
+        )
     }
 
     private func handleOpenSettings() {
@@ -218,14 +227,29 @@ final class AppCoordinator {
     }
 
     private func handleOpenHistory() {
-        threadWindowLifecycle.openOrFocusHistory { [weak self] in
-            self?.send(.threadWindowClosed)
-        }
-        store.send(.threadWindowOpened)
+        threadWindowLifecycle.openOrFocusHistory(
+            onOpened: { [weak self] in
+                self?.store.send(.threadWindowOpened)
+            },
+            onFailed: { [weak self] message in
+                self?.handleThreadWindowOpenFailure(message)
+            },
+            onClosed: { [weak self] in
+                self?.send(.threadWindowClosed)
+            }
+        )
     }
 
     private func handleStatusBubbleTap(_ threadID: String?) {
-        if threadID != nil, threadWindowLifecycle.focus(threadID: threadID) { return }
+        if threadID != nil, threadWindowLifecycle.focus(threadID: threadID, onFailure: { [weak self] in
+            self?.promptPanelController.show()
+        }) { return }
+        promptPanelController.show()
+    }
+
+    private func handleThreadWindowOpenFailure(_ message: String) {
+        store.send(.threadWindowClosed)
+        promptPanelController.setSubmissionEnabled(false, message: message)
         promptPanelController.show()
     }
 

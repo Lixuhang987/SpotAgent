@@ -7,11 +7,12 @@ final class ElectronBackedAppServerTests: XCTestCase {
         let shell = RecordingElectronShellProcess()
         let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
 
-        try appServer.prepareThreadWindow()
+        let commandId = try appServer.prepareThreadWindow()
 
-        guard case .prepare = shell.sentCommands.first else {
+        guard case .prepare(let sentCommandId) = shell.sentCommands.first else {
             return XCTFail("expected prepare command")
         }
+        XCTAssertEqual(sentCommandId, commandId)
     }
 
     func testOpenInitialPromptSendsElectronPayload() throws {
@@ -19,11 +20,12 @@ final class ElectronBackedAppServerTests: XCTestCase {
         let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
         let prompt = try XCTUnwrap(PromptSubmission.compose(draft: "hello", attachments: []))
 
-        try appServer.openInitialPrompt(prompt)
+        let commandId = try appServer.openInitialPrompt(prompt)
 
-        guard case .openInitialPrompt(_, let payload) = shell.sentCommands.first else {
+        guard case .openInitialPrompt(let sentCommandId, let payload) = shell.sentCommands.first else {
             return XCTFail("expected open initial prompt command")
         }
+        XCTAssertEqual(sentCommandId, commandId)
         XCTAssertEqual(payload.text, "hello")
         XCTAssertEqual(payload.attachments, [])
         XCTAssertNil(payload.actionBinding)
@@ -33,23 +35,61 @@ final class ElectronBackedAppServerTests: XCTestCase {
         let shell = RecordingElectronShellProcess()
         let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
 
-        try appServer.openHistory()
+        let commandId = try appServer.openHistory()
 
-        guard case .openHistory = shell.sentCommands.first else {
+        guard case .openHistory(let sentCommandId) = shell.sentCommands.first else {
             return XCTFail("expected open history command")
         }
+        XCTAssertEqual(sentCommandId, commandId)
     }
 
     func testFocusSendsFocusCommand() throws {
         let shell = RecordingElectronShellProcess()
         let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
 
-        try appServer.focus(threadId: "thread-1")
+        let commandId = try appServer.focus(threadId: "thread-1")
 
-        guard case .focus(_, let threadId) = shell.sentCommands.first else {
+        guard case .focus(let sentCommandId, let threadId) = shell.sentCommands.first else {
             return XCTFail("expected focus command")
         }
+        XCTAssertEqual(sentCommandId, commandId)
         XCTAssertEqual(threadId, "thread-1")
+    }
+
+    func testCommandAckPublishesThreadWindowCommandResult() throws {
+        let shell = RecordingElectronShellProcess()
+        let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
+        var results: [ThreadWindowCommandResult] = []
+        appServer.onCommandResult = { results.append($0) }
+
+        appServer.start()
+        let commandId = try appServer.focus(threadId: "thread-1")
+        shell.emit(.commandAck(
+            commandId: commandId,
+            ok: false,
+            error: "thread window is not visible"
+        ))
+
+        XCTAssertEqual(results, [
+            ThreadWindowCommandResult(
+                commandId: commandId,
+                kind: .focus,
+                ok: false,
+                error: "thread window is not visible"
+            ),
+        ])
+    }
+
+    func testUnknownCommandAckIsIgnored() {
+        let shell = RecordingElectronShellProcess()
+        let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
+        var results: [ThreadWindowCommandResult] = []
+        appServer.onCommandResult = { results.append($0) }
+
+        appServer.start()
+        shell.emit(.commandAck(commandId: "missing", ok: false, error: "ignored"))
+
+        XCTAssertTrue(results.isEmpty)
     }
 
     func testVisibleThreadWindowClosedInvokesWindowClosedCallback() {
@@ -247,12 +287,16 @@ private final class RecordingElectronShellProcess: ElectronShellProcessing {
     private(set) var startCount = 0
     private(set) var stopCount = 0
     private(set) var sentCommands: [ElectronShellCommand] = []
+    var sendError: Error?
 
     func start() throws {
         startCount += 1
     }
 
     func send(_ command: ElectronShellCommand) throws {
+        if let sendError {
+            throw sendError
+        }
         sentCommands.append(command)
     }
 

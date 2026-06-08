@@ -1,11 +1,33 @@
 import Foundation
 
+enum ThreadWindowCommandKind: Equatable {
+    case prepare
+    case openInitialPrompt
+    case openHistory
+    case focus
+}
+
+struct ThreadWindowCommandResult: Equatable {
+    let commandId: String
+    let kind: ThreadWindowCommandKind
+    let ok: Bool
+    let error: String?
+}
+
 @MainActor
 protocol ThreadWindowCommanding: AnyObject {
     var onThreadWindowClosed: (() -> Void)? { get set }
+    var onCommandResult: ((ThreadWindowCommandResult) -> Void)? { get set }
 
-    func prepareThreadWindow() throws
-    func openInitialPrompt(_ prompt: PromptSubmission) throws
-    func openHistory() throws
-    func focus(threadId: String?) throws
+    @discardableResult
+    func prepareThreadWindow() throws -> String
+
+    @discardableResult
+    func openInitialPrompt(_ prompt: PromptSubmission) throws -> String
+
+    @discardableResult
+    func openHistory() throws -> String
+
+    @discardableResult
+    func focus(threadId: String?) throws -> String
 }
