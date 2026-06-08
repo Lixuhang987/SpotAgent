@@ -17,12 +17,12 @@
 
 ## 开发验证记录
 
-### 后端常驻 Thread 输入队列
+### Thread 输入队列与 input.submit 破坏性迁移
 
-- 完成日期：2026-06-07
-- 关键 commit：`b0893c5`
-- 实现位置：`apps/agent-server/src/thread/ThreadInputQueue.ts`、`apps/agent-server/src/thread/ThreadRuntimeOrchestrator.ts`、`apps/agent-server/src/thread/ThreadPersistence.ts`、`apps/agent-server/src/server/server.ts`
-- 验收结果：后端兼容旧 `turn.start`；运行中输入不再中断当前 run，而是排队进入 active turn follow-up。已通过 `bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`。
+- 完成日期：2026-06-07（后端队列）；2026-06-08（输入协议破坏性迁移）
+- 关键 commit：`b0893c5`（后端队列）；`3e562e1`（输入协议迁移）
+- 实现位置：`packages/core/src/protocol/ThreadCommand.ts`、`apps/agent-server/src/thread/ThreadInputQueue.ts`、`apps/agent-server/src/thread/ThreadRuntimeOrchestrator.ts`、`apps/agent-server/src/thread/ThreadCommandRouter.ts`、`apps/agent-server/src/server/server.ts`、`apps/thread-window-web/src/protocol/threadProtocol.ts`、`apps/thread-window-web/src/thread/threadSocketClient.ts`、`apps/thread-window-web/src/App.tsx`、`apps/thread-window-web/src/components/Composer.tsx`
+- 验收结果：外部用户输入命令迁移为 `input.submit`，旧 `turn.start` 不再属于当前 `ThreadCommand`；运行中输入不再中断当前 run，而是排队进入 active turn follow-up；ThreadWindow composer 在 running 状态下仍可提交输入并保留 Stop。已通过 `bash ./scripts/test.sh`、`pnpm --filter handagent-thread-window-web test`、`pnpm --filter handagent-thread-window-web build`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`。
 
 ## Anthropic Provider 真实调用（P1）
 
