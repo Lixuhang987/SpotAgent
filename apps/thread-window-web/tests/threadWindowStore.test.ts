@@ -157,6 +157,51 @@ describe("threadWindowStore", () => {
     expect(store.getState().tabs["thread-1"].queuedComposerInputs).toEqual([]);
   });
 
+  it("removes a queued composer input by index", () => {
+    const store = createThreadWindowStore;
+    store.getState().openHistoryThread("thread-1");
+    store.getState().queueComposerInput("thread-1", "first");
+    store.getState().queueComposerInput("thread-1", "second");
+
+    store.getState().removeQueuedComposerInput("thread-1", 0);
+
+    expect(store.getState().tabs["thread-1"].queuedComposerInputs).toEqual([
+      { text: "second", attachments: [] },
+    ]);
+  });
+
+  it("holds queued composer input while a submitted input is waiting for turn start", () => {
+    const store = createThreadWindowStore;
+    store.getState().openHistoryThread("thread-1");
+
+    store.getState().markComposerInputDispatchPending("thread-1");
+    store.getState().queueComposerInput("thread-1", "second");
+
+    expect(store.getState().takeNextQueuedInputForDispatch("thread-1")).toBeNull();
+
+    store.getState().handleNotification({
+      type: "turn.started",
+      threadId: "thread-1",
+      notificationId: "n-running",
+      turnId: "turn-1",
+      timestamp,
+      payload: {},
+    });
+    store.getState().handleNotification({
+      type: "turn.completed",
+      threadId: "thread-1",
+      notificationId: "n-completed",
+      turnId: "turn-1",
+      timestamp,
+      payload: { status: "completed" },
+    });
+
+    expect(store.getState().takeNextQueuedInputForDispatch("thread-1")).toEqual({
+      text: "second",
+      attachments: [],
+    });
+  });
+
   it("does not append duplicate assistant delta notifications", () => {
     const store = createThreadWindowStore;
     store.getState().openHistoryThread("thread-1");

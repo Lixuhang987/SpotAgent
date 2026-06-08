@@ -350,6 +350,49 @@ describe("ThreadCommandRouter", () => {
     expect(second).toEqual([]);
   });
 
+  it("rejects input.submit on a running thread so user follow-up stays frontend-owned", async () => {
+    const publisher = new ThreadNotificationPublisher();
+    const first: ThreadNotification[] = [];
+    const second: ThreadNotification[] = [];
+    publisher.attachConnection("c1", (event) => first.push(event as ThreadNotification));
+    publisher.attachConnection("c2", (event) => second.push(event as ThreadNotification));
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
+      () => "2026-06-04T00:00:00.000Z",
+    );
+    const Thread = await persistence.createThread();
+    const orchestrator = {
+      submitInput: vi.fn(async () => {}),
+      isThreadRunning: vi.fn(() => true),
+    };
+    const router = new ThreadCommandRouter(
+      orchestrator,
+      persistence,
+      publisher,
+      () => "2026-06-04T00:00:00.000Z",
+    );
+
+    await router.receive(
+      {
+        type: "input.submit",
+        threadId: Thread.metadata.id,
+        inputId: "input-1",
+        timestamp: "2026-06-04T00:00:00.000Z",
+        payload: { text: "queued in frontend" },
+      },
+      "c1",
+    );
+
+    expect(orchestrator.submitInput).not.toHaveBeenCalled();
+    expect(first).toHaveLength(1);
+    expect(first[0]).toMatchObject({
+      type: "thread.error",
+      threadId: Thread.metadata.id,
+      payload: { code: "thread_running" },
+    });
+    expect(second).toEqual([]);
+  });
+
   it("lists threads and emits thread.listed only to the requesting connection", async () => {
     const publisher = new ThreadNotificationPublisher();
     const first: string[] = [];

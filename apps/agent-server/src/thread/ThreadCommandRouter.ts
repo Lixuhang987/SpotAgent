@@ -194,6 +194,24 @@ export class ThreadCommandRouter {
       }
       return;
     }
+    if (this.orchestrator.isThreadRunning?.(command.threadId)) {
+      const errorEvent: ThreadNotification = {
+        type: "thread.error",
+        threadId: command.threadId,
+        notificationId: this.makeNotificationId(),
+        timestamp: this.now(),
+        payload: {
+          code: "thread_running",
+          message: "Thread is running; queue user follow-up input in the frontend.",
+        },
+      };
+      if (connectionId) {
+        this.publisher.publishToConnection(connectionId, errorEvent);
+      } else {
+        this.publisher.publish(errorEvent);
+      }
+      return;
+    }
 
     await this.orchestrator.submitInput(
       {

@@ -1,16 +1,26 @@
 import { useRef, useState } from 'react';
+import type { QueuedComposerInput } from '../store/threadWindowStore.ts';
 
 interface ComposerProps {
   disabled: boolean;
   stopDisabled: boolean;
+  queuedInputs?: QueuedComposerInput[];
   onSubmit: (text: string) => void;
   onStop: () => void;
+  onRemoveQueuedInput?: (index: number) => void;
 }
 
 const MAX_ROWS = 5;
 const LINE_HEIGHT = 24;
 
-export function Composer({ disabled, stopDisabled, onSubmit, onStop }: ComposerProps) {
+export function Composer({
+  disabled,
+  stopDisabled,
+  queuedInputs = [],
+  onSubmit,
+  onStop,
+  onRemoveQueuedInput,
+}: ComposerProps) {
   const [text, setText] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -49,8 +59,47 @@ export function Composer({ disabled, stopDisabled, onSubmit, onStop }: ComposerP
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex min-w-0 items-end justify-center overflow-hidden bg-surface-dark px-lg py-md"
+      className="flex min-w-0 flex-col items-center justify-end overflow-hidden bg-surface-dark px-lg py-md"
     >
+      {queuedInputs.length > 0 ? (
+        <div
+          data-queued-composer-panel="true"
+          className="mb-xs max-h-[156px] min-w-0 w-full max-w-[720pt] overflow-y-auto rounded-2xl border border-white/10 bg-surface-dark-elevated/95 px-xs py-xs shadow-product-inner"
+        >
+          <div className="space-y-1">
+            {queuedInputs.map((queuedInput, index) => (
+              <div
+                key={`${index}-${queuedInput.text}`}
+                data-queued-composer-item="true"
+                className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-xs rounded-xl px-xs py-1 text-sm text-on-dark-soft hover:bg-white/5"
+              >
+                <span className="font-code text-xs text-on-dark-soft/70">↳</span>
+                <span className="truncate text-on-dark" title={queuedInput.text}>
+                  {queuedInput.text}
+                </span>
+                <span className="whitespace-nowrap text-xs text-on-dark-soft">待发送</span>
+                <button
+                  type="button"
+                  aria-label={`移除排队输入 ${index + 1}`}
+                  onClick={() => onRemoveQueuedInput?.(index)}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg text-on-dark-soft transition-colors hover:bg-white/10 hover:text-on-dark"
+                >
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                    <path
+                      d="M3.5 4.2H10.5M5.2 4.2V3.1H8.8V4.2M5 5.8V10M7 5.8V10M9 5.8V10M4.2 4.2L4.7 11.2H9.3L9.8 4.2"
+                      stroke="currentColor"
+                      strokeWidth="1.3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       {/* GPT 风格 pill 形容器 */}
       <div className="relative mx-auto min-w-0 w-full max-w-[720pt] rounded-3xl border border-white/10 bg-surface-dark-elevated px-md py-xs shadow-product-inner transition-colors focus-within:border-white/20">
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-xs">

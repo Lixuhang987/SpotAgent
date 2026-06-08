@@ -11,14 +11,14 @@
 | 文件 | 职责 |
 |------|------|
 | `ThreadCommandRouter.ts` | 处理 `ThreadCommand` 路由，保留 `ClientResponse` fallback hooks，调用 orchestrator / persistence，并把 notification 推给 publisher |
-| `ThreadInputQueue.ts` | thread-local FIFO input item 队列；当前生产路径承载用户输入，类型上保留 response item |
+| `ThreadInputQueue.ts` | thread-local FIFO input item 队列；当前生产路径承载 idle user input 的 session 唤醒，类型上为后续 response item / 子 agent 通信预留 |
 | `ThreadNotificationPublisher.ts` | 维护 `connection -> subscribed threadIds` 的分发表；thread 级消息按 `threadId` 定向，非 thread 级 notification 广播 |
 | `ThreadRuntimeOrchestrator.ts` | 维护 per-thread session loop：记录输入、唤醒 runtime、drain queued input、转译通知、处理中断与错误 |
 | `ThreadPersistence.ts` | `ThreadStore` 的唯一直接封装：创建 / 删除 / 读取 / 列出 thread，追加用户消息、runtime delta、审计事件，恢复重启前未完成的 turn |
 
 ## 常驻输入队列
 
-`input.submit` 是当前用户输入命令，agent-server 内部会先把它归一化为 `ThreadInputItem(kind: "user")`。旧输入命令不再属于当前 `ThreadCommand`。
+`input.submit` 是当前普通用户输入命令；公开 `/api/thread` 路由只在目标 thread 非 running 时把它交给 orchestrator。running 时的普通用户 follow-up 由 React 前端排队展示，后端若收到 running `input.submit` 会返回 `thread.error(code: "thread_running")`。旧输入命令不再属于当前 `ThreadCommand`。
 
 ```mermaid
 sequenceDiagram
@@ -30,26 +30,16 @@ sequenceDiagram
 
   Router->>Orchestrator: submitInput(input.submit)
   Orchestrator->>Queue: enqueue ThreadInputItem
-  alt thread idle
-    Orchestrator->>Orchestrator: persist user message
-    Orchestrator-->>Publisher: user.message.recorded
-    Orchestrator-->>Publisher: turn.started
-    Orchestrator->>Runtime: runWithMessages(history)
-  else thread running
-    Queue-->>Orchestrator: hold as pending input
-  end
+  Orchestrator->>Orchestrator: persist user message
+  Orchestrator-->>Publisher: user.message.recorded
+  Orchestrator-->>Publisher: turn.started
+  Orchestrator->>Runtime: runWithMessages(history)
   Runtime-->>Orchestrator: AgentRuntimeEvent / result
   Orchestrator->>Orchestrator: append runtime delta
-  alt queued input exists
-    Orchestrator->>Orchestrator: persist queued user message after runtime delta
-    Orchestrator-->>Publisher: user.message.recorded
-    Orchestrator->>Runtime: runWithMessages(updated history)
-  else no queued input
-    Orchestrator-->>Publisher: turn.completed + thread.status.changed
-  end
+  Orchestrator-->>Publisher: turn.completed + thread.status.changed
 ```
 
-运行中收到新的 `input.submit` 不会 abort 当前 run；后端会先把新输入留在 thread queue，等当前 active run 的 generated messages / events 追加完成后，再记录 queued user message 并在下一次 follow-up 中进入模型上下文。这样持久化与 UI 恢复顺序保持为“当前 user -> assistant/tool 输出 -> queued user”，而不是两个 user input 连在一起。每个 thread 进程内最多一个 active run，晚到 runtime event 必须通过 generation 检查后才能发布或落盘。
+运行中普通用户输入不进入后端 session loop；React ThreadWindow 会把它保存在前端队列里，待 `turn.completed` / `thread.status.changed` 后逐条发送新的 `input.submit`。每个 thread 进程内最多一个 active run，晚到 runtime event 必须通过 generation 检查后才能发布或落盘。
 
 ## 关键机制
 
@@ -59,7 +49,7 @@ sequenceDiagram
 - `thread.resume`：恢复既有 thread，并返回 `thread.snapshot`。
 - `thread.list`：返回 `thread.listed`。
 - `thread.delete`：删除指定 thread；若该 thread 正在运行，先中断再删。
-- `input.submit`：用户输入入口；后端内部归一化为 user input item，idle 时立即记录并唤醒 session loop，running 时在当前 active run 完成写回后再记录并 steer 到 follow-up。
+- `input.submit`：普通用户输入入口；thread 非 running 时进入 orchestrator，running 时 router 返回 `thread.error(code: "thread_running")`，由前端继续持有 queued input。
 - `turn.interrupt`：中断当前运行中的 turn。
 - `workspace.list`：读取 workspace 注册表，并在当前连接返回 `workspace.listed`；未配置 registry 时返回 `thread.error(workspace_registry_not_configured)`。
 
@@ -84,8 +74,8 @@ sequenceDiagram
 ### active turn 与 append-only 写回
 
 - runtime 回调落通知或持久化前都要检查当前 generation；被中断或超时清理的旧 run 的晚到 delta / tool result / error 不得污染当前状态。
-- runtime 结果通过 `persistRunDelta` 追加 generated messages 和 events；运行期间到达的新 user input 会在这一步之后再持久化，避免覆盖已有消息，也避免把 queued user 放到当前 assistant 输出前面。
-- 每轮 runtime 使用稳定输入快照；active run 准备阶段收到的新 input 只进入 follow-up，不会被当前 runtime 和 follow-up 重复处理。
+- runtime 结果通过 `persistRunDelta` 追加 generated messages 和 events，避免覆盖运行期间已有消息。
+- 每轮 runtime 使用稳定输入快照；后续若接入内部 response item / 子 agent 通信，active run 准备阶段收到的内部队列项只进入后续 follow-up，不会被当前 runtime 和 follow-up 重复处理。
 
 ### 中断与重启恢复
 

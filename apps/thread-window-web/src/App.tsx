@@ -170,6 +170,7 @@ export function App() {
             <Composer
               disabled={state.connectionState !== "connected"}
               stopDisabled={state.connectionState !== "connected" || activeTab.status !== "running"}
+              queuedInputs={activeTab.queuedComposerInputs}
               onSubmit={(text) => {
                 const latestTab = createThreadWindowStore.getState().tabs[activeTab.threadId];
                 if (!latestTab) {
@@ -183,7 +184,11 @@ export function App() {
                   createThreadWindowStore.getState().queueComposerInput(activeTab.threadId, text);
                   return;
                 }
+                createThreadWindowStore.getState().markComposerInputDispatchPending(activeTab.threadId);
                 clientRef.current?.submitInput(activeTab.threadId, text);
+              }}
+              onRemoveQueuedInput={(index) => {
+                createThreadWindowStore.getState().removeQueuedComposerInput(activeTab.threadId, index);
               }}
               onStop={() => {
                 if (state.connectionState !== "connected" || activeTab.status !== "running") {

@@ -57,7 +57,7 @@ flowchart TD
   G --> L["thread/ThreadPersistence"]
 ```
 
-`input.submit` 是用户输入入口；进入 `ThreadRuntimeOrchestrator` 后会变成 thread-local input item。idle 时立即记录 user message 并唤醒 backend turn worker；running 时作为 active turn follow-up 兜底排队，等当前 runtime 结果先追加 assistant / tool delta 后，再记录 queued user message 并进入下一次 follow-up，避免持久化顺序变成连续 user message。旧输入命令不再属于当前 thread command 协议。
+`input.submit` 是普通用户输入入口；公开 `/api/thread` 路由只在目标 thread 非 running 时接收并交给 `ThreadRuntimeOrchestrator`。running 时的普通用户 follow-up 由 React ThreadWindow 前端排队展示，暂不发送到后端；若仍收到 running `input.submit`，router 只向发起连接返回 `thread.error(code: "thread_running")`。后端 `ThreadInputQueue` 保留为 session loop 内部机制和后续子 agent / response item 通信预留，不作为当前普通用户 follow-up 的展示队列。旧输入命令不再属于当前 thread command 协议。
 
 ## 协议主干
 

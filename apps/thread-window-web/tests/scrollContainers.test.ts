@@ -2,6 +2,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/App.tsx";
+import { Composer } from "../src/components/Composer.tsx";
 import { HistorySidebar } from "../src/components/HistorySidebar.tsx";
 import { MessageList } from "../src/components/MessageList.tsx";
 import { TabBar } from "../src/components/TabBar.tsx";
@@ -94,6 +95,27 @@ describe("ThreadWindow scroll containers", () => {
     );
 
     expect(html).toContain("overflow-y-auto overflow-x-hidden");
+  });
+
+  it("renders queued composer input above the input bar", () => {
+    const html = render(
+      React.createElement(Composer, {
+        disabled: false,
+        stopDisabled: false,
+        queuedInputs: [
+          { text: "排队的后续问题 1", attachments: [] },
+          { text: "排队的后续问题 2", attachments: [] },
+        ],
+        onSubmit: vi.fn(),
+        onStop: vi.fn(),
+        onRemoveQueuedInput: vi.fn(),
+      }),
+    );
+
+    expect(html).toContain('data-queued-composer-panel="true"');
+    expect(html).toContain("排队的后续问题 1");
+    expect(html).toContain("排队的后续问题 2");
+    expect(html).toContain('aria-label="移除排队输入 1"');
   });
 
   it("lets only the tab strip scroll horizontally", () => {

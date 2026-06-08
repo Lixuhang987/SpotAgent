@@ -74,6 +74,8 @@ export type ThreadWindowState = {
   toggleWorkspaceExpanded(workspaceId: string): void;
   setSearchQuery(query: string): void;
   queueComposerInput(threadId: string, text: string, attachments?: ThreadAttachment[]): void;
+  removeQueuedComposerInput(threadId: string, index: number): void;
+  markComposerInputDispatchPending(threadId: string): void;
   takeNextQueuedInputForDispatch(threadId: string): QueuedComposerInput | null;
   handleNotification(notification: ThreadNotification): void;
   handleRequest(request: ServerRequest): void;
@@ -132,6 +134,23 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
     set(produce<ThreadWindowState>((draft) => {
       const tab = draft.tabs[threadId] ??= emptyTab(threadId);
       tab.queuedComposerInputs.push({ text, attachments });
+    }));
+  },
+
+  removeQueuedComposerInput(threadId, index) {
+    set(produce<ThreadWindowState>((draft) => {
+      const tab = draft.tabs[threadId];
+      if (!tab || index < 0 || index >= tab.queuedComposerInputs.length) {
+        return;
+      }
+      tab.queuedComposerInputs.splice(index, 1);
+    }));
+  },
+
+  markComposerInputDispatchPending(threadId) {
+    set(produce<ThreadWindowState>((draft) => {
+      const tab = draft.tabs[threadId] ??= emptyTab(threadId);
+      tab.queuedInputDispatchPending = true;
     }));
   },
 
