@@ -100,6 +100,7 @@ describe("ThreadPermissionBridge", () => {
 
     const secondSent: ServerRequest[] = [];
     const secondToken = bridge.bindThread("Thread-A", (message) => secondSent.push(message));
+    expect(secondSent).toEqual(firstSent);
 
     expect(firstSent).toHaveLength(1);
     const firstRequest = firstSent[0];
@@ -116,10 +117,11 @@ describe("ThreadPermissionBridge", () => {
     expect(staleOutcome).toBe("pending");
 
     expect(bridge.unbindThread("Thread-A", firstToken)).toBe(false);
-    await expect(askFromFirstSocket).resolves.toEqual({
-      decision: "deny",
-      reason: "thread closed",
-    });
+    bridge.handleResponse(
+      permissionAnswer(firstRequest.requestId, "allow"),
+      secondToken,
+    );
+    await expect(askFromFirstSocket).resolves.toEqual({ decision: "allow" });
 
     const askFromSecondSocket = bridge.ask({
       threadId: "Thread-A",
@@ -127,8 +129,8 @@ describe("ThreadPermissionBridge", () => {
       toolCallId: "tool-B",
       arguments: { path: "b.txt" },
     });
-    expect(secondSent).toHaveLength(1);
-    const secondRequest = secondSent[0];
+    expect(secondSent).toHaveLength(2);
+    const secondRequest = secondSent[1];
     if (secondRequest.type !== "permission.requested") throw new Error("type");
     bridge.handleResponse(
       permissionAnswer(secondRequest.requestId, "allow"),
@@ -136,6 +138,32 @@ describe("ThreadPermissionBridge", () => {
     );
 
     await expect(askFromSecondSocket).resolves.toEqual({ decision: "allow" });
+  });
+
+  it("replays pending requests to a rebound thread socket and accepts the new socket response", async () => {
+    const bridge = new ThreadPermissionBridge();
+    const firstSent: ServerRequest[] = [];
+    const firstToken = bridge.bindThread("Thread-A", (message) => firstSent.push(message));
+    const ask = bridge.ask({
+      threadId: "Thread-A",
+      toolName: "ocr.read",
+      toolCallId: "tool-A",
+      arguments: { imageBase64: "stub", mimeType: "image/png" },
+    });
+
+    expect(firstSent).toHaveLength(1);
+    const firstRequest = firstSent[0];
+    if (firstRequest.type !== "permission.requested") throw new Error("type");
+
+    const secondSent: ServerRequest[] = [];
+    const secondToken = bridge.bindThread("Thread-A", (message) => secondSent.push(message));
+
+    expect(secondToken).not.toBe(firstToken);
+    expect(secondSent).toEqual([firstRequest]);
+
+    bridge.handleResponse(permissionAnswer(firstRequest.requestId, "allow"), secondToken);
+
+    await expect(ask).resolves.toEqual({ decision: "allow" });
   });
 });
 

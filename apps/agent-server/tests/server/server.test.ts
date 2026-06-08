@@ -187,7 +187,7 @@ describe("attachThreadSocketHandlers", () => {
     expect(permissionPolicy.clearThreadRules).not.toHaveBeenCalled();
   });
 
-  it("ignores stale permission responses and only closes pending asks owned by the stale socket", async () => {
+  it("migrates pending permission asks to the rebound socket", async () => {
     const firstSocket = new FakeSocket();
     const secondSocket = new FakeSocket();
     const firstDeps = makeHandlerDependencies();
@@ -231,12 +231,13 @@ describe("attachThreadSocketHandlers", () => {
     expect(staleOutcome).toBe("pending");
 
     firstSocket.emit("close");
-    await expect(staleAsk).resolves.toEqual({
-      decision: "deny",
-      reason: "thread closed",
-    });
     expect(permissionPolicy.clearThreadRules).not.toHaveBeenCalled();
     expect(firstDeps.commandRouter.interruptThread).not.toHaveBeenCalled();
+    await emitMessage(
+      secondSocket,
+      permissionResponse(staleRequest.requestId, "allow"),
+    );
+    await expect(staleAsk).resolves.toEqual({ decision: "allow", remember: "thread" });
 
     const currentAsk = permissionBridge.ask({
       threadId: "Thread-A",
@@ -278,6 +279,50 @@ describe("attachThreadSocketHandlers", () => {
     await emitMessage(socket, permissionResponse(request.requestId, "allow"));
 
     await expect(ask).resolves.toEqual({ decision: "allow", remember: "thread" });
+  });
+
+  it("replays a pending permission request after thread.resume binds a reconnected socket", async () => {
+    const firstSocket = new FakeSocket();
+    const secondSocket = new FakeSocket();
+    const firstDeps = makeHandlerDependencies();
+    const secondDeps = makeHandlerDependencies();
+    const permissionBridge = new ThreadPermissionBridge();
+
+    attachThreadSocketHandlers(firstSocket as never, {
+      ...firstDeps,
+      permissionBridge,
+    });
+    attachThreadSocketHandlers(secondSocket as never, {
+      ...secondDeps,
+      permissionBridge,
+    });
+
+    await emitMessage(firstSocket, inputSubmit("Thread-A", "first"));
+    const ask = permissionBridge.ask({
+      threadId: "Thread-A",
+      toolName: "ocr.read",
+      toolCallId: "tool-A",
+      arguments: { imageBase64: "stub", mimeType: "image/png" },
+    });
+    const request = lastSent<ServerRequest>(firstSocket);
+    if (request.type !== "permission.requested") throw new Error("type");
+
+    await emitMessage(secondSocket, {
+      type: "thread.resume",
+      threadId: "Thread-A",
+      commandId: "resume-1",
+      timestamp: new Date().toISOString(),
+    });
+
+    expect(secondDeps.commandRouter.receive).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "thread.resume", threadId: "Thread-A" }),
+      expect.any(String),
+    );
+    expect(lastSent<ServerRequest>(secondSocket)).toEqual(request);
+
+    await emitMessage(secondSocket, permissionResponse(request.requestId, "deny"));
+
+    await expect(ask).resolves.toEqual({ decision: "deny", remember: "thread" });
   });
 
   it("routes workspace request responses through the current socket binding", async () => {

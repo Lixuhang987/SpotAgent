@@ -106,6 +106,17 @@ export function attachThreadSocketHandlers(
         }
       }
       await commandRouter.receive(message, connectionId);
+      if (
+        message.type === "thread.resume" &&
+        permissionBridge &&
+        !boundThreads.has(message.threadId)
+      ) {
+        const token = permissionBridge.bindThread(
+          message.threadId,
+          (request) => eventPublisher.publishToConnection(connectionId, request),
+        );
+        boundThreads.set(message.threadId, token);
+      }
       return;
     }
   });

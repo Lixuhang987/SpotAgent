@@ -9,6 +9,7 @@ export type ThreadBindingToken = number;
 type Pending = {
   threadId: string;
   token: ThreadBindingToken;
+  request: Extract<ServerRequest, { type: "permission.requested" }>;
   resolve: (resolution: {
     decision: "allow" | "deny";
     remember?: "once" | "thread" | "always";
@@ -34,6 +35,7 @@ export class ThreadPermissionBridge {
   bindThread(threadId: string, send: Send): ThreadBindingToken {
     const token = ++this.nextBindingToken;
     this.threads.set(threadId, { token, send });
+    this.replayPendingForThread(threadId, token, send);
     return token;
   }
 
@@ -74,14 +76,7 @@ export class ThreadPermissionBridge {
         resolve({ decision: "deny", reason: "permission request timed out" });
       }, timeoutMs);
 
-      this.pending.set(requestId, {
-        threadId,
-        token: binding.token,
-        resolve,
-        timeout,
-      });
-
-      binding.send({
+      const requestMessage: Extract<ServerRequest, { type: "permission.requested" }> = {
         type: "permission.requested",
         requestId,
         threadId,
@@ -92,7 +87,17 @@ export class ThreadPermissionBridge {
           arguments: request.arguments,
           timeoutMs,
         },
+      };
+
+      this.pending.set(requestId, {
+        threadId,
+        token: binding.token,
+        request: requestMessage,
+        resolve,
+        timeout,
       });
+
+      binding.send(requestMessage);
     });
   };
 
@@ -121,6 +126,18 @@ export class ThreadPermissionBridge {
       clearTimeout(pending.timeout);
       pending.resolve({ decision: "deny", reason: "thread closed" });
       this.pending.delete(requestId);
+    }
+  }
+
+  private replayPendingForThread(
+    threadId: string,
+    token: ThreadBindingToken,
+    send: Send,
+  ): void {
+    for (const pending of this.pending.values()) {
+      if (pending.threadId !== threadId) continue;
+      pending.token = token;
+      send(pending.request);
     }
   }
 }
