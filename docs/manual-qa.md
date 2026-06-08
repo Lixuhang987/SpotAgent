@@ -216,13 +216,6 @@
 1. 继续回到 thread A 发送需要工具的第二轮 prompt，确认 thread A 仍可继续使用真实工具，不会退回只暴露 `use_tools`。
 1. 打开 `~/.spotAgent/log/<YYYY-MM-DD>/network-NNN.jsonl`，对比两条 thread 的请求体：thread A 激活后应包含完整工具集，thread B 未激活时仍只包含 `use_tools`。
 
-### 场景 2：需要工具的 prompt 触发激活并完成调用
-
-1. 新建 thread，输入"看一下我屏幕"或类似需要读取屏幕的 prompt。
-1. 确认模型先调用 `use_tools`（ThreadWindow 中出现对应 tool call 气泡），随后调用真实工具（如 `screen.capture`）。
-1. 确认 ThreadWindow 中 tool messages 完整出现：`use_tools` 的结果与真实工具的结果均可见。
-1. 确认最终 assistant 回复包含对屏幕内容的描述。
-
 ### 场景 3：同一 thread 激活后不再重复出现 use_tools
 
 1. 接场景 2，在同一 thread 中再次输入"再读一次桌面前台"或类似 prompt。

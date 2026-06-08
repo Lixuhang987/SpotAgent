@@ -1027,3 +1027,11 @@
 - **验证过程**：重新执行 `bash ./scripts/package-app.sh`，确认 bundle 无 `HandAgentRuntimeMode.json`，通过真实全局快捷键打开 PromptPanel 并提交 `HANDAGENT_REAL_CHAT_SCENE1_20260609 请用一句话写一首短诗，不要使用任何工具。`。ThreadWindow 中只出现 user 消息和 assistant 回复 `六月的风轻轻握住夜色，把未说出口的梦吹成满天星河。`，没有 `use_tools` 或其他 tool call 气泡；`/api/activity` snapshot 回到 `status:"idle"`。`~/.spotAgent/log/2026-06-09/network-002.jsonl` 中对应请求的 `tools` 数组只包含 `use_tools`，不含 builtin tool。
 - **证据**：thread 文件 `~/.spotAgent/threads/thread-1780961303715-8bnpk5.json`；network 日志 `~/.spotAgent/log/2026-06-09/network-002.jsonl`；截图 `/tmp/handagent-qa/real-chat-scene1-no-tools.png`。
 - **结论**：通过。
+
+### 场景 2：真实 LLM 工具 prompt 触发激活并完成调用
+
+- **验证日期**：2026-06-09
+- **验证环境**：真实 LLM / packaged app / macOS 15+；`bash ./scripts/package-app.sh` 打包，`dist/HandAgentDesktop.app/Contents/Resources/HandAgentRuntimeMode.json` 不存在，确认未启用 mock LLM。
+- **验证过程**：通过全局快捷键打开 PromptPanel，提交 `HANDAGENT_REAL_TOOL_SCENE2_20260609 请只调用屏幕读取工具看一下我的屏幕，然后用一句话总结。不要写文件，不要请求其他权限。`。ThreadWindow 先显示 `use_tools` tool 结果，随后显示 `screen.capture` tool 结果，最终 assistant 回复为“你的屏幕显示的是一张占满屏幕的抽象彩色图案/艺术壁纸。”；`/api/activity` 先进入 `tool_running / 正在使用 screen.capture`，完成后回到 `idle / 点击开始`。
+- **证据**：thread 文件 `~/.spotAgent/threads/thread-1780961496528-f04ryg.json`，共 6 条消息，包含 user、`use_tools` tool result、`screen.capture` tool result 与最终 assistant；网络日志 `~/.spotAgent/log/2026-06-09/network-003.jsonl` 第 3 行请求 tools 仅包含 `use_tools`，第 5 行激活后包含完整 tool catalog，第 7 行包含 `screen_capture` function call/output；截图 `/tmp/handagent-qa/real-tool-scene2-completed-w44970.png`、`/tmp/handagent-qa/real-tool-scene2-completed-w44960.png`；Computer Use 可访问树确认 ThreadWindow 可见 `[ use_tools ]`、`[ screen.capture ]` 和最终 assistant 文本。
+- **结论**：通过。真实 LLM 在新 thread 中可先调用 `use_tools` 激活完整工具集，再调用 `screen.capture`，并把 tool messages 与最终回复完整展示和持久化。
