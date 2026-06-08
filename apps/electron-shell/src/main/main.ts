@@ -1,6 +1,7 @@
 import { BrowserWindow, app } from "electron";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { ElectronShellRuntime, errorMessage } from "./electronShellRuntime.js";
 import {
   parseCommand,
   type ElectronToSwiftEvent,
@@ -29,19 +30,11 @@ const supervisor = new NodeAgentServerSupervisor({
 const prewarmer = new ThreadWindowPrewarmer({
   threadWindowURL,
   preloadPath,
-  onClosed: (wasPrepared) => {
+  onClosed: (event) => {
     if (hasStoppedSupervisor) {
       return;
     }
-    send({
-      channel: "electron_shell",
-      type: "thread_window.closed",
-      timestamp: now(),
-      wasVisible: false,
-    });
-    if (wasPrepared && hasAgentServerHealth) {
-      void prepareThreadWindowAfterServerReady();
-    }
+    runtime.handleThreadWindowClosed(event);
   },
   createWindow: (options) => {
     const window = new BrowserWindow(options);
@@ -62,8 +55,6 @@ const prewarmer = new ThreadWindowPrewarmer({
 
 let hasStartedSupervisor = false;
 let hasStoppedSupervisor = false;
-let hasAgentServerHealth = false;
-let prepareAfterServerReadyPromise: Promise<void> | null = null;
 
 function send(event: ElectronToSwiftEvent): void {
   bridge.send(event);
@@ -71,20 +62,6 @@ function send(event: ElectronToSwiftEvent): void {
 
 function now(): string {
   return new Date().toISOString();
-}
-
-function ack(command: SwiftToElectronCommand, ok: boolean, error?: string): void {
-  send({
-    channel: "electron_shell",
-    type: "command.ack",
-    commandId: command.commandId,
-    ok,
-    ...(error ? { error } : {}),
-  });
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "unknown error";
 }
 
 function commandIdFromRawLine(line: string): string | null {
@@ -98,39 +75,6 @@ function commandIdFromRawLine(line: string): string | null {
     return null;
   }
   return null;
-}
-
-async function prepareThreadWindowAfterServerReady(): Promise<void> {
-  if (prepareAfterServerReadyPromise) {
-    return prepareAfterServerReadyPromise;
-  }
-
-  prepareAfterServerReadyPromise = prewarmer.prepare()
-    .then(() => {
-      if (hasStoppedSupervisor) {
-        return;
-      }
-      send({
-        channel: "electron_shell",
-        type: "thread_window.prepared",
-        timestamp: now(),
-      });
-    })
-    .catch((error: unknown) => {
-      if (hasStoppedSupervisor) {
-        return;
-      }
-      send({
-        channel: "electron_shell",
-        type: "thread_window.prepare_failed",
-        message: errorMessage(error),
-      });
-    })
-    .finally(() => {
-      prepareAfterServerReadyPromise = null;
-    });
-
-  return prepareAfterServerReadyPromise;
 }
 
 function startSupervisor(): void {
@@ -153,6 +97,14 @@ function stopSupervisor(): void {
   }
 }
 
+const runtime = new ElectronShellRuntime({
+  prewarmer,
+  send,
+  now,
+  stopSupervisor,
+  quit: () => app.quit(),
+});
+
 async function handleCommandLine(line: string): Promise<void> {
   let command: SwiftToElectronCommand;
   try {
@@ -171,38 +123,11 @@ async function handleCommandLine(line: string): Promise<void> {
     return;
   }
 
-  if (command.type === "shutdown") {
-    ack(command, true);
-    stopSupervisor();
-    app.quit();
-    return;
-  }
-
-  if (command.type === "thread_window.open_initial_prompt") {
-    try {
-      await prewarmer.openInitialPrompt(command.payload);
-      ack(command, true);
-    } catch (error) {
-      ack(command, false, errorMessage(error));
-    }
-    return;
-  }
-
-  ack(command, false, "command is not active in phase 0");
+  await runtime.handleCommand(command);
 }
 
 supervisor.onHealth((event) => {
-  hasAgentServerHealth = event.available;
-  send({
-    channel: "electron_shell",
-    type: "agent_server.health",
-    available: event.available,
-    ...(event.message ? { message: event.message } : {}),
-  });
-
-  if (event.available && !hasStoppedSupervisor) {
-    void prepareThreadWindowAfterServerReady();
-  }
+  runtime.handleAgentServerHealth(event);
 });
 
 bridge.onLine((line) => {
