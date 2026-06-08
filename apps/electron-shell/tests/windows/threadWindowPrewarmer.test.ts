@@ -71,6 +71,54 @@ describe("ThreadWindowPrewarmer", () => {
     expect(window.focusCount).toBe(1);
   });
 
+  it("does not show a replacement window after the initial prompt window closes during delivery", async () => {
+    const firstWindow = new FakeBrowserWindow();
+    const secondWindow = new FakeBrowserWindow();
+    const injected = createDeferred<void>();
+    firstWindow.webContents.executeJavaScript = async (source: string) => {
+      firstWindow.executedJavaScript.push(source);
+      await injected.promise;
+    };
+    const windows = [firstWindow, secondWindow];
+    let createCount = 0;
+    const host = new ThreadWindowPrewarmer({
+      threadWindowURL: "http://127.0.0.1:4317/thread-window/index.html",
+      preloadPath: "/preload.js",
+      createWindow: () => {
+        createCount += 1;
+        const window = windows.shift();
+        if (!window) {
+          throw new Error("unexpected createWindow");
+        }
+        return window;
+      },
+    });
+
+    const openingInitialPrompt = host.openInitialPrompt({
+      clientRequestId: "prompt-1",
+      text: "hello",
+      attachments: [],
+      actionBinding: null,
+    });
+    firstWindow.webContents.emit("did-finish-load");
+    await flushMicrotasks();
+
+    expect(firstWindow.executedJavaScript[0]).toContain("window.handAgentReceiveInitialPrompt");
+    firstWindow.emit("closed");
+
+    const openingHistory = host.openHistory();
+    secondWindow.webContents.emit("did-finish-load");
+    await openingHistory;
+
+    injected.resolve();
+    await expect(openingInitialPrompt).rejects.toThrow("thread window changed before initial prompt was shown");
+    expect(firstWindow.showCount).toBe(0);
+    expect(firstWindow.focusCount).toBe(0);
+    expect(secondWindow.showCount).toBe(1);
+    expect(secondWindow.focusCount).toBe(1);
+    expect(createCount).toBe(2);
+  });
+
   it("opens history without delivering an initial prompt", async () => {
     const window = new FakeBrowserWindow();
     const host = new ThreadWindowPrewarmer({
@@ -159,21 +207,31 @@ describe("ThreadWindowPrewarmer", () => {
   });
 
   it("resets state and notifies when a prepared window closes", async () => {
-    const window = new FakeBrowserWindow();
+    const firstWindow = new FakeBrowserWindow();
+    const secondWindow = new FakeBrowserWindow();
+    const windows = [firstWindow, secondWindow];
+    let createCount = 0;
     let closedCount = 0;
     const prewarmer = new ThreadWindowPrewarmer({
       threadWindowURL: "http://127.0.0.1:4317/thread-window/index.html",
       preloadPath: "/preload.js",
-      createWindow: () => window,
+      createWindow: () => {
+        createCount += 1;
+        const window = windows.shift();
+        if (!window) {
+          throw new Error("unexpected createWindow");
+        }
+        return window;
+      },
       onClosed: () => {
         closedCount += 1;
       },
     });
     const prepared = prewarmer.prepare();
-    window.webContents.emit("did-finish-load");
+    firstWindow.webContents.emit("did-finish-load");
     await prepared;
 
-    window.emit("closed");
+    firstWindow.emit("closed");
 
     expect(closedCount).toBe(1);
     const reopened = prewarmer.openInitialPrompt({
@@ -182,12 +240,16 @@ describe("ThreadWindowPrewarmer", () => {
       attachments: [],
       actionBinding: null,
     });
-    window.webContents.emit("did-finish-load");
+    secondWindow.webContents.emit("did-finish-load");
     await reopened;
 
-    expect(window.loadCount).toBe(2);
-    expect(window.showCount).toBe(1);
-    expect(window.focusCount).toBe(1);
+    expect(firstWindow.loadCount).toBe(1);
+    expect(firstWindow.showCount).toBe(0);
+    expect(firstWindow.focusCount).toBe(0);
+    expect(secondWindow.loadCount).toBe(1);
+    expect(secondWindow.showCount).toBe(1);
+    expect(secondWindow.focusCount).toBe(1);
+    expect(createCount).toBe(2);
   });
 
   it("rejects in-flight prepare when the window closes and allows retry", async () => {
@@ -244,5 +306,25 @@ class FakeBrowserWindow extends EventEmitter {
 
   focus(): void {
     this.focusCount += 1;
+  }
+}
+
+function createDeferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T | PromiseLike<T>) => void;
+  reject: (error: unknown) => void;
+} {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
+}
+
+async function flushMicrotasks(): Promise<void> {
+  for (let index = 0; index < 5; index += 1) {
+    await Promise.resolve();
   }
 }

@@ -98,18 +98,26 @@ export class ThreadWindowPrewarmer {
 
   async openInitialPrompt(payload: InitialPromptPayload): Promise<void> {
     await this.prepare();
-    if (!this.window || !this.prepared) {
+    const window = this.window;
+    if (!window || !this.prepared) {
       throw new Error("thread window is not prepared");
     }
 
     const serialized = JSON.stringify(payload).replace(/</g, "\\u003c");
-    await this.window.webContents.executeJavaScript(`window.handAgentReceiveInitialPrompt(${serialized});`);
-    this.showAndFocus();
+    await window.webContents.executeJavaScript(`window.handAgentReceiveInitialPrompt(${serialized});`);
+    if (this.window !== window || !this.prepared) {
+      throw new Error("thread window changed before initial prompt was shown");
+    }
+    this.showAndFocus(window);
   }
 
   async openHistory(): Promise<void> {
     await this.prepare();
-    this.showAndFocus();
+    const window = this.window;
+    if (!window || !this.prepared) {
+      throw new Error("thread window is not prepared");
+    }
+    this.showAndFocus(window);
   }
 
   focus(): boolean {
@@ -120,12 +128,12 @@ export class ThreadWindowPrewarmer {
     return true;
   }
 
-  private showAndFocus(): void {
-    if (!this.window) {
+  private showAndFocus(window: BrowserWindowLike): void {
+    if (this.window !== window || !this.prepared) {
       throw new Error("thread window is not prepared");
     }
-    this.window.show();
-    this.window.focus();
+    window.show();
+    window.focus();
     this.visible = true;
   }
 
