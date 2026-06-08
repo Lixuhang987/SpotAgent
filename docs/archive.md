@@ -1019,3 +1019,11 @@
 - **验证过程**：通过当前 packaged app app-server 的 ThreadWindow 运行时 DOM 验证 GPT 风格布局。MessageBubble：assistant 为 `bg-transparent` 且背景 `rgba(0, 0, 0, 0)`，user article `flex justify-end` 且 user bubble 宽度约为消息容器 85%，tool bubble 为 `bg-tool-bubble/50` 半透明 dark，tool 正文为 `font-code` / JetBrains Mono。MessageList 内层为 `max-w-[720pt]` 并水平居中；Composer shell 为 `rounded-3xl border-white/10`，附件按钮 disabled，空闲发送按钮 disabled 时使用 elevated dark，运行中停止按钮为 coral。TabBar 横向容器 `scrollWidth=1164`、`clientWidth=620`，存在 active dark tab 与 inactive dark-soft tab，关闭按钮默认 `opacity=0` 且 tab 文本无状态点。提交 `THREADWINDOW_SCENE7_TYPING_QA_20260609 [mock:slow-focus]` 后，运行中显示 3 个 `animate-bounce` 点，延迟为 `0ms / 150ms / 300ms`，停止按钮为 coral；点击停止后点和停止按钮消失。
 - **证据**：JSON `/tmp/handagent-qa/threadwindow-scenario7-gpt-layout-evidence-cli.json`；截图 `/tmp/handagent-qa/threadwindow-scenario7-gpt-layout-current.png`、`/tmp/handagent-qa/threadwindow-scenario7-typing-indicator-running.png`。
 - **结论**：通过。
+
+### 真实 LLM 工具激活场景 1：纯聊天不触发工具激活
+
+- **验证日期**：2026-06-09
+- **验证环境**：默认 WKWebView packaged app，settings / real LLM，`~/.spotAgent/settings.json` provider 为 `openai-compatible`，model 为 `gpt-5.5`，api 为 `responses`，baseUrl 为 `http://127.0.0.1:8090/v1`
+- **验证过程**：重新执行 `bash ./scripts/package-app.sh`，确认 bundle 无 `HandAgentRuntimeMode.json`，通过真实全局快捷键打开 PromptPanel 并提交 `HANDAGENT_REAL_CHAT_SCENE1_20260609 请用一句话写一首短诗，不要使用任何工具。`。ThreadWindow 中只出现 user 消息和 assistant 回复 `六月的风轻轻握住夜色，把未说出口的梦吹成满天星河。`，没有 `use_tools` 或其他 tool call 气泡；`/api/activity` snapshot 回到 `status:"idle"`。`~/.spotAgent/log/2026-06-09/network-002.jsonl` 中对应请求的 `tools` 数组只包含 `use_tools`，不含 builtin tool。
+- **证据**：thread 文件 `~/.spotAgent/threads/thread-1780961303715-8bnpk5.json`；network 日志 `~/.spotAgent/log/2026-06-09/network-002.jsonl`；截图 `/tmp/handagent-qa/real-chat-scene1-no-tools.png`。
+- **结论**：通过。

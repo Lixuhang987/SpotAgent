@@ -216,12 +216,6 @@
 1. 继续回到 thread A 发送需要工具的第二轮 prompt，确认 thread A 仍可继续使用真实工具，不会退回只暴露 `use_tools`。
 1. 打开 `~/.spotAgent/log/<YYYY-MM-DD>/network-NNN.jsonl`，对比两条 thread 的请求体：thread A 激活后应包含完整工具集，thread B 未激活时仍只包含 `use_tools`。
 
-### 场景 1：纯聊天问题不触发工具激活
-
-1. 新建 thread，输入一个不需要工具的普通问题（例如"今天天气怎么样"或"帮我写一首诗"）。
-1. 确认模型直接回复，ThreadWindow 中不出现任何 tool call 气泡。
-1. 打开 `~/.spotAgent/log/<YYYY-MM-DD>/network-NNN.jsonl`，找到本次请求对应的条目，确认请求体中 `tools` 数组只包含一个名为 `use_tools` 的 tool，不含任何 builtin tool。
-
 ### 场景 2：需要工具的 prompt 触发激活并完成调用
 
 1. 新建 thread，输入"看一下我屏幕"或类似需要读取屏幕的 prompt。
