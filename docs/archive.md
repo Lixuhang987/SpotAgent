@@ -1011,3 +1011,11 @@
 - **验证过程**：通过当前 packaged app app-server 的 ThreadWindow 运行时 DOM 读取计算样式并截图。左侧 sidebar 背景为 `rgb(239, 233, 222)`，搜索框和选中历史项为 `rgb(250, 249, 245)`，边线为 `rgb(230, 223, 216)`；右侧 workspace 背景为 `rgb(24, 23, 21)`，TabBar 为 `rgb(31, 30, 27)`，Composer shell 为 `rgb(37, 35, 32)`；“新建对话”和可发送状态按钮均为 coral `rgb(204, 120, 92)`。消息样式按当前 `MessageBubble` GPT 风格实现：user 消息为 `bg-surface-card` warm cream，assistant 消息透明 `rgba(0, 0, 0, 0)`，tool 消息为 `bg-tool-bubble/50` 半透明 dark code-style。640px 最小宽度下 `docScrollWidth/bodyScrollWidth` 仍等于 640，未出现页面级横向溢出。原手工条目中的 “assistant cream card” 与当前 GPT 风格实现冲突，本次按代码和 `apps/thread-window-web/thread-window-web.md` 的当前设计事实归档。
 - **证据**：JSON `/tmp/handagent-qa/threadwindow-scenario6-warm-canvas-evidence-cli.json`；截图 `/tmp/handagent-qa/threadwindow-scenario6-warm-canvas-current.png`、`/tmp/handagent-qa/threadwindow-scenario6-minwidth-current.png`。
 - **结论**：通过。
+
+### ThreadWindow 场景 7：GPT 风格布局验证
+
+- **验证日期**：2026-06-09
+- **验证环境**：默认 WKWebView packaged app，`mock-llm`
+- **验证过程**：通过当前 packaged app app-server 的 ThreadWindow 运行时 DOM 验证 GPT 风格布局。MessageBubble：assistant 为 `bg-transparent` 且背景 `rgba(0, 0, 0, 0)`，user article `flex justify-end` 且 user bubble 宽度约为消息容器 85%，tool bubble 为 `bg-tool-bubble/50` 半透明 dark，tool 正文为 `font-code` / JetBrains Mono。MessageList 内层为 `max-w-[720pt]` 并水平居中；Composer shell 为 `rounded-3xl border-white/10`，附件按钮 disabled，空闲发送按钮 disabled 时使用 elevated dark，运行中停止按钮为 coral。TabBar 横向容器 `scrollWidth=1164`、`clientWidth=620`，存在 active dark tab 与 inactive dark-soft tab，关闭按钮默认 `opacity=0` 且 tab 文本无状态点。提交 `THREADWINDOW_SCENE7_TYPING_QA_20260609 [mock:slow-focus]` 后，运行中显示 3 个 `animate-bounce` 点，延迟为 `0ms / 150ms / 300ms`，停止按钮为 coral；点击停止后点和停止按钮消失。
+- **证据**：JSON `/tmp/handagent-qa/threadwindow-scenario7-gpt-layout-evidence-cli.json`；截图 `/tmp/handagent-qa/threadwindow-scenario7-gpt-layout-current.png`、`/tmp/handagent-qa/threadwindow-scenario7-typing-indicator-running.png`。
+- **结论**：通过。

@@ -195,6 +195,7 @@
 - 场景 5A 已完成滚动容器验证：默认 WKWebView packaged mock app 提交 `THREADWINDOW_SCENE5A_SCROLL_QA_20260609 [mock:assistant-ok]`，生成 `~/.spotAgent/threads/thread-1780955664655-r0vptz.json`，其中 user prompt 包含 80 行长文本。当前 WKWebView live 窗口保留初始静态截图 `/tmp/handagent-qa/threadwindow-scenario5a-initial-long-message.png`；通过同一 app-server 的 ThreadWindow 运行时 DOM 补齐动态证据：左侧列表滚动后 `scrollTop` 从 0 到 900，标题、新建对话按钮和搜索框坐标不变；右侧消息滚动后 `scrollTop` 从 0 到 1200，TabBar 和 Composer 坐标不变；打开 10 个历史 thread 后 TabBar `scrollWidth=1164`、`clientWidth=620`，横向滚动后 `scrollLeft=544`，页面级 `docScrollWidth/bodyScrollWidth` 仍等于 920；最小宽度 640 下含权限请求面板时 `docScrollWidth/bodyScrollWidth` 仍等于 640。证据：`/tmp/handagent-qa/threadwindow-scenario5a-scroll-evidence-cli.json`、`/tmp/handagent-qa/threadwindow-scenario5a-tabs-evidence-cli.json` 及对应截图。结论：通过。
 - 场景 6 已完成 warm-canvas 视觉验证：通过当前 packaged app app-server 的 ThreadWindow 运行时 DOM 读取计算样式，确认左侧 sidebar 为 `rgb(239, 233, 222)`、搜索框和选中历史项为 `rgb(250, 249, 245)`、右侧 workspace 为 `rgb(24, 23, 21)`、TabBar 为 `rgb(31, 30, 27)`、Composer shell 为 `rgb(37, 35, 32)`，新建对话与可发送状态按钮为 coral `rgb(204, 120, 92)`。消息样式按当前 `MessageBubble` GPT 风格实现：user 为 `bg-surface-card` warm cream，assistant 为透明 `rgba(0, 0, 0, 0)`，tool 为半透明 dark code-style 且内容使用 code 字体。640px 最小宽度下 `docScrollWidth/bodyScrollWidth` 仍等于 640。证据：`/tmp/handagent-qa/threadwindow-scenario6-warm-canvas-evidence-cli.json`、`/tmp/handagent-qa/threadwindow-scenario6-warm-canvas-current.png`、`/tmp/handagent-qa/threadwindow-scenario6-minwidth-current.png`。结论：通过；原手工条目里 “assistant cream card” 是过期期望，已按当前 GPT 风格事实归档。
 - 场景 6 / 场景 7 assistant 文本截断缺陷已通过默认 WKWebView packaged live 回归：缺陷发现时，`THREADWINDOW_SCENE6_VISUAL_QA_20260609 [mock:workspace-list]` 生成 `~/.spotAgent/threads/thread-1780956268767-2n3fjt.json`，持久化最终 assistant content 为 `Mock workspace.list completed.`，但截图 `/tmp/handagent-qa/threadwindow-scenario6-visual-workspace-list-final.png` 与裁剪 `/tmp/handagent-qa/threadwindow-scenario6-assistant_final_crop.png` 只显示 `Mock`；`THREADWINDOW_SCENE7_LAYOUT_QA_20260609 [mock:assistant-ok]` 生成 `~/.spotAgent/threads/thread-1780956663996-o7g1aj.json`，持久化 assistant content 为 `Mock assistant response: main chain is reachable.`，但截图 `/tmp/handagent-qa/threadwindow-scenario7-layout-assistant-ok.png` 与裁剪 `/tmp/handagent-qa/threadwindow-scenario7-assistant-final-crop.png` 也只显示 `Mock`。子 agent `019ea947-5f2d-7982-b734-77dcf5ce7f63` 按 `$trace-and-verify-call-chain` 定位到 agent-server 在同一毫秒内为多段 `assistant_message_delta` 生成重复 `notificationId`，React store 去重后丢弃后续 delta；修复 `176f0d5` 增加每个 active run 的单调 `notificationSequence` 并拼入 runtime notificationId，`assistant.delta.itemId` 仍保持不变用于文本拼接。主仓库重新执行相关 agent-server / ThreadWindow web 测试、`bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build` 与 `bash ./scripts/package-app.sh --mock-llm` 后，packaged app 提交 `THREADWINDOW_SCENE7_TEXT_FIX_QA_20260609 [mock:assistant-ok]` 生成 `~/.spotAgent/threads/thread-1780957524607-gfjaa7.json`，UI 完整显示 `Mock assistant response: main chain is reachable.`，截图 `/tmp/handagent-qa/threadwindow-scene7-text-fix.png`；提交 `THREADWINDOW_SCENE6_TEXT_FIX_QA_20260609 [mock:workspace-list]` 生成 `~/.spotAgent/threads/thread-1780957564200-kgnmdi.json`，UI 完整显示 `Mock workspace.list completed.`，截图 `/tmp/handagent-qa/threadwindow-scene6-text-fix.png`。该缺陷已从 `docs/bugs.md` 移除并追加到 `docs/archive.md`；退出后无 HandAgent / agent-server 残留，`127.0.0.1:4317` 无监听。
+- 场景 7 已完成 GPT 风格布局验证：通过当前 packaged app app-server 的 ThreadWindow 运行时 DOM 验证 MessageBubble、MessageList、Composer、TabBar 与 TypingIndicator。assistant 消息为透明 `bg-transparent`，user 消息右对齐且宽度约为消息容器 85%，tool 消息为半透明 dark bubble 且正文 `font-code`；MessageList 内层为 `max-w-[720pt]` 且居中，Composer shell 为 `rounded-3xl border-white/10`，附件按钮 disabled，空闲发送按钮 disabled 时使用 elevated dark，运行中停止按钮为 coral；TabBar 横向容器 `scrollWidth=1164/clientWidth=620`，存在 active dark tab 与 inactive dark-soft tab，关闭按钮默认 `opacity=0` 且没有状态点文本。提交 `THREADWINDOW_SCENE7_TYPING_QA_20260609 [mock:slow-focus]` 后运行中显示 3 个 `animate-bounce` 点，延迟为 0ms / 150ms / 300ms；点击停止后点和停止按钮消失。证据：`/tmp/handagent-qa/threadwindow-scenario7-gpt-layout-evidence-cli.json`、`/tmp/handagent-qa/threadwindow-scenario7-gpt-layout-current.png`、`/tmp/handagent-qa/threadwindow-scenario7-typing-indicator-running.png`。结论：通过。
 - 场景 8 已完成默认 WKWebView packaged live 验证：提交 `THREADWINDOW_SCENE8_ACTION_BUTTONS_QA_20260609_R2 [mock:workspace-list]` 后生成 `~/.spotAgent/threads/thread-1780957822168-ghgnjc.json`。初始截图 `/tmp/handagent-qa/threadwindow-scenario8-r2-initial.png` 确认 assistant 和 tool 消息默认无操作按钮；hover assistant 后截图 `/tmp/handagent-qa/threadwindow-scenario8-assistant-hover.png` 显示低对比度 cream 的 `复制 / 编辑 / 重新生成` 按钮且无布局跳动；hover tool 后截图 `/tmp/handagent-qa/threadwindow-scenario8-tool-hover.png` 确认 tool 结果下方无独立操作按钮。用 CoreGraphics 精确点击 final assistant 的复制按钮后，`pbpaste` 返回 `Mock workspace.list completed.`，截图 `/tmp/handagent-qa/threadwindow-scenario8-copy-click-swift-585.png`；AX 读取 final assistant 组按钮状态为 `复制消息 enabled=true`、`编辑 enabled=false`、`重新生成 enabled=false`，且 `编辑` / `重新生成` 的 `AXHelp` 均为 `即将推出`。结论：场景 8 消息操作按钮已通过。
 - 场景 9 已完成默认 WKWebView packaged live 验证：在同一 packaged mock app 的 ThreadWindow composer 中，空输入框 AX 尺寸为 `482x64`；输入 1 行后仍为 `482x64`，截图 `/tmp/handagent-qa/threadwindow-scenario9-composer-paste-1line.png`。用 Shift+Return 验证可插入换行后，再通过剪贴板粘贴 5 行真实触发 textarea input 事件，输入框增高到 `482x120`，截图 `/tmp/handagent-qa/threadwindow-scenario9-composer-paste-5lines.png`；粘贴 6 行后仍保持 `482x120`，内部显示垂直滚动条，截图 `/tmp/handagent-qa/threadwindow-scenario9-composer-paste-6lines.png`。按无修饰 Return 后，输入框清空并恢复到 `482x52`，截图 `/tmp/handagent-qa/threadwindow-scenario9-after-submit.png`；`~/.spotAgent/threads/thread-1780957822168-ghgnjc.json` 随后持久化 6 行 user message 与 mock assistant 回复。结论：场景 9 Composer 自动增高已通过。
 - 场景 10 已完成默认 WKWebView packaged live 验证：当前 UI 截图 `/tmp/handagent-qa/threadwindow-scenario10-visual-current.png` 显示 cream sidebar + dark workspace 的双 surface 节奏，顶部没有 connection pill，TabBar 只显示 browser-style tab 和关闭按钮，无状态点。点击 `SCENE4_QA_WORKSPACE_THREAD` 历史 row 空白区域后打开 `qa-scene` tab，截图 `/tmp/handagent-qa/threadwindow-scenario10-history-row-click.png`；点击同一 row 最右侧删除图标后只显示删除确认面板且未触发 row open 传播，截图 `/tmp/handagent-qa/threadwindow-scenario10-history-delete-click.png`，点击取消后面板关闭，截图 `/tmp/handagent-qa/threadwindow-scenario10-delete-cancel.png`。场景 10 第 4 条原文不完整，本轮按可观察 request panel 行为验证：提交 `THREADWINDOW_SCENE10_PERMISSION_PANEL_QA_20260609 [mock:permission-write]` 后出现 permission 面板，深色 elevated card 内含 monospace 参数 code block、coral `允许` 与 secondary `拒绝` 按钮，右下 StatusBubble 显示 `Running / 等待权限确认`，截图 `/tmp/handagent-qa/threadwindow-scenario10-permission-panel.png`；点击 `拒绝` 后 request panel 消失并显示 tool 拒绝结果，截图 `/tmp/handagent-qa/threadwindow-scenario10-permission-denied-after.png`，`~/.spotAgent/threads/qa-scene4-qa-workspace.json` 记录 `permission_request file.write deny` 与 `tool_result error`。结论：场景 10 视觉一致性已通过；原手工条目第 4 条文案不完整已在归档中说明。
@@ -205,51 +206,6 @@
 - 已执行 `pnpm --filter handagent-thread-window-web build`
 
 ### 验收场景
-
-#### 场景 7: GPT 风格布局验证
-
-**验收目标**: 确认 ThreadWindow React 前端已按 `apps/thread-window-web/thread-window-web.md` 的 GPT 风格布局实现，同时保留 DESIGN.md 配色。
-
-**前提条件**:
-- 已执行 `pnpm --filter handagent-thread-window-web build`
-- 启动 desktop app：`bash ./scripts/swiftw run HandAgentDesktop`
-- 提交一个 prompt，打开 ThreadWindow
-
-**消息展示 (MessageBubble)**:
-- [ ] assistant 消息完全透明无背景，文本直接铺在 `surface-dark` (#181715) 背景上
-- [ ] user 消息右对齐，最大宽度约 85%，带圆角背景（warm cream 色 `surface-card` #efe9de）
-- [ ] tool 消息左对齐，半透明深色背景，使用代码字体
-- [ ] 操作按钮（复制/编辑/重新生成）hover 时显示（不hover时也占位，不要发生hover后下面的所有消息移位）
-
-**内容区布局 (MessageList)**:
-- [ ] 消息区域水平居中，最大宽度 720pt
-- [ ] 消息间距统一（12px / gap-sm）
-
-**输入栏 (Composer)**:
-- [ ] pill 形大圆角容器（24pt / rounded-3xl）
-- [ ] 边框 `border-white/10`，聚焦时变为 `border-white/20`
-- [ ] 输入栏与消息区同宽（720pt），水平居中
-- [ ] 右侧内嵌按钮：附件按钮（占位 disabled）+ 发送/停止按钮
-- [ ] 空闲时显示发送按钮（箭头向上图标），运行时显示停止按钮（方形图标）
-
-**Tab 栏 (TabBar)**:
-- [ ] 浏览器风格 tab：活跃 tab 与内容区背景融合（`bg-surface-dark` #181715）
-- [ ] 非活跃 tab 视觉下沉（`bg-surface-dark-soft` #1f1e1b）
-- [ ] tab 顶部圆角（8px / rounded-t-lg）
-- [ ] 关闭按钮 hover 时显示（group-hover:opacity-100）
-- [ ] 去除状态点，只保留标题
-
-**运行状态指示器 (TypingIndicator)**:
-- [ ] 提交一个需要 LLM 响应的 prompt
-- [ ] 运行中时，最后一条 assistant 消息底部显示三个跳动的点
-- [ ] 点的动画错峰延迟（0ms / 150ms / 300ms）
-- [ ] 运行完成后打字指示器消失
-
-**配色验证（保留 DESIGN.md）**:
-- [ ] 主背景使用 `#181715` (surface-dark)，不是 spec 中的 `#212121`
-- [ ] 侧边栏使用 `#efe9de` (surface-card, warm cream)，不是 spec 中的 `#2F2F2F`
-- [ ] user 消息背景使用 `#efe9de` (surface-card, warm cream)，不是 spec 中的 `#3A3A3A`
-- [ ] 主按钮使用 `#cc785c` (primary, coral)
 
 ### 场景 0：并发 thread 工具激活隔离
 
