@@ -46,7 +46,8 @@ HistorySidebar
 
 - 窗口宽度 `>= 760px` 时显示历史边栏，宽度为窗口宽度的 30%，并限制在 220px 到 320px 之间。
 - 窗口宽度 `< 760px` 时隐藏历史边栏，右侧对话区切到单列布局。
-- 全局 `body` 最小宽度保持低于隐藏阈值，确保缩窄窗口时可以进入隐藏侧栏状态。
+- 全局 `html/body/#root` 固定为 `100%` 高宽并隐藏页面级 overflow；不要在 `body` 上设置最小宽度，否则窄窗口会回到页面横向滚动。
+- 边栏自身固定为视口高度；Header、新建按钮和搜索框保持固定，只有 workspace/thread 列表区域使用 `overflow-y-auto`。
 
 ### 右侧对话区（GPT 风格布局）
 
@@ -64,6 +65,8 @@ ThreadWorkspace
 └── Composer（pill 形大圆角输入栏）
     └── 内嵌布局：[附件按钮占位] [文本输入] [发送/停止按钮]
 ```
+
+右侧 workspace 是固定高度 grid：TabBar、窗口错误提示和 Composer 不参与主滚动；只有 `MessageList` 是对话纵向滚动容器。窗口错误提示行由常驻 slot 占位，错误为空时高度为 0，避免 active content 与 Composer 因 grid 自动放置而前移。页面级横向滚动必须保持关闭；右侧唯一允许横向滚动的区域是 TabBar，多个 tab 时由 TabBar 自身 `overflow-x-auto` 承接，消息区、Composer、请求面板均使用 `min-w-0` / `overflow-x-hidden` 或换行布局避免撑宽窗口。
 
 ### 核心组件说明
 
@@ -107,6 +110,7 @@ Swift `ThreadWindowWebHost.configurationScript` 在 document start 注入 `/api/
 相关测试：
 
 - `tests/nativeConfig.test.ts`：覆盖 early pending prompt flush。
+- `tests/scrollContainers.test.ts`：覆盖 ThreadWindow shell、左侧历史列表、右侧 MessageList 与 TabBar 的滚动容器 class 合同。
 - Swift 侧 `ThreadWindowWebHostTests`：覆盖配置脚本会安装可排队 receiver。
 
 ## 边界

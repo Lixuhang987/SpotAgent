@@ -136,6 +136,13 @@
 4. 继续缩小窗口到 760px 以下，确认左侧历史边栏隐藏，右侧对话区占满窗口宽度。
 5. 从窄窗口重新放大到 760px 以上，确认左侧历史边栏重新出现，历史项、搜索框和 workspace 展开状态仍正常。
 
+#### 场景 5A: ThreadWindow 滚动容器验证
+
+1. 准备足够多的历史 thread，使左侧列表高度超过窗口；滚动左侧边栏时，HandAgent 标题、新建对话按钮和搜索框保持固定，只有对话列表滚动。
+2. 打开一个包含多轮消息的 thread，使右侧消息超过窗口高度；滚动右侧时，顶部 TabBar 和底部 Composer 保持固定，只有消息区域滚动。
+3. 打开多个 tab，使 tab 总宽度超过右侧可视宽度；确认只有 TabBar 内部出现横向滚动，ThreadWindow 页面本身没有底部横向滚动条。
+4. 将 ThreadWindow 缩到最小可用尺寸附近，确认消息、Composer、请求面板和历史项不撑出页面横向滚动。
+
 #### 场景 6: ThreadWindow Claude warm-canvas 视觉验证
 
 1. 创建新 thread，发送若干消息（user / assistant / tool）

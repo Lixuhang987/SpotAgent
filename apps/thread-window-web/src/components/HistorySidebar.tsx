@@ -32,7 +32,7 @@ export function HistorySidebar({
   );
 
   return (
-    <aside className="min-h-screen border-r border-hairline bg-surface-card p-sm overflow-hidden flex flex-col">
+    <aside className="flex h-screen min-h-0 min-w-0 flex-col overflow-hidden border-r border-hairline bg-surface-card p-sm">
       <header className="mb-sm">
         <div className="flex items-center gap-xs">
           <span className="grid h-6 w-6 place-items-center rounded-full bg-ink text-canvas text-[15px] leading-none" aria-hidden="true">
@@ -62,7 +62,7 @@ export function HistorySidebar({
       />
 
       {/* Workspace 分组和默认分组 */}
-      <div className="flex-1 overflow-y-auto space-y-xs pr-1">
+      <div className="flex-1 min-h-0 space-y-xs overflow-y-auto overflow-x-hidden pr-1">
         {/* Workspace 分组 */}
         {grouped.workspaceGroups.map((group) => (
           <WorkspaceGroup

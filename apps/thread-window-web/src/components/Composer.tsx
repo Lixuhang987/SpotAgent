@@ -50,11 +50,11 @@ export function Composer({ disabled, stopDisabled, onSubmit, onStop }: ComposerP
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex items-end justify-center bg-surface-dark px-lg py-md"
+      className="flex min-w-0 items-end justify-center overflow-hidden bg-surface-dark px-lg py-md"
     >
       {/* GPT 风格 pill 形容器 */}
-      <div className="relative mx-auto w-full max-w-[720pt] rounded-3xl border border-white/10 bg-surface-dark-elevated px-md py-xs shadow-product-inner transition-colors focus-within:border-white/20">
-        <div className="grid grid-cols-[1fr_auto] items-end gap-xs">
+      <div className="relative mx-auto min-w-0 w-full max-w-[720pt] rounded-3xl border border-white/10 bg-surface-dark-elevated px-md py-xs shadow-product-inner transition-colors focus-within:border-white/20">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-xs">
           {/* 文本输入区域 */}
           <textarea
             ref={textareaRef}
@@ -63,7 +63,7 @@ export function Composer({ disabled, stopDisabled, onSubmit, onStop }: ComposerP
             onKeyDown={handleKeyDown}
             placeholder="Ask HandAgent"
             disabled={disabled}
-            className="min-h-[52px] max-h-[120px] resize-none overflow-y-auto bg-transparent px-xs py-xs text-[16px] leading-[1.5] text-on-dark placeholder:text-on-dark-soft outline-none disabled:cursor-not-allowed disabled:text-on-dark-soft/50"
+            className="min-h-[52px] min-w-0 max-h-[120px] w-full resize-none overflow-y-auto overflow-x-hidden bg-transparent px-xs py-xs text-[16px] leading-[1.5] text-on-dark placeholder:text-on-dark-soft outline-none disabled:cursor-not-allowed disabled:text-on-dark-soft/50"
             style={{ minHeight: '52px', maxHeight: `${MAX_ROWS * LINE_HEIGHT}px` }}
           />
 
