@@ -10,6 +10,7 @@ import {
 } from "./protocol/electronShellProtocol.js";
 import { createAgentServerSupervisor } from "./serverSupervisor/agentServerSupervisorFactory.js";
 import { JsonLineBridge } from "./swiftBridge/jsonLineBridge.js";
+import { CommandSocketServer } from "./swiftBridge/commandSocketServer.js";
 import { ActivityWindowController } from "./windows/activityWindowController.js";
 import { ThreadWindowPrewarmer } from "./windows/threadWindowPrewarmer.js";
 
@@ -21,8 +22,10 @@ const threadWindowURL =
 const threadPreloadPath = join(currentDir, "../preload/threadWindowPreload.js");
 const activityWindowHTMLPath = join(currentDir, "../activity-window/index.html");
 const activityPreloadPath = join(currentDir, "../preload/activityWindowPreload.js");
+const commandSocketPath = process.env.HANDAGENT_ELECTRON_COMMAND_SOCKET;
 
 const bridge = new JsonLineBridge({ input: process.stdin, output: process.stdout });
+const commandSocketServer = commandSocketPath ? new CommandSocketServer(commandSocketPath) : null;
 const supervisor = createAgentServerSupervisor({
   repoRoot,
   nodePath,
@@ -165,17 +168,24 @@ supervisor.onHealth((event) => {
 bridge.onLine((line) => {
   void handleCommandLine(line);
 });
+commandSocketServer?.onLine((line) => {
+  void handleCommandLine(line);
+});
 
 process.stdin.on("end", () => {
-  stopSupervisor();
-  app.quit();
+  if (!commandSocketServer) {
+    stopSupervisor();
+    app.quit();
+  }
 });
 
 app.on("before-quit", () => {
+  commandSocketServer?.close();
   stopSupervisor();
 });
 
 try {
+  await commandSocketServer?.start();
   await app.whenReady();
   send({ channel: "electron_shell", type: "electron.ready", timestamp: now() });
   process.stderr.write(`[electron-shell] agent-server supervisor: ${JSON.stringify(supervisor.describe())}\n`);

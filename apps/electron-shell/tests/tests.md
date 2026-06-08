@@ -11,7 +11,7 @@
 | `preload/` | [preload/preload.md](/Users/mu9/proj/handAgent/apps/electron-shell/tests/preload/preload.md) | preload 注入的 main-world globals 和 IPC bridge |
 | `protocol/` | [protocol/protocol.md](/Users/mu9/proj/handAgent/apps/electron-shell/tests/protocol/protocol.md) | Swift <-> Electron command/event 解析、编码和拒绝旧 `thread_window.prepare` command |
 | `serverSupervisor/` | [serverSupervisor/serverSupervisor.md](/Users/mu9/proj/handAgent/apps/electron-shell/tests/serverSupervisor/serverSupervisor.md) | supervisor entry 选择、Node fallback、utilityProcess 语义、readiness、restart 和 stop |
-| `swiftBridge/` | [swiftBridge/swiftBridge.md](/Users/mu9/proj/handAgent/apps/electron-shell/tests/swiftBridge/swiftBridge.md) | newline-delimited JSON bridge 的 chunk 切行和 event 写出 |
+| `swiftBridge/` | [swiftBridge/swiftBridge.md](/Users/mu9/proj/handAgent/apps/electron-shell/tests/swiftBridge/swiftBridge.md) | newline-delimited JSON bridge 与 command socket 的 chunk 切行和 event 写出 |
 | `windows/` | [windows/windows.md](/Users/mu9/proj/handAgent/apps/electron-shell/tests/windows/windows.md) | ThreadWindow hidden prewarm、initial prompt 注入、ActivityWindow 非激活展示 |
 | `smoke.test.ts` | 无独立文档 | Electron shell test runtime 基础 smoke |
 

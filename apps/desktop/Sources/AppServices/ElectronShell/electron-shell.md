@@ -5,8 +5,9 @@
 ## 职责
 
 - 启动 Electron 子进程；`HANDAGENT_ELECTRON_BINARY` 可覆盖 Electron binary，`HANDAGENT_ELECTRON_MAIN` 可覆盖 main entry。未显式覆盖 main entry 时，packaged app 优先使用 `Contents/Resources/ElectronShell/dist/main/main.js`，并通过 `HANDAGENT_ELECTRON_BINARY` 或 PATH 中的 `electron` 启动；开发态回退为 `pnpm --filter handagent-electron-shell exec electron apps/electron-shell/dist/main/main.js`。
-- 通过 stdio newline-delimited JSON 发送 `ElectronShellCommand`，接收 `ElectronShellEvent`。
-- 主动停机时先发送 `shutdown` command 并关闭子进程 stdin；Electron 未在 2 秒内退出时才兜底 `terminate()`，主动停机不作为 fatal termination 上报。
+- Swift 启动 Electron 时把子进程 stdin 指向 `/dev/null`，避免 Electron CLI 在 pipe stdin 未 EOF 时阻塞加载 main entry；`ElectronShellCommand` 通过 `HANDAGENT_ELECTRON_COMMAND_SOCKET` 指向的本地 Unix domain socket 发送。
+- Electron -> Swift 的 `ElectronShellEvent` 仍通过 stdout newline-delimited JSON 回传。
+- 主动停机时先通过 command socket 发送 `shutdown` command；Electron 未在 2 秒内退出时才兜底 `terminate()`，主动停机不作为 fatal termination 上报。
 - 在 `agent_server.health available=true` 与 `thread_window.prepared` 同时成立后，向 `AgentServerHealth` 暴露可提交状态。
 - 作为 `ThreadWindowCommanding` 实现，只接收 Coordinator 的 openInitialPrompt/openHistory/focus 意图；不再接收 prepare 意图。
 - 作为 `ActivityWindowCommanding` 实现，接收 Coordinator 的 showActivityWindow 意图，并编码为 `activity_window.show`。
@@ -26,7 +27,7 @@ Electron StatusBubble 点击且无法聚焦 ThreadWindow 时，会发送 `prompt
 
 | 文件 | 职责 |
 |------|------|
-| `ElectronShellProcess.swift` | 启动 Electron 子进程、写入 command JSON line、读取 stdout event JSON line、处理主动停机和非主动退出 |
+| `ElectronShellProcess.swift` | 启动 Electron 子进程、通过 Unix socket 写入 command JSON line、读取 stdout event JSON line、处理主动停机和非主动退出 |
 | `ElectronShellProtocol.swift` | Swift 端 command/event DTO，必须与 TS `electronShellProtocol.ts` 字段一致 |
 | `ElectronBackedAppServer.swift` | Electron flag 路径下的 app-server health gate、ThreadWindow command client、ActivityWindow command client 和 platform bridge 连接管理 |
 | `ThreadWindowCommanding.swift` | Coordinator 面向 ThreadWindow 的 command 抽象：open initial prompt、open history、focus |
@@ -54,4 +55,5 @@ Electron StatusBubble 点击且无法聚焦 ThreadWindow 时，会发送 `prompt
 - 新增或改名 Electron command/event 时，先改 `ElectronShellProtocol.swift`，再同步 `apps/electron-shell/src/main/protocol/electronShellProtocol.ts` 和双方测试。
 - 不把 `ThreadCommand` / `ThreadNotification` 引入本目录；Swift 只传 initial prompt payload 和窗口 command。
 - `ElectronShellProcess` 的 stdout 只能解析 event；stderr 可用于日志但当前不转发 UI。不要把 Electron diagnostic 写到 stdout。
+- Swift->Electron command socket 路径必须保持短路径；macOS `sockaddr_un.sun_path` 长度有限，当前使用 `/tmp/hae-<uuid>.sock`。
 - `stop()` 必须清理 callbacks、pending command kind、platform client 和 shell handlers，避免旧 Electron 事件影响下一次 start。
