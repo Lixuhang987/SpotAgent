@@ -21,9 +21,11 @@ sequenceDiagram
   participant React as apps/thread-window-web
   participant Server as agent-server
 
+  Coord->>Life: PromptPanel shown -> prepareHiddenWindow
+  Life->>View: create hidden NSWindow/WKWebView
   Coord->>Life: submit prompt
   Life->>Host: enqueueInitialPrompt(...)
-  Life->>View: present WKWebView
+  Life->>View: show prepared WKWebView
   View->>React: load web bundle
   View->>React: handAgentReceiveInitialPrompt(payload)
   React->>Server: /api/thread ThreadCommand
@@ -32,13 +34,20 @@ sequenceDiagram
 
 Swift 在 `WKUserScript.atDocumentStart` 注入 `window.handAgentThreadWindowConfig` 时，也会初始化 `window.handAgentPendingInitialPrompts` 和临时 `window.handAgentReceiveInitialPrompt`。如果 `WKNavigationDelegate.didFinish` 早于 React `useEffect` 安装正式 receiver，初始 prompt 会先进入 pending 队列；React 启动后由 `installInitialPromptReceiver` flush，再发送 `thread.start` 和首轮 `turn.start`。改动这个桥时必须同时覆盖 Swift 配置脚本和 React native config 测试。
 
+## 隐藏预热
+
+- `PromptPanel` 显示后，Coordinator 会在下一轮 main runloop 调用 `ThreadWindowLifecycle.prepareHiddenWindow`。
+- 预热只创建隐藏的 `NSWindow/WKWebView` 并加载 web bundle，不注入初始 prompt，不显示窗口，不激活 App，不把 ThreadWindow 计入 `.regular` 激活策略。
+- 用户提交 prompt 或打开历史时才会真实显示窗口；若预热窗口已存在，会复用同一个 `ThreadWindowWebHost` 和 `WKWebView`。
+- agent-server 不可用时不做预热，避免隐藏 WebView 加载不可达的 `/thread-window/index.html`。
+
 ## 调试前提
 
-- 仅通过全局快捷键打开 `PromptPanel`，**不会**触发 `ThreadWindow` 创建或 `WKWebView` 加载。
-- `ThreadWindow` 的加载链路只会在以下入口触发：
+- 仅通过全局快捷键打开 `PromptPanel`，会触发隐藏 WebView 预热，但不会显示 ThreadWindow，也不会创建新 thread。
+- 新 thread 的加载链路只会在以下入口触发：
   - 用户在 `PromptPanel` 中输入内容并提交（回车）；
   - Coordinator 显式调用历史入口 `openOrFocusHistory(...)`。
-- 因此排查 `ThreadWindow` 白屏、`WKWebView` 导航、React 首屏渲染等问题时，必须先完成一次真实提交，或明确走历史入口；不要把“`PromptPanel` 已打开”误判为“`ThreadWindow` 已开始加载”。
+- 因此排查 `ThreadWindow` 白屏、`WKWebView` 导航、React 首屏渲染等问题时，可以先打开 `PromptPanel` 观察隐藏预热日志；但要验证 `thread.start / turn.start` 仍必须完成一次真实提交。
 
 ## 边界
 

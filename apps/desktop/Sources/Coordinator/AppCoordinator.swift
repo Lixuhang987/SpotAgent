@@ -144,6 +144,9 @@ final class AppCoordinator {
         promptPanelController.onOpenSettings = { [weak self] in
             self?.send(.openSettings)
         }
+        promptPanelController.onDidShow = { [weak self] in
+            self?.prepareThreadWindowForPromptPanel()
+        }
     }
 
     private func setupAgentServerHealth() {
@@ -193,6 +196,13 @@ final class AppCoordinator {
             self?.send(.threadWindowClosed)
         }
         store.send(.threadWindowOpened)
+    }
+
+    private func prepareThreadWindowForPromptPanel() {
+        guard agentServerError == nil else { return }
+        threadWindowLifecycle.prepareHiddenWindow { [weak self] in
+            self?.send(.threadWindowClosed)
+        }
     }
 
     private func handleOpenSettings() {

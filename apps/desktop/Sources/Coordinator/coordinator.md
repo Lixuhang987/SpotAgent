@@ -7,7 +7,7 @@
 | 文件 | 职责 |
 |------|------|
 | `AppCoordinator.swift` | 单向事件流、Action 路由；不持有 `NSWindow`、不 `import AppKit` |
-| `ThreadWindowLifecycle.swift` | 持有全局唯一 ThreadWindow；提供 `createTabWithInitialPrompt / openOrFocusHistory / focus / close`，并把 tab 状态同步到 `ThreadRegistry` |
+| `ThreadWindowLifecycle.swift` | 持有全局唯一 ThreadWindow；提供 `prepareHiddenWindow / createTabWithInitialPrompt / openOrFocusHistory / focus / close`，区分隐藏预热和真实显示窗口 |
 | `SettingsLifecycle.swift` | 持有设置窗口；提供 `openOrFocus / handleClosed / close` |
 | `PromptSubmission.swift` | 把 PromptPanel attachment 翻译为 `composed prompt + summary + UserMessageAttachmentPayload[]` 的纯函数 |
 | `PromptCaptureCoordinator.swift` | 把热键 → 选区 / 区域采集 → PromptPanel attachment 的串联从 Coordinator 抽出 |
@@ -20,10 +20,13 @@
 - 测试模式走 `AppServices.testing()` 注入 nop 替身，跳过窗口/进程/激活策略副作用。
 - 窗口生命周期由 lifecycle 控制器闭环：`ThreadWindowLifecycle` 管全局 ThreadWindow，`SettingsLifecycle` 管 Settings；Coordinator 不持有 AppKit 对象。
 - 历史入口语义：`openHistory` 聚焦全局 ThreadWindow 并刷新左侧历史，不打开独立窗口，不改变 active tab。
+- PromptPanel 显示后会在下一轮 main runloop 触发 `prepareHiddenWindow`，只隐藏创建 `NSWindow/WKWebView` 并加载 React bundle；不 `makeKeyAndOrderFront`，不 `NSApp.activate`，不切 `.regular`，不计入 open ThreadWindow。
 - PromptPanel 提交语义：`submitPrompt` 与 `submitActionPrompt` 都复用全局 ThreadWindow，每次提交都走 `thread.start` 创建新 thread/tab，然后发送首轮 `turn.start`；ThreadWindow 底部 composer 才会在已有 active tab 中继续追问。
+- PromptPanel 提交或历史入口才会真实显示 ThreadWindow；如果已有预热窗口，Lifecycle 复用同一个 host/window，首次显示时才更新激活策略。
 - Action prompt 由 PromptPanel 先渲染 template。skill action 只携带渲染后的 prompt 创建新 thread；plugin action 额外携带 `{ pluginId, promptName }` 作为 `actionBinding` 创建新 thread。
 - Settings 打开时会创建模型、builtin tool、Plugin、Append Prompt、MCP、权限和 workspace 的 ViewModel。Coordinator 只负责注入，不直接读写 `~/.spotAgent/plugins` 或 `~/.spotAgent/mcp.json`。
 - agent-server 健康状态独立：server 不可用时拒绝 `submitPrompt` 并保留面板草稿。
+- agent-server 不可用时 PromptPanel 打开不触发 ThreadWindow 预热，避免后台加载失败的 web bundle。
 
 ## 当前 Action 列表
 

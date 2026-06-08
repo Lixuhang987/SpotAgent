@@ -18,8 +18,8 @@
 
 | 文件 | 职责 |
 |------|------|
-| `AppServices.swift` | DI 容器：持有 `appServer` / `threadRegistry` / `settingsStore` / `threadHistoryStore` / `actionManifestStore` / `appServerURL` / `hotkeyRegistrar` / `threadWindowPresenter` / `settingsWindowPresenter` / `fatalAlertPresenter` / `setActivationPolicy` / `showsStatusBubble`。生产由 `init()` 默认参数装配，测试用 `AppServices.testing()` 注入 nop 替身。同文件还定义 `ThreadWindowPresenting` / `SettingsWindowPresenting` / `HotkeyRegistering` / `FatalAlertPresenting` 协议与 `Nop*` 测试替身 |
-| `AppServicesProductionImpls.swift` | 生产实现：`ProductionHotkeyRegistrar`（委托 Hotkey 层绑定 `KeyboardShortcuts.Name`）+ `ProductionThreadWindowPresenter` / `ProductionSettingsWindowPresenter`（构建 `NSWindow` + `NSHostingController`，固定浅色 `NSAppearance(.aqua)` 以匹配 warm-canvas 主题，并通过 `WindowCloseObservation` 持有和释放关闭通知 token）+ `ProductionFatalAlertPresenter` |
+| `AppServices.swift` | DI 容器：持有 `appServer` / `threadRegistry` / `settingsStore` / `threadHistoryStore` / `actionManifestStore` / `appServerURL` / `hotkeyRegistrar` / `threadWindowPresenter` / `settingsWindowPresenter` / `fatalAlertPresenter` / `setActivationPolicy` / `showsStatusBubble`。生产由 `init()` 默认参数装配，测试用 `AppServices.testing()` 注入 nop 替身。同文件还定义 `ThreadWindowPresenting` / `SettingsWindowPresenting` / `HotkeyRegistering` / `FatalAlertPresenting` 协议与 `Nop*` 测试替身；`ThreadWindowPresenting` 拆分为 `makeWindow` 和 `show`，用于隐藏预热 |
+| `AppServicesProductionImpls.swift` | 生产实现：`ProductionHotkeyRegistrar`（委托 Hotkey 层绑定 `KeyboardShortcuts.Name`）+ `ProductionThreadWindowPresenter` / `ProductionSettingsWindowPresenter`（构建 `NSWindow` + `NSHostingController`，固定浅色 `NSAppearance(.aqua)` 以匹配 warm-canvas 主题，并通过 `WindowCloseObservation` 持有和释放关闭通知 token）+ `ProductionFatalAlertPresenter`；ThreadWindow presenter 创建阶段不显示窗口，`show(window:)` 才 `makeKeyAndOrderFront` 与激活 App |
 
 ## DI 协议
 
@@ -34,6 +34,7 @@
 ## 编辑此层的约束
 
 - **服务与 presenter 分层**：`AppServer` / `AgentSettingsStore` / `ThreadRegistry` 等服务保持 UI 无关；生产 window presenter 可以 `import AppKit/SwiftUI`，但只能负责窗口构造与关闭回调，不写业务逻辑。
+- **ThreadWindow 预热边界**：`ThreadWindowPresenting.makeWindow` 只构建隐藏窗口并触发布局加载，不能调用 `makeKeyAndOrderFront` / `NSApp.activate`；真实展示必须走 `show(window:)`，由 `ThreadWindowLifecycle` 决定何时计入激活策略。
 - **SettingsWindowPresenting 只注入 ViewModel**：Settings 的 Plugin / Append Prompt / MCP 页面各自直接读写 `~/.spotAgent/plugins` 或 `~/.spotAgent/mcp.json`；presenter 只把 ViewModel 交给 `SettingsView`，不解析配置文件。
 - **`@Observable` 优先**：`ThreadRegistry` / `AgentSettingsStore` 已迁到 `@Observable`；新建状态类不要再用 `ObservableObject` / `@Published` / Combine。
 - **依赖通过 init 注入**：`AgentSettingsStore(homeDirectoryURL:)` 这样允许测试注入临时目录；不要在服务内直接读 `FileManager.default.homeDirectoryForCurrentUser` 之外的全局状态。

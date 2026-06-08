@@ -3,6 +3,48 @@ import XCTest
 
 @MainActor
 final class ThreadWindowLifecycleTests: XCTestCase {
+    func testPrepareHiddenWindowCreatesHostWithoutShowingOrPromotingActivationPolicy() {
+        let presenter = RecordingThreadWindowPresenter()
+        var policies: [NSApplication.ActivationPolicy] = []
+        let lifecycle = ThreadWindowLifecycle(
+            threadWebSocketURL: URL(string: "ws://127.0.0.1:4317/api/thread")!,
+            webAppURL: URL(fileURLWithPath: "/tmp/index.html"),
+            windowPresenter: presenter,
+            activationPolicy: AppActivationPolicyCoordinator(),
+            setActivationPolicy: { policies.append($0) }
+        )
+
+        lifecycle.prepareHiddenWindow(onClosed: {})
+
+        XCTAssertNotNil(lifecycle.webHost)
+        XCTAssertEqual(presenter.makeWindowCount, 1)
+        XCTAssertEqual(presenter.showCount, 0)
+        XCTAssertFalse(policies.contains(.regular))
+    }
+
+    func testInitialPromptShowsPreparedWindowAndQueuesPrompt() throws {
+        let presenter = RecordingThreadWindowPresenter()
+        var policies: [NSApplication.ActivationPolicy] = []
+        let lifecycle = ThreadWindowLifecycle(
+            threadWebSocketURL: URL(string: "ws://127.0.0.1:4317/api/thread")!,
+            webAppURL: URL(fileURLWithPath: "/tmp/index.html"),
+            windowPresenter: presenter,
+            activationPolicy: AppActivationPolicyCoordinator(),
+            setActivationPolicy: { policies.append($0) }
+        )
+        let prompt = try XCTUnwrap(PromptSubmission.compose(draft: "hello", attachments: []))
+
+        lifecycle.prepareHiddenWindow(onClosed: {})
+        let preparedHost = lifecycle.webHost
+        lifecycle.createTabWithInitialPrompt(prompt, onClosed: {})
+
+        XCTAssertTrue(lifecycle.webHost === preparedHost)
+        XCTAssertEqual(presenter.makeWindowCount, 1)
+        XCTAssertEqual(presenter.showCount, 1)
+        XCTAssertEqual(lifecycle.webHost?.drainInitialPrompts().map(\.text), ["hello"])
+        XCTAssertEqual(policies.last, .regular)
+    }
+
     func testInitialPromptCreatesWebHostAndQueuesPrompt() throws {
         let presenter = RecordingThreadWindowPresenter()
         let lifecycle = ThreadWindowLifecycle(
@@ -38,7 +80,7 @@ final class ThreadWindowLifecycleTests: XCTestCase {
 
         XCTAssertNotNil(lifecycle.webHost)
         XCTAssertEqual(lifecycle.webHost?.pendingInitialPromptCount, 0)
-        XCTAssertEqual(presenter.presentCount, 1)
+        XCTAssertEqual(presenter.makeWindowCount, 1)
     }
 
     func testMultiplePromptsReuseHost() throws {
@@ -58,7 +100,7 @@ final class ThreadWindowLifecycleTests: XCTestCase {
         lifecycle.createTabWithInitialPrompt(second, onClosed: {})
 
         XCTAssertTrue(lifecycle.webHost === firstHost)
-        XCTAssertEqual(presenter.presentCount, 1)
+        XCTAssertEqual(presenter.makeWindowCount, 1)
         XCTAssertEqual(lifecycle.webHost?.drainInitialPrompts().map(\.text), ["first", "second"])
     }
 }
@@ -66,11 +108,16 @@ final class ThreadWindowLifecycleTests: XCTestCase {
 @MainActor
 private final class RecordingThreadWindowPresenter: ThreadWindowPresenting {
     private(set) var presentedHost: ThreadWindowWebHost?
-    private(set) var presentCount = 0
+    private(set) var makeWindowCount = 0
+    private(set) var showCount = 0
 
-    func present(host: ThreadWindowWebHost, onClose: @escaping () -> Void) -> NSWindow? {
+    func makeWindow(host: ThreadWindowWebHost, onClose: @escaping () -> Void) -> NSWindow? {
         presentedHost = host
-        presentCount += 1
+        makeWindowCount += 1
         return NSWindow()
+    }
+
+    func show(window: NSWindow) {
+        showCount += 1
     }
 }

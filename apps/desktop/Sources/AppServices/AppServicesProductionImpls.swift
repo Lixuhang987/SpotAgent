@@ -38,7 +38,7 @@ final class ProductionHotkeyRegistrar: HotkeyRegistering {
 final class ProductionThreadWindowPresenter: ThreadWindowPresenting {
     private var closeObservations: [ObjectIdentifier: WindowCloseObservation] = [:]
 
-    func present(
+    func makeWindow(
         host: ThreadWindowWebHost,
         onClose: @escaping () -> Void
     ) -> NSWindow? {
@@ -50,6 +50,7 @@ final class ProductionThreadWindowPresenter: ThreadWindowPresenting {
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.center()
+        window.contentView?.layoutSubtreeIfNeeded()
 
         let sendableOnClose = SendableClosure(closure: onClose)
         let windowID = ObjectIdentifier(window)
@@ -61,9 +62,12 @@ final class ProductionThreadWindowPresenter: ThreadWindowPresenting {
             Task { @MainActor in sendableOnClose.closure() }
         }
 
+        return window
+    }
+
+    func show(window: NSWindow) {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-        return window
     }
 }
 

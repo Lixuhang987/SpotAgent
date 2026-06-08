@@ -5,10 +5,11 @@ import SwiftUI
 
 @MainActor
 protocol ThreadWindowPresenting {
-    func present(
+    func makeWindow(
         host: ThreadWindowWebHost,
         onClose: @escaping () -> Void
     ) -> NSWindow?
+    func show(window: NSWindow)
 }
 
 @MainActor
@@ -103,6 +104,7 @@ final class AppServices {
 
     static func testing(
         setActivationPolicy: @escaping @MainActor (NSApplication.ActivationPolicy) -> Void = { _ in },
+        threadWindowPresenter: any ThreadWindowPresenting = NopThreadWindowPresenter(),
         settingsWindowPresenter: any SettingsWindowPresenting = NopSettingsWindowPresenter(),
         actionManifestStore: ActionManifestStore = ActionManifestStore(
             pluginsDirectoryURL: URL(fileURLWithPath: "/dev/null", isDirectory: true)
@@ -115,7 +117,7 @@ final class AppServices {
             platformServerURL: URL(string: "ws://127.0.0.1:0/noop-platform")!,
             threadWindowWebAppURL: URL(fileURLWithPath: "/tmp/index.html"),
             hotkeyRegistrar: NopHotkeyRegistrar(),
-            threadWindowPresenter: NopThreadWindowPresenter(),
+            threadWindowPresenter: threadWindowPresenter,
             settingsWindowPresenter: settingsWindowPresenter,
             fatalAlertPresenter: NopFatalAlertPresenter(),
             setActivationPolicy: setActivationPolicy,
@@ -167,10 +169,12 @@ final class NopHotkeyRegistrar: HotkeyRegistering {
 final class NopThreadWindowPresenter: ThreadWindowPresenting {
     private(set) var presentedHost: ThreadWindowWebHost?
 
-    func present(host: ThreadWindowWebHost, onClose: @escaping () -> Void) -> NSWindow? {
+    func makeWindow(host: ThreadWindowWebHost, onClose: @escaping () -> Void) -> NSWindow? {
         presentedHost = host
         return NSWindow()
     }
+
+    func show(window: NSWindow) {}
 }
 
 @MainActor

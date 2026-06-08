@@ -62,6 +62,14 @@
 1. 再次打开 PromptPanel，连续提交第二条不同 prompt，确认复用同一个 ThreadWindow 但创建新的 tab/thread，而不是写入当前 active tab 的 composer thread。
 1. 在 `~/.spotAgent/threads/` 找到对应两个 thread 文件，确认每个文件都包含各自的首条 user message。
 
+## PromptPanel ThreadWindow 预热 smoke（P2）
+
+1. 从当前 worktree 执行 `bash ./scripts/swiftw run HandAgentDesktop`。
+1. 通过全局快捷键打开 PromptPanel，先不要提交，确认没有 ThreadWindow 跳出，App 不因为隐藏预热额外切到前台窗口。
+1. 等待约 1 秒后提交普通 prompt，确认复用已预热的 WKWebView 打开 ThreadWindow，并创建新的 tab/thread。
+1. 关闭 ThreadWindow，再次打开 PromptPanel；确认打开 PromptPanel 本身不卡住输入焦点，仍可立即输入。
+1. 暂停或断开 agent-server 后打开 PromptPanel，确认只显示 server 不可用提示，不创建隐藏 ThreadWindow，也不丢草稿。
+
 ## ThreadWindow UI 重构完整验收（P2）
 
 **实施状态**：Phase 1-4 已 100% 完成（2026-06-07 合并到 main）

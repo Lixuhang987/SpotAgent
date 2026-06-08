@@ -46,6 +46,75 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testShowPromptPanelPrewarmsHiddenThreadWindowWithoutPromotingRegularPolicy() async throws {
+        let presenter = StubThreadWindowPresenter()
+        var appliedPolicies: [NSApplication.ActivationPolicy] = []
+        let services = AppServices.testing(
+            setActivationPolicy: { appliedPolicies.append($0) },
+            threadWindowPresenter: presenter
+        )
+        let coordinator = AppCoordinator(services: services)
+
+        coordinator.send(.showPromptPanel)
+        try await Task.sleep(for: .milliseconds(20))
+
+        XCTAssertNotNil(coordinator.threadWindowWebHost)
+        XCTAssertEqual(presenter.makeWindowCount, 1)
+        XCTAssertEqual(presenter.showCount, 0)
+        XCTAssertFalse(appliedPolicies.contains(.regular))
+    }
+
+    @MainActor
+    func testSubmitPromptReusesPromptPanelPrewarmedThreadWindow() async throws {
+        let presenter = StubThreadWindowPresenter()
+        let services = AppServices.testing(threadWindowPresenter: presenter)
+        let coordinator = AppCoordinator(services: services)
+
+        coordinator.send(.showPromptPanel)
+        try await Task.sleep(for: .milliseconds(20))
+        let prewarmedHost = coordinator.threadWindowWebHost
+
+        coordinator.send(.submitPrompt("hello", attachments: []))
+
+        XCTAssertTrue(coordinator.threadWindowWebHost === prewarmedHost)
+        XCTAssertEqual(presenter.makeWindowCount, 1)
+        XCTAssertEqual(presenter.showCount, 1)
+        XCTAssertEqual(coordinator.threadWindowWebHost?.drainInitialPrompts().map(\.text), ["hello"])
+    }
+
+    @MainActor
+    func testShowPromptPanelDoesNotPrewarmThreadWindowWhileAgentServerUnavailable() async throws {
+        final class StubAppServer: AppServerManaging {
+            var isAvailable = true
+            var startupErrorMessage: String?
+            var onAvailabilityChange: ((Bool) -> Void)?
+            var onFatalError: ((String) -> Void)?
+            func start() {}
+            func stop() {}
+        }
+        let stub = StubAppServer()
+        let presenter = StubThreadWindowPresenter()
+        let services = AppServices(
+            appServer: stub,
+            appServerURL: URL(string: "ws://127.0.0.1:0/noop")!,
+            hotkeyRegistrar: NopHotkeyRegistrar(),
+            threadWindowPresenter: presenter,
+            settingsWindowPresenter: NopSettingsWindowPresenter(),
+            fatalAlertPresenter: NopFatalAlertPresenter(),
+            setActivationPolicy: { _ in },
+            showsStatusBubble: false
+        )
+        let coordinator = AppCoordinator(services: services)
+
+        stub.onAvailabilityChange?(false)
+        coordinator.send(.showPromptPanel)
+        try await Task.sleep(for: .milliseconds(20))
+
+        XCTAssertNil(coordinator.threadWindowWebHost)
+        XCTAssertEqual(presenter.makeWindowCount, 0)
+    }
+
+    @MainActor
     func testThreadClosedRemovesWindowViewModel() {
         let coordinator = AppCoordinator(services: AppServices.testing())
 
@@ -215,5 +284,20 @@ final class StubSettingsWindowPresenter: SettingsWindowPresenting {
         let window = NSWindow()
         presentedWindow = window
         return window
+    }
+}
+
+@MainActor
+final class StubThreadWindowPresenter: ThreadWindowPresenting {
+    private(set) var makeWindowCount = 0
+    private(set) var showCount = 0
+
+    func makeWindow(host: ThreadWindowWebHost, onClose: @escaping () -> Void) -> NSWindow? {
+        makeWindowCount += 1
+        return NSWindow()
+    }
+
+    func show(window: NSWindow) {
+        showCount += 1
     }
 }
