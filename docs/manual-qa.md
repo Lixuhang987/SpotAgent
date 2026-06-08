@@ -74,10 +74,15 @@
 - `ELECTRON_SHUTDOWN_CLEANUP_QA_20260609 [mock:assistant-ok]` 已验证标准 quit 后无 Electron main / Electron Helper renderer / agent-server 残留，`127.0.0.1:4317` 无监听输出，thread 文件 `~/.spotAgent/threads/thread-1780946798569-bwztm6.json`。
 - `ELECTRON_STARTING_SEQUENCE_QA_20260609_C [mock:assistant-ok]` 已验证 Electron ActivityWindow activity 流包含 `starting` / `running` / `completed` / `idle` 序列，thread 文件 `~/.spotAgent/threads/thread-1780947483869-t8ou50.json` 包含同一 user prompt 与 mock assistant。
 - 点击 Electron StatusBubble 的可见 ThreadWindow 分支已验证：先激活 Finder，再用 CGEvent 点击 ActivityWindow 中心，前台切到 Electron，`HandAgent ThreadWindow` 的 `AXMain=true`，`HandAgent Activity` 的 `AXMain=false`。
+- Electron ActivityWindow 非 key 行为已验证：点击气泡后 `HandAgent Activity` 的 `AXMain=false` / `AXFocused=false`，CoreGraphics 只显示 owner 为 `Electron` 的 `HandAgent Activity` 小窗，layer 为 3，bounds 为 `{X: 1144, Y: 832, Width: 272, Height: 76}`。
 
 **2026-06-09 缺陷记录**：
 
 - 关闭可见 Electron ThreadWindow 后，ActivityWindow 仍显示且 agent-server 继续监听 `127.0.0.1:4317`，但连续两次用 CGEvent 点击 ActivityWindow 中心后，Swift `PromptPanel` 未打开；窗口状态只有 Electron `HandAgent Activity`，HandAgentDesktop 无可见窗口。证据截图：`/tmp/handagent-qa/electron-bubble-after-threadwindow-close-click.png`、`/tmp/handagent-qa/electron-bubble-no-threadwindow-second-click.png`。该缺陷已写入 `docs/bugs.md`。
+
+**2026-06-09 阻塞子项**：
+
+- “关闭 Electron StatusBubble” 暂无稳定产品路径：ActivityWindow 是 frameless 小窗，AX `close window "HandAgent Activity"` 返回 `-1708`（窗口不理解 close 信息），也没有可见关闭按钮；本轮只确认关闭尝试后 agent-server 仍监听 `127.0.0.1:4317`，未把该子项判为通过。
 
 1. 运行 `pnpm --filter handagent-electron-shell build`。
 1. 设置 `HANDAGENT_ELECTRON_SHELL=1` 后运行桌面 App，确认 Electron shell 和 agent-server 只有各一份进程，`127.0.0.1:4317` 没有第二份 server 冲突。
