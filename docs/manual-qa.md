@@ -23,7 +23,7 @@
 - 实现位置：`apps/electron-shell/src/main/windows/activityWindowController.ts`、`apps/electron-shell/tests/windows/activityWindowController.test.ts`
 - 修复结论：`acceptFirstMouse: true` 只能允许 inactive first mouse 传入，但 ActivityWindow 仍是 `focusable: false` 时，主仓库 packaged app 的 CGEvent 点击仍不能稳定触发 renderer click。ActivityWindow 现在改为 `focusable: true` + `acceptFirstMouse: true`，并继续用 `showInactive()` 做初始非激活展示；后续链路仍是 renderer click -> preload IPC -> Electron main sender 校验 -> runtime focus fallback -> Swift PromptPanel。
 - 自动化验证：`pnpm --filter handagent-electron-shell exec vitest run tests/windows/activityWindowController.test.ts tests/preload/activityWindowPreload.test.ts tests/main/activityWindowIpc.test.ts tests/main/electronShellRuntime.test.ts` 覆盖 ActivityWindow window options、preload 发 `activity-window:focus-thread`、main IPC sender 校验与 runtime fallback。
-- 后续 live 验证方式：合入主仓库后重新执行 `pnpm --filter handagent-electron-shell build` 和 `bash ./scripts/package-app.sh --mock-llm`，用 Electron flag packaged app 复现 `ELECTRON_STATUSBUBBLE_FALLBACK_FIXED_QA_20260609 [mock:assistant-ok]` 场景；关闭 visible Electron ThreadWindow 后，CGEvent 点击 ActivityWindow 坐标应打开 Swift `PromptPanel`。
+- 主仓库 live 回归结果：2026-06-09 合入 `412e1e9` 后重新执行 `bash ./scripts/package-app.sh --mock-llm`，packaged app 已包含 `focusable: true` 与 `acceptFirstMouse: true`；提交 `ELECTRON_STATUSBUBBLE_FOCUSABLE_QA_20260609 [mock:assistant-ok]` 后生成 `~/.spotAgent/threads/thread-1780949594500-gba8h6.json`，关闭 Electron `HandAgent ThreadWindow` 后只剩 `HandAgent Activity`，agent-server 仍监听 `127.0.0.1:4317`。使用 CGEvent 点击 `{1280,870}`、`{1165,870}`、`{1235,870}`、`{1320,870}` 后，Swift `PromptPanel` 仍未出现；ActivityWindow 为 `AXMain=true` / `AXFocused=false`。截图：`/tmp/handagent-qa/electron-statusbubble-focusable-before-retry.png`、`/tmp/handagent-qa/electron-statusbubble-focusable-after-clicks.png`。该缺陷已重新写入 `docs/bugs.md`，退出 QA app 后无 HandAgent / Electron / agent-server 残留，`127.0.0.1:4317` 无监听。
 
 ### Electron StatusBubble 无可聚焦 ThreadWindow 回退 PromptPanel 修复
 
@@ -99,7 +99,7 @@
 - `ELECTRON_SHUTDOWN_CLEANUP_QA_20260609 [mock:assistant-ok]` 已验证标准 quit 后无 Electron main / Electron Helper renderer / agent-server 残留，`127.0.0.1:4317` 无监听输出，thread 文件 `~/.spotAgent/threads/thread-1780946798569-bwztm6.json`。
 - `ELECTRON_STARTING_SEQUENCE_QA_20260609_C [mock:assistant-ok]` 已验证 Electron ActivityWindow activity 流包含 `starting` / `running` / `completed` / `idle` 序列，thread 文件 `~/.spotAgent/threads/thread-1780947483869-t8ou50.json` 包含同一 user prompt 与 mock assistant。
 - 点击 Electron StatusBubble 的可见 ThreadWindow 分支已验证：先激活 Finder，再用 CGEvent 点击 ActivityWindow 中心，前台切到 Electron，`HandAgent ThreadWindow` 的 `AXMain=true`，`HandAgent Activity` 的 `AXMain=false`。
-- Electron ActivityWindow 非 key 行为已验证：点击气泡后 `HandAgent Activity` 的 `AXMain=false` / `AXFocused=false`，CoreGraphics 只显示 owner 为 `Electron` 的 `HandAgent Activity` 小窗，layer 为 3，bounds 为 `{X: 1144, Y: 832, Width: 272, Height: 76}`。
+- Electron ActivityWindow 非 key 行为曾在 `focusable:false` 版本验证：点击气泡后 `HandAgent Activity` 的 `AXMain=false` / `AXFocused=false`，CoreGraphics 只显示 owner 为 `Electron` 的 `HandAgent Activity` 小窗，layer 为 3，bounds 为 `{X: 1144, Y: 832, Width: 272, Height: 76}`。二次修复改为 `focusable:true` 后，2026-06-09 packaged 回归中 ActivityWindow 为 `AXMain=true` / `AXFocused=false`，最终非 key 行为需随下一次 StatusBubble 修复重新确认。
 - supervisor 最大重启诊断已验证：先退出 QA app，用 Python 端口占用器监听 `127.0.0.1:4317`，再启动 Electron flag packaged app；超过 5 次 restart attempt 后，agent-server 不再残留，PromptPanel 可见错误文案 `agent-server stopped after 5 restart attempts: agent-server exited with code 1`，截图 `/tmp/handagent-qa/electron-supervisor-max-prompt.png`。清理后无 HandAgent / Electron / agent-server 残留，`127.0.0.1:4317` 无监听。
 - packaged app 产物与 mock LLM 路径已验证：`dist/HandAgentDesktop.app/Contents/Resources/ElectronShell/dist/main/main.js` 存在；`HANDAGENT_ELECTRON_BINARY` 指向的 Electron binary 可执行且版本为 `v42.3.3`；`~/.spotAgent/threads/thread-1780947483869-t8ou50.json` 中 assistant 内容为 `Mock assistant response: main chain is reachable.`，确认 mock packaged app 未访问真实 LLM。
 - PromptPanel 连续提交已验证复用同一个 Electron ThreadWindow 并创建不同 thread/tab：第一次提交 `ELECTRON_MULTI_PROMPT_QA_20260609_A [mock:assistant-ok]` 生成 `~/.spotAgent/threads/thread-1780948156864-2ttk2d.json`；第二次提交 `ELECTRON_MULTI_PROMPT_QA_20260609_B [mock:assistant-ok]` 生成 `~/.spotAgent/threads/thread-1780948177419-qwq8of.json`；两次提交后 `HandAgent ThreadWindow` 的 CoreGraphics window number 均为 `43975`，截图 `/tmp/handagent-qa/electron-two-prompt-tabs.png` 显示同一 Electron ThreadWindow 内有两个 tab，当前内容为 B prompt。
@@ -107,7 +107,7 @@
 
 **2026-06-09 待回归修复项**：
 
-- 关闭可见 Electron ThreadWindow 后，ActivityWindow 仍显示且 agent-server 继续监听 `127.0.0.1:4317` 时，用 CGEvent 点击 ActivityWindow 中心应打开 Swift `PromptPanel`。`2af9ba0` 已加入 ActivityWindow `acceptFirstMouse: true` 并通过自动化覆盖，但主仓库 packaged app 实机回归仍失败；二次修复改为 `focusable: true` + `acceptFirstMouse: true`，仍需主仓库 packaged app 实机回归确认。
+- 关闭可见 Electron ThreadWindow 后，ActivityWindow 仍显示且 agent-server 继续监听 `127.0.0.1:4317` 时，用 CGEvent 点击 ActivityWindow 中心应打开 Swift `PromptPanel`。`2af9ba0` 的 `acceptFirstMouse: true` 修复不足；`412e1e9` 的 `focusable: true` + `acceptFirstMouse: true` 也已在主仓库 packaged app 实机回归失败。当前缺陷已写入 `docs/bugs.md`，下一轮需继续定位 `ActivityWindow renderer click -> activity-window:focus-thread IPC -> ElectronShellRuntime.handleActivityWindowFocusRequest -> prompt_panel.show_requested` 哪一跳未发生。
 
 **2026-06-09 阻塞子项**：
 
