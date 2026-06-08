@@ -75,6 +75,46 @@ describe("NodeAgentServerSupervisor", () => {
     expect(process.stderr.listenerCount("data")).toBeGreaterThan(0);
   });
 
+  it("describes the node child supervisor and utilityProcess blocker", () => {
+    const supervisor = new NodeAgentServerSupervisor({
+      repoRoot: "/repo",
+      nodePath: "/usr/bin/node",
+      env: {},
+      utilityProcessBlocker: "missing built JS entry",
+      waitForReady: () => Promise.resolve(),
+      spawnProcess: () => new FakeChildProcess(),
+    });
+
+    expect(supervisor.describe()).toEqual({
+      mode: "node_child",
+      entry: "apps/agent-server/src/server/server.ts",
+      coreRuntimeHost: "agent-server",
+      utilityProcessBlocker: "missing built JS entry",
+    });
+  });
+
+  it("writes child stdout and stderr to the injected log sink", () => {
+    const process = new FakeChildProcess();
+    const lines: string[] = [];
+    const supervisor = new NodeAgentServerSupervisor({
+      repoRoot: "/repo",
+      nodePath: "/usr/bin/node",
+      env: {},
+      logSink: (line) => lines.push(line),
+      waitForReady: () => Promise.resolve(),
+      spawnProcess: () => process,
+    });
+
+    supervisor.start();
+    process.stdout.emit("data", Buffer.from("ready\n"));
+    process.stderr.emit("data", Buffer.from("warn\n"));
+
+    expect(lines).toEqual([
+      "[agent-server stdout] ready\n",
+      "[agent-server stderr] warn\n",
+    ]);
+  });
+
   it("emits unavailable health on non-zero exit", () => {
     const process = new FakeChildProcess();
     const health: Array<{ available: boolean; message?: string }> = [];
@@ -160,6 +200,32 @@ describe("NodeAgentServerSupervisor", () => {
     expect(health.at(-1)).toEqual({
       available: false,
       message: "agent-server process error: spawn failed",
+    });
+  });
+
+  it("reports a final unavailable health event after max restart attempts", () => {
+    const process = new FakeChildProcess();
+    const health: Array<{ available: boolean; message?: string }> = [];
+    const scheduled: Array<() => void> = [];
+    const supervisor = new NodeAgentServerSupervisor({
+      repoRoot: "/repo",
+      nodePath: "/usr/bin/node",
+      env: {},
+      maxRestartAttempts: 1,
+      waitForReady: () => Promise.resolve(),
+      spawnProcess: () => process,
+      scheduleRestart: (callback) => scheduled.push(callback),
+    });
+    supervisor.onHealth((event) => health.push(event));
+
+    supervisor.start();
+    process.emit("exit", 9, null);
+    scheduled[0]?.();
+    process.emit("exit", 9, null);
+
+    expect(health.at(-1)).toEqual({
+      available: false,
+      message: "agent-server stopped after 1 restart attempts: agent-server exited with code 9",
     });
   });
 

@@ -1,11 +1,12 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import type { EventEmitter } from "node:events";
 import { createConnection } from "node:net";
-
-export type AgentServerHealthEvent = {
-  available: boolean;
-  message?: string;
-};
+import type {
+  AgentServerHealthEvent,
+  AgentServerLogSink,
+  AgentServerSupervisor,
+  AgentServerSupervisorDescription,
+} from "./agentServerSupervisor.js";
 
 export type AgentServerChildProcess = EventEmitter & {
   stdout?: EventEmitter | null;
@@ -23,6 +24,8 @@ type SupervisorOptions = {
   repoRoot: string;
   nodePath: string;
   env: NodeJS.ProcessEnv;
+  utilityProcessBlocker?: string | null;
+  logSink?: AgentServerLogSink;
   spawnProcess?: (
     command: string,
     args: string[],
@@ -37,7 +40,7 @@ type SupervisorOptions = {
   maxRestartAttempts?: number;
 };
 
-export class NodeAgentServerSupervisor {
+export class NodeAgentServerSupervisor implements AgentServerSupervisor {
   private child: AgentServerChildProcess | null = null;
   private userRequestedStop = false;
   private restartAttempts = 0;
@@ -69,6 +72,15 @@ export class NodeAgentServerSupervisor {
       pollIntervalMs: options.readinessPollIntervalMs ?? 100,
     }));
     this.maxRestartAttempts = options.maxRestartAttempts ?? 5;
+  }
+
+  describe(): AgentServerSupervisorDescription {
+    return {
+      mode: "node_child",
+      entry: "apps/agent-server/src/server/server.ts",
+      coreRuntimeHost: "agent-server",
+      utilityProcessBlocker: this.options.utilityProcessBlocker ?? null,
+    };
   }
 
   onHealth(listener: (event: AgentServerHealthEvent) => void): () => void {
@@ -167,11 +179,15 @@ export class NodeAgentServerSupervisor {
 
   private handleFailure(message: string): void {
     this.child = null;
-    this.emitHealth({ available: false, message });
     if (this.restartAttempts >= this.maxRestartAttempts) {
+      this.emitHealth({
+        available: false,
+        message: `agent-server stopped after ${this.maxRestartAttempts} restart attempts: ${message}`,
+      });
       return;
     }
 
+    this.emitHealth({ available: false, message });
     const delayMs = Math.min(30_000, 2 ** this.restartAttempts * 1_000);
     this.restartAttempts += 1;
     const generation = this.restartGeneration;
@@ -191,11 +207,19 @@ export class NodeAgentServerSupervisor {
 
   private drainChildOutput(child: AgentServerChildProcess): void {
     child.stdout?.on("data", (chunk: unknown) => {
-      process.stderr.write(formatChildOutput("stdout", chunk));
+      this.writeLog(formatChildOutput("stdout", chunk));
     });
     child.stderr?.on("data", (chunk: unknown) => {
-      process.stderr.write(formatChildOutput("stderr", chunk));
+      this.writeLog(formatChildOutput("stderr", chunk));
     });
+  }
+
+  private writeLog(line: string): void {
+    if (this.options.logSink) {
+      this.options.logSink(line);
+      return;
+    }
+    process.stderr.write(line);
   }
 }
 
