@@ -19,7 +19,7 @@
 | `src/store/` | `zustand + immer` ThreadWindow 状态源（包含 workspace 列表、展开状态、搜索查询） |
 | `src/components/` | UI 组件层（见下方组件架构） |
 | `src/styles/` | Tailwind CSS 样式入口（`tailwind.css`） |
-| `src/native/` | Swift 注入配置和初始 prompt 接收 |
+| `src/native/` | Swift 注入配置和初始 prompt 接收；启动时 flush Swift early receiver 暂存的 `handAgentPendingInitialPrompts` |
 | `src/utils/` | 工具函数（如 `cn.ts` 用于 Tailwind 类名合并） |
 
 ## 组件架构
@@ -94,6 +94,15 @@ Tailwind 主题配置见 `tailwind.config.js`，关键 token 由 `tests/designTo
 - **ThreadStartCommand** 的 `workspaceId` 可选参数，用于创建关联到 workspace 的 thread
 
 向后兼容策略：旧 thread 文件缺失 `workspaceId` 时自动补充为 `null`，归入"默认对话"分组。
+
+## Swift 初始 prompt 桥
+
+Swift `ThreadWindowWebHost.configurationScript` 在 document start 注入 `/api/thread` URL，并安装一个临时 `window.handAgentReceiveInitialPrompt`。这个临时 receiver 只把早到的 payload 放进 `window.handAgentPendingInitialPrompts`。React `App` 挂载后通过 `installInitialPromptReceiver` 安装正式 receiver，立即 flush pending 队列，并调用 `ThreadSocketClient.startInitialPrompt(payload)`。这样即使 `WKNavigationDelegate.didFinish` 早于 React `useEffect`，PromptPanel 提交也不会只打开窗口而丢失新对话。
+
+相关测试：
+
+- `tests/nativeConfig.test.ts`：覆盖 early pending prompt flush。
+- Swift 侧 `ThreadWindowWebHostTests`：覆盖配置脚本会安装可排队 receiver。
 
 ## 边界
 

@@ -1,4 +1,5 @@
 import XCTest
+import JavaScriptCore
 @testable import HandAgentDesktop
 
 @MainActor
@@ -13,6 +14,32 @@ final class ThreadWindowWebHostTests: XCTestCase {
 
         XCTAssertTrue(script.contains("window.handAgentThreadWindowConfig"))
         XCTAssertTrue(script.contains(#""threadWebSocketURL":"ws:\/\/127.0.0.1:4317\/api\/thread""#))
+    }
+
+    func testConfigurationScriptQueuesInitialPromptsBeforeReactReceiverIsReady() throws {
+        let host = ThreadWindowWebHost(
+            threadWebSocketURL: URL(string: "ws://127.0.0.1:4317/api/thread")!,
+            webAppURL: URL(fileURLWithPath: "/tmp/index.html")
+        )
+        let context = try XCTUnwrap(JSContext())
+        context.evaluateScript("var window = {};")
+
+        context.evaluateScript(host.configurationScript)
+        context.evaluateScript("""
+        window.handAgentReceiveInitialPrompt({
+          clientRequestId: "prompt-1",
+          text: "hello",
+          attachments: [],
+          actionBinding: null
+        });
+        """)
+
+        XCTAssertEqual(context.evaluateScript("typeof window.handAgentReceiveInitialPrompt")?.toString(), "function")
+        XCTAssertEqual(context.evaluateScript("window.handAgentPendingInitialPrompts.length")?.toInt32(), 1)
+        XCTAssertEqual(
+            context.evaluateScript("window.handAgentPendingInitialPrompts[0].text")?.toString(),
+            "hello"
+        )
     }
 
     func testInitialPromptsQueueAndDrainInOrder() throws {

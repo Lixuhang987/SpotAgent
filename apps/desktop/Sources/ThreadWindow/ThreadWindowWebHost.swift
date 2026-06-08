@@ -40,13 +40,28 @@ final class ThreadWindowWebHost {
 
     var configurationScript: String {
         let config = ["threadWebSocketURL": threadWebSocketURL.absoluteString]
-        guard
+        let json: String
+        if
             let data = try? JSONEncoder().encode(config),
-            let json = String(data: data, encoding: .utf8)
-        else {
-            return "window.handAgentThreadWindowConfig = {};"
+            let encoded = String(data: data, encoding: .utf8)
+        {
+            json = encoded
+        } else {
+            json = "{}"
         }
-        return "window.handAgentThreadWindowConfig = \(json);"
+        return """
+        (() => {
+          window.handAgentThreadWindowConfig = \(json);
+          window.handAgentPendingInitialPrompts = Array.isArray(window.handAgentPendingInitialPrompts)
+            ? window.handAgentPendingInitialPrompts
+            : [];
+          if (typeof window.handAgentReceiveInitialPrompt !== "function") {
+            window.handAgentReceiveInitialPrompt = (payload) => {
+              window.handAgentPendingInitialPrompts.push(payload);
+            };
+          }
+        })();
+        """
     }
 
     init(threadWebSocketURL: URL, webAppURL: URL) {

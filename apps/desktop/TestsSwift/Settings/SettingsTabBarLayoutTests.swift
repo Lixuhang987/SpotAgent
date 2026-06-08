@@ -5,8 +5,17 @@ import XCTest
 @MainActor
 final class SettingsTabBarLayoutTests: XCTestCase {
     func testTabButtonUsesFlexibleMaxWidthInsteadOfFixedWidth() {
+        let testFileURL = URL(fileURLWithPath: #filePath)
+        let desktopRoot = testFileURL
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsStylesURL = desktopRoot
+            .appendingPathComponent("Sources")
+            .appendingPathComponent("Settings")
+            .appendingPathComponent("SettingsStyles.swift")
         let source = try! String(
-            contentsOfFile: "/Users/mu9/proj/handAgent/.worktrees/ui-theme-settings-fix/apps/desktop/Sources/Settings/SettingsStyles.swift",
+            contentsOf: settingsStylesURL,
             encoding: .utf8
         )
 
