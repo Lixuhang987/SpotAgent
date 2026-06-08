@@ -81,6 +81,7 @@
 **2026-06-09 缺陷记录**：
 
 - 关闭可见 Electron ThreadWindow 后，ActivityWindow 仍显示且 agent-server 继续监听 `127.0.0.1:4317`，但连续两次用 CGEvent 点击 ActivityWindow 中心后，Swift `PromptPanel` 未打开；窗口状态只有 Electron `HandAgent Activity`，HandAgentDesktop 无可见窗口。证据截图：`/tmp/handagent-qa/electron-bubble-after-threadwindow-close-click.png`、`/tmp/handagent-qa/electron-bubble-no-threadwindow-second-click.png`。该缺陷已写入 `docs/bugs.md`。
+- Electron flag 启动时 supervisor description 未出现在可观察启动日志中：使用 `HANDAGENT_ELECTRON_SHELL=1` 与 packaged mock app 启动后，Swift / Electron main / agent-server 均启动成功，`127.0.0.1:4317` 有 node 监听，`/api/activity` 返回 idle snapshot，但 `/tmp/handagent-qa/electron-log-description-20260609.log` 为 0 行，`log show --last 3m --predicate 'process == "HandAgentDesktop" OR process == "Electron"'` 和 `/tmp/handagent-qa/*.log` 中均未找到 `agent-server supervisor` / `coreRuntimeHost` / `utilityProcessBlocker`。该缺陷已写入 `docs/bugs.md`。
 
 **2026-06-09 阻塞子项**：
 

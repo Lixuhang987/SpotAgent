@@ -31,6 +31,20 @@
 
 ## 当前 bug
 
+### Electron supervisor description 启动日志不可见
+
+- **严重级别**：P2
+- **发现日期**：2026-06-09
+- **复现步骤**：
+  1. 在 `main` 的 `/Users/mu9/proj/handAgent` 确认工作区干净且 `127.0.0.1:4317` 无监听。
+  1. 使用 `HANDAGENT_ELECTRON_SHELL=1` 与 `HANDAGENT_ELECTRON_BINARY=/Users/mu9/proj/handAgent/node_modules/.pnpm/electron@42.3.3/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron` 启动 `dist/HandAgentDesktop.app/Contents/MacOS/HandAgentDesktop`，并把 app stdout/stderr 重定向到 `/tmp/handagent-qa/electron-log-description-20260609.log`。
+  1. 等待 Electron flag 路径启动完成。
+  1. 检查 app stdout/stderr、macOS unified log 和 `/tmp/handagent-qa/*.log`。
+- **实际结果**：Swift 宿主、Electron main、agent-server 均启动成功，`127.0.0.1:4317` 由 `node --experimental-transform-types ... apps/agent-server/src/server/server.ts` 监听，`/api/activity` 返回 idle snapshot；但 `/tmp/handagent-qa/electron-log-description-20260609.log` 为 0 行，`log show --last 3m --predicate 'process == "HandAgentDesktop" OR process == "Electron"'` 和 `/tmp/handagent-qa/*.log` 均找不到 `agent-server supervisor`、`coreRuntimeHost` 或 `utilityProcessBlocker`。
+- **期望结果**：Electron flag 启动日志应包含 agent-server supervisor description，并明确 `mode`、`coreRuntimeHost: "agent-server"` 与 `utilityProcessBlocker`；如果走 Node child fallback，应说明 utilityProcess blocker，满足 `docs/manual-qa.md` 的 Electron UI Shell 最终态验收项。
+- **证据**：启动日志文件 `/tmp/handagent-qa/electron-log-description-20260609.log` 为 0 行；进程证据显示 `HandAgentDesktop`、Electron main、agent-server 与 renderer 均存在；`lsof -nP -iTCP:4317 -sTCP:LISTEN` 显示 node 监听；`/api/activity` 返回 `{"type":"activity.snapshot","status":"idle"}`。
+- **初步调用链 / 根因边界**：预期链路是 `Electron main bootElectronShell -> process.stderr.write("[electron-shell] agent-server supervisor: ...") -> Swift ElectronShellProcess stderr pipe -> 可观察启动日志或统一日志`。当前代码中 `ElectronShellProcess` 为 Electron 子进程设置 `standardError = Pipe()`，但 stderr readability handler 只读取并丢弃非空 data；失败边界疑似在 Swift 侧 stderr 转发/记录，而不是 Electron main 是否构造 description 或 agent-server 是否启动。
+
 ### Electron StatusBubble 无可聚焦 ThreadWindow 时未打开 PromptPanel
 
 - **严重级别**：P1
