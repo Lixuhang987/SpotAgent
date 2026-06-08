@@ -193,6 +193,7 @@ final class AppCoordinatorTests: XCTestCase {
 final class StubSettingsWindowPresenter: SettingsWindowPresenting {
     private let onPresent: () -> Void
     private(set) var lastShortcutActions: [ActionDefinition] = []
+    private(set) var presentedWindow: NSWindow?
 
     init(onPresent: @escaping () -> Void = {}) {
         self.onPresent = onPresent
@@ -211,6 +212,8 @@ final class StubSettingsWindowPresenter: SettingsWindowPresenting {
     ) -> NSWindow? {
         lastShortcutActions = shortcutActions
         onPresent()
-        return NSWindow()
+        let window = NSWindow()
+        presentedWindow = window
+        return window
     }
 }
