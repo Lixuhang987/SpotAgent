@@ -1003,3 +1003,11 @@
 - **验证过程**：使用当前 packaged mock app 中的 `THREADWINDOW_SCENE5A_SCROLL_QA_20260609 [mock:assistant-ok]` thread，其持久化文件为 `~/.spotAgent/threads/thread-1780955664655-r0vptz.json`，user prompt 包含 80 行长文本。WKWebView live 窗口保留初始静态截图，确认右侧消息区出现独立纵向滚动条、顶部 TabBar 和底部 Composer 位于固定区域。随后通过同一 app-server 的 ThreadWindow 运行时 DOM 执行动态滚动：左侧历史列表 `scrollHeight=4013`、`clientHeight=451`，滚动后 `scrollTop` 从 0 到 900，HandAgent 标题、新建对话按钮和搜索框坐标不变；右侧 MessageList `scrollHeight=4143`、`clientHeight=238`，滚动后 `scrollTop` 从 0 到 1200，TabBar 和 Composer 坐标不变；打开 10 个历史 thread 后 TabBar `scrollWidth=1164`、`clientWidth=620`，横向滚动后 `scrollLeft=544`，页面级 `docScrollWidth/bodyScrollWidth` 仍等于 920；最小宽度 640 下含权限请求面板时，`docScrollWidth/bodyScrollWidth` 仍等于 640。
 - **证据**：thread 文件 `~/.spotAgent/threads/thread-1780955664655-r0vptz.json`；JSON `/tmp/handagent-qa/threadwindow-scenario5a-scroll-evidence-cli.json`、`/tmp/handagent-qa/threadwindow-scenario5a-tabs-evidence-cli.json`；截图 `/tmp/handagent-qa/threadwindow-scenario5a-initial-long-message.png`、`/tmp/handagent-qa/threadwindow-scenario5a-sidebar-scrolled.png`、`/tmp/handagent-qa/threadwindow-scenario5a-message-scrolled.png`、`/tmp/handagent-qa/threadwindow-scenario5a-tabs-history-overflow.png`、`/tmp/handagent-qa/threadwindow-scenario5a-minwidth-permission-panel.png`。
 - **结论**：通过。
+
+### ThreadWindow 场景 6：warm-canvas 视觉验证
+
+- **验证日期**：2026-06-09
+- **验证环境**：默认 WKWebView packaged app，`mock-llm`
+- **验证过程**：通过当前 packaged app app-server 的 ThreadWindow 运行时 DOM 读取计算样式并截图。左侧 sidebar 背景为 `rgb(239, 233, 222)`，搜索框和选中历史项为 `rgb(250, 249, 245)`，边线为 `rgb(230, 223, 216)`；右侧 workspace 背景为 `rgb(24, 23, 21)`，TabBar 为 `rgb(31, 30, 27)`，Composer shell 为 `rgb(37, 35, 32)`；“新建对话”和可发送状态按钮均为 coral `rgb(204, 120, 92)`。消息样式按当前 `MessageBubble` GPT 风格实现：user 消息为 `bg-surface-card` warm cream，assistant 消息透明 `rgba(0, 0, 0, 0)`，tool 消息为 `bg-tool-bubble/50` 半透明 dark code-style。640px 最小宽度下 `docScrollWidth/bodyScrollWidth` 仍等于 640，未出现页面级横向溢出。原手工条目中的 “assistant cream card” 与当前 GPT 风格实现冲突，本次按代码和 `apps/thread-window-web/thread-window-web.md` 的当前设计事实归档。
+- **证据**：JSON `/tmp/handagent-qa/threadwindow-scenario6-warm-canvas-evidence-cli.json`；截图 `/tmp/handagent-qa/threadwindow-scenario6-warm-canvas-current.png`、`/tmp/handagent-qa/threadwindow-scenario6-minwidth-current.png`。
+- **结论**：通过。
