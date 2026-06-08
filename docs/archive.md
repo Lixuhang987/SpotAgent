@@ -931,3 +931,11 @@
 - **验证过程**：缺陷发现时，`THREADWINDOW_SCENE6_VISUAL_QA_20260609 [mock:workspace-list]` 与 `THREADWINDOW_SCENE7_LAYOUT_QA_20260609 [mock:assistant-ok]` 的 thread 文件分别持久化了完整 assistant 文本，但 ThreadWindow UI 只显示 `Mock`。按 `$trace-and-verify-call-chain` 定位到 agent-server 在同一毫秒内为多段 `assistant_message_delta` 生成重复 `notificationId`，React store 去重后丢弃后续 delta。修复后重新运行 agent-server / ThreadWindow web 相关测试、仓库级 TypeScript、Swift test/build，并重新打包 mock app；packaged live 回归提交 `THREADWINDOW_SCENE7_TEXT_FIX_QA_20260609 [mock:assistant-ok]` 与 `THREADWINDOW_SCENE6_TEXT_FIX_QA_20260609 [mock:workspace-list]`，ThreadWindow 分别完整显示 `Mock assistant response: main chain is reachable.` 与 `Mock workspace.list completed.`。
 - **证据**：修复前 thread `~/.spotAgent/threads/thread-1780956268767-2n3fjt.json`、`~/.spotAgent/threads/thread-1780956663996-o7g1aj.json`；修复前截图 `/tmp/handagent-qa/threadwindow-scenario6-visual-workspace-list-final.png`、`/tmp/handagent-qa/threadwindow-scenario7-layout-assistant-ok.png`；修复后 thread `~/.spotAgent/threads/thread-1780957524607-gfjaa7.json`、`~/.spotAgent/threads/thread-1780957564200-kgnmdi.json`；修复后截图 `/tmp/handagent-qa/threadwindow-scene7-text-fix.png`、`/tmp/handagent-qa/threadwindow-scene6-text-fix.png`；退出 QA app 后无 HandAgent / agent-server 残留，`127.0.0.1:4317` 无监听。
 - **结论**：最终 assistant 文本截断缺陷已修复并通过主仓库 packaged live 回归；该缺陷已从 `docs/bugs.md` 移除。
+
+### ThreadWindow 场景 8：消息操作按钮验证（GPT 风格）
+
+- **验证日期**：2026-06-09
+- **验证环境**：默认 WKWebView packaged app，`mock-llm`
+- **验证过程**：启动 `dist/HandAgentDesktop.app` 后提交 `THREADWINDOW_SCENE8_ACTION_BUTTONS_QA_20260609_R2 [mock:workspace-list]`，生成 workspace.list tool 结果与 final assistant 消息。初始状态下 assistant 和 tool 消息无操作按钮；hover final assistant 后显示 `复制 / 编辑 / 重新生成`，按钮栏使用低对比度 cream 文本且没有推动后续内容；hover tool 结果时 tool 下方不出现独立操作按钮。CoreGraphics 精确点击 final assistant 的复制按钮后，`pbpaste` 返回 `Mock workspace.list completed.`。AX 读取 final assistant 按钮状态为 `复制消息 enabled=true`、`编辑 enabled=false`、`重新生成 enabled=false`，`编辑` 与 `重新生成` 的 `AXHelp` 均为 `即将推出`。
+- **证据**：thread 文件 `~/.spotAgent/threads/thread-1780957822168-ghgnjc.json`；截图 `/tmp/handagent-qa/threadwindow-scenario8-r2-initial.png`、`/tmp/handagent-qa/threadwindow-scenario8-assistant-hover.png`、`/tmp/handagent-qa/threadwindow-scenario8-tool-hover.png`、`/tmp/handagent-qa/threadwindow-scenario8-copy-click-swift-585.png`。
+- **结论**：通过。

@@ -194,6 +194,7 @@
 - 场景 5 已完成默认 WKWebView packaged live 验证：提交 `THREADWINDOW_SCENE5_RESPONSIVE_QA_20260609 [mock:assistant-ok]` 后生成 `~/.spotAgent/threads/thread-1780954592680-hdn67v.json`。用 AX 调整 `HandAgent` 窗口尺寸并读取 sidebar `complementary` 区域：窗口 920x640 时 sidebar 为 276x612，接近 30%，截图 `/tmp/handagent-qa/threadwindow-scenario5-width-920.png`；窗口放大到实际 1280x640 时 sidebar 为 320x612，达到最大宽度上限，截图 `/tmp/handagent-qa/threadwindow-scenario5-width-1300.png`；窗口 800x640 时 sidebar 为 240x612，仍接近 30% 且高于 220，截图 `/tmp/handagent-qa/threadwindow-scenario5-width-800.png`；窗口 740x640 时 main 只有右侧 region，sidebar 隐藏，截图 `/tmp/handagent-qa/threadwindow-scenario5-width-740.png`；重新放回 920x640 后 main 恢复为 2 个区域，sidebar 为 276x612，搜索框仍存在且为空，截图 `/tmp/handagent-qa/threadwindow-scenario5-width-920-restored.png`。退出后无 HandAgent / agent-server 残留，`127.0.0.1:4317` 无监听。
 - 场景 5A 已启动但未完成动态滚动验证：默认 WKWebView packaged mock app 提交 `THREADWINDOW_SCENE5A_SCROLL_QA_20260609 [mock:assistant-ok]`，生成 `~/.spotAgent/threads/thread-1780955664655-r0vptz.json`，其中 user prompt 包含 80 行长文本，ThreadWindow 右侧出现独立纵向滚动条，顶部 TabBar 和底部 Composer 可见且位于固定区域，截图 `/tmp/handagent-qa/threadwindow-scenario5a-initial-long-message.png`。但本轮用 CoreGraphics wheel（line / pixel、正反方向）、鼠标点击后 Page Down、方向键、窗口级 `AXScrollDown` 均未能驱动 WKWebView 内部滚动；AX 子树枚举 `window "HandAgent"` 仍返回 `-10000`，窗口级 `AXScrollDown` 返回 `-1728`。因此本轮只记录静态布局证据，不把场景 5A 判为通过，也不判为产品缺陷；需下一轮使用可操作 WKWebView 滚动的输入路径继续验证左侧列表滚动、右侧消息滚动、TabBar 横向滚动和最小尺寸横向溢出。退出后无 HandAgent / agent-server 残留，`127.0.0.1:4317` 无监听。
 - 场景 6 / 场景 7 assistant 文本截断缺陷已通过默认 WKWebView packaged live 回归：缺陷发现时，`THREADWINDOW_SCENE6_VISUAL_QA_20260609 [mock:workspace-list]` 生成 `~/.spotAgent/threads/thread-1780956268767-2n3fjt.json`，持久化最终 assistant content 为 `Mock workspace.list completed.`，但截图 `/tmp/handagent-qa/threadwindow-scenario6-visual-workspace-list-final.png` 与裁剪 `/tmp/handagent-qa/threadwindow-scenario6-assistant_final_crop.png` 只显示 `Mock`；`THREADWINDOW_SCENE7_LAYOUT_QA_20260609 [mock:assistant-ok]` 生成 `~/.spotAgent/threads/thread-1780956663996-o7g1aj.json`，持久化 assistant content 为 `Mock assistant response: main chain is reachable.`，但截图 `/tmp/handagent-qa/threadwindow-scenario7-layout-assistant-ok.png` 与裁剪 `/tmp/handagent-qa/threadwindow-scenario7-assistant-final-crop.png` 也只显示 `Mock`。子 agent `019ea947-5f2d-7982-b734-77dcf5ce7f63` 按 `$trace-and-verify-call-chain` 定位到 agent-server 在同一毫秒内为多段 `assistant_message_delta` 生成重复 `notificationId`，React store 去重后丢弃后续 delta；修复 `176f0d5` 增加每个 active run 的单调 `notificationSequence` 并拼入 runtime notificationId，`assistant.delta.itemId` 仍保持不变用于文本拼接。主仓库重新执行相关 agent-server / ThreadWindow web 测试、`bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build` 与 `bash ./scripts/package-app.sh --mock-llm` 后，packaged app 提交 `THREADWINDOW_SCENE7_TEXT_FIX_QA_20260609 [mock:assistant-ok]` 生成 `~/.spotAgent/threads/thread-1780957524607-gfjaa7.json`，UI 完整显示 `Mock assistant response: main chain is reachable.`，截图 `/tmp/handagent-qa/threadwindow-scene7-text-fix.png`；提交 `THREADWINDOW_SCENE6_TEXT_FIX_QA_20260609 [mock:workspace-list]` 生成 `~/.spotAgent/threads/thread-1780957564200-kgnmdi.json`，UI 完整显示 `Mock workspace.list completed.`，截图 `/tmp/handagent-qa/threadwindow-scene6-text-fix.png`。该缺陷已从 `docs/bugs.md` 移除并追加到 `docs/archive.md`；退出后无 HandAgent / agent-server 残留，`127.0.0.1:4317` 无监听。
+- 场景 8 已完成默认 WKWebView packaged live 验证：提交 `THREADWINDOW_SCENE8_ACTION_BUTTONS_QA_20260609_R2 [mock:workspace-list]` 后生成 `~/.spotAgent/threads/thread-1780957822168-ghgnjc.json`。初始截图 `/tmp/handagent-qa/threadwindow-scenario8-r2-initial.png` 确认 assistant 和 tool 消息默认无操作按钮；hover assistant 后截图 `/tmp/handagent-qa/threadwindow-scenario8-assistant-hover.png` 显示低对比度 cream 的 `复制 / 编辑 / 重新生成` 按钮且无布局跳动；hover tool 后截图 `/tmp/handagent-qa/threadwindow-scenario8-tool-hover.png` 确认 tool 结果下方无独立操作按钮。用 CoreGraphics 精确点击 final assistant 的复制按钮后，`pbpaste` 返回 `Mock workspace.list completed.`，截图 `/tmp/handagent-qa/threadwindow-scenario8-copy-click-swift-585.png`；AX 读取 final assistant 组按钮状态为 `复制消息 enabled=true`、`编辑 enabled=false`、`重新生成 enabled=false`，且 `编辑` / `重新生成` 的 `AXHelp` 均为 `即将推出`。结论：场景 8 消息操作按钮已通过。
 
 ### 前提条件
 - 已通过 `bash ./scripts/test.sh`
@@ -325,15 +326,6 @@
 - [ ] 侧边栏使用 `#efe9de` (surface-card, warm cream)，不是 spec 中的 `#2F2F2F`
 - [ ] user 消息背景使用 `#efe9de` (surface-card, warm cream)，不是 spec 中的 `#3A3A3A`
 - [ ] 主按钮使用 `#cc785c` (primary, coral)
-
-#### 场景 8: 消息操作按钮验证（GPT 风格）
-
-1. 确认 assistant 和 tool 消息的操作按钮默认不显示
-2. hover assistant 消息，确认操作按钮显示
-3. 确认 hover后 tool下面不显示操作按钮
-4. 点击"复制"按钮，确认消息内容复制到剪贴板
-5. 确认"编辑"和"重新生成"按钮显示但禁用，hover 时显示 tooltip "即将推出"
-6. 确认操作按钮栏在深色 workspace 上使用低对比度 cream 文本，不干扰阅读
 
 #### 场景 9: Composer 自动增高输入框验证（GPT 风格）
 
