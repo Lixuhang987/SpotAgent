@@ -214,12 +214,21 @@ describe("ActivityWindowController", () => {
     expect(preventDefault).not.toHaveBeenCalled();
   });
 
-  it("releases native focus for the next activity click by re-showing inactive", async () => {
-    const window = new FakeBrowserWindow();
+  it("releases stale native window state for the next activity click by rebuilding the window", async () => {
+    const firstWindow = new FakeBrowserWindow();
+    const secondWindow = new FakeBrowserWindow();
+    const windows = [firstWindow, secondWindow];
+    const createWindow = vi.fn(() => {
+      const window = windows.shift();
+      if (!window) {
+        throw new Error("unexpected createWindow");
+      }
+      return window;
+    });
     const controller = new ActivityWindowController({
       activityWindowHTMLPath: "/dist/activity-window/index.html",
       preloadPath: "/dist/preload/activityWindowPreload.js",
-      createWindow: () => window,
+      createWindow,
       screenProvider: {
         getPrimaryWorkArea: () => ({ x: 0, y: 0, width: 1440, height: 900 }),
       },
@@ -227,9 +236,14 @@ describe("ActivityWindowController", () => {
 
     await controller.show();
     controller.releaseNativeFocusForNextClick();
+    await Promise.resolve();
 
-    expect(window.hideCount).toBe(1);
-    expect(window.showInactiveCount).toBe(2);
+    expect(createWindow).toHaveBeenCalledTimes(2);
+    expect(firstWindow.destroyCount).toBe(1);
+    expect(firstWindow.showInactiveCount).toBe(1);
+    expect(secondWindow.loadedFile).toBe("/dist/activity-window/index.html");
+    expect(secondWindow.showInactiveCount).toBe(1);
+    expect(secondWindow.bounds).toEqual({ x: 1144, y: 800, width: 272, height: 76 });
   });
 
   it("ignores native focus release before the activity window exists", () => {
@@ -254,7 +268,7 @@ class FakeBrowserWindow extends EventEmitter {
   loadedFile: string | null = null;
   loadFileCount = 0;
   showInactiveCount = 0;
-  hideCount = 0;
+  destroyCount = 0;
 
   setBounds(bounds: { x: number; y: number; width: number; height: number }): void {
     this.bounds = bounds;
@@ -270,7 +284,8 @@ class FakeBrowserWindow extends EventEmitter {
     this.showInactiveCount += 1;
   }
 
-  hide(): void {
-    this.hideCount += 1;
+  destroy(): void {
+    this.destroyCount += 1;
+    this.emit("closed");
   }
 }

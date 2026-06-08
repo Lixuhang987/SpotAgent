@@ -24,7 +24,7 @@
 - `show()` 每次都会按 primary work area 重新计算右下角 bounds，再用 `showInactive()` 显示，避免抢焦点。
 - ActivityWindow 只 load `dist/activity-window/index.html`；状态数据由 renderer 通过 `/api/activity` 获取。
 - ActivityWindow 的 native `focus` 和 `before-mouse-event` 左键 `mouseDown` 要作为 renderer click IPC 的兜底上报给 runtime：如果 visible ThreadWindow 可聚焦则聚焦 ThreadWindow，否则发送 `prompt_panel.show_requested`。`before-mouse-event` 兜底要阻止对应 page mouse event，避免 renderer click IPC 再次发送同一点击意图。
-- visible ThreadWindow 关闭后，runtime 会让 ActivityWindow `hide()` 后再 `showInactive()`，复用非激活展示路径释放 native focus / AXMain 状态，让下一次点击重新产生 focus 或 mouse event；这不能创建 ActivityWindow，也不能触发 PromptPanel。
+- visible ThreadWindow 关闭后，runtime 会让 ActivityWindow 销毁旧 `BrowserWindow` 并重新创建一个 `showInactive()` 窗口，用新的 native window identity 释放旧窗口的 native focus / AXMain 状态，让下一次点击重新产生 focus 或 mouse event；这不会直接触发 PromptPanel。
 - renderer crash 只上报 `renderer.crashed window: "activity"`；Swift 侧可回退 StatusBubble，但不代表 agent-server 不可用。
 
 ## 修改约束

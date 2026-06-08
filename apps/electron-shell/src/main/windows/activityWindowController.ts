@@ -9,7 +9,7 @@ export type BrowserWindowLike = {
   loadFile(filePath: string): Promise<unknown> | unknown;
   setBounds(bounds: Rectangle): void;
   showInactive(): void;
-  hide(): void;
+  destroy(): void;
 };
 
 type ScreenProvider = {
@@ -64,8 +64,13 @@ export class ActivityWindowController {
       return;
     }
 
-    window.hide();
-    window.showInactive();
+    this.window = null;
+    this.hasLoaded = false;
+    window.destroy();
+    void this.show().catch(() => {
+      // The close path is best-effort: a later explicit activity_window.show command
+      // still reports load failures through its command ack.
+    });
   }
 
   private ensureWindow(): BrowserWindowLike {
