@@ -132,6 +132,32 @@ describe("ElectronShellRuntime", () => {
     });
   });
 
+  it("uses native activity mouse down when focus is already held by the activity window", () => {
+    const harness = createHarness({ focusResult: false });
+
+    harness.runtime.handleActivityWindowNativeMouseDown();
+
+    expect(harness.prewarmer.focus).toHaveBeenCalledTimes(1);
+    expect(harness.events).toContainEqual({
+      channel: "electron_shell",
+      type: "prompt_panel.show_requested",
+      reason: "activity_window.clicked_without_thread",
+    });
+  });
+
+  it("focuses a visible thread window from native activity mouse down", () => {
+    const harness = createHarness();
+
+    harness.runtime.handleActivityWindowNativeMouseDown();
+
+    expect(harness.prewarmer.focus).toHaveBeenCalledTimes(1);
+    expect(harness.events).not.toContainEqual({
+      channel: "electron_shell",
+      type: "prompt_panel.show_requested",
+      reason: "activity_window.clicked_without_thread",
+    });
+  });
+
   it("acks focus false when no visible thread window exists", async () => {
     const harness = createHarness({ focusResult: false });
 

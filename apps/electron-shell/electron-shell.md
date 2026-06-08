@@ -25,11 +25,11 @@
 ## Phase 3 StatusBubble
 
 - `ActivityWindowController` 创建 frameless/transparent Electron `BrowserWindow`，加载 `dist/activity-window/index.html`。
-- ActivityWindow 使用 `showInactive()` 非激活展示，窗口 `focusable: true`、`acceptFirstMouse: true`、`skipTaskbar: true`、`alwaysOnTop: true`；不要用不可聚焦窗口阻断 macOS CGEvent 点击进入 renderer。macOS packaged CGEvent 点击若只把 ActivityWindow 变成 native focus / AXMain 而没有送达 renderer IPC，Electron main 也会把该 native focus 当作点击兜底。
+- ActivityWindow 使用 `showInactive()` 非激活展示，窗口 `focusable: true`、`acceptFirstMouse: true`、`skipTaskbar: true`、`alwaysOnTop: true`；不要用不可聚焦窗口阻断 macOS CGEvent 点击进入 renderer。macOS packaged CGEvent 点击若只触发 ActivityWindow native focus / AXMain 或 `before-mouse-event` 而没有送达 renderer IPC，Electron main 也会把这些 native 事件当作点击兜底。
 - activity renderer 直接连接 `ws://127.0.0.1:4317/api/activity`，只消费 `AgentActivityEvent`。
 - ActivityWindow 的 `webPreferences` 固定为 `contextIsolation: true`、`nodeIntegration: false`。
 - preload 只暴露 activity WebSocket URL 和 `focusThread(threadId)`；renderer 不获得 Node/Electron 全量能力。
-- 点击气泡后 Electron main 优先聚焦 visible ThreadWindow；如果没有可聚焦窗口，发送 `prompt_panel.show_requested` 给 Swift。该语义同时覆盖 renderer `activity-window:focus-thread` IPC 和 ActivityWindow native focus 兜底。
+- 点击气泡后 Electron main 优先聚焦 visible ThreadWindow；如果没有可聚焦窗口，发送 `prompt_panel.show_requested` 给 Swift。该语义同时覆盖 renderer `activity-window:focus-thread` IPC、ActivityWindow native focus 和 native mouse down 兜底。
 
 ## Phase 3 边界
 

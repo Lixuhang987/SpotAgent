@@ -129,6 +129,90 @@ describe("ActivityWindowController", () => {
 
     expect(onNativeFocus).toHaveBeenCalledTimes(1);
   });
+
+  it("emits native left mouse down as a focused activity click fallback", async () => {
+    const window = new FakeBrowserWindow();
+    const onNativeMouseDown = vi.fn();
+    const preventDefault = vi.fn();
+    const controller = new ActivityWindowController({
+      activityWindowHTMLPath: "/dist/activity-window/index.html",
+      preloadPath: "/dist/preload/activityWindowPreload.js",
+      createWindow: () => window,
+      screenProvider: {
+        getPrimaryWorkArea: () => ({ x: 0, y: 0, width: 1440, height: 900 }),
+      },
+      onNativeMouseDown,
+    });
+
+    await controller.show();
+    expect(onNativeMouseDown).not.toHaveBeenCalled();
+
+    window.webContents.emit(
+      "before-mouse-event",
+      { preventDefault },
+      { type: "mouseDown", button: "left", x: 128, y: 32 },
+    );
+
+    expect(onNativeMouseDown).toHaveBeenCalledTimes(1);
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats native mouse down without button as an activity click fallback", async () => {
+    const window = new FakeBrowserWindow();
+    const onNativeMouseDown = vi.fn();
+    const preventDefault = vi.fn();
+    const controller = new ActivityWindowController({
+      activityWindowHTMLPath: "/dist/activity-window/index.html",
+      preloadPath: "/dist/preload/activityWindowPreload.js",
+      createWindow: () => window,
+      screenProvider: {
+        getPrimaryWorkArea: () => ({ x: 0, y: 0, width: 1440, height: 900 }),
+      },
+      onNativeMouseDown,
+    });
+
+    await controller.show();
+    expect(onNativeMouseDown).not.toHaveBeenCalled();
+
+    window.webContents.emit(
+      "before-mouse-event",
+      { preventDefault },
+      { type: "mouseDown", x: 128, y: 32 },
+    );
+
+    expect(onNativeMouseDown).toHaveBeenCalledTimes(1);
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores non-click native mouse events", async () => {
+    const window = new FakeBrowserWindow();
+    const onNativeMouseDown = vi.fn();
+    const preventDefault = vi.fn();
+    const controller = new ActivityWindowController({
+      activityWindowHTMLPath: "/dist/activity-window/index.html",
+      preloadPath: "/dist/preload/activityWindowPreload.js",
+      createWindow: () => window,
+      screenProvider: {
+        getPrimaryWorkArea: () => ({ x: 0, y: 0, width: 1440, height: 900 }),
+      },
+      onNativeMouseDown,
+    });
+
+    await controller.show();
+    window.webContents.emit(
+      "before-mouse-event",
+      { preventDefault },
+      { type: "mouseMove", button: "left", x: 128, y: 32 },
+    );
+    window.webContents.emit(
+      "before-mouse-event",
+      { preventDefault },
+      { type: "mouseDown", button: "right", x: 128, y: 32 },
+    );
+
+    expect(onNativeMouseDown).not.toHaveBeenCalled();
+    expect(preventDefault).not.toHaveBeenCalled();
+  });
 });
 
 class FakeBrowserWindow extends EventEmitter {

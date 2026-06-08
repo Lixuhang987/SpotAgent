@@ -81,6 +81,9 @@ const activityWindow = new ActivityWindowController({
   onNativeFocus: () => {
     runtime.handleActivityWindowNativeFocus();
   },
+  onNativeMouseDown: () => {
+    runtime.handleActivityWindowNativeMouseDown();
+  },
 });
 
 let hasStartedSupervisor = false;

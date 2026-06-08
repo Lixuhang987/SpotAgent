@@ -82,6 +82,14 @@ export class ElectronShellRuntime {
     this.requestPromptPanelFromActivityWindow();
   }
 
+  handleActivityWindowNativeMouseDown(): void {
+    if (this.options.prewarmer.focus()) {
+      return;
+    }
+
+    this.requestPromptPanelFromActivityWindow();
+  }
+
   private requestPromptPanelFromActivityWindow(): void {
     this.options.send({
       channel: "electron_shell",

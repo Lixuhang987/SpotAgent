@@ -3,6 +3,7 @@ import type { BrowserWindowConstructorOptions, Rectangle } from "electron";
 export type BrowserWindowLike = {
   webContents: {
     on(event: "render-process-gone", listener: (event: unknown, details: { reason: string }) => void): unknown;
+    on(event: "before-mouse-event", listener: (event: { preventDefault(): void }, mouse: { type: string; button?: string }) => void): unknown;
   };
   on(event: "closed" | "focus", listener: () => void): unknown;
   loadFile(filePath: string): Promise<unknown> | unknown;
@@ -21,6 +22,7 @@ type Options = {
   screenProvider: ScreenProvider;
   onRendererCrashed?: (reason: string) => void;
   onNativeFocus?: () => void;
+  onNativeMouseDown?: () => void;
 };
 
 const ACTIVITY_WINDOW_WIDTH = 272;
@@ -94,6 +96,17 @@ export class ActivityWindowController {
         return;
       }
       this.options.onRendererCrashed?.(details.reason);
+    });
+    window.webContents.on("before-mouse-event", (event, mouse) => {
+      if (
+        mouse.type !== "mouseDown" ||
+        (mouse.button !== undefined && mouse.button !== "left")
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      this.options.onNativeMouseDown?.();
     });
 
     this.window = window;
