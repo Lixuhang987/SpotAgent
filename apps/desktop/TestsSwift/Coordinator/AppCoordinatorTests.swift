@@ -111,6 +111,7 @@ final class AppCoordinatorTests: XCTestCase {
 
     @MainActor
     func testElectronShowsActivityWindowWhenAppServerBecomesAvailable() async throws {
+        closeStatusBubblePanels()
         let appServer = TriggerableAppServer()
         appServer.isAvailable = false
         let activityClient = RecordingActivityWindowCommandClient()
@@ -128,11 +129,68 @@ final class AppCoordinatorTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(10))
 
         XCTAssertEqual(activityClient.showCount, 1)
+        XCTAssertEqual(visibleStatusBubblePanelCount(), 0)
         _ = coordinator
     }
 
     @MainActor
+    func testElectronActivityShowThrowFallsBackToSwiftStatusBubble() async throws {
+        closeStatusBubblePanels()
+        let appServer = TriggerableAppServer()
+        appServer.isAvailable = false
+        let activityClient = RecordingActivityWindowCommandClient()
+        activityClient.showError = RecordingActivityWindowCommandError.showFailed
+        let coordinator = AppCoordinator(
+            services: electronServices(
+                appServer: appServer,
+                commandClient: RecordingThreadWindowCommandClient(),
+                activityClient: activityClient
+            )
+        )
+        defer {
+            coordinator.shutdown()
+            closeStatusBubblePanels()
+        }
+
+        appServer.publishAvailability(true)
+        try await Task.sleep(for: .milliseconds(10))
+
+        XCTAssertEqual(activityClient.showCount, 1)
+        XCTAssertEqual(visibleStatusBubblePanelCount(), 1)
+    }
+
+    @MainActor
+    func testElectronActivityShowAckFailureFallsBackToSwiftStatusBubble() async throws {
+        closeStatusBubblePanels()
+        let appServer = TriggerableAppServer()
+        appServer.isAvailable = false
+        let activityClient = RecordingActivityWindowCommandClient()
+        let coordinator = AppCoordinator(
+            services: electronServices(
+                appServer: appServer,
+                commandClient: RecordingThreadWindowCommandClient(),
+                activityClient: activityClient
+            )
+        )
+        defer {
+            coordinator.shutdown()
+            closeStatusBubblePanels()
+        }
+
+        appServer.publishAvailability(true)
+        try await Task.sleep(for: .milliseconds(10))
+        XCTAssertEqual(visibleStatusBubblePanelCount(), 0)
+
+        activityClient.complete(commandId: "activity-show-1", ok: false, error: "activity window failed")
+        try await Task.sleep(for: .milliseconds(10))
+
+        XCTAssertEqual(activityClient.showCount, 1)
+        XCTAssertEqual(visibleStatusBubblePanelCount(), 1)
+    }
+
+    @MainActor
     func testElectronActivityPromptRequestShowsPromptPanelWithoutFocusingThreadWindow() {
+        closePromptPanelWindows()
         let app = NSApplication.shared
         let commandClient = RecordingThreadWindowCommandClient()
         let activityClient = RecordingActivityWindowCommandClient()
@@ -148,6 +206,30 @@ final class AppCoordinatorTests: XCTestCase {
         XCTAssertTrue(app.windows.contains { $0 is PromptPanelWindow && $0.isVisible })
         XCTAssertTrue(commandClient.focusedThreadIDs.isEmpty)
         coordinator.send(.hidePromptPanel)
+        closePromptPanelWindows()
+    }
+
+    @MainActor
+    func testShutdownClearsElectronActivityPromptRequestCallback() async throws {
+        closePromptPanelWindows()
+        let app = NSApplication.shared
+        let commandClient = RecordingThreadWindowCommandClient()
+        let activityClient = RecordingActivityWindowCommandClient()
+        let coordinator = AppCoordinator(
+            services: electronServices(
+                commandClient: commandClient,
+                activityClient: activityClient
+            )
+        )
+
+        coordinator.shutdown()
+        XCTAssertNil(activityClient.onPromptPanelShowRequested)
+        XCTAssertNil(activityClient.onActivityWindowCommandResult)
+        activityClient.requestPromptPanel()
+        try await Task.sleep(for: .milliseconds(10))
+
+        XCTAssertFalse(app.windows.contains { $0 is PromptPanelWindow && $0.isVisible })
+        closePromptPanelWindows()
     }
 
     @MainActor
@@ -295,6 +377,27 @@ final class AppCoordinatorTests: XCTestCase {
 }
 
 @MainActor
+private func visibleStatusBubblePanelCount() -> Int {
+    NSApplication.shared.windows.filter {
+        String(describing: type(of: $0)).contains("StatusBubblePanel") && $0.isVisible
+    }.count
+}
+
+@MainActor
+private func closeStatusBubblePanels() {
+    for window in NSApplication.shared.windows where String(describing: type(of: window)).contains("StatusBubblePanel") {
+        window.close()
+    }
+}
+
+@MainActor
+private func closePromptPanelWindows() {
+    for window in NSApplication.shared.windows where window is PromptPanelWindow {
+        window.close()
+    }
+}
+
+@MainActor
 private func electronServices(
     appServer: any AppServerManaging = NopAppServer(),
     commandClient: RecordingThreadWindowCommandClient,
@@ -316,19 +419,38 @@ private func electronServices(
     )
 }
 
+private enum RecordingActivityWindowCommandError: Error {
+    case showFailed
+}
+
 @MainActor
 private final class RecordingActivityWindowCommandClient: ActivityWindowCommanding {
     var onActivityWindowCommandResult: ((ActivityWindowCommandResult) -> Void)?
     var onPromptPanelShowRequested: (() -> Void)?
+    var showError: Error?
     private(set) var showCount = 0
 
     func showActivityWindow() throws -> String {
         showCount += 1
+        if let showError {
+            throw showError
+        }
         return "activity-show-\(showCount)"
     }
 
     func requestPromptPanel() {
         onPromptPanelShowRequested?()
+    }
+
+    func complete(commandId: String, ok: Bool, error: String? = nil) {
+        onActivityWindowCommandResult?(
+            ActivityWindowCommandResult(
+                commandId: commandId,
+                kind: .show,
+                ok: ok,
+                error: error
+            )
+        )
     }
 }
 

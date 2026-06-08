@@ -83,6 +83,7 @@ final class AppCoordinator {
 
     func shutdown() {
         unregisterActionShortcuts()
+        clearElectronActivityWindowCallbacks()
         agentServerHealth.stop()
         settingsLifecycle.close()
         threadWindowLifecycle.close()
@@ -161,7 +162,7 @@ final class AppCoordinator {
             self.store.send(.appServerAvailabilityChanged(available))
             self.promptPanelController.setSubmissionEnabled(available, message: message)
             if available {
-                _ = try? self.activityWindowCommandClient?.showActivityWindow()
+                self.showElectronActivityWindowOrFallback()
             }
         }
     }
@@ -187,6 +188,24 @@ final class AppCoordinator {
     private func setupElectronActivityWindow() {
         activityWindowCommandClient?.onPromptPanelShowRequested = { [weak self] in
             self?.promptPanelController.show()
+        }
+        activityWindowCommandClient?.onActivityWindowCommandResult = { [weak self] result in
+            guard result.kind == .show, !result.ok else { return }
+            self?.statusBubbleController.show()
+        }
+    }
+
+    private func clearElectronActivityWindowCallbacks() {
+        activityWindowCommandClient?.onPromptPanelShowRequested = nil
+        activityWindowCommandClient?.onActivityWindowCommandResult = nil
+    }
+
+    private func showElectronActivityWindowOrFallback() {
+        guard let activityWindowCommandClient else { return }
+        do {
+            _ = try activityWindowCommandClient.showActivityWindow()
+        } catch {
+            statusBubbleController.show()
         }
     }
 
