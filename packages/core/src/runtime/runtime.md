@@ -57,7 +57,7 @@ flowchart TD
 
 - `AgentRuntime` 只负责 LLM/tool loop，不直接暴露给 UI，也不直接处理 WebSocket 协议。
 - 新主路径由 agent-server 的 `ThreadRuntimeOrchestrator` 调用 `AgentRuntime.runWithMessages(..., { threadId })`，并把 `AgentRuntimeEvent` 翻译成 `ThreadNotification`。
-- runtime 不负责 app-server socket 协议翻译、持久化审计事件模型、server 侧中断补帧策略或 desktop 展示状态推断。
+- runtime 不负责 agent-server socket 协议翻译、持久化审计事件模型、server 侧中断补帧策略或 desktop 展示状态推断。
 
 ## meta-tool 激活分支
 
@@ -69,7 +69,7 @@ flowchart TD
   - `isThreadActivated(threadId)`：每次 LLM 请求前判断当前 thread 是否已激活，用于决定传入完整工具集还是仅 meta-tool。
 - tool-use-policy system prompt section 仅在 `hasRealTools`（registry 中存在非 meta-tool）为真时出现；未激活 thread 不注入该 section，避免引导模型调用尚不存在的工具。
 
-
+## 运行约定
 
 - `maxTimes = 100`：限制一次用户输入内的 LLM/tool 循环次数，防止无限循环；这里的 times 不是产品语义上的 turn，产品语义里的 turn 是“一次用户输入到本次运行自然结束”。
 - `permissionPolicy = AllowAllPermissionPolicy()`：仅在测试 / 脚本场景默认放行；生产由 `agent-server` 注入 `FilePermissionPolicy(askResolver)`。
@@ -90,7 +90,7 @@ flowchart TD
 - 不要把 provider 私有 stream / SSE 细节写进 `AgentRuntime`，provider 必须先归一化成 `LLMStreamEvent`。
 - tool 调用以 `ToolRegistry.get(name)` 为唯一入口，不允许直接 `import` builtin tool。
 - 新增 system prompt 规则时优先放入 `SystemPrompt.ts` 的 section builder，不要在 `AgentRuntime.completeAssistantResponse()` 里直接拼接策略字符串。
-- 新增事件类型时，app-server 的协议转发层与审计落盘层必须同步更新。
+- 新增事件类型时，agent-server 的协议转发层与审计落盘层必须同步更新。
 
 ## 相关文档
 

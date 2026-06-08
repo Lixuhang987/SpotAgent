@@ -1,6 +1,14 @@
 # agent-server
 
-`apps/agent-server` 是本地 thread 桥（Node + TypeScript）。desktop 将它作为子进程启动，它在 `127.0.0.1:4317` 同时提供三类入口：`ws://127.0.0.1:4317/api/thread` 给 React ThreadWindow，`ws://127.0.0.1:4317/api/platform` 给 Swift 宿主，以及 `http://127.0.0.1:4317/thread-window/*` 给 `WKWebView` 加载 React 静态资源。`/api/thread` 接收 `ThreadCommand` / `ClientResponse` 并推送 `ThreadNotification` / `ServerRequest`；`/api/platform` 只承载 `PlatformBridgeMessage`，用于向 desktop 请求平台能力。
+`apps/agent-server` 是 desktop 派生的本地 Node 服务。它只做本地 bridge、路由、持久化封装和 runtime 驱动：不渲染 ThreadWindow UI，不实现 macOS 原生能力，也不在本包定义跨进程 DTO。
+
+同一端口 `127.0.0.1:4317` 暴露三类入口：
+
+| 入口 | 消费方 | 消息边界 |
+|------|------|------|
+| `ws://127.0.0.1:4317/api/thread` | React ThreadWindow | 接收 `ThreadCommand` / `ClientResponse`，发送 `ThreadNotification` / `ServerRequest` |
+| `ws://127.0.0.1:4317/api/platform` | Swift desktop | 只承载 `PlatformBridgeMessage`，用于 core platform tool 反向请求 desktop |
+| `http://127.0.0.1:4317/thread-window/*` | `WKWebView` | 返回 React 静态资源，不参与 thread 协议 |
 
 ## 直接子节点
 
@@ -11,17 +19,6 @@
 | `package.json` | 无独立文档 | workspace 包声明；`main` 和 `start` 指向 `src/server/server.ts` |
 | `node_modules/` | 不纳入仓库文档 | pnpm 安装产物，不提交、不维护文档 |
 
-## 在分层中的位置
-
-```mermaid
-flowchart LR
-  A["apps/desktop<br/>Swift 宿主"] -->|"/api/platform PlatformBridgeMessage"| B["apps/agent-server<br/>Node WebSocket bridge"]
-  W["apps/thread-window-web<br/>React ThreadWindow"] -->|"/api/thread ThreadCommand / ClientResponse"| B
-  B --> C["@handagent/core<br/>runtime / tools / storage / protocol"]
-  B -->|"/api/thread ThreadNotification / ServerRequest"| W
-  B -->|"/api/platform PlatformBridgeMessage"| A
-```
-
 ## 启动与组合
 
 desktop 侧 `AgentServerService` 会定位仓库根目录并启动：
@@ -30,45 +27,26 @@ desktop 侧 `AgentServerService` 会定位仓库根目录并启动：
 node --experimental-transform-types --experimental-specifier-resolution=node apps/agent-server/src/server/server.ts
 ```
 
-启动后 `src/server/server.ts` 会完成组合：
+启动后 `src/server/server.ts` 是组合根，负责把 core 和本目录模块接起来：
 
 1. 构造 `FileThreadStore`、`FilesystemBlobStore`、`FileNetworkLogger`、`FileWorkspaceRegistry`。
 2. 读取 `~/.spotAgent/mcp.json` 并创建 `MCPServerRegistry`。
 3. 创建 `WebSocketPlatformBridge`、`ThreadPermissionBridge`、`ThreadWorkspaceAskBridge`。
 4. 通过 `SettingsBackedToolRegistry` 注册 builtin tools。
 5. 通过 `SettingsBackedLLMClient` 或 `MockLLMClient` 选择 LLM 模式。
-6. 按 thread 缓存 `AgentRuntime`，注入 thread 级 tool registry、permission policy、blob store 和 turn summarizer。
+6. 按 thread 缓存 `AgentRuntime`，注入 thread 级 tool registry、permission policy、blob store 和 turn summarizer；mock 模式使用 `MockLLMClient` 且不启用 summarizer。
 7. 创建 `ThreadPersistence`、`ThreadRuntimeOrchestrator`、`ThreadInputQueue` 驱动的 per-thread session loop、`ThreadNotificationPublisher`、`ThreadCommandRouter`。
 8. 启动同端口 HTTP + WebSocket 服务：`/api/thread` 挂载 thread command/response handler，`/api/platform` 挂载 platform bridge handler，`/thread-window/*` 提供 React 静态资源，未知 path 直接关闭或返回 404。
-
-## 主消息流
-
-```mermaid
-flowchart TD
-  A["React /api/thread socket"] --> B["server/attachThreadSocketHandlers"]
-  P["Swift /api/platform socket"] --> D["server/attachPlatformSocketHandlers"]
-  D --> PB["bridges/WebSocketPlatformBridge"]
-  B --> C{"ClientResponse / ThreadCommand"}
-  C -- "ClientResponse" --> E["bridges/ThreadPermissionBridge<br/>bridges/ThreadWorkspaceAskBridge"]
-  C -- "ThreadCommand" --> F["thread/ThreadCommandRouter"]
-  F --> G["thread/ThreadRuntimeOrchestrator"]
-  F --> H["thread/ThreadNotificationPublisher"]
-  G --> I["@handagent/core AgentRuntime"]
-  I --> J["protocol/MessageTranslator"]
-  J --> H
-  H --> K["React ThreadWindow"]
-  G --> L["thread/ThreadPersistence"]
-```
-
-`turn.start` 是兼容入口；进入 `ThreadRuntimeOrchestrator` 后会变成 thread-local input item，优先 steer 到当前 active turn，没有 active turn 时才唤醒新的 backend turn worker。
 
 ## 协议主干
 
 - `/api/thread` 顶层只接收 `ThreadCommand`、`ClientResponse`。
 - `/api/platform` 顶层只接收 `PlatformBridgeMessage`。
 - thread 通知主干统一走 `ThreadNotification`；`thread.snapshot` 是恢复入口。
-- permission / workspace 不再走旧协议 union，统一由 server 发 `ServerRequest`，React 回 `ClientResponse`。
-- 单条 React thread socket 可以同时恢复多个 thread；没有 unsubscribe 协议，tab 关闭只取消 React 本地订阅。
+- permission / workspace 的交互式回流统一由 server 发 `ServerRequest`，React 回 `ClientResponse`。
+- `workspace.listed` 是 `workspace.list` 的连接级响应，不带 `threadId`，只发给发起命令的 `/api/thread` 连接。
+- permission / workspace request-response 都绑定到 thread 当前连接；断线或旧 token 回包不能影响新连接。
+- 单条 React thread socket 可以同时恢复多个 thread；当前协议不承诺显式 unsubscribe。
 
 ## 与文件系统约定
 
@@ -98,6 +76,8 @@ open dist/HandAgentDesktop.app
 
 - 不在 `agent-server` 内定义跨进程 DTO；thread 命令走 `@handagent/core/protocol/ThreadCommand.ts`，thread 通知走 `@handagent/core/protocol/ThreadNotification.ts`，请求回流走 `ServerRequest` / `ClientResponse`，平台帧走 `@handagent/core/protocol/PlatformBridgeMessage.ts`。
 - 不 import macOS、Swift、AppKit、SwiftUI 或 browser-only 模块；平台能力一律经 `PlatformAdapter` / `PlatformBridge`。
+- 不在这里实现 UI 状态；ThreadWindow tabs、composer、请求面板和消息展示属于 React 前端。
+- 不在这里实现平台原生能力；`/api/platform` 只把 core `RemotePlatformAdapter` 的请求转给 desktop。
 - 新增源码子目录时，更新 [src/src.md](/Users/mu9/proj/handAgent/apps/agent-server/src/src.md)；新增测试子目录时，更新 [tests/tests.md](/Users/mu9/proj/handAgent/apps/agent-server/tests/tests.md)。
 - 修改 TypeScript 后必须重启 desktop app 才能生效，无 hot reload。
 - 验证命令：`bash ./scripts/test.sh`；涉及 desktop 启动路径时同时跑 `bash ./scripts/swiftw test` 与 `bash ./scripts/swiftw build`。

@@ -2,7 +2,7 @@
 
 ## 文档目标
 
-本文档是仓库级总览，描述 HandAgent 的分层架构、核心调用链路、关键 DTO，以及各子目录文档之间的关系。
+本文档是仓库级总览，描述 HandAgent 的分层架构、核心调用链路、跨层合约，以及各子目录文档之间的关系。
 
 下级文档入口：
 
@@ -48,7 +48,7 @@ flowchart TD
   H --> I[LLMClient.stream]
   I --> I1[转发 delta / tool / request 为单向事件]
   I1 --> J{返回 toolCalls?}
-  J -- 否 --> K[React 渲染 assistant bubbles]
+  J -- 否 --> K[React 渲染 assistant 消息]
   J -- 是 --> L[ToolRegistry.get]
   L --> M[AgentTool.call]
   M --> N[PlatformAdapter 或文件系统]
@@ -57,127 +57,24 @@ flowchart TD
   O --> I
 ```
 
-## 主链路阶段 DTO
+## 跨层合约
 
-### 1. Prompt 与 thread 输入
+- 初始上下文只来自用户主动输入和主动附件。PromptPanel 的 attachment 只通过 initial prompt 进入 React；屏幕、剪贴板、App 状态和文件读取都必须走 tool。
+- Thread 主协议只跑在 `/api/thread`：React 发送 `ThreadCommand` / `ClientResponse`，agent-server 发送 `ThreadNotification` / `ServerRequest`。
+- 平台 RPC 只跑在 `/api/platform`：Swift desktop 发送 `platform_bridge_hello`，处理 `channel: "platform"` 的 `platform_request`，并回写 `platform_response`。
+- `thread.snapshot` 是打开、恢复和重连后的 thread 状态入口；`workspace.listed` 是 `workspace.list` 的连接级响应，不带 `threadId`。
+- `permission.requested` / `workspace.requested` 是 server 向 React 提问、等待 UI 回执的少量交互；不要把它们混入普通 notification 或 platform RPC。
+- 持久化主目录是 `~/.spotAgent/threads/`；workspace、permission、blob、log、plugin、MCP 配置分别由对应模块文档说明。
+- 图片 attachment 先落 Blob/STUB；agent-server 在 runtime 前展开为多模态 image part，最终能否理解图片取决于当前 provider capability。
 
-- `AgentThreadInput`
-  - `prompt: string`
-  - `selection?: SelectionCaptureResult | null`
-- `SelectionCaptureResult`
-  - `{ kind: "selected"; text: string }`
-  - `{ kind: "empty" }`
-  - `{ kind: "error"; message?: string }`
-- `AgentThread`
-  - `prompt: string`
-  - `selectedText: string | null`
-- `ThreadAttachment`（agent-server WS 协议）
-  - `{ kind: "text_selection"; id; text }`
-  - `{ kind: "image"; id; mimeType; base64 }`
-- `PromptAttachmentResult`（desktop 内部）：5 case 详见 [PromptPanel](/Users/mu9/proj/handAgent/apps/desktop/Sources/PromptPanel/prompt-panel.md)。
+协议字段详见 [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md)。desktop 内部提交模型见 [PromptPanel](/Users/mu9/proj/handAgent/apps/desktop/Sources/PromptPanel/prompt-panel.md)，React UI 状态见 [thread-window-web](/Users/mu9/proj/handAgent/apps/thread-window-web/thread-window-web.md)，agent-server 编排见 [agent-server](/Users/mu9/proj/handAgent/apps/agent-server/agent-server.md)。
 
-### 2. Swift 宿主聚合状态
+## 当前架构不变量
 
-- `ThreadSummary`
-  - `threadId: string`
-  - `isRunning: boolean`
-  - `latestSummary: string`
-  - `lastActiveAt: Date`
-  - `windowIsOpen: boolean`
-
-### 3. Runtime 与 LLM
-
-- `AgentMessage`
-  - `user`
-  - `assistant`
-  - `tool`
-  - `system`
-- `ToolCallEnvelope`
-  - `id: string`
-  - `name: string`
-  - `arguments: Record<string, unknown>`
-- `LLMStreamEvent`
-  - `text_delta`
-  - `tool_call`
-  - `message_end`
-- `LLMCompletion`（兼容聚合结果）
-  - `message: assistant message`
-  - `toolCalls?: ToolCallEnvelope[]`
-- `AgentRunResult`
-  - `messages: AgentMessage[]`
-
-### 4. Tool 与平台
-
-- `RegisteredTool`
-  - `name`
-  - `description`
-  - `inputSchema`
-- `AgentTool<TInput, TOutput>`
-  - `call(input): Promise<TOutput>`
-- `PlatformAdapter`
-  - `listApps`
-  - `currentClipboardText`
-  - `frontmostAppInfo`
-  - `frontmostWindowList`
-  - `captureScreen`
-  - `recognizeText`
-  - `accessibilitySnapshot`
-  - `performAccessibilityAction`
-- `PlatformBridge`：跨进程 RPC 接口；定义 `OfflineError` / `TimeoutError` / `RemoteError` 三个类型化错误。
-
-### 5. Thread 存储
-
-- `ThreadMetadata`
-  - `id: string`
-  - `preview: string | null`
-  - `createdAt: string`
-  - `updatedAt: string`
-  - `messageCount: number`
-  - `workspaceId: string | null`
-  - `actionBinding?: ThreadActionBinding`
-- `PersistedThread`
-  - `version: 1`
-  - `metadata: ThreadMetadata`
-  - `messages: AgentMessage[]`
-  - `events: ThreadAuditEvent[]`
-- `ThreadAuditEvent`
-  - `tool_call`：记录 tool 调用入参
-  - `tool_result`：记录 tool 执行结果与耗时
-  - `permission_request`：权限审批记录（审计事件名，不是当前 UI 主协议名）
-  - `error`：运行时错误
-- `ThreadStore`（接口）
-  - `create / get / delete / list`
-  - `updatePreview / appendMessages / setMessages / appendEvents`
-
-### 6. 工作区与权限
-
-- `Workspace` / `WorkspaceRegistry` / `FileWorkspaceRegistry`（持久化到 `~/.spotAgent/workspaces.json`）。
-- `PermissionPolicy` / `PermissionDecision` / `PermissionResolution` / `PermissionScope` / `FilePermissionPolicy`（持久化到 `~/.spotAgent/permissions.json`）。
-
-### 7. 跨进程协议（`packages/core/src/protocol/`）
-
-当前跨进程协议分为五组 DTO：
-
-- `ThreadCommand`：React ThreadWindow -> agent-server 的命令，例如 `thread.start`、`thread.resume`、`thread.list`、`thread.delete`、`turn.start`、`turn.interrupt`。
-- `ThreadNotification`：agent-server / core -> React ThreadWindow 的通知，例如 `thread.started`、`thread.snapshot`、`user.message.recorded`、`turn.started`、`assistant.delta`、`tool.started`、`tool.finished`、`turn.completed`、`thread.status.changed`、`thread.error`。
-- `ServerRequest`：server -> React ThreadWindow 的待回执请求，当前包括 `permission.requested` 与 `workspace.requested`。
-- `ClientResponse`：React ThreadWindow -> server 的请求回执，当前包括 `permission.answered` 与 `workspace.answered`。
-- `PlatformBridgeMessage`：独立于 thread 协议的反向平台 IPC，由 Swift 宿主通过 `/api/platform` 处理，仍使用 `channel: "platform"` + `platform_bridge_hello` / `platform_request` / `platform_response`。
-
-详见 [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md)。
-
-## 当前实现状态
-
-- 当前桌面壳已经切到 `PromptPanel + 全局唯一 WKWebView ThreadWindow + StatusBubble`。
-- 当前 ThreadWindow 由 Swift `WKWebView` 承载 React 前端。React 左侧展示持久化 thread 历史；点击历史项会在当前窗口创建或激活 tab。React 持有 tabs、`threadId`、消息、运行态、权限请求和 workspace 选择等完整 thread UI 生命周期，并通过 `/api/thread` 接收各自事件。
-- `agent-server` 通过 `ThreadCommandRouter + ThreadRuntimeOrchestrator + ThreadInputQueue + ThreadNotificationPublisher + ThreadPersistence + ThreadStore` 管理 thread；旧 `turn.start` 协议在后端内部归一化为 input item，运行中的 thread 会优先把新输入 steer 到当前 active turn。
-- `packages/core/src/storage` 提供持久化 thread 存储，默认使用 `FileThreadStore` 将 thread 写入 `~/.spotAgent/threads/`。
-- React ThreadWindow 通过 agent-server 的 `/api/thread` 读取同一目录，为左侧历史列表提供恢复和删除入口；恢复同一 `threadId` 时优先激活已有 tab，未打开时创建新 tab 并等待 `thread.snapshot` 恢复。
-- `packages/core` 已经定义完整的 tool、platform DTO。
-- macOS 平台能力由 `apps/desktop` 内的 `MacPlatformProvider` 实现：剪贴板（`NSPasteboard`）、App 列表与前台 App（`NSWorkspace`，对应 `app.list` / `app.frontmost`）、窗口列表（`CGWindowListCopyWindowInfo`）、屏幕截图（`ScreenCaptureKit` + `SCScreenshotManager`，支持 screen / display / window / region target）、OCR（Vision）与 Accessibility snapshot / action。
-- 桌面 App 通过独立 `/api/platform` WebSocket 发送 `platform_bridge_hello`，并把 `channel: "platform"` 的 `platform_request` 分派给 `PlatformBridgeService`；Swift 不再解析 `ThreadNotification`，也不发送 `ThreadCommand`。
-- React ThreadWindow 已有 thread socket 断线自动重连、历史刷新与 tab 重新恢复逻辑；仍需实机验证 agent-server 重启后的 `thread.snapshot` 恢复体验。
-- 图片 attachment 会落 Blob/Stub；agent-server 在 runtime 前把 image STUB 展开为多模态 image part，LLM 是否能理解图片取决于当前 provider capability。
+- Swift desktop 不持有 thread client，不发送 `ThreadCommand`，不解析 `ThreadNotification`；只负责 PromptPanel、`NSWindow/WKWebView` host、initial prompt 注入、StatusBubble 与 macOS 平台能力实现。
+- React ThreadWindow 是 tabs、历史、消息、运行态、permission/workspace 请求面板和 composer 的 UI 状态源。
+- agent-server 是组合根和本地桥：负责 socket 路径拆分、thread/turn 路由、runtime 驱动、持久化封装、permission/workspace 回执桥和 platform bridge 转发。
+- packages/core 只定义跨平台 runtime、tool、platform、protocol、storage、workspace 和 permission 抽象，不实现 UI 或 macOS 原生能力。
 
 ## 阅读顺序建议
 

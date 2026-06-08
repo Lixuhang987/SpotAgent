@@ -1,5 +1,8 @@
 # AppServer Thread/Turn Refactor Implementation Plan
 
+> **状态：历史实施计划。**
+> 本文记录旧 `Session*` 主路径到 `Thread*` / `Turn*` 语义的迁移步骤，不作为当前代码结构的直接依据。当前开发请沿目录文档读取最新边界。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace all front-end and back-end `session` semantics with `thread`/`turn`, introduce a single Swift `AppServer` kernel plus TCA stores, and delete the legacy `Session*` runtime path.

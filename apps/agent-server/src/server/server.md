@@ -4,6 +4,8 @@
 
 `server/` 是 agent-server 的进程入口与组合根。它负责启动同端口 HTTP + WebSocket 服务，按 request path 拆分 `/api/thread`、`/api/platform` 与 `/thread-window/*`，并把 core 与本目录其他模块组装成生产运行图。
 
+本目录可以读取本地配置路径、创建长驻依赖和绑定 socket；不要在这里写 runtime event 翻译、tool 业务逻辑或平台原生实现。
+
 ## 文件
 
 | 文件 | 职责 |
@@ -37,12 +39,12 @@ if (path === "/api/thread") {
 socket.close();
 ```
 
-`/api/thread` 和 `/api/platform` 是两条独立 WebSocket。`/thread-window/*` 由同一个 HTTP server 直接返回 React 静态资源，供桌面端 `WKWebView` 使用。未知 path 或缺失 path 会被关闭或返回 404，不默认为 thread socket。
+`/api/thread` 和 `/api/platform` 是两条独立 WebSocket，不共享消息 union。`/thread-window/*` 由同一个 HTTP server 直接返回 React 静态资源，供桌面端 `WKWebView` 使用。未知 path 或缺失 path 会被关闭或返回 404，不默认为 thread socket。
 
 按当前协议约束：
 
-- `/api/thread` 接收 `ClientResponse` 和 `ThreadCommand`，其中 `ThreadCommand` 包含 `thread.start`、`thread.resume`、`thread.list`、`thread.delete`、`turn.start`、`turn.interrupt`、`workspace.list`。
-- `/api/platform` 接收 `PlatformBridgeMessage`，其中 `platform_bridge_hello` 会为当前 socket 生成 fencing token；之后的 `platform_response` 必须带着这条 socket 当前 token 才能唤醒 pending request，避免旧 socket 的晚到响应污染新连接。
+- `/api/thread` 接收 `ClientResponse` 和 `ThreadCommand`。`ClientResponse` 只包含 `permission.answered` / `workspace.answered`；`ThreadCommand` 包含 `thread.start`、`thread.resume`、`thread.list`、`thread.delete`、`turn.start`、`turn.interrupt`、`workspace.list`。
+- `/api/platform` 接收 `PlatformBridgeMessage`。`platform_bridge_hello` 会为当前 socket 生成 fencing token；之后的 `platform_response` 必须带着这条 socket 当前 token 才能唤醒 pending request，避免旧 socket 的晚到响应污染新连接。
 
 ### thread 绑定与关闭清理
 
@@ -57,9 +59,11 @@ if (message.type === "turn.start") {
 }
 ```
 
-`turn.start` 是 permission / workspace 回流的绑定时机。当前连接在收到带 `threadId` 的命令后会建立该 thread 的通知路由。socket close 时会按 token 解绑，旧 socket 只能取消自己 token 下的 pending 请求；如果同一 thread 已被新 socket 绑定，旧 socket close 不会清掉新绑定。
+当前连接在收到带 `threadId` 的命令后会建立该 thread 的通知路由。`turn.start` 是 permission / workspace 回流的绑定时机：只有发过用户输入的 thread 才会把 `permission.requested` / `workspace.requested` 定向回当前连接。socket close 时会按 token 解绑，旧 socket 只能取消自己 token 下的 pending 请求；如果同一 thread 已被新 socket 绑定，旧 socket close 不会清掉新绑定。
 
-`ThreadNotificationPublisher` 负责 `connectionId -> subscribed threadIds` 映射，所以一条 desktop 连接可以同时接收多个 thread 的通知，并靠 `thread.snapshot` 恢复各自状态。若关闭的 socket 仍持有某个 thread 的 permission binding，server 会异步触发 `commandRouter.interruptThread(threadId)` 并清理该 thread 的临时权限规则；若 binding 已被新 socket 接管，旧 socket close 不会中断新连接。
+`ThreadNotificationPublisher` 负责 `connectionId -> subscribed threadIds` 映射，所以一条 React `/api/thread` 连接可以同时接收多个 thread 的通知，并靠 `thread.snapshot` 恢复各自状态。若关闭的 socket 仍持有某个 thread 的 permission binding，server 会异步触发 `commandRouter.interruptThread(threadId)` 并清理该 thread 的临时权限规则；若 binding 已被新 socket 接管，旧 socket close 不会中断新连接。
+
+`workspace.list` 不需要 thread 绑定；它读取 workspace registry 后只向发起连接返回 `workspace.listed`。
 
 ### 组合根
 
@@ -98,7 +102,7 @@ const runtimeForThread = (threadId: string) => {
 ## 编辑约束
 
 - 新增长驻依赖时放进 `startDefaultServer`，保持 `startServer` 只接收已注入对象，方便单元测试。
-- 新增 socket 顶层分支前先判断它是否属于 `PlatformBridgeMessage`、`ClientResponse` 或 `ThreadCommand`；不要再扩散旧 union。
+- 新增 socket 顶层分支前先判断它是否属于 `PlatformBridgeMessage`、`ClientResponse` 或 `ThreadCommand`；不要扩散自定义 union。
 - 不在本目录写业务翻译逻辑；runtime event 翻译归 `protocol/`，thread 状态归 `thread/`，工具 / MCP 归 `actions/`。
 
 ## 下一步阅读

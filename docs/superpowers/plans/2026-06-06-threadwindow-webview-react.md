@@ -1,5 +1,8 @@
 # ThreadWindow WebView React Implementation Plan
 
+> **状态：历史实施计划。**
+> 本文记录 ThreadWindow 迁移到 `WKWebView + React` 以及拆分 `/api/thread` / `/api/platform` 的实施步骤。当前事实以 `handAgent.md`、`apps/thread-window-web/thread-window-web.md` 与 `apps/desktop/Sources/ThreadWindow/thread-window.md` 为准。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 将 SwiftUI/TCA ThreadWindow 替换为 `WKWebView` 承载的 React ThreadWindow，并把 agent-server 的 thread 与 platform WebSocket 拆成两条连接。

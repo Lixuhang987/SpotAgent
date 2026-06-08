@@ -72,7 +72,7 @@ plugin action 绑定的外部能力不由 core tools 目录加载私有插件进
 ### 7. 跨进程协议
 
 - React ThreadWindow 与 agent-server 走 `/api/thread` WebSocket；Thread 主路径拆为 `ThreadCommand`、`ThreadNotification`、`ServerRequest`、`ClientResponse` 四类消息。
-- `ThreadCommand` 只表示 UI 主动提交的命令；`ThreadNotification` 只表示 server/core 向 UI 推送的结果通知。
+- `ThreadCommand` 只表示 UI 主动提交的命令；`ThreadNotification` 只表示 agent-server 向 UI 推送的结果通知。
 - `ServerRequest` / `ClientResponse` 只覆盖少量“server 提问，UI 回执”的交互，如权限审批与 workspace 选择。
 - Swift desktop 不参与 thread 主协议，只通过 `/api/platform` 处理独立 `PlatformBridgeMessage`，并用 `channel: "platform"` 分流。
 - 字段说明详见 [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md)。

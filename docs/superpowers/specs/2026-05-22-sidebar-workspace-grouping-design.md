@@ -1,5 +1,8 @@
 # 侧边栏 Workspace 分组设计
 
+> **状态：历史设计。**
+> 本文使用旧 `SessionWindow` / `Session*` 命名和旧 Swift 侧边栏方案，仅用于追溯 workspace 分组诉求。当前实现依据是 React ThreadWindow、`Thread*` 协议和 `workspace.list` / `workspace.listed`。
+
 ## 概述
 
 重构 SessionWindow 左侧对话列表，将会话按 workspace 分组展示，替代当前的平铺列表。

@@ -1,5 +1,7 @@
 # 懒加载工具激活（Lazy Tool Activation）实施计划
 
+> **当前注意：** 本文是历史实施计划。当前懒加载工具激活仍有真实 provider 收尾 bug，尤其不要把“激活后继续暴露 `use_tools`”当作不可改变约束；修复依据见 [docs/bugs.md](/Users/mu9/proj/handAgent/docs/bugs.md)。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 让 HandAgent 的 session 在用户进入纯聊天时不再为 builtin/MCP tool definitions 付费，模型判断需要工具时通过调用 meta-tool `use_tools` 激活完整工具集，且整个 session 内激活状态持久。

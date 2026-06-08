@@ -15,14 +15,12 @@
 - 已通过 `bash ./scripts/swiftw test`。
 - 已通过 `bash ./scripts/swiftw build`。
 
-## 开发验证记录
+## 文档一致性 smoke（P2）
 
-### 后端常驻 Thread 输入队列
-
-- 完成日期：2026-06-07
-- 关键 commit：`b0893c5`
-- 实现位置：`apps/agent-server/src/thread/ThreadInputQueue.ts`、`apps/agent-server/src/thread/ThreadRuntimeOrchestrator.ts`、`apps/agent-server/src/thread/ThreadPersistence.ts`、`apps/agent-server/src/server/server.ts`
-- 验收结果：后端兼容旧 `turn.start`；运行中输入不再中断当前 run，而是排队进入 active turn follow-up。已通过 `bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`。
+1. 从 `AGENTS.md → handAgent.md → apps/apps.md / packages/packages.md` 逐层打开文档，确认每级 `<dir>.md` 只索引直接子节点。
+1. 检索当前文档中的 `SessionWindow` / `sessionWindow`，确认非归档命中只作为历史旧称说明出现，当前实现统一使用 `ThreadWindow`。
+1. 对照 `apps/desktop/Sources/ThreadWindow/thread-window.md`、`apps/thread-window-web/thread-window-web.md` 和 `apps/agent-server/agent-server.md`，确认 Swift 只做 WKWebView host 与 `/api/platform`，React 持有 `/api/thread` 和 ThreadWindow UI 状态。
+1. 对照 `packages/core/src/protocol/protocol.md` 与 Web/agent-server 文档，确认 `workspace.list` / `workspace.listed`、`permission.requested` / `permission.answered`、`workspace.requested` / `workspace.answered` 的归属一致。
 
 ## Anthropic Provider 真实调用（P1）
 

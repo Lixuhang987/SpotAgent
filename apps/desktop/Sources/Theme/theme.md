@@ -33,4 +33,4 @@
 ## 与其他模块的关系
 
 - SwiftUI 原生模块的 `*View.swift` 与 `*Styles.swift` 优先通过 `@Environment(\.appTheme)` 消费 token；少量局部 layout 数值按模块后续收敛。
-- ViewModifier（PromptPanelStyles / ThreadStyles / StatusBubbleStyles）是 token 的二次封装层：跨模块复用的样式组合写在 Styles 文件，单 View 一次性的样式直接写在 View 里。
+- ViewModifier（PromptPanelStyles / SettingsStyles / StatusBubbleStyles）是 token 的二次封装层：跨模块复用的样式组合写在 Styles 文件，单 View 一次性的样式直接写在 View 里。

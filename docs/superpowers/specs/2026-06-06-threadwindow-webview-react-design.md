@@ -1,5 +1,8 @@
 # ThreadWindow WKWebView + React 迁移设计
 
+> **状态：历史迁移设计。**
+> 本文背景段描述的是迁移前的 SwiftUI/TCA ThreadWindow 与共享连接状态；当前事实是 React ThreadWindow 持有 `/api/thread`，Swift 宿主持有独立 `/api/platform`。
+
 ## 背景
 
 当前 ThreadWindow 完全由 SwiftUI/TCA 实现，Swift 侧通过 `AppServer` 维护进程级共享 WebSocket。该连接同时承载 thread 协议和 `PlatformBridgeMessage`，`AppServerClient` 在同一连接上发送 `platform_bridge_hello`，收到 `platform_request` 后交给 `PlatformBridgeService`。

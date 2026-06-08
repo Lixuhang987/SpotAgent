@@ -2,7 +2,9 @@
 
 ## 目录职责
 
-`bridges/` 把 core 的抽象回调接到 desktop WebSocket。这里不执行 LLM 或 tool 逻辑，只维护 server request、client response、超时、socket 重绑和 token fencing。
+`bridges/` 把 core 的抽象回调接到 desktop 或 ThreadWindow WebSocket。这里不执行 LLM 或 tool 逻辑，只维护 request-response、超时、socket 重绑和 token fencing。
+
+`WebSocketPlatformBridge` 走 `/api/platform`；`ThreadPermissionBridge` 与 `ThreadWorkspaceAskBridge` 走 `/api/thread` 的 `ServerRequest` / `ClientResponse`。
 
 ## 文件
 
@@ -16,9 +18,9 @@
 
 | 桥 | 请求来源 | 回流消息 | 默认超时 | 绑定粒度 |
 |------|------|------|------|------|
-| `WebSocketPlatformBridge` | core `RemotePlatformAdapter` | `platform_response` | `call()` 入参默认 15s | 当前发送 `platform_bridge_hello` 的 `/api/platform` socket |
-| `ThreadPermissionBridge` | core `FilePermissionPolicy.ask` | `permission.answered` | 60s | 当前 thread 绑定连接 |
-| `ThreadWorkspaceAskBridge` | builtin `workspace.askUser` | `workspace.answered` | 60s | 当前 thread 绑定连接，且同 thread 串行 |
+| `WebSocketPlatformBridge` | core `RemotePlatformAdapter` | `/api/platform` `platform_response` | `call()` 入参默认 15s | 当前发送 `platform_bridge_hello` 的 `/api/platform` socket |
+| `ThreadPermissionBridge` | core `FilePermissionPolicy.ask` | `/api/thread` `permission.answered` | 60s | 当前 thread 绑定连接 |
+| `ThreadWorkspaceAskBridge` | builtin `workspace.askUser` | `/api/thread` `workspace.answered` | 60s | 当前 thread 绑定连接，且同 thread 串行 |
 
 ## 关键机制
 
@@ -38,7 +40,7 @@ attach(send: Send): BridgeToken {
 }
 ```
 
-新的 `/api/platform` socket 发送 `platform_bridge_hello` 后会替换旧 platform 绑定，并让旧 token 下的 pending request 以 offline 失败。旧 socket 晚到的 response 因 token 不匹配会被忽略。`WebSocketPlatformBridge` 不挂载在 `/api/thread`，也不与 ThreadWindow UI 共享 WebSocket。
+新的 `/api/platform` socket 发送 `platform_bridge_hello` 后会替换旧 platform 绑定，并让旧 token 下的 pending request 以 offline 失败。旧 socket 晚到的 response 因 token 不匹配会被忽略。`WebSocketPlatformBridge` 不挂载在 `/api/thread`，也不与 ThreadWindow UI 共享 WebSocket；它只转发平台能力请求，不实现 macOS 能力。
 
 ### 权限审批绑定到 thread
 
@@ -54,6 +56,8 @@ this.pending.set(requestId, {
 
 权限 requestId 带 `threadId` 前缀，server 层可以从 `permission.answered.requestId` 找回 thread，再用该连接持有的 binding token 调 `handleResponse()`。这保证一个 thread 断线重连后，旧 socket 不能答复新 socket 发起的审批。
 
+权限桥的绑定由 `server/attachThreadSocketHandlers` 在 `turn.start` 时建立；如果 core 发起 permission ask 时没有 thread id 或没有当前绑定连接，直接返回 deny。
+
 ### Workspace ask 串行展示
 
 ```ts
@@ -64,6 +68,8 @@ this.dispatchNext(threadId);
 ```
 
 同一 thread 内多个 `workspace.askUser` 会排队展示，避免桌面端同时出现多个 workspace 选择请求。当前 active job 完成、取消或超时后，才会派发下一个 job。
+
+这条桥只服务 builtin `workspace.askUser` 的交互式选择；`workspace.list` / `workspace.listed` 是 `thread/ThreadCommandRouter` 的连接级列表命令，不经过 `ThreadWorkspaceAskBridge`。
 
 ## 失败语义
 

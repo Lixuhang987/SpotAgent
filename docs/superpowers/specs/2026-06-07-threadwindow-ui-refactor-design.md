@@ -1,5 +1,8 @@
 # ThreadWindow UI 重构设计文档
 
+> **状态：历史设计。**
+> 本文中的 Raycast Glass / Mango Amber / dark-only 约束已被后续 `DESIGN.md` warm-canvas / coral / dark product surface 视觉统一取代。当前 UI 开发与验收以 `apps/thread-window-web/thread-window-web.md` 和 `docs/manual-qa.md` 为准。
+
 ## 文档元信息
 
 - **日期**: 2026-06-07

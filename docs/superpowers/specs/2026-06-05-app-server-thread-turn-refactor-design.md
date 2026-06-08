@@ -1,5 +1,8 @@
 # AppServer Thread/Turn 破坏性重构设计
 
+> **状态：历史重构设计。**
+> 本文记录从旧 `Session*` 主路径迁移到 `Thread*` / `Turn*` 语义的设计过程。当前架构事实以 `handAgent.md`、`apps/**/<dir>.md` 和 `packages/**/<dir>.md` 为准。
+
 ## 背景
 
 当前 macOS 宿主层把 agent-server 进程管理、WebSocket 连接、协议编解码、事件分发、线程运行缓存、平台桥接处理分别散落在多个旧主路径对象中：

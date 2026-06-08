@@ -1,9 +1,9 @@
 # protocol
 
-`packages/core/src/protocol` 定义 React ThreadWindow、desktop、app-server、core 之间的跨进程协议边界。新主路径统一使用 `Thread` / `Turn` 语义：
+`packages/core/src/protocol` 定义 React ThreadWindow、agent-server、desktop 之间的跨进程协议 DTO。新主路径统一使用 `Thread` / `Turn` 语义：
 
 - React ThreadWindow 只提交 `ThreadCommand`，并回覆 `ClientResponse`
-- app-server / core 只向 React ThreadWindow 推送 `ThreadNotification`，并在需要用户决定时发 `ServerRequest`
+- agent-server 向 React ThreadWindow 推送 `ThreadNotification`，并在需要用户决定时发 `ServerRequest`
 - 平台 RPC 独立于 thread 主路径，由 Swift desktop 通过 `/api/platform` 处理 `PlatformBridgeMessage`
 
 ## 文件
@@ -21,9 +21,9 @@
 
 ```mermaid
 flowchart LR
-  A[React ThreadWindow] -->|/api/thread ThreadCommand| B[app-server]
+  A[React ThreadWindow] -->|/api/thread ThreadCommand| B[agent-server]
   B -->|submit| C[core runtime]
-  C -->|ThreadNotification| B
+  C -->|AgentRuntimeEvent| B
   B -->|/api/thread ThreadNotification| A
   B -->|/api/thread ServerRequest| A
   A -->|/api/thread ClientResponse| B
@@ -32,8 +32,8 @@ flowchart LR
 
 - React ThreadWindow 不直接驱动 `AgentRuntime`，只发命令、收事件。
 - Swift desktop 不处理 thread DTO，只处理 platform bridge DTO。
-- app-server 负责 socket、订阅路由、持久化、权限 / workspace 回执桥接。
-- core 负责把命令转成 runtime 执行，并把执行结果归一化成稳定事件流。
+- agent-server 负责 socket、订阅路由、持久化、权限 / workspace 回执桥接，以及把 `AgentRuntimeEvent` 归一化为 `ThreadNotification`。
+- core 只定义协议 DTO 与 runtime 事件，不负责 WebSocket 生命周期或连接分发。
 
 ## 主协议分类
 
@@ -81,11 +81,11 @@ flowchart LR
 ## core 侧消费方式
 
 - 新主路径由 agent-server 的 thread runtime 编排 `AgentRuntime`，对外只暴露 `ThreadNotification`。
-- `AgentRuntimeEvent` 到 `ThreadNotification` 的归一化由 app-server thread 层维护，避免 runtime 内部事件直接暴露给 UI。
+- `AgentRuntimeEvent` 到 `ThreadNotification` 的归一化由 agent-server thread 层维护，避免 runtime 内部事件直接暴露给 UI。
 
 ## Action Binding
 
-plugin action 绑定信息位于 `thread.start.payload.actionBinding`。app-server 会重新读取本地 manifest，确认该 prompt 是可绑定的 plugin action，解析并持久化 thread metadata 的 `actionBinding.mcpServerIds`，随后只在该 thread 的 runtime 前组合对应 MCP tools。`kind: "skill"` 的 action 只提交渲染后的普通 prompt，不携带 action binding。
+plugin action 绑定信息位于 `thread.start.payload.actionBinding`。agent-server 会重新读取本地 manifest，确认该 prompt 是可绑定的 plugin action，解析并持久化 thread metadata 的 `actionBinding.mcpServerIds`，随后只在该 thread 的 runtime 前组合对应 MCP tools。`kind: "skill"` 的 action 只提交渲染后的普通 prompt，不携带 action binding。
 
 普通 `turn.start` 不携带 action binding；一个 thread 的 MCP scope 由创建时 metadata 决定，不随后续消息变化。
 
@@ -174,7 +174,7 @@ React ThreadWindow 回复：
 
 ## 编辑此目录的约束
 
-- 协议是合约，desktop（Swift）与 app-server（TS）必须严格对齐字段。
+- 协议是合约，desktop（Swift）与 agent-server（TS）必须严格对齐字段。
 - 新增 type 时考虑：是否同时影响 `ThreadStore` 持久化、`ConversationMessage` UI、`ThreadAuditEvent` 审计三处。
 - 协议字段保持平铺，不要嵌套 anyJson 黑洞，让两边 codec 都能强类型化。
 - 平台 RPC 不带 `threadId`；server 只通过 `channel: "platform"` 分派平台帧。

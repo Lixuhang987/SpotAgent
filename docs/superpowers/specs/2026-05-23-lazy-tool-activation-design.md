@@ -1,5 +1,7 @@
 # 懒加载工具激活（Lazy Tool Activation）设计
 
+> **当前注意：** 本文是 2026-05-23 的历史设计。文中“激活后仍保留 `use_tools`”已被当前 bug 清单标为真实 provider 工具调用收尾失败的可疑边界；修复懒加载工具激活时以 [docs/bugs.md](/Users/mu9/proj/handAgent/docs/bugs.md) 的当前结论为准。
+
 ## 背景与目标
 
 HandAgent 是随时唤起的桌面助手，定位是"对话优先、需要时自然过渡到工具调用"。当前实现里，每个 session 的每一轮 LLM 调用都会把全部 builtin tool 与 MCP tool 的定义传给模型，无论用户是想纯聊天还是想触发工具。

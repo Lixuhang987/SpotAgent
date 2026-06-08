@@ -8,7 +8,7 @@
 
 | 子节点 | 职责 |
 |------|------|
-| `server/` | `startServer`、`attachThreadSocketHandlers`、顶层 `PlatformBridgeMessage / ThreadCommand / ClientResponse` 分派、按 MCP 配置创建 client、LLM 模式解析、Computer Use client 选择；未覆盖缺口：`readMCPConfig` 的 MCP 配置读取 |
+| `server/` | `startServer`、`attachThreadSocketHandlers`、`attachPlatformSocketHandlers`、顶层 `PlatformBridgeMessage / ThreadCommand / ClientResponse` 分派、按 MCP 配置创建 client、LLM 模式解析、Computer Use client 选择 |
 | `thread/` | `ThreadCommandRouter`、`ThreadNotificationPublisher`、`ThreadRuntimeOrchestrator`、`ThreadPersistence`、thread 级工具激活状态 |
 | `protocol/` | `MessageTranslator` 的 `ThreadNotification`、审计事件、用户附件和 image STUB 翻译 |
 | `settings/` | `SettingsBackedLLMClient` 与 `SettingsBackedToolRegistry` 的 stamp 缓存和热加载 |
@@ -37,6 +37,6 @@ pnpm exec vitest run apps/agent-server/tests/bridges
 - 新增源码文件时，优先把测试放进同职责测试目录。
 - 不把 `.test.ts` 放进 `src/`。
 - `thread/` 相关测试应覆盖 `thread.snapshot` 恢复、单连接多 thread 通知路由、运行中删除或中断等主路径语义。
-- `server/` 相关测试应覆盖顶层三类消息分派，以及 `ServerRequest -> ClientResponse` 回流。
+- `server/` 相关测试应覆盖 `/api/thread` 与 `/api/platform` 的路径拆分、顶层三类消息分派，以及 `ServerRequest -> ClientResponse` 回流。
 - 涉及 socket 回流的测试应覆盖旧 token 晚到、socket close、timeout 三类失败语义。
 - 涉及目录移动时，先跑 `bash ./scripts/test.sh`，再跑 Swift 验证，确保 desktop 启动路径仍能定位 agent-server 入口。

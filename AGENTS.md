@@ -54,22 +54,9 @@
 - 热键、输入框、用户选区属于用户触发入口，不属于 tool。
 - 读取 App 信息、操作 App、编辑文件、保存内容等能力统一抽象为 tool，由 LLM 决定是否调用。
 
-## 主调用链路
+## 架构事实入口
 
-```mermaid
-flowchart TD
-  A[用户按下全局热键] --> B[Swift 宿主打开 PromptPanel]
-  B --> C[用户输入 prompt 并提交]
-  C --> D[Swift 创建或聚焦 ThreadWindow WKWebView 并注入 initial prompt]
-  D --> E[React ThreadWindow 连接 /api/thread 并发送 ThreadCommand]
-  E --> F[agent-server 接收 ThreadCommand]
-  F --> G[AgentRuntime 调用 LLMClient]
-  G --> H{是否返回 toolCalls}
-  H -- 否 --> I[React 渲染 assistant messages]
-  H -- 是 --> J[ToolRegistry 查找 tool]
-  J --> K[tool 调用平台适配器或文件能力]
-  K --> G
-```
+主调用链路、分层职责和跨进程 DTO 以 [handAgent.md](/Users/mu9/proj/handAgent/handAgent.md) 为准。本文件只保留协作、文档维护和开发流程约束，避免和架构文档双写。
 
 
 ## 开发规范

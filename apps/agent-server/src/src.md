@@ -2,7 +2,9 @@
 
 ## 目录职责
 
-`apps/agent-server/src` 是本地 Node agent-server 的源码层。它不承载 macOS UI，也不定义 core 协议 DTO；它负责把 desktop WebSocket 消息、core runtime、settings、MCP、权限审批与平台反向 IPC 组装成一个本地 thread 服务。
+`apps/agent-server/src` 是本地 Node agent-server 的源码层。它把 `/api/thread`、`/api/platform`、core runtime、settings、MCP、权限审批、workspace 选择和持久化组装成本地 thread 服务。
+
+本目录不承载 macOS UI，不实现平台原生能力，也不定义 core 协议 DTO。
 
 ## 子目录索引
 
@@ -15,22 +17,14 @@
 | `actions/` | [actions/actions.md](/Users/mu9/proj/handAgent/apps/agent-server/src/actions/actions.md) | plugin action binding、全局 / thread scoped MCP、Computer Use 兼容层与 thread 级工具表 |
 | `bridges/` | [bridges/bridges.md](/Users/mu9/proj/handAgent/apps/agent-server/src/bridges/bridges.md) | desktop 回流桥：平台 RPC、权限审批、workspace 选择 |
 
-## 主运行流
+## 内部依赖方向
 
-```mermaid
-flowchart TD
-  A["desktop 启动 node src/server/server.ts"] --> B["server/startDefaultServer"]
-  B --> C["settings: LLM client + builtin tools"]
-  B --> D["actions: MCP registry + thread scoped tools"]
-  B --> E["bridges: platform / permission / workspace ask"]
-  B --> F["thread: persistence + orchestrator + router"]
-  F --> G["WebSocket thread message"]
-  G --> H["ThreadCommandRouter.receive"]
-  H --> I["ThreadRuntimeOrchestrator.handleUserMessage"]
-  I --> J["core AgentRuntime.runWithMessages"]
-  J --> K["protocol/MessageTranslator"]
-  K --> L["desktop ThreadWindow messages"]
-```
+- `server/` 是组合根；只有这里创建长驻依赖、读取 `~/.spotAgent` 路径并绑定 HTTP / WebSocket。
+- `thread/` 消费已经注入的 runtime、persistence、publisher、workspace registry 和 action binding resolver，不直接创建 LLM client、MCP client 或 platform adapter。
+- `protocol/` 只做 runtime event、conversation message、audit event 和 attachment STUB 的翻译。
+- `settings/` 把 `settings.json` 热加载成 LLM client 与 builtin tool registry。
+- `actions/` 组合 builtin tools、MCP tools 与 plugin action binding，产出 thread 级工具表。
+- `bridges/` 把 core resolver / platform bridge 映射到 desktop socket，不执行 tool 业务逻辑。
 
 ## 边界规则
 
@@ -39,6 +33,7 @@ flowchart TD
 - `server/` 是组合根；新增长驻服务要先在这里注入，再通过构造函数传给下游目录。
 - `thread/` 不直接创建 LLM client、MCP client 或 platform adapter；它只消费构造好的 runtime 与 persistence。
 - `bridges/` 只负责把 core resolver / bridge 接口映射到 desktop socket，不执行 tool 业务逻辑。
+- `/api/thread` 与 `/api/platform` 不共享消息 union；新增协议字段先改 `packages/core/src/protocol`，再在本目录接线。
 
 ## 推荐阅读顺序
 

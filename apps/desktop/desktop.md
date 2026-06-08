@@ -14,12 +14,14 @@
 
 ### 2. 模块布局：View + ViewModel + Controller + Styles
 
-每个独立 UI 模块（PromptPanel / ThreadWindow / StatusBubble / Settings）按四件套拆分：
+原生 SwiftUI UI 模块（PromptPanel / StatusBubble / Settings）按四件套拆分：
 
 - **View**：纯 SwiftUI，只读 ViewModel 状态、消费 `@Environment(\.appTheme)`，不直接调 `NSEvent` / `NSPanel` / 系统 API。
 - **ViewModel**：`@Observable` 状态机；不持有 `View` / `Color` / `Font`；跨模块意图通过闭包出口（`onSubmit` / `onTap` / `onHide`）暴露。
 - **Controller**（仅当模块需要 `NSPanel` / `NSWindow` 自定义生命周期时）：纯窗口与事件监听层，不写业务逻辑。
 - **Styles**：跨 View 复用的 `ViewModifier`。一次性样式直接写在 View 里，避免 ViewModifier 爆炸。
+
+`ThreadWindow` 已迁到 React，Swift 侧只保留 `NSWindow/WKWebView` host、配置注入和 initial prompt 队列，不再按 Swift ViewModel / reducer / message view 方式扩展。
 
 ### 3. 协调：AppCoordinator 单向事件流
 
@@ -117,39 +119,26 @@ sequenceDiagram
   Server-->>React: ThreadNotification / ServerRequest
 ```
 
-## 关键 DTO
+## 跨层数据
 
-### `ThreadSummary`（[Thread](Sources/AppServices/Thread/thread.md)）
+### `~/.spotAgent/settings.json`
 
-- `threadId` / `isRunning` / `latestSummary` / `lastActiveAt` / `windowIsOpen`
-- 用途：聚合 StatusBubble 显示与 thread 回跳。
+desktop 与 agent-server 共享的模型和 builtin tool 配置文件。desktop 侧由 [AgentSettings](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/AgentSettings/agent-settings.md) 读写；agent-server 在下一次 LLM 请求或 tool registry 刷新时按文件戳读取，无需重启。
 
-### `AgentSettings` 文件结构（[AgentSettings](Sources/AppServices/AgentSettings/agent-settings.md)）
+### `PromptAttachmentResult` / `ActionDefinition`
 
-`~/.spotAgent/settings.json` 是 desktop 与 agent-server 共享模型配置的文件通道：
+`PromptAttachmentResult` 是 PromptPanel 提交时能进入 initial prompt 的用户主动附件，只包含 5 类：`.noAttachment`、`.textToken`、`.textSelection`、`.imageRegion`、`.selectionError`。屏幕、剪贴板、App 状态不能在这里默认注入。
 
-- desktop 侧 `AgentSettingsStore` 启动读一次 + 500ms 轮询；写入走 `update(_:)` 原子写。
-- agent-server 侧 `SettingsBackedLLMClient.stream()` / `complete()` 每次先检查 `settings.json` 文件戳，配置未变化时复用已缓存的 `VercelClient`。
-- 同一文件也支持 `tools.allowlist / tools.denylist`，Settings UI 的"工具"Tab 可切换 builtin tool；agent-server 每轮 user message 进入 runtime 前按文件戳刷新 tool registry。
-- 修改后下一次 LLM 请求即生效，无需重启。
+`ActionDefinition` 来自 `~/.spotAgent/plugins/*/plugin.json` 的 `prompts[]`。desktop 负责 trigger、参数和 template 的本地渲染；plugin action 会把 `{ pluginId, promptName }` 作为 `actionBinding` 随 initial prompt 发给 React，再由 agent-server 重新校验 manifest 并持久化 thread 绑定。
 
-### `PromptAttachmentResult` / ActionDefinition（[PromptPanel](Sources/PromptPanel/prompt-panel.md)）
+### `ThreadSummary`
 
-`PromptAttachmentResult` 共有 5 个 case，对应不同附件采集结果：
-
-- `.noAttachment`：无附件，普通提交。
-- `.textToken(String)`：直接附加纯文本块（如内嵌的命令片段）。
-- `.textSelection(text:source:)`：用户主动文本选区（来自 `MacSelectionCaptureProvider`，Cmd-C 抓 NSPasteboard）。
-- `.imageRegion(base64:mimeType:)`：用户区域截图（来自 `MacRegionCaptureProvider`，保留 `screencapture -i` 作为用户主动圈选入口）。
-- `.selectionError(message:)`：采集失败，UI 以禁用 chip + tooltip 反馈。
-
-`ActionDefinition` 是 PromptPanel 中由 manifest prompt 派生的 item 模型，包含 trigger、参数、可选 Action 全局快捷键、提交行为和可选 plugin binding。来源是 `~/.spotAgent/plugins/*/plugin.json` 的 `prompts[]`。参数统一使用 `[name: value]` 命名块；无参数 action 可以只输入 trigger。skill action 只提交渲染后的 prompt；plugin action 提交渲染后的 prompt 与 `{ pluginId, promptName }`，由 agent-server 重新校验并持久化 thread 绑定，后续按 `mcpServerIds` 激活对应 MCP tool scope。
+`ThreadSummary` 只服务 Swift 侧 `ThreadRegistry` 和 StatusBubble 回跳，不是 React ThreadWindow 的 tabs、消息或运行态来源。实时 thread UI 状态属于 `apps/thread-window-web`。
 
 ## 注意事项
 
 - agent-server 是 desktop app fork 的长驻子进程，**修改 TS 源码必须重启 desktop app**，无 hot reload。
 - `AgentServerService` 已实现指数退避重启（最多 5 次），多次失败时通过 `onFatalError` 回调上抛 Coordinator 弹原生 alert（详见 [agent-server.md](Sources/AppServices/AgentServer/agent-server.md)）。
-- node 子进程 stdout/stderr 通过 Pipe 捕获但未暴露 UI（仅防 fd 泄漏）。
 - 设置窗口与 Thread 窗口共享 `AppActivationPolicyCoordinator`，全部关闭后 app 切回 `.accessory`。
 - desktop 不再持有 thread client。`ThreadWindowLifecycle` 只创建或聚焦 `WKWebView`，并把初始 prompt 队列注入 React。
 - React ThreadWindow 负责 `/api/thread` 上的 command / notification / request / response 编解码和 UI 状态。

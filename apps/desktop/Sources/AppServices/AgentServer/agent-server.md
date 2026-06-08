@@ -1,6 +1,6 @@
 # AgentServer 模块
 
-管理本地 agent-server 进程的生命周期。
+管理本地 agent-server 子进程和 desktop 到 `/api/platform` 的连接。
 
 ## 文件
 
@@ -20,7 +20,7 @@
 4. 读取 `Contents/Resources/HandAgentRuntimeMode.json`；当 `llmMode` 为 `mock` 时向子进程环境注入 `HANDAGENT_LLM_MODE=mock`。
 5. 启动 `node --experimental-transform-types --experimental-specifier-resolution=node apps/agent-server/src/server/server.ts`。
 6. 记录 `lastStartupError` 供 UI 展示。
-7. 子进程启动后连接 `ws://127.0.0.1:4317/api/platform`，发送 `platform_bridge_hello` 并处理 `PlatformBridgeMessage`。
+7. 子进程启动后连接 `ws://127.0.0.1:4317/api/platform`，发送 `channel: "platform"` 的 `platform_bridge_hello` 并处理 `PlatformBridgeMessage`。
 
 桌面端 `AppServer` 不再持有 `/api/thread` client，也不维护 ThreadWindow tabs/messages/history。
 它不发送 `ThreadCommand`，不解析 `ThreadNotification`；ThreadWindow 的 thread 协议由 React 前端通过 `/api/thread` 处理。

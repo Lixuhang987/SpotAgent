@@ -1,5 +1,8 @@
 # ThreadWindow UI 重构实施计划
 
+> **状态：历史计划。**
+> 本文记录早期 Tailwind/Radix 与 Raycast Glass / Mango Amber 实施路径。当前视觉依据已切到 `DESIGN.md` warm-canvas / coral / dark product surface，不应按本文的 dark-only 约束继续开发。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 重构 ThreadWindow 前端 UI，采用 ChatGPT 风格的布局密度和交互模式，保留 Raycast Glass 视觉风格

@@ -1,5 +1,8 @@
 # Codex Style Three Layer Unidirectional Refactor Implementation Plan
 
+> **状态：历史计划。**
+> 本文描述的是早期 `Session*` 与 desktop 共享 `AppServerConnection` 方案。当前实现已经改为 React ThreadWindow 持有 `/api/thread`，Swift 宿主只通过独立 `/api/platform` 处理平台 RPC；不要把本文的共享连接设计当作当前架构事实。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 将 HandAgent 重构为更接近 Codex 的 UI / app-server / core 三层架构，把当前“每个 tab 一条 WebSocket”改为“desktop 进程唯一一条长连接 + 按 `sessionId` 路由”，并把会话通信收敛为“UI 发命令、server/core 发事件、少量 server request 等待 UI 回执”的单向主干。

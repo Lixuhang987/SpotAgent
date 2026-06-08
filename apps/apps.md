@@ -53,24 +53,6 @@ flowchart LR
 - `ThreadCommand` / `ThreadNotification` / `ServerRequest` / `ClientResponse`
 - `PlatformBridgeMessage`（含 platform_bridge_hello / platform_request / platform_response）
 
-## 近期重构经验
-
-最近一次 `codex/swift-refactor-review` 重构主要落在 `apps/desktop`，目标是优先清理 SwiftUI 层的自维护实现与字符串状态：
-
-- Settings 模型页把 provider / API 选择从自绘 `HStack + Button` 改为系统 segmented `Picker`，API Key 输入改为 `SecureField`；Workspace 添加目录从直接创建 `NSOpenPanel` 改为 SwiftUI `fileImporter`。
-- Settings 容器把 tab 字符串收敛为 `SettingsTab` enum，并抽出 `SettingsListSection` 复用列表分割线逻辑，避免多个页面重复 `Array(enumerated())`。
-- ThreadWindow 已迁移到 React；旧 Swift ViewModel 中的 `ThreadRunStatus` 经验只作为历史重构记录保留。
-- Theme 环境值从手写 `EnvironmentKey` 改为 SwiftUI `@Entry`；StatusBubble 补了首次出现时 running 动画启动和 accessibility action。
-
-可复用经验：
-
-- 涉及 SwiftUI 视图或 macOS 窗口交互时，先查 SwiftUI 相关技能与最新 API 参考，再按模块文档里的 AppKit 约束落地。
-- 优先用系统控件承接交互语义，但要先读模块文档里的 AppKit 约束；例如 StatusBubble 文档明确说明整块包成 `Button` 会吞掉拖拽手势，所以这次保留 `onTapGesture`，只补 accessibility。
-- 协议字符串不要直接扩散到 UI 层；跨进程 DTO 保持兼容，宿主内部用 enum / struct 承接，类型错误尽量变成编译错误。
-- 重复行列表、分割线、tab 元数据这类 UI 结构应抽成小型共享 View 或 enum；这比在每个页面复制索引判断更容易维护。
-- 改动系统交互方式时必须同步对应 `<dir>.md`，例如 `WorkspaceSettingsView` 改成 `fileImporter` 后，`Settings/settings.md` 也要同时更新。
-- apps 层改动通常要同时跑 TypeScript 与 Swift 校验：`bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`。
-
 ## 模块边界
 
 - 宿主层不负责编排 LLM/tool 循环。

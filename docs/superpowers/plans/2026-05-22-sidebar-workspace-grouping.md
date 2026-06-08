@@ -1,5 +1,8 @@
 # Sidebar Workspace Grouping Implementation Plan
 
+> **状态：历史计划。**
+> 本文使用旧 `SessionWindow` / `Session*` 命名和旧 Swift 侧边栏实施路径，不作为当前实现依据。当前 workspace 分组在 React ThreadWindow 内通过 `workspace.list` / `workspace.listed` 与 thread metadata 实现和验收。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Refactor the SessionWindow left sidebar to group conversations by workspace, with collapsible workspace sections and per-workspace "new session" buttons.
