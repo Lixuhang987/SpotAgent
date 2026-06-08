@@ -75,6 +75,69 @@ final class ElectronShellProcessTests: XCTestCase {
         XCTAssertEqual(marker, "eof")
     }
 
+    func testForwardsChildStderrToHostStderrAndKeepsStdoutEventsDecodable() async throws {
+        let temporaryDirectory = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let capturedStderrURL = temporaryDirectory.appendingPathComponent("captured-stderr.log")
+        let capturedStderrDescriptor = open(capturedStderrURL.path, O_WRONLY | O_CREAT | O_TRUNC, 0o600)
+        XCTAssertGreaterThanOrEqual(capturedStderrDescriptor, 0)
+        let originalStderrDescriptor = dup(STDERR_FILENO)
+        XCTAssertGreaterThanOrEqual(originalStderrDescriptor, 0)
+        fflush(stderr)
+        XCTAssertEqual(dup2(capturedStderrDescriptor, STDERR_FILENO), STDERR_FILENO)
+        close(capturedStderrDescriptor)
+        defer {
+            fflush(stderr)
+            dup2(originalStderrDescriptor, STDERR_FILENO)
+            close(originalStderrDescriptor)
+        }
+
+        let shell = ElectronShellProcess(
+            launchPath: "/bin/sh",
+            arguments: [
+                "-c",
+                """
+                printf '[electron-shell] agent-server supervisor: {"mode":"node_child","coreRuntimeHost":"agent-server","utilityProcessBlocker":"missing built JS entry"}\\n' >&2
+                printf '{"channel":"electron_shell","type":"electron.ready","timestamp":"2026-06-09T00:00:00.000Z"}\\n'
+                sleep 0.1
+                """,
+            ],
+            environment: [:]
+        )
+
+        let eventExpectation = expectation(description: "electron ready event decoded from stdout")
+        var events: [ElectronShellEvent] = []
+        shell.onEvent = { event in
+            events.append(event)
+            eventExpectation.fulfill()
+        }
+
+        try shell.start()
+        defer { shell.stop() }
+
+        await fulfillment(of: [eventExpectation], timeout: 2)
+        XCTAssertEqual(events, [.electronReady(timestamp: "2026-06-09T00:00:00.000Z")])
+
+        let stderrDeadline = Date().addingTimeInterval(1)
+        var capturedStderr = ""
+        while Date() < stderrDeadline {
+            fflush(stderr)
+            capturedStderr = (try? String(contentsOf: capturedStderrURL, encoding: .utf8)) ?? ""
+            if capturedStderr.contains("agent-server supervisor") {
+                break
+            }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        XCTAssertTrue(capturedStderr.contains("agent-server supervisor"))
+        XCTAssertTrue(capturedStderr.contains(#""coreRuntimeHost":"agent-server""#))
+        XCTAssertTrue(capturedStderr.contains(#""utilityProcessBlocker":"missing built JS entry""#))
+        XCTAssertFalse(capturedStderr.contains(#""type":"electron.ready""#))
+    }
+
     func testSendWritesCommandsToElectronCommandSocket() throws {
         let temporaryDirectory = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

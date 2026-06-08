@@ -91,6 +91,10 @@ final class ElectronShellProcess: ElectronShellProcessing {
                 }
                 return
             }
+            Task { @MainActor in
+                guard let process else { return }
+                self?.handleErrorOutput(data, from: process)
+            }
         }
 
         try process.run()
@@ -142,6 +146,11 @@ final class ElectronShellProcess: ElectronShellProcessing {
         guard process === sourceProcess else { return }
         outputDecoder.onEvent = onEvent
         outputDecoder.receive(data)
+    }
+
+    private func handleErrorOutput(_ data: Data, from sourceProcess: Process) {
+        guard process === sourceProcess else { return }
+        FileHandle.standardError.write(data)
     }
 
     private func handleTermination(_ terminatedProcess: Process) {

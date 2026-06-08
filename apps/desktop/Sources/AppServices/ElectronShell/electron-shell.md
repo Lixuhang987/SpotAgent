@@ -54,6 +54,6 @@ Electron StatusBubble 点击且无法聚焦 ThreadWindow 时，会发送 `prompt
 
 - 新增或改名 Electron command/event 时，先改 `ElectronShellProtocol.swift`，再同步 `apps/electron-shell/src/main/protocol/electronShellProtocol.ts` 和双方测试。
 - 不把 `ThreadCommand` / `ThreadNotification` 引入本目录；Swift 只传 initial prompt payload 和窗口 command。
-- `ElectronShellProcess` 的 stdout 只能解析 event；stderr 可用于日志但当前不转发 UI。不要把 Electron diagnostic 写到 stdout。
+- `ElectronShellProcess` 的 stdout 只能解析 event；stderr 作为 diagnostic 日志原样转发到宿主 stderr，支持 packaged app stdout/stderr 重定向观察。不要把 Electron diagnostic 写到 stdout。
 - Swift->Electron command socket 路径必须保持短路径；macOS `sockaddr_un.sun_path` 长度有限，当前使用 `/tmp/hae-<uuid>.sock`。
 - `stop()` 必须清理 callbacks、pending command kind、platform client 和 shell handlers，避免旧 Electron 事件影响下一次 start。
