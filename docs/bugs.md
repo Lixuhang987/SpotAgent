@@ -2,7 +2,7 @@
 
 本文记录当前已知但尚未修复的 bug。功能待办继续放在 [TODO.md](/Users/mu9/proj/handAgent/docs/TODO.md)
 
-最后核对日期：2026-06-08。
+最后核对日期：2026-06-09。
 
 ## 修 bug 约束
 
@@ -30,6 +30,23 @@
 ---
 
 ## 当前 bug
+
+### Electron flag 路径下 `/api/platform` bridge 未连接
+
+- **严重级别**：P1
+- **发现日期**：2026-06-09
+- **复现步骤**：
+  1. 使用 `HANDAGENT_ELECTRON_SHELL=1` 与 `HANDAGENT_ELECTRON_BINARY=/Users/mu9/proj/handAgent/node_modules/.pnpm/electron@42.3.3/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron` 启动 `dist/HandAgentDesktop.app/Contents/MacOS/HandAgentDesktop`。
+  1. 确认 Swift `HandAgentDesktop`、Electron main、agent-server 各一份进程，`127.0.0.1:4317` 由 Electron 监督的 agent-server 监听。
+  1. 在 Electron ThreadWindow 中提交 `ELECTRON_PLATFORM_TOOL_ALLOW_QA_20260609 [mock:clipboard-read]`；为排除权限点击不稳定因素，QA 期间已在 `~/.spotAgent/permissions.json` 追加 `clipboard.read {}` 的 `allow` 规则。
+- **实际结果**：thread 文件 `~/.spotAgent/threads/thread-1780945602117-u52ak4.json` 中 `clipboard.read` tool result 为 `Platform bridge is not connected (method: clipboard.read)`；Electron ThreadWindow 仍显示 assistant 完成文本，但平台 tool 实际未通过 Swift 回写。
+- **期望结果**：Electron flag 路径下 agent-server 仍应通过 Swift `/api/platform` bridge 执行 `clipboard.read`，tool result 应包含 Swift 从剪贴板读取并回写的结果。
+- **证据**：
+  - 进程：`HandAgentDesktop` PID 36477；Electron main PID 36478；agent-server PID 36493；`lsof -nP -iTCP:4317 -sTCP:LISTEN` 显示 PID 36493 监听。
+  - 窗口：Electron 进程存在 `HandAgent Activity` 与 `HandAgent ThreadWindow`；`HandAgentDesktop` 无 Swift 标准 ThreadWindow。
+  - 持久化：`~/.spotAgent/threads/thread-1780945602117-u52ak4.json` 包含 user prompt、`clipboard.read` tool call，以及 tool result `Platform bridge is not connected (method: clipboard.read)`。
+  - activity：新连接 `/api/activity` 收到 `activity.snapshot`，`activeThreadId` 为 `thread-1780945602117-u52ak4`，最终状态回到 `idle`。
+- **初步调用链 / 根因边界**：`Electron ThreadWindow -> /api/thread -> agent-server -> MockLLMClient tool call -> PermissionPolicy allow -> RemotePlatformAdapter -> /api/platform bridge` 在 platform bridge 检查处失败。失败边界位于 Electron flag 启动时 Swift 是否仍启动并保持 `PlatformBridgeConnectionClient` 连接 `/api/platform`，而不是 React ThreadWindow、MockLLMClient 或权限策略。
 
 ### `AI SDK stream finished without assistant content or tool calls`
 
