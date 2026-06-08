@@ -31,20 +31,6 @@
 
 ## 当前 bug
 
-### ThreadWindow 最终 assistant 文本只显示首段
-
-- **严重级别**：P1
-- **发现日期**：2026-06-09
-- **复现步骤**：
-  1. 使用默认 WKWebView packaged mock app 启动 HandAgent。
-  1. 通过全局快捷键打开 PromptPanel。
-  1. 提交 `THREADWINDOW_SCENE6_VISUAL_QA_20260609 [mock:workspace-list]` 或 `THREADWINDOW_SCENE7_LAYOUT_QA_20260609 [mock:assistant-ok]`。
-  1. 等待 tool 调用结束，观察 ThreadWindow 消息区。
-- **实际结果**：`~/.spotAgent/threads/thread-1780956268767-2n3fjt.json` 中最终 assistant message 的 content 是 `Mock workspace.list completed.`，但 ThreadWindow 终态 UI 只显示 `Mock`；`~/.spotAgent/threads/thread-1780956663996-o7g1aj.json` 中 assistant content 是 `Mock assistant response: main chain is reachable.`，但 UI 也只显示 `Mock`。截图 `/tmp/handagent-qa/threadwindow-scenario6-visual-workspace-list-final.png`、`/tmp/handagent-qa/threadwindow-scenario7-layout-assistant-ok.png` 与裁剪图 `/tmp/handagent-qa/threadwindow-scenario6-assistant_final_crop.png`、`/tmp/handagent-qa/threadwindow-scenario7-assistant-final-crop.png` 均只显示 `Mock`。
-- **期望结果**：ThreadWindow 应完整显示最终 assistant 文本，不能只显示首个 delta 或首段文本。
-- **证据**：场景 6 thread 文件包含 4 条消息：user prompt、assistant tool call、`workspace.list` tool result、assistant final；tool result status 为 success。场景 7 thread 文件包含 user prompt 和完整 assistant final。两组证据都说明 agent-server 持久化链路已有完整 assistant 内容，缺陷集中在 `/api/thread` 通知到 React UI 展示链路。退出 QA app 后无 HandAgent / agent-server 残留，`127.0.0.1:4317` 无监听。
-- **初步调用链 / 根因边界**：已验证 `MockLLMClient -> agent-server runtime -> thread persistence` 有完整 final assistant content；未验证 `/api/thread` 通知、`thread.snapshot`、React store 合并 assistant delta/final、`MessageBubble` 渲染哪个 hop 丢失剩余文本。已分发子 agent `019ea947-5f2d-7982-b734-77dcf5ce7f63` 使用 `$trace-and-verify-call-chain` 定位修复。
-
 ### `AI SDK stream finished without assistant content or tool calls`
 
 - **严重级别**：P1
