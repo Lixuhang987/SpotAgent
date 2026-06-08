@@ -38,6 +38,27 @@ node --experimental-transform-types --experimental-specifier-resolution=node app
 7. 创建 `ThreadPersistence`、`ThreadRuntimeOrchestrator`、`ThreadInputQueue` 驱动的 per-thread session loop、`ThreadNotificationPublisher`、`ThreadCommandRouter`。
 8. 启动同端口 HTTP + WebSocket 服务：`/api/thread` 挂载 thread command/response handler，`/api/platform` 挂载 platform bridge handler，`/thread-window/*` 提供 React 静态资源，未知 path 直接关闭或返回 404。
 
+## 主消息流
+
+```mermaid
+flowchart TD
+  A["React /api/thread socket"] --> B["server/attachThreadSocketHandlers"]
+  P["Swift /api/platform socket"] --> D["server/attachPlatformSocketHandlers"]
+  D --> PB["bridges/WebSocketPlatformBridge"]
+  B --> C{"ClientResponse / ThreadCommand"}
+  C -- "ClientResponse" --> E["bridges/ThreadPermissionBridge<br/>bridges/ThreadWorkspaceAskBridge"]
+  C -- "ThreadCommand" --> F["thread/ThreadCommandRouter"]
+  F --> G["thread/ThreadRuntimeOrchestrator"]
+  F --> H["thread/ThreadNotificationPublisher"]
+  G --> I["@handagent/core AgentRuntime"]
+  I --> J["protocol/MessageTranslator"]
+  J --> H
+  H --> K["React ThreadWindow"]
+  G --> L["thread/ThreadPersistence"]
+```
+
+`input.submit` 是用户输入入口；进入 `ThreadRuntimeOrchestrator` 后会变成 thread-local input item，优先 steer 到当前 active turn，没有 active turn 时才唤醒新的 backend turn worker。旧输入命令不再属于当前 thread command 协议。
+
 ## 协议主干
 
 - `/api/thread` 顶层只接收 `ThreadCommand`、`ClientResponse`。

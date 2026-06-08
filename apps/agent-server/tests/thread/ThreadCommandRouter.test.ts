@@ -16,7 +16,7 @@ describe("ThreadCommandRouter", () => {
       () => "2026-06-04T00:00:00.000Z",
     );
     const router = new ThreadCommandRouter(
-      { handleUserMessage: vi.fn(async () => {}) },
+      { submitInput: vi.fn(async () => {}) },
       persistence,
       publisher,
       () => "2026-06-04T00:00:00.000Z",
@@ -36,7 +36,7 @@ describe("ThreadCommandRouter", () => {
       () => "2026-06-04T00:00:00.000Z",
     );
     const router = new ThreadCommandRouter(
-      { handleUserMessage: vi.fn(async () => {}) },
+      { submitInput: vi.fn(async () => {}) },
       persistence,
       publisher,
       () => "2026-06-04T00:00:00.000Z",
@@ -69,7 +69,7 @@ describe("ThreadCommandRouter", () => {
     );
     const Thread = await persistence.createThread();
     const orchestrator = {
-      handleUserMessage: vi.fn(async () => {}),
+      submitInput: vi.fn(async () => {}),
       isThreadRunning: vi.fn(() => false),
     };
     const router = new ThreadCommandRouter(
@@ -89,7 +89,7 @@ describe("ThreadCommandRouter", () => {
       "c1",
     );
 
-    expect(orchestrator.handleUserMessage).not.toHaveBeenCalled();
+    expect(orchestrator.submitInput).not.toHaveBeenCalled();
     expect(sent).toHaveLength(1);
     expect(sent[0]).toMatchObject({
       type: "thread.snapshot",
@@ -97,7 +97,7 @@ describe("ThreadCommandRouter", () => {
     });
   });
 
-  it("forwards turn.start through orchestrator and publishes translated notifications", async () => {
+  it("forwards input.submit through orchestrator and publishes translated notifications", async () => {
     const publisher = new ThreadNotificationPublisher();
     const seen: string[] = [];
     publisher.attachConnection("c1", (event) => seen.push(event.type));
@@ -109,7 +109,7 @@ describe("ThreadCommandRouter", () => {
     publisher.subscribe("c1", Thread.metadata.id);
 
     const orchestrator = {
-      handleUserMessage: vi.fn(async (_message, push: (message: ThreadNotification) => void) => {
+      submitInput: vi.fn(async (_message, push: (message: ThreadNotification) => void) => {
         push({
           type: "user.message.recorded",
           threadId: Thread.metadata.id,
@@ -178,16 +178,16 @@ describe("ThreadCommandRouter", () => {
 
     await router.receive(
       {
-        type: "turn.start",
+        type: "input.submit",
         threadId: Thread.metadata.id,
-        commandId: "turn-1",
+        inputId: "input-1",
         timestamp: "2026-06-04T00:00:00.000Z",
         payload: { text: "hi" },
       },
       "c1",
     );
 
-    expect(orchestrator.handleUserMessage).toHaveBeenCalled();
+    expect(orchestrator.submitInput).toHaveBeenCalled();
     expect(seen).toEqual([
       "user.message.recorded",
       "turn.started",
@@ -199,7 +199,7 @@ describe("ThreadCommandRouter", () => {
     ]);
   });
 
-  it("keeps old turn.start compatible with async backend input handling", async () => {
+  it("maps input.submit inputId to the persisted user message id", async () => {
     const publisher = new ThreadNotificationPublisher();
     const seen: ThreadNotification[] = [];
     publisher.attachConnection("c1", (event) => seen.push(event as ThreadNotification));
@@ -211,13 +211,13 @@ describe("ThreadCommandRouter", () => {
     const thread = await persistence.createThread();
     publisher.subscribe("c1", thread.metadata.id);
     const orchestrator = {
-      handleUserMessage: vi.fn(async (_message, push: (message: ThreadNotification) => void) => {
+      submitInput: vi.fn(async (_message, push: (message: ThreadNotification) => void) => {
         push({
           type: "user.message.recorded",
           threadId: thread.metadata.id,
           notificationId: "recorded",
           timestamp: "2026-06-07T00:00:00.000Z",
-          payload: { messageId: "turn-1", text: "hi" },
+          payload: { messageId: "input-1", text: "hi" },
         });
       }),
     };
@@ -230,19 +230,19 @@ describe("ThreadCommandRouter", () => {
 
     await router.receive(
       {
-        type: "turn.start",
+        type: "input.submit",
         threadId: thread.metadata.id,
-        commandId: "turn-1",
+        inputId: "input-1",
         timestamp: "2026-06-07T00:00:00.000Z",
         payload: { text: "hi" },
       },
       "c1",
     );
 
-    expect(orchestrator.handleUserMessage).toHaveBeenCalledWith(
+    expect(orchestrator.submitInput).toHaveBeenCalledWith(
       expect.objectContaining({
         threadId: thread.metadata.id,
-        messageId: "turn-1",
+        messageId: "input-1",
         payload: { text: "hi", attachments: undefined },
       }),
       expect.any(Function),
@@ -255,7 +255,7 @@ describe("ThreadCommandRouter", () => {
     ]);
   });
 
-  it("waits for interrupt cleanup when old turn.interrupt is received", async () => {
+  it("waits for interrupt cleanup when turn.interrupt is received", async () => {
     const publisher = new ThreadNotificationPublisher();
     const seen: ThreadNotification[] = [];
     publisher.attachConnection("c1", (event) => seen.push(event as ThreadNotification));
@@ -265,7 +265,7 @@ describe("ThreadCommandRouter", () => {
       () => "2026-06-07T00:00:00.000Z",
     );
     const orchestrator = {
-      handleUserMessage: vi.fn(async () => {}),
+      submitInput: vi.fn(async () => {}),
       interruptThread: vi.fn(),
       interruptAndWait: vi.fn(async (_threadId, push: (message: ThreadNotification) => void) => {
         push({
@@ -308,7 +308,7 @@ describe("ThreadCommandRouter", () => {
     ]);
   });
 
-  it("emits thread.error to the requesting connection when turn.start targets a missing thread", async () => {
+  it("emits thread.error to the requesting connection when input.submit targets a missing thread", async () => {
     const publisher = new ThreadNotificationPublisher();
     const first: ThreadNotification[] = [];
     const second: ThreadNotification[] = [];
@@ -319,7 +319,7 @@ describe("ThreadCommandRouter", () => {
       () => "2026-06-04T00:00:00.000Z",
     );
     const orchestrator = {
-      handleUserMessage: vi.fn(async () => {}),
+      submitInput: vi.fn(async () => {}),
     };
     const router = new ThreadCommandRouter(
       orchestrator,
@@ -330,23 +330,23 @@ describe("ThreadCommandRouter", () => {
 
     await router.receive(
       {
-        type: "turn.start",
+        type: "input.submit",
         threadId: "missing-thread",
-        commandId: "turn-1",
+        inputId: "input-1",
         timestamp: "2026-06-04T00:00:00.000Z",
         payload: { text: "hi" },
       },
       "c1",
     );
 
-    expect(orchestrator.handleUserMessage).not.toHaveBeenCalled();
+    expect(orchestrator.submitInput).not.toHaveBeenCalled();
     expect(first).toHaveLength(1);
     expect(first[0]).toMatchObject({
       type: "thread.error",
       threadId: "missing-thread",
-      commandId: "turn-1",
       payload: { code: "thread_not_found" },
     });
+    expect(first[0]).not.toHaveProperty("commandId");
     expect(second).toEqual([]);
   });
 
@@ -362,7 +362,7 @@ describe("ThreadCommandRouter", () => {
     );
     await persistence.createThread();
     const router = new ThreadCommandRouter(
-      { handleUserMessage: vi.fn(async () => {}) },
+      { submitInput: vi.fn(async () => {}) },
       persistence,
       publisher,
       () => "2026-06-04T00:00:00.000Z",
@@ -391,7 +391,7 @@ describe("ThreadCommandRouter", () => {
     );
     const Thread = await persistence.createThread();
     const orchestrator = {
-      handleUserMessage: vi.fn(async () => {}),
+      submitInput: vi.fn(async () => {}),
       isThreadRunning: vi.fn(() => true),
       interruptAndWait: vi.fn(async () => {}),
     };

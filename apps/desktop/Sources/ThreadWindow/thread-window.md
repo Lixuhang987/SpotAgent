@@ -30,7 +30,7 @@ sequenceDiagram
   Server-->>React: ThreadNotification / ServerRequest
 ```
 
-Swift 在 `WKUserScript.atDocumentStart` 注入 `window.handAgentThreadWindowConfig` 时，也会初始化 `window.handAgentPendingInitialPrompts` 和临时 `window.handAgentReceiveInitialPrompt`。如果 `WKNavigationDelegate.didFinish` 早于 React `useEffect` 安装正式 receiver，initial prompt 会先进入 pending 队列；React 启动后由 `installInitialPromptReceiver` flush，再通过 `/api/thread` 创建新 thread 与首轮 turn。改动这个桥时必须同时覆盖 Swift 配置脚本和 React native config 测试。
+Swift 在 `WKUserScript.atDocumentStart` 注入 `window.handAgentThreadWindowConfig` 时，也会初始化 `window.handAgentPendingInitialPrompts` 和临时 `window.handAgentReceiveInitialPrompt`。如果 `WKNavigationDelegate.didFinish` 早于 React `useEffect` 安装正式 receiver，初始 prompt 会先进入 pending 队列；React 启动后由 `installInitialPromptReceiver` flush，再发送 `thread.start` 和首轮 `input.submit`。改动这个桥时必须同时覆盖 Swift 配置脚本和 React native config 测试。
 
 ## 调试前提
 

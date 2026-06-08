@@ -44,7 +44,6 @@ export function Composer({ disabled, stopDisabled, onSubmit, onStop }: ComposerP
     }
   };
 
-  // GPT 风格：根据运行状态决定显示发送还是停止按钮
   const isRunning = !stopDisabled;
 
   return (
@@ -86,9 +85,7 @@ export function Composer({ disabled, stopDisabled, onSubmit, onStop }: ComposerP
               </svg>
             </button>
 
-            {/* 发送或停止按钮 */}
             {isRunning ? (
-              // 停止按钮（方形图标）
               <button
                 type="button"
                 onClick={onStop}
@@ -107,25 +104,23 @@ export function Composer({ disabled, stopDisabled, onSubmit, onStop }: ComposerP
                   />
                 </svg>
               </button>
-            ) : (
-              // 发送按钮（箭头图标）
-              <button
-                type="submit"
-                disabled={disabled || !text.trim()}
-                className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-on-primary transition-colors hover:bg-primary-active disabled:cursor-not-allowed disabled:bg-surface-dark-elevated disabled:text-on-dark-soft"
-                title="发送"
-              >
-                <svg width="16" height="16" viewBox="0 0 16 16">
-                  <path
-                    d="M8 3V13M8 3L12 7M8 3L4 7"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
-            )}
+            ) : null}
+            <button
+              type="submit"
+              disabled={disabled || !text.trim()}
+              className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-on-primary transition-colors hover:bg-primary-active disabled:cursor-not-allowed disabled:bg-surface-dark-elevated disabled:text-on-dark-soft"
+              title="发送"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16">
+                <path
+                  d="M8 3V13M8 3L12 7M8 3L4 7"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
           </div>
         </div>
       </div>

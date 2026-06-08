@@ -29,7 +29,7 @@ captureRegion 热键
             └─ error(message)   → PromptPanelController.appendAttachment(.selectionError(...))
 ```
 
-附件提交后由 Coordinator 通过 `PromptSubmission.compose(...)` 组装为 `composed prompt + summary + UserMessageAttachmentPayload[]`，再交给 `ThreadWindowWebHost` 注入为 initial prompt。React ThreadWindow 收到 initial prompt 后先通过 `/api/thread` 发送 `thread.start`，收到 `thread.started` 后再发送首轮 `turn.start`，其中 `turn.start.payload.attachments` 携带 `text_selection` / `image` attachments。
+附件提交后由 Coordinator 通过 `PromptSubmission.compose(...)` 组装为 `composed prompt + summary + UserMessageAttachmentPayload[]`，再交给 `ThreadWindowWebHost` 注入为 initial prompt。React ThreadWindow 收到 initial prompt 后先通过 `/api/thread` 发送 `thread.start`，收到 `thread.started` 后再发送首轮 `input.submit`，其中 `input.submit.payload.attachments` 携带 `text_selection` / `image` attachments。
 
 ## 设计备注
 

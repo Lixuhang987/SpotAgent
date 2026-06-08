@@ -145,9 +145,9 @@ export function App() {
               />
             </div>
             <Composer
-              disabled={state.connectionState !== "connected" || activeTab.status === "running"}
+              disabled={state.connectionState !== "connected"}
               stopDisabled={state.connectionState !== "connected" || activeTab.status !== "running"}
-              onSubmit={(text) => clientRef.current?.startTurn(activeTab.threadId, text)}
+              onSubmit={(text) => clientRef.current?.submitInput(activeTab.threadId, text)}
               onStop={() => {
                 if (state.connectionState !== "connected" || activeTab.status !== "running") {
                   return;

@@ -73,7 +73,7 @@ flowchart TD
 
 - Swift desktop 不持有 thread client，不发送 `ThreadCommand`，不解析 `ThreadNotification`；只负责 PromptPanel、`NSWindow/WKWebView` host、initial prompt 注入、StatusBubble 与 macOS 平台能力实现。
 - React ThreadWindow 是 tabs、历史、消息、运行态、permission/workspace 请求面板和 composer 的 UI 状态源。
-- agent-server 是组合根和本地桥：负责 socket 路径拆分、thread/turn 路由、runtime 驱动、持久化封装、permission/workspace 回执桥和 platform bridge 转发。
+- agent-server 是组合根和本地桥：负责 socket 路径拆分、thread/turn 路由、runtime 驱动、持久化封装、permission/workspace 回执桥和 platform bridge 转发；外部用户输入命令统一是 `input.submit`，后端内部归一化为 input item。
 - packages/core 只定义跨平台 runtime、tool、platform、protocol、storage、workspace 和 permission 抽象，不实现 UI 或 macOS 原生能力。
 
 ## 阅读顺序建议

@@ -20,7 +20,7 @@
 ## 内部依赖方向
 
 - `server/` 是组合根；只有这里创建长驻依赖、读取 `~/.spotAgent` 路径并绑定 HTTP / WebSocket。
-- `thread/` 消费已经注入的 runtime、persistence、publisher、workspace registry 和 action binding resolver，不直接创建 LLM client、MCP client 或 platform adapter。
+- `thread/` 消费已经注入的 runtime、persistence、publisher、workspace registry 和 action binding resolver，不直接创建 LLM client、MCP client 或 platform adapter；用户输入通过 `input.submit` 进入 `ThreadRuntimeOrchestrator.submitInput`。
 - `protocol/` 只做 runtime event、conversation message、audit event 和 attachment STUB 的翻译。
 - `settings/` 把 `settings.json` 热加载成 LLM client 与 builtin tool registry。
 - `actions/` 组合 builtin tools、MCP tools 与 plugin action binding，产出 thread 级工具表。

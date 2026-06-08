@@ -22,8 +22,6 @@
   - goal / budget：目标状态、预算、用量统计及 UI 呈现。
   - realtime：语音、低延迟流式输入输出或实时通道。
   - codex-style `item.*`：细粒度 item 生命周期、局部更新、折叠与重放语义。
-  - 前端输入协议改造：React `ThreadSocketClient` 后续通过 `ThreadCommand` 从当前 `turn.start` 切到更明确的 `input.submit` / `turn.steer` 或同等语义，补充运行中输入 ack、steered / queued 状态展示。
-  - 破坏性清理：把命令命名、通知命名和文档统一到 input item / active turn 模型。
   - archived/list/search：归档 thread 的列表、搜索、恢复和删除管理。
   - thread-level event replay、notification 去重与 request 生命周期。
   - auth refresh request / response：server 触发鉴权刷新、desktop 回执结果的 `ServerRequest` / `ClientResponse` 语义。
@@ -32,6 +30,7 @@
   - 历史保存顺序：明确 thread history 初始输入、hook 注入内容与后续消息的持久化顺序。
   - MCP server 激活来源：plugin 除了用户显式指定，也支持由 skill 声明启用。
 - 补一轮端到端实机验证：thread 创建、thread 恢复、thread 列表、thread 删除、turn 中断、permission / workspace 回流。
+- 补一轮端到端实机验证：React ThreadWindow 只通过 `/api/thread` 承载 thread/turn 主协议，Swift 宿主只通过 `/api/platform` 承载 `PlatformBridgeMessage`，确认两条 WebSocket 独立且互不污染。
 
 ---
 

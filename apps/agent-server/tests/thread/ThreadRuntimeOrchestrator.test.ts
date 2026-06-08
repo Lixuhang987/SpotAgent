@@ -99,13 +99,13 @@ describe("ThreadRuntimeOrchestrator", () => {
 
     await persistence.ensureThread("thread-steer");
 
-    await orchestrator.handleUserMessage(
+    await orchestrator.submitInput(
       createUserMessage("thread-steer", "first", "user-1"),
       (message) => pushed.push(message),
     );
     await waitUntil(() => runtimeCalls.length === 1, "first runtime call");
 
-    await orchestrator.handleUserMessage(
+    await orchestrator.submitInput(
       createUserMessage("thread-steer", "second", "user-2"),
       (message) => pushed.push(message),
     );
@@ -174,13 +174,13 @@ describe("ThreadRuntimeOrchestrator", () => {
     );
 
     await persistence.ensureThread("thread-prepare-steer");
-    await orchestrator.handleUserMessage(
+    await orchestrator.submitInput(
       createUserMessage("thread-prepare-steer", "first", "user-1"),
       (message) => pushed.push(message),
     );
     await waitUntil(() => beforeRunCount === 1, "first beforeRun");
 
-    await orchestrator.handleUserMessage(
+    await orchestrator.submitInput(
       createUserMessage("thread-prepare-steer", "second", "user-2"),
       (message) => pushed.push(message),
     );
@@ -244,18 +244,18 @@ describe("ThreadRuntimeOrchestrator", () => {
     );
 
     await persistence.ensureThread("thread-follow-up-steer");
-    await orchestrator.handleUserMessage(
+    await orchestrator.submitInput(
       createUserMessage("thread-follow-up-steer", "first", "user-1"),
       () => {},
     );
     await waitUntil(() => runtimeCalls.length === 1, "first runtime call");
-    await orchestrator.handleUserMessage(
+    await orchestrator.submitInput(
       createUserMessage("thread-follow-up-steer", "second", "user-2"),
       () => {},
     );
     firstRunGate.resolve();
     await waitUntil(() => beforeRunCount === 2, "second beforeRun");
-    await orchestrator.handleUserMessage(
+    await orchestrator.submitInput(
       createUserMessage("thread-follow-up-steer", "third", "user-3"),
       () => {},
     );
@@ -327,7 +327,7 @@ describe("ThreadRuntimeOrchestrator", () => {
     );
 
     await persistence.ensureThread("Thread-1");
-    await orchestrator.handleUserMessage(
+    await orchestrator.submitInput(
       createUserMessage("Thread-1", "第一句", "user-1"),
       (message) => pushed.push(message),
     );
@@ -422,12 +422,12 @@ describe("ThreadRuntimeOrchestrator", () => {
     );
 
     await persistence.ensureThread("Thread-2");
-    await orchestrator.handleUserMessage(
+    await orchestrator.submitInput(
       createUserMessage("Thread-2", "第一句", "user-1"),
       () => {},
     );
     await orchestrator.waitForThreadIdle("Thread-2");
-    await orchestrator.handleUserMessage(
+    await orchestrator.submitInput(
       createUserMessage("Thread-2", "第二句", "user-2"),
       () => {},
     );
@@ -489,7 +489,7 @@ describe("ThreadRuntimeOrchestrator", () => {
     );
 
     await persistence.ensureThread("Thread-summary");
-    await orchestrator.handleUserMessage(
+    await orchestrator.submitInput(
       createUserMessage("Thread-summary", "第一句", "user-1"),
       () => {},
     );
@@ -524,7 +524,7 @@ describe("ThreadRuntimeOrchestrator", () => {
     );
 
     await persistence.ensureThread("Thread-summary-error");
-    await orchestrator.handleUserMessage(
+    await orchestrator.submitInput(
       createUserMessage("Thread-summary-error", "第一句", "user-1"),
       (message) => pushed.push(message),
     );
@@ -574,7 +574,7 @@ describe("ThreadRuntimeOrchestrator", () => {
     );
 
     await persistence.ensureThread("Thread-image");
-    await orchestrator.handleUserMessage(
+    await orchestrator.submitInput(
       {
         ...createUserMessage("Thread-image", "描述图片", "user-1"),
         payload: {
@@ -662,7 +662,7 @@ describe("ThreadRuntimeOrchestrator", () => {
     );
 
     await persistence.ensureThread("Thread-tool");
-    await orchestrator.handleUserMessage(
+    await orchestrator.submitInput(
       createUserMessage("Thread-tool", "读取文件", "user-1"),
       (message) => pushed.push(message),
     );
@@ -797,7 +797,7 @@ describe("ThreadRuntimeOrchestrator", () => {
     );
 
     await persistence.ensureThread("Thread-tool-running");
-    await orchestrator.handleUserMessage(
+    await orchestrator.submitInput(
       createUserMessage("Thread-tool-running", "列出工作区", "user-1"),
       (message) => pushed.push(message),
     );
@@ -860,7 +860,7 @@ describe("ThreadRuntimeOrchestrator", () => {
     );
 
     await persistence.ensureThread("Thread-interrupt");
-    const runPromise = orchestrator.handleUserMessage(
+    const runPromise = orchestrator.submitInput(
       createUserMessage("Thread-interrupt", "停止这轮", "user-1"),
       (message) => pushed.push(message),
     );
@@ -950,7 +950,7 @@ describe("ThreadRuntimeOrchestrator", () => {
     );
 
     await persistence.ensureThread("Thread-delete-running");
-    const runPromise = orchestrator.handleUserMessage(
+    const runPromise = orchestrator.submitInput(
       createUserMessage("Thread-delete-running", "删除中", "user-1"),
       (message) => pushed.push(message),
     );
@@ -1023,7 +1023,7 @@ describe("ThreadRuntimeOrchestrator", () => {
     );
 
     await persistence.ensureThread("Thread-stubborn-runtime");
-    void orchestrator.handleUserMessage(
+    void orchestrator.submitInput(
       createUserMessage("Thread-stubborn-runtime", "删除中", "user-1"),
       (message) => pushed.push(message),
     );
@@ -1064,7 +1064,7 @@ describe("ThreadRuntimeOrchestrator", () => {
       },
     ]);
 
-    await orchestrator.handleUserMessage(
+    await orchestrator.submitInput(
       createUserMessage("Thread-stubborn-runtime", "继续", "user-2"),
       (message) => pushed.push(message),
     );
@@ -1097,7 +1097,7 @@ describe("ThreadRuntimeOrchestrator", () => {
     );
 
     await persistence.ensureThread("Thread-timeout-idle-waiter");
-    void orchestrator.handleUserMessage(
+    void orchestrator.submitInput(
       createUserMessage("Thread-timeout-idle-waiter", "删除中", "user-1"),
       () => {},
     );
@@ -1143,7 +1143,7 @@ describe("ThreadRuntimeOrchestrator", () => {
     );
 
     await persistence.ensureThread("Thread-timeout-replay");
-    void orchestrator.handleUserMessage(
+    void orchestrator.submitInput(
       createUserMessage("Thread-timeout-replay", "first", "user-1"),
       (message) => pushed.push(message),
     );
@@ -1157,7 +1157,7 @@ describe("ThreadRuntimeOrchestrator", () => {
       () => eventTypes(pushed).includes("turn.completed"),
       "interrupt notification",
     );
-    await orchestrator.handleUserMessage(
+    await orchestrator.submitInput(
       createUserMessage("Thread-timeout-replay", "second", "user-2"),
       (message) => pushed.push(message),
     );
@@ -1227,13 +1227,13 @@ describe("ThreadRuntimeOrchestrator", () => {
     );
 
     await persistence.ensureThread("Thread-interrupt-enqueue");
-    const runPromise = orchestrator.handleUserMessage(
+    const runPromise = orchestrator.submitInput(
       createUserMessage("Thread-interrupt-enqueue", "first", "user-1"),
       (message) => pushed.push(message),
     );
     await runStarted.promise;
 
-    const secondInputPromise = orchestrator.handleUserMessage(
+    const secondInputPromise = orchestrator.submitInput(
       createUserMessage("Thread-interrupt-enqueue", "second", "user-2"),
       (message) => pushed.push(message),
     );
@@ -1287,7 +1287,7 @@ describe("ThreadRuntimeOrchestrator", () => {
     );
 
     await persistence.ensureThread("Thread-non-abort-reject");
-    const runPromise = orchestrator.handleUserMessage(
+    const runPromise = orchestrator.submitInput(
       createUserMessage("Thread-non-abort-reject", "停止这轮", "user-1"),
       (message) => pushed.push(message),
     );
@@ -1344,7 +1344,7 @@ describe("ThreadRuntimeOrchestrator", () => {
     );
 
     await persistence.ensureThread("Thread-4");
-    await orchestrator.handleUserMessage(
+    await orchestrator.submitInput(
       createUserMessage("Thread-4", "你好", "user-1"),
       (message) => pushed.push(message),
     );
@@ -1409,7 +1409,7 @@ describe("ThreadRuntimeOrchestrator activation hook", () => {
     );
 
     await persistence.ensureThread("s1");
-    await orchestrator.handleUserMessage(
+    await orchestrator.submitInput(
       createUserMessage("s1", "hi", "user-1"),
       () => {},
     );
@@ -1453,12 +1453,12 @@ describe("ThreadRuntimeOrchestrator activation hook", () => {
 
     await persistence.ensureThread("s1");
     await persistence.ensureThread("s2");
-    await orchestrator.handleUserMessage(
+    await orchestrator.submitInput(
       createUserMessage("s1", "one", "user-1"),
       () => {},
     );
     await orchestrator.waitForThreadIdle("s1");
-    await orchestrator.handleUserMessage(
+    await orchestrator.submitInput(
       createUserMessage("s2", "two", "user-2"),
       () => {},
     );

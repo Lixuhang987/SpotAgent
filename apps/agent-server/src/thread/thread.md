@@ -16,9 +16,9 @@
 | `ThreadRuntimeOrchestrator.ts` | 维护 per-thread session loop：记录输入、唤醒 runtime、drain queued input、转译通知、处理中断与错误 |
 | `ThreadPersistence.ts` | `ThreadStore` 的唯一直接封装：创建 / 删除 / 读取 / 列出 thread，追加用户消息、runtime delta、审计事件，恢复重启前未完成的 turn |
 
-## 输入队列与 active turn
+## 常驻输入队列
 
-`turn.start` 是 React composer 和初始 prompt 的用户输入入口。进入 orchestrator 后会先持久化为 user message，再入 `ThreadInputQueue`。
+`input.submit` 是当前用户输入命令，agent-server 内部会先把它归一化为 `ThreadInputItem(kind: "user")`。旧输入命令不再属于当前 `ThreadCommand`。
 
 ```mermaid
 sequenceDiagram
@@ -28,7 +28,7 @@ sequenceDiagram
   participant Runtime as core AgentRuntime
   participant Publisher as ThreadNotificationPublisher
 
-  Router->>Orchestrator: handleUserMessage(turn.start)
+  Router->>Orchestrator: submitInput(input.submit)
   Orchestrator->>Orchestrator: persist user message
   Orchestrator-->>Publisher: user.message.recorded
   Orchestrator->>Queue: enqueue ThreadInputItem
@@ -47,7 +47,7 @@ sequenceDiagram
   end
 ```
 
-运行中收到新的 `turn.start` 不会 abort 当前 run；新输入会立即记录为用户消息，并在当前 active turn 的下一次 follow-up 中进入模型上下文。每个 thread 进程内最多一个 active run，晚到 runtime event 必须通过 generation 检查后才能发布或落盘。
+运行中收到新的 `input.submit` 不会 abort 当前 run；新输入会立即记录为用户消息，并在当前 active turn 的下一次 follow-up 中进入模型上下文。每个 thread 进程内最多一个 active run，晚到 runtime event 必须通过 generation 检查后才能发布或落盘。
 
 ## 关键机制
 
@@ -57,7 +57,7 @@ sequenceDiagram
 - `thread.resume`：恢复既有 thread，并返回 `thread.snapshot`。
 - `thread.list`：返回 `thread.listed`。
 - `thread.delete`：删除指定 thread；若该 thread 正在运行，先中断再删。
-- `turn.start`：用户输入入口；idle 时唤醒 session loop，running 时 steer 到 active turn follow-up。
+- `input.submit`：用户输入入口；后端内部归一化为 user input item，idle 时唤醒 session loop，running 时 steer 到 active turn follow-up。
 - `turn.interrupt`：中断当前运行中的 turn。
 - `workspace.list`：读取 workspace 注册表，并在当前连接返回 `workspace.listed`；未配置 registry 时返回 `thread.error(workspace_registry_not_configured)`。
 
@@ -104,3 +104,4 @@ sequenceDiagram
 - 新增 thread / turn 命令分支优先落在 `ThreadCommandRouter.ts`。
 - runtime event 到 notification / 审计事件的翻译归 `protocol/MessageTranslator.ts`。
 - 需要 request-response 的能力优先判断是否属于 `/api/thread` 的 `ServerRequest` / `ClientResponse`；不要误挂到 `/api/platform`。
+- 旧输入协议不要继续写回本文件；当前输入入口以 `input.submit` 为准。

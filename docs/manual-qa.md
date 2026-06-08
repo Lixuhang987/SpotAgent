@@ -15,6 +15,15 @@
 - 已通过 `bash ./scripts/swiftw test`。
 - 已通过 `bash ./scripts/swiftw build`。
 
+## 开发验证记录
+
+### Thread 输入队列与 input.submit 破坏性迁移
+
+- 完成日期：2026-06-07（后端队列）；2026-06-08（输入协议破坏性迁移）
+- 关键 commit：`b0893c5`（后端队列）；`3e562e1`（输入协议迁移）
+- 实现位置：`packages/core/src/protocol/ThreadCommand.ts`、`apps/agent-server/src/thread/ThreadInputQueue.ts`、`apps/agent-server/src/thread/ThreadRuntimeOrchestrator.ts`、`apps/agent-server/src/thread/ThreadCommandRouter.ts`、`apps/agent-server/src/server/server.ts`、`apps/thread-window-web/src/protocol/threadProtocol.ts`、`apps/thread-window-web/src/thread/threadSocketClient.ts`、`apps/thread-window-web/src/App.tsx`、`apps/thread-window-web/src/components/Composer.tsx`
+- 验收结果：外部用户输入命令统一为 `input.submit`，旧输入命令已从当前 `ThreadCommand` 移除；运行中输入不再中断当前 run，而是排队进入 active turn follow-up；ThreadWindow composer 在 running 状态下仍可提交输入并保留 Stop。已通过 `bash ./scripts/test.sh`、`pnpm --filter handagent-thread-window-web test`、`pnpm --filter handagent-thread-window-web build`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`。
+
 ## 文档一致性 smoke（P2）
 
 1. 从 `AGENTS.md → handAgent.md → apps/apps.md / packages/packages.md` 逐层打开文档，确认每级 `<dir>.md` 只索引直接子节点。

@@ -31,7 +31,7 @@ Web 侧命令和通知类型以 `packages/core/src/protocol/` 为真相，`src/p
 
 当前 Web 包必须覆盖这些协议点：
 
-- 出站 `ThreadCommand`：`thread.start`、`thread.resume`、`thread.list`、`thread.delete`、`turn.start`、`turn.interrupt`、`workspace.list`。
+- 出站 `ThreadCommand`：`thread.start`、`thread.resume`、`thread.list`、`thread.delete`、`input.submit`、`turn.interrupt`、`workspace.list`。
 - 入站 `ThreadNotification`：消息流、tool 流、状态变化、`thread.listed`、`thread.deleted`、`thread.error`、`workspace.listed`。
 - 入站 `ServerRequest`：`permission.requested` 与 `workspace.requested`。
 - 出站 `ClientResponse`：`permission.answered` 与 `workspace.answered`。
@@ -48,12 +48,12 @@ Swift 在 document start 注入：
 
 React `App` 挂载后通过 `installInitialPromptReceiver` 替换正式 receiver，并 flush 早到的 pending prompt。
 
-首轮消息流程不是直接 `turn.start`：
+首轮消息流程先建 thread，再提交首轮输入：
 
 1. `App` 收到 `InitialPromptPayload` 后先写入 store 的 `pendingInitialPrompts`。
 2. `ThreadSocketClient.startInitialPrompt` 发送 `thread.start`，`commandId` 使用 `clientRequestId`，并携带 `actionBinding`。
-3. 收到匹配 `commandId` 的 `thread.started` 后，store 创建并激活 tab，socket client 自动发送 `thread.resume`，再发送首轮 `turn.start` 和 attachments。
-4. 若收到匹配 `commandId` 的 `thread.error`，socket client 清理 pending prompt，store 暴露窗口级错误，不再补发 `turn.start`。
+3. 收到匹配 `commandId` 的 `thread.started` 后，store 创建并激活 tab，socket client 自动发送 `thread.resume`，再发送首轮 `input.submit` 和 attachments。
+4. 若收到匹配 `commandId` 的 `thread.error`，socket client 清理 pending prompt，store 暴露窗口级错误，不再补发 `input.submit`。
 
 这个顺序同时保护“先建 thread 再补首轮输入”和“WebSocket 未 open 时排队发送”的场景；相关测试在 `tests/nativeConfig.test.ts`、`tests/threadSocketClient.test.ts`、`tests/threadWindowStore.test.ts`。
 

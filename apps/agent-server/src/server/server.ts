@@ -87,7 +87,7 @@ export function attachThreadSocketHandlers(
       if ("threadId" in message && typeof message.threadId === "string") {
         eventPublisher.subscribe(connectionId, message.threadId);
       }
-      if (message.type === "turn.start") {
+      if (message.type === "input.submit") {
         if (permissionBridge && !boundThreads.has(message.threadId)) {
           const token = permissionBridge.bindThread(
             message.threadId,
@@ -171,7 +171,7 @@ function isThreadCommand(message: unknown): message is ThreadCommand {
     "thread.resume",
     "thread.list",
     "thread.delete",
-    "turn.start",
+    "input.submit",
     "turn.interrupt",
     "workspace.list",
   ].includes((message as { type?: string }).type ?? "");

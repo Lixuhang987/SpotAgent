@@ -19,7 +19,7 @@ type ActionBindingResolver = {
   resolve(binding: CreateThreadActionBinding): Promise<ThreadActionBinding>;
 };
 
-type RouterOrchestrator = Pick<ThreadRuntimeOrchestrator, "handleUserMessage"> &
+type RouterOrchestrator = Pick<ThreadRuntimeOrchestrator, "submitInput"> &
   Partial<
     Pick<
       ThreadRuntimeOrchestrator,
@@ -56,8 +56,8 @@ export class ThreadCommandRouter {
         return this.handleCreateThread(command, connectionId);
       case "thread.resume":
         return this.handleResumeThread(command, connectionId);
-      case "turn.start":
-        return this.handleTurnStart(command, connectionId);
+      case "input.submit":
+        return this.handleInputSubmit(command, connectionId);
       case "turn.interrupt":
         return this.interruptThread(command.threadId);
       case "thread.list":
@@ -172,8 +172,8 @@ export class ThreadCommandRouter {
     });
   }
 
-  private async handleTurnStart(
-    command: Extract<ThreadCommand, { type: "turn.start" }>,
+  private async handleInputSubmit(
+    command: Extract<ThreadCommand, { type: "input.submit" }>,
     connectionId?: string,
   ): Promise<void> {
     if (!(await this.persistence.getThread(command.threadId))) {
@@ -181,7 +181,6 @@ export class ThreadCommandRouter {
         type: "thread.error",
         threadId: command.threadId,
         notificationId: this.makeNotificationId(),
-        commandId: command.commandId,
         timestamp: this.now(),
         payload: {
           code: "thread_not_found",
@@ -196,10 +195,10 @@ export class ThreadCommandRouter {
       return;
     }
 
-    await this.orchestrator.handleUserMessage(
+    await this.orchestrator.submitInput(
       {
         threadId: command.threadId,
-        messageId: command.commandId,
+        messageId: command.inputId,
         timestamp: command.timestamp,
         payload: {
           text: command.payload.text,

@@ -56,7 +56,7 @@ this.pending.set(requestId, {
 
 权限 requestId 带 `threadId` 前缀，server 层可以从 `permission.answered.requestId` 找回 thread，再用该连接持有的 binding token 调 `handleResponse()`。这保证一个 thread 断线重连后，旧 socket 不能答复新 socket 发起的审批。
 
-权限桥的绑定由 `server/attachThreadSocketHandlers` 在 `turn.start` 时建立；如果 core 发起 permission ask 时没有 thread id 或没有当前绑定连接，直接返回 deny。
+权限桥的绑定由 `server/attachThreadSocketHandlers` 在 `input.submit` 时建立；如果 core 发起 permission ask 时没有 thread id 或没有当前绑定连接，直接返回 deny。
 
 ### Workspace ask 串行展示
 

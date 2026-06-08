@@ -93,17 +93,17 @@ export function encodeThreadDelete(input: {
   });
 }
 
-export function encodeTurnStart(input: {
+export function encodeInputSubmit(input: {
   threadId: string;
-  commandId: string;
+  inputId: string;
   timestamp: string;
   text: string;
   attachments: ThreadAttachment[];
 }): string {
   return encode({
-    type: "turn.start",
+    type: "input.submit",
     threadId: input.threadId,
-    commandId: input.commandId,
+    inputId: input.inputId,
     timestamp: input.timestamp,
     payload: {
       text: input.text,
