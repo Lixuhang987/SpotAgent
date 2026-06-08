@@ -76,6 +76,7 @@
 - 点击 Electron StatusBubble 的可见 ThreadWindow 分支已验证：先激活 Finder，再用 CGEvent 点击 ActivityWindow 中心，前台切到 Electron，`HandAgent ThreadWindow` 的 `AXMain=true`，`HandAgent Activity` 的 `AXMain=false`。
 - Electron ActivityWindow 非 key 行为已验证：点击气泡后 `HandAgent Activity` 的 `AXMain=false` / `AXFocused=false`，CoreGraphics 只显示 owner 为 `Electron` 的 `HandAgent Activity` 小窗，layer 为 3，bounds 为 `{X: 1144, Y: 832, Width: 272, Height: 76}`。
 - supervisor 最大重启诊断已验证：先退出 QA app，用 Python 端口占用器监听 `127.0.0.1:4317`，再启动 Electron flag packaged app；超过 5 次 restart attempt 后，agent-server 不再残留，PromptPanel 可见错误文案 `agent-server stopped after 5 restart attempts: agent-server exited with code 1`，截图 `/tmp/handagent-qa/electron-supervisor-max-prompt.png`。清理后无 HandAgent / Electron / agent-server 残留，`127.0.0.1:4317` 无监听。
+- packaged app 产物与 mock LLM 路径已验证：`dist/HandAgentDesktop.app/Contents/Resources/ElectronShell/dist/main/main.js` 存在；`HANDAGENT_ELECTRON_BINARY` 指向的 Electron binary 可执行且版本为 `v42.3.3`；`~/.spotAgent/threads/thread-1780947483869-t8ou50.json` 中 assistant 内容为 `Mock assistant response: main chain is reachable.`，确认 mock packaged app 未访问真实 LLM。
 
 **2026-06-09 缺陷记录**：
 
