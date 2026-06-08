@@ -890,3 +890,11 @@
 - **验证过程**：使用 `bash ./scripts/package-app.sh --mock-llm` 打包并 `open dist/HandAgentDesktop.app` 启动；通过全局快捷键打开 PromptPanel，提交 `STATUS_BUBBLE_ACTIVITY_FIX_QA_20260609 [mock:slow-focus]`。运行中确认新 thread 写入 `~/.spotAgent/threads/thread-1780944091160-4qjzbd.json`，近 30 分钟旧 `~/.spotAgent/sessions/` 无新增文件；`/api/activity` snapshot 返回 `status: "running"`、`latestSummary: "正在回复"`、`activeThreadId: "thread-1780944091160-4qjzbd"`；Swift StatusBubble 截图显示 `Running / 正在回复`。点击状态气泡后未打开 PromptPanel，焦点回到当前 HandAgent ThreadWindow，Computer Use 可见当前 thread 仍显示该 slow-focus prompt。随后点击 Stop 停止 slow turn。
 - **证据**：`/tmp/handagent-qa/status-bubble-activity-fixed.png`；`~/.spotAgent/threads/thread-1780944091160-4qjzbd.json`；Computer Use 观察到 ThreadWindow 中 Stop 按钮与点击后焦点回到 ThreadWindow；`lsof -nP -iTCP:4317 -sTCP:LISTEN` 显示 agent-server 监听。
 - **结论**：通过。当前历史主路径是 `~/.spotAgent/threads/`；默认路径 Swift StatusBubble 能展示 running 摘要并回跳当前活跃 ThreadWindow。
+
+### PromptPanel 输入框视觉与拖动 smoke（P2）
+
+- **验证日期**：2026-06-09
+- **验证环境**：mock-llm packaged app，默认 WKWebView 路径，macOS 15+
+- **验证过程**：先关闭 ThreadWindow 并激活 Finder，再通过原生全局快捷键 `Command+Shift+Space` 打开 PromptPanel。Computer Use 观察到输入框自动聚焦，首行左侧无独立图标、无独立输入框卡片或边框；单行输入占满设置按钮左侧剩余空间。使用 CoreGraphics 鼠标事件从 placeholder 右侧空白区域拖动，窗口位置从 `400,147` 移到 `490,192`。通过 Shift+Return 输入多行，输入区域增高到 5 行；通过 accessibility 设置 6 行文本后出现垂直滚动条，布局不继续撑高。普通 Return 提交后 PromptPanel 关闭并打开 ThreadWindow。点击面板外侧、按 Esc、再次按全局快捷键均能关闭面板，前台 App 保持/恢复为 Finder。切换 macOS 深色模式后再次打开 PromptPanel，输入文字和 placeholder 仍保持深色高对比，随后恢复系统外观。
+- **证据**：Computer Use 观察 PromptPanel 输入框 focused；`System Events` 前台 App 查询为 `Finder`；`System Events` 窗口位置从 `400,147` 变为 `490,192`；6 行文本状态下 accessibility tree 显示输入 scroll area 出现 scroll bar。
+- **结论**：通过。PromptPanel 输入框视觉、拖动、自动增高、提交与焦点恢复符合预期。
