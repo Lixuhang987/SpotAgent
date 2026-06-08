@@ -56,12 +56,14 @@ struct ElectronShellLaunchConfiguration: Equatable {
 struct AppServicesRuntime {
     let appServer: any AppServerManaging
     let threadWindowCommandClient: (any ThreadWindowCommanding)?
+    let activityWindowCommandClient: (any ActivityWindowCommanding)?
 }
 
 @MainActor
 final class AppServices {
     let appServer: any AppServerManaging
     let threadWindowCommandClient: (any ThreadWindowCommanding)?
+    let activityWindowCommandClient: (any ActivityWindowCommanding)?
     let threadRegistry: ThreadRegistry
     let settingsStore: AgentSettingsStore
     let threadHistoryStore: ThreadHistoryStore
@@ -75,10 +77,12 @@ final class AppServices {
     let fatalAlertPresenter: any FatalAlertPresenting
     let setActivationPolicy: @MainActor (NSApplication.ActivationPolicy) -> Void
     let showsStatusBubble: Bool
+    let showsFatalAlert: Bool
 
     init(
         appServer: (any AppServerManaging)? = nil,
         threadWindowCommandClient: (any ThreadWindowCommanding)? = nil,
+        activityWindowCommandClient: (any ActivityWindowCommanding)? = nil,
         threadRegistry: ThreadRegistry = ThreadRegistry(),
         settingsStore: AgentSettingsStore = AgentSettingsStore(),
         threadHistoryStore: ThreadHistoryStore = ThreadHistoryStore(),
@@ -93,13 +97,16 @@ final class AppServices {
         setActivationPolicy: @escaping @MainActor (NSApplication.ActivationPolicy) -> Void = {
             NSApplication.shared.setActivationPolicy($0)
         },
-        showsStatusBubble: Bool = true
+        showsStatusBubble: Bool = true,
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        showsFatalAlert: Bool = true
     ) {
         let runtime = appServer == nil
-            ? AppServices.defaultRuntime(platformServerURL: platformServerURL)
+            ? AppServices.defaultRuntime(environment: environment, platformServerURL: platformServerURL)
             : nil
         self.appServer = appServer ?? runtime!.appServer
         self.threadWindowCommandClient = threadWindowCommandClient ?? runtime?.threadWindowCommandClient
+        self.activityWindowCommandClient = activityWindowCommandClient ?? runtime?.activityWindowCommandClient
         self.threadRegistry = threadRegistry
         self.settingsStore = settingsStore
         self.threadHistoryStore = threadHistoryStore
@@ -112,7 +119,8 @@ final class AppServices {
         self.settingsWindowPresenter = settingsWindowPresenter
         self.fatalAlertPresenter = fatalAlertPresenter
         self.setActivationPolicy = setActivationPolicy
-        self.showsStatusBubble = showsStatusBubble
+        self.showsStatusBubble = showsStatusBubble && self.activityWindowCommandClient == nil
+        self.showsFatalAlert = showsFatalAlert
     }
 
     static func testing(
@@ -133,7 +141,8 @@ final class AppServices {
             settingsWindowPresenter: settingsWindowPresenter,
             fatalAlertPresenter: NopFatalAlertPresenter(),
             setActivationPolicy: setActivationPolicy,
-            showsStatusBubble: false
+            showsStatusBubble: false,
+            showsFatalAlert: false
         )
     }
 
@@ -164,7 +173,8 @@ final class AppServices {
             let appServer = ElectronBackedAppServer(shell: shell, platformClient: platformClient)
             return AppServicesRuntime(
                 appServer: appServer,
-                threadWindowCommandClient: appServer
+                threadWindowCommandClient: appServer,
+                activityWindowCommandClient: appServer
             )
         }
 
@@ -173,7 +183,8 @@ final class AppServices {
                 agentServer: AgentServerService(),
                 platformClient: platformClient
             ),
-            threadWindowCommandClient: nil
+            threadWindowCommandClient: nil,
+            activityWindowCommandClient: nil
         )
     }
 

@@ -49,7 +49,9 @@ final class AppServicesTests: XCTestCase {
 
         XCTAssertTrue(runtime.appServer is ElectronBackedAppServer)
         XCTAssertTrue(runtime.threadWindowCommandClient is ElectronBackedAppServer)
+        XCTAssertTrue(runtime.activityWindowCommandClient is ElectronBackedAppServer)
         XCTAssertTrue((runtime.appServer as AnyObject) === (runtime.threadWindowCommandClient as AnyObject))
+        XCTAssertTrue((runtime.appServer as AnyObject) === (runtime.activityWindowCommandClient as AnyObject))
     }
 
     @MainActor
@@ -61,6 +63,22 @@ final class AppServicesTests: XCTestCase {
 
         XCTAssertTrue(runtime.appServer is AppServer)
         XCTAssertNil(runtime.threadWindowCommandClient)
+        XCTAssertNil(runtime.activityWindowCommandClient)
+    }
+
+    @MainActor
+    func testElectronRuntimeProvidesActivityWindowClientAndDisablesSwiftStatusBubble() {
+        let services = AppServices(
+            environment: [
+                "HANDAGENT_ELECTRON_SHELL": "1",
+                "HANDAGENT_ELECTRON_MAIN": "apps/electron-shell/dist/main/main.js",
+            ]
+        )
+
+        XCTAssertNotNil(services.threadWindowCommandClient)
+        XCTAssertNotNil(services.activityWindowCommandClient)
+        XCTAssertFalse(services.showsStatusBubble)
+        XCTAssertTrue(services.showsFatalAlert)
     }
 
     @MainActor

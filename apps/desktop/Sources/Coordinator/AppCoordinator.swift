@@ -28,6 +28,7 @@ final class AppCoordinator {
     }
     @ObservationIgnored private let agentServerHealth: AgentServerHealth
     @ObservationIgnored private let threadWindowLifecycle: any ThreadWindowManaging
+    @ObservationIgnored private let activityWindowCommandClient: (any ActivityWindowCommanding)?
     @ObservationIgnored private let settingsLifecycle: SettingsLifecycle
     @ObservationIgnored private let activationPolicy = AppActivationPolicyCoordinator()
     @ObservationIgnored private var registeredActionShortcutNames: Set<KeyboardShortcuts.Name> = []
@@ -48,8 +49,9 @@ final class AppCoordinator {
         self.agentServerHealth = AgentServerHealth(
             appServer: services.appServer,
             fatalAlertPresenter: services.fatalAlertPresenter,
-            showsFatalAlert: services.showsStatusBubble
+            showsFatalAlert: services.showsFatalAlert
         )
+        self.activityWindowCommandClient = services.activityWindowCommandClient
         if let threadWindowCommandClient = services.threadWindowCommandClient {
             self.threadWindowLifecycle = ElectronThreadWindowLifecycle(client: threadWindowCommandClient)
         } else {
@@ -73,6 +75,7 @@ final class AppCoordinator {
         setupPromptPanel()
         setupHotkey()
         setupStatusBubble()
+        setupElectronActivityWindow()
         setupAgentServerHealth()
         agentServerHealth.start()
         if services.showsStatusBubble { statusBubbleController.show() }
@@ -157,6 +160,9 @@ final class AppCoordinator {
             guard let self else { return }
             self.store.send(.appServerAvailabilityChanged(available))
             self.promptPanelController.setSubmissionEnabled(available, message: message)
+            if available {
+                _ = try? self.activityWindowCommandClient?.showActivityWindow()
+            }
         }
     }
 
@@ -175,6 +181,12 @@ final class AppCoordinator {
     private func setupStatusBubble() {
         statusBubbleController.onTap = { [weak self] threadID in
             self?.send(.statusBubbleTapped(threadID))
+        }
+    }
+
+    private func setupElectronActivityWindow() {
+        activityWindowCommandClient?.onPromptPanelShowRequested = { [weak self] in
+            self?.promptPanelController.show()
         }
     }
 

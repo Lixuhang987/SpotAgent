@@ -110,6 +110,47 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testElectronShowsActivityWindowWhenAppServerBecomesAvailable() async throws {
+        let appServer = TriggerableAppServer()
+        appServer.isAvailable = false
+        let activityClient = RecordingActivityWindowCommandClient()
+        let coordinator = AppCoordinator(
+            services: electronServices(
+                appServer: appServer,
+                commandClient: RecordingThreadWindowCommandClient(),
+                activityClient: activityClient
+            )
+        )
+
+        XCTAssertEqual(activityClient.showCount, 0)
+
+        appServer.publishAvailability(true)
+        try await Task.sleep(for: .milliseconds(10))
+
+        XCTAssertEqual(activityClient.showCount, 1)
+        _ = coordinator
+    }
+
+    @MainActor
+    func testElectronActivityPromptRequestShowsPromptPanelWithoutFocusingThreadWindow() {
+        let app = NSApplication.shared
+        let commandClient = RecordingThreadWindowCommandClient()
+        let activityClient = RecordingActivityWindowCommandClient()
+        let coordinator = AppCoordinator(
+            services: electronServices(
+                commandClient: commandClient,
+                activityClient: activityClient
+            )
+        )
+
+        activityClient.requestPromptPanel()
+
+        XCTAssertTrue(app.windows.contains { $0 is PromptPanelWindow && $0.isVisible })
+        XCTAssertTrue(commandClient.focusedThreadIDs.isEmpty)
+        coordinator.send(.hidePromptPanel)
+    }
+
+    @MainActor
     func testThreadClosedRemovesWindowViewModel() {
         let coordinator = AppCoordinator(services: AppServices.testing())
 
@@ -254,10 +295,15 @@ final class AppCoordinatorTests: XCTestCase {
 }
 
 @MainActor
-private func electronServices(commandClient: RecordingThreadWindowCommandClient) -> AppServices {
+private func electronServices(
+    appServer: any AppServerManaging = NopAppServer(),
+    commandClient: RecordingThreadWindowCommandClient,
+    activityClient: RecordingActivityWindowCommandClient? = nil
+) -> AppServices {
     AppServices(
-        appServer: NopAppServer(),
+        appServer: appServer,
         threadWindowCommandClient: commandClient,
+        activityWindowCommandClient: activityClient,
         appServerURL: URL(string: "ws://127.0.0.1:0/noop")!,
         platformServerURL: URL(string: "ws://127.0.0.1:0/noop-platform")!,
         threadWindowWebAppURL: URL(fileURLWithPath: "/tmp/index.html"),
@@ -268,6 +314,38 @@ private func electronServices(commandClient: RecordingThreadWindowCommandClient)
         setActivationPolicy: { _ in },
         showsStatusBubble: false
     )
+}
+
+@MainActor
+private final class RecordingActivityWindowCommandClient: ActivityWindowCommanding {
+    var onActivityWindowCommandResult: ((ActivityWindowCommandResult) -> Void)?
+    var onPromptPanelShowRequested: (() -> Void)?
+    private(set) var showCount = 0
+
+    func showActivityWindow() throws -> String {
+        showCount += 1
+        return "activity-show-\(showCount)"
+    }
+
+    func requestPromptPanel() {
+        onPromptPanelShowRequested?()
+    }
+}
+
+@MainActor
+private final class TriggerableAppServer: AppServerManaging {
+    var isAvailable = true
+    var startupErrorMessage: String?
+    var onAvailabilityChange: ((Bool) -> Void)?
+    var onFatalError: ((String) -> Void)?
+
+    func start() {}
+    func stop() {}
+
+    func publishAvailability(_ available: Bool) {
+        isAvailable = available
+        onAvailabilityChange?(available)
+    }
 }
 
 @MainActor
