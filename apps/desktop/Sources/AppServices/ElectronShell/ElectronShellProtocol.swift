@@ -64,7 +64,7 @@ enum ElectronShellEvent: Decodable, Equatable {
     case threadWindowPrepared(timestamp: String)
     case commandAck(commandId: String, ok: Bool, error: String?)
     case threadWindowClosed(timestamp: String)
-    case rendererCrashed(window: String, reason: String)
+    case rendererCrashed(window: ElectronShellRendererWindow, reason: String)
     case agentServerHealth(available: Bool, message: String?)
 
     private enum CodingKeys: String, CodingKey {
@@ -97,7 +97,7 @@ enum ElectronShellEvent: Decodable, Equatable {
             self = .threadWindowClosed(timestamp: try container.decode(String.self, forKey: .timestamp))
         case "renderer.crashed":
             self = .rendererCrashed(
-                window: try container.decode(String.self, forKey: .window),
+                window: try container.decode(ElectronShellRendererWindow.self, forKey: .window),
                 reason: try container.decode(String.self, forKey: .reason)
             )
         case "agent_server.health":
@@ -113,4 +113,9 @@ enum ElectronShellEvent: Decodable, Equatable {
             )
         }
     }
+}
+
+enum ElectronShellRendererWindow: String, Decodable, Equatable {
+    case thread
+    case activity
 }

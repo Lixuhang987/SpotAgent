@@ -9,10 +9,10 @@ type InitialPromptPayload = {
 
 type BrowserWindowLike = {
   webContents: {
-    once(event: "did-finish-load", listener: () => void): unknown;
+    once(event: "did-finish-load" | "did-fail-load", listener: () => void): unknown;
     executeJavaScript(source: string): Promise<unknown>;
   };
-  loadURL(url: string): unknown;
+  loadURL(url: string): Promise<unknown> | unknown;
   show(): void;
   focus(): void;
 };
@@ -26,12 +26,16 @@ type Options = {
 export class ThreadWindowPrewarmer {
   private window: BrowserWindowLike | null = null;
   private prepared = false;
+  private preparePromise: Promise<void> | null = null;
 
   constructor(private readonly options: Options) {}
 
   async prepare(): Promise<void> {
     if (this.prepared) {
       return;
+    }
+    if (this.preparePromise) {
+      return this.preparePromise;
     }
     if (!this.window) {
       this.window = this.options.createWindow({
@@ -47,11 +51,36 @@ export class ThreadWindowPrewarmer {
     }
 
     const window = this.window;
-    await new Promise<void>((resolve) => {
-      window.webContents.once("did-finish-load", resolve);
-      window.loadURL(this.options.threadWindowURL);
+    this.preparePromise = new Promise<void>((resolve, reject) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        this.prepared = true;
+        this.preparePromise = null;
+        resolve();
+      };
+      const fail = () => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        this.prepared = false;
+        this.preparePromise = null;
+        reject(new Error("thread window failed to load"));
+      };
+
+      window.webContents.once("did-finish-load", finish);
+      window.webContents.once("did-fail-load", fail);
+      const loadResult = window.loadURL(this.options.threadWindowURL);
+      if (isPromiseLike(loadResult)) {
+        loadResult.then(finish, fail);
+      }
     });
-    this.prepared = true;
+
+    return this.preparePromise;
   }
 
   async openInitialPrompt(payload: InitialPromptPayload): Promise<void> {
@@ -64,4 +93,11 @@ export class ThreadWindowPrewarmer {
     this.window.show();
     this.window.focus();
   }
+}
+
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return typeof value === "object"
+    && value !== null
+    && "then" in value
+    && typeof value.then === "function";
 }

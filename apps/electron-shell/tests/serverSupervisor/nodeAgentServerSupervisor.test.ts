@@ -74,6 +74,50 @@ describe("NodeAgentServerSupervisor", () => {
     expect(process.killed).toBe(true);
     expect(scheduleRestart).not.toHaveBeenCalled();
   });
+
+  it("does not restart from a stale callback after stop", () => {
+    const process = new FakeChildProcess();
+    const spawned: FakeChildProcess[] = [];
+    const scheduled: Array<() => void> = [];
+    const supervisor = new NodeAgentServerSupervisor({
+      repoRoot: "/repo",
+      nodePath: "/usr/bin/node",
+      env: {},
+      spawnProcess: () => {
+        spawned.push(process);
+        return process;
+      },
+      scheduleRestart: (callback) => scheduled.push(callback),
+    });
+
+    supervisor.start();
+    process.emit("exit", 9, null);
+    supervisor.stop();
+    scheduled[0]?.();
+
+    expect(spawned).toHaveLength(1);
+  });
+
+  it("emits unavailable health on child process errors", () => {
+    const process = new FakeChildProcess();
+    const health: Array<{ available: boolean; message?: string }> = [];
+    const supervisor = new NodeAgentServerSupervisor({
+      repoRoot: "/repo",
+      nodePath: "/missing/node",
+      env: {},
+      spawnProcess: () => process,
+      scheduleRestart: vi.fn(),
+    });
+    supervisor.onHealth((event) => health.push(event));
+
+    supervisor.start();
+    process.emit("error", new Error("spawn failed"));
+
+    expect(health.at(-1)).toEqual({
+      available: false,
+      message: "agent-server process error: spawn failed",
+    });
+  });
 });
 
 class FakeChildProcess extends EventEmitter implements AgentServerChildProcess {

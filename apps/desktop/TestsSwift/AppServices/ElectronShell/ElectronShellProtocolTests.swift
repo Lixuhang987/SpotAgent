@@ -37,4 +37,22 @@ final class ElectronShellProtocolTests: XCTestCase {
         XCTAssertTrue(available)
         XCTAssertNil(message)
     }
+
+    func testDecodesRendererCrashedWindowEnum() throws {
+        let data = """
+        {"channel":"electron_shell","type":"renderer.crashed","window":"thread","reason":"gone"}
+        """.data(using: .utf8)!
+
+        let event = try JSONDecoder().decode(ElectronShellEvent.self, from: data)
+
+        XCTAssertEqual(event, .rendererCrashed(window: .thread, reason: "gone"))
+    }
+
+    func testRejectsUnknownRendererCrashedWindow() {
+        let data = """
+        {"channel":"electron_shell","type":"renderer.crashed","window":"settings","reason":"gone"}
+        """.data(using: .utf8)!
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ElectronShellEvent.self, from: data))
+    }
 }

@@ -47,6 +47,41 @@ describe("ThreadWindowPrewarmer", () => {
     expect(window.showCount).toBe(1);
     expect(window.focusCount).toBe(1);
   });
+
+  it("reuses an in-flight prepare request", async () => {
+    const window = new FakeBrowserWindow();
+    const prewarmer = new ThreadWindowPrewarmer({
+      threadWindowURL: "http://127.0.0.1:4317/thread-window/index.html",
+      preloadPath: "/preload.js",
+      createWindow: () => window,
+    });
+
+    const firstPrepare = prewarmer.prepare();
+    const secondPrepare = prewarmer.prepare();
+    window.webContents.emit("did-finish-load");
+    await Promise.all([firstPrepare, secondPrepare]);
+
+    expect(window.loadCount).toBe(1);
+  });
+
+  it("rejects failed loads and allows a later retry", async () => {
+    const window = new FakeBrowserWindow();
+    const prewarmer = new ThreadWindowPrewarmer({
+      threadWindowURL: "http://127.0.0.1:4317/thread-window/index.html",
+      preloadPath: "/preload.js",
+      createWindow: () => window,
+    });
+
+    const failedPrepare = prewarmer.prepare();
+    window.webContents.emit("did-fail-load");
+    await expect(failedPrepare).rejects.toThrow("thread window failed to load");
+
+    const retriedPrepare = prewarmer.prepare();
+    window.webContents.emit("did-finish-load");
+    await retriedPrepare;
+
+    expect(window.loadCount).toBe(2);
+  });
 });
 
 class FakeBrowserWindow {
@@ -54,6 +89,7 @@ class FakeBrowserWindow {
     executeJavaScript: (source: string) => Promise<void>;
   };
   loadedURL: string | null = null;
+  loadCount = 0;
   showCount = 0;
   focusCount = 0;
   executedJavaScript: string[] = [];
@@ -66,6 +102,7 @@ class FakeBrowserWindow {
 
   loadURL(url: string): void {
     this.loadedURL = url;
+    this.loadCount += 1;
   }
 
   show(): void {

@@ -1,8 +1,13 @@
+import type {
+  ActionBindingPayload,
+  ThreadAttachment,
+} from "@handagent/core/protocol/ThreadProtocolShared.ts";
+
 type InitialPromptPayload = {
   clientRequestId: string;
   text: string;
-  attachments: unknown[];
-  actionBinding: { pluginId: string; promptName: string } | null;
+  attachments: ThreadAttachment[];
+  actionBinding: ActionBindingPayload | null;
 };
 
 export type SwiftToElectronCommand =
@@ -64,6 +69,7 @@ export function isSwiftToElectronCommand(value: unknown): value is SwiftToElectr
         && typeof value.payload.clientRequestId === "string"
         && typeof value.payload.text === "string"
         && Array.isArray(value.payload.attachments)
+        && value.payload.attachments.every(isThreadAttachment)
         && (value.payload.actionBinding === null || isActionBinding(value.payload.actionBinding));
     case "thread_window.open_history":
     case "activity_window.show":
@@ -76,10 +82,27 @@ export function isSwiftToElectronCommand(value: unknown): value is SwiftToElectr
   }
 }
 
-function isActionBinding(value: unknown): value is { pluginId: string; promptName: string } {
+function isActionBinding(value: unknown): value is ActionBindingPayload {
   return isRecord(value)
     && typeof value.pluginId === "string"
     && typeof value.promptName === "string";
+}
+
+function isThreadAttachment(value: unknown): value is ThreadAttachment {
+  if (!isRecord(value) || typeof value.id !== "string") {
+    return false;
+  }
+
+  if (value.kind === "text_selection") {
+    return typeof value.text === "string";
+  }
+
+  if (value.kind === "image") {
+    return (value.mimeType === "image/png" || value.mimeType === "image/jpeg" || value.mimeType === "image/webp")
+      && typeof value.base64 === "string";
+  }
+
+  return false;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

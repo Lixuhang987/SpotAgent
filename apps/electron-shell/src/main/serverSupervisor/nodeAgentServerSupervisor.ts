@@ -35,6 +35,7 @@ export class NodeAgentServerSupervisor {
   private child: AgentServerChildProcess | null = null;
   private userRequestedStop = false;
   private restartAttempts = 0;
+  private restartGeneration = 0;
   private listeners = new Set<(event: AgentServerHealthEvent) => void>();
   private readonly spawnProcess: (
     command: string,
@@ -79,13 +80,17 @@ export class NodeAgentServerSupervisor {
     });
     this.child = child;
     child.on("exit", (code: number | null, signal: NodeJS.Signals | null) =>
-      this.handleExit(code, signal),
+      this.handleExit(child, code, signal),
+    );
+    child.on("error", (error: Error) =>
+      this.handleProcessError(child, error),
     );
     this.emitHealth({ available: true });
   }
 
   stop(): void {
     this.userRequestedStop = true;
+    this.restartGeneration += 1;
     const child = this.child;
     this.child = null;
     child?.kill();
@@ -93,11 +98,16 @@ export class NodeAgentServerSupervisor {
   }
 
   private handleExit(
+    child: AgentServerChildProcess,
     code: number | null,
     signal: NodeJS.Signals | null,
   ): void {
-    this.child = null;
+    if (this.child !== child) {
+      return;
+    }
+
     if (this.userRequestedStop || code === 0) {
+      this.child = null;
       return;
     }
 
@@ -105,15 +115,33 @@ export class NodeAgentServerSupervisor {
       code === null
         ? `agent-server exited from signal ${signal ?? "unknown"}`
         : `agent-server exited with code ${code}`;
-    this.emitHealth({ available: false, message });
+    this.handleFailure(message);
+  }
 
+  private handleProcessError(child: AgentServerChildProcess, error: Error): void {
+    if (this.child !== child) {
+      return;
+    }
+
+    this.handleFailure(`agent-server process error: ${error.message}`);
+  }
+
+  private handleFailure(message: string): void {
+    this.child = null;
+    this.emitHealth({ available: false, message });
     if (this.restartAttempts >= this.maxRestartAttempts) {
       return;
     }
 
     const delayMs = Math.min(30_000, 2 ** this.restartAttempts * 1_000);
     this.restartAttempts += 1;
-    this.scheduleRestart(() => this.start(), delayMs);
+    const generation = this.restartGeneration;
+    this.scheduleRestart(() => {
+      if (this.userRequestedStop || generation !== this.restartGeneration) {
+        return;
+      }
+      this.start();
+    }, delayMs);
   }
 
   private emitHealth(event: AgentServerHealthEvent): void {
