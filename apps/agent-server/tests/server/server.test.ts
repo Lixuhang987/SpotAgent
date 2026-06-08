@@ -629,6 +629,54 @@ describe("startServer", () => {
       await once(server, "close");
     }
   });
+
+  it("closes /api/activity clients when no activity publisher is configured", async () => {
+    const commandRouter = {
+      receive: vi.fn(async () => {}),
+      interruptThread: vi.fn(),
+      handleResponse: vi.fn(),
+    } as unknown as ThreadCommandRouter;
+    const eventPublisher = {
+      attachConnection: vi.fn(),
+      detachConnection: vi.fn(),
+      subscribe: vi.fn(),
+      publishToConnection: vi.fn(),
+    } as unknown as ThreadNotificationPublisher;
+    const bridge = {
+      attach: vi.fn(),
+      detach: vi.fn(),
+      handleResponse: vi.fn(),
+    };
+    const server = await startServer({
+      commandRouter,
+      eventPublisher,
+      bridge: bridge as never,
+      port: 0,
+    });
+    const address = server.address() as AddressInfo;
+    const socket = new WebSocket(`ws://127.0.0.1:${address.port}/api/activity`);
+
+    try {
+      const opened = await new Promise<boolean>((resolve) => {
+        socket.once("open", () => resolve(true));
+        socket.once("error", () => resolve(false));
+      });
+      expect(opened).toBe(true);
+      await expect(waitForClose(socket)).resolves.toBe(true);
+      expect(eventPublisher.attachConnection).not.toHaveBeenCalled();
+      expect(commandRouter.receive).not.toHaveBeenCalled();
+      expect(bridge.attach).not.toHaveBeenCalled();
+    } finally {
+      if (
+        socket.readyState === WebSocket.OPEN ||
+        socket.readyState === WebSocket.CONNECTING
+      ) {
+        socket.terminate();
+      }
+      server.close();
+      await once(server, "close");
+    }
+  });
 });
 
 describe("resolveLLMMode", () => {
