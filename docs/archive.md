@@ -913,3 +913,12 @@
 - **验证环境**：主仓库 `main`，packaged mock-llm，`HANDAGENT_ELECTRON_SHELL=1`，Electron binary `/Users/mu9/proj/handAgent/node_modules/.pnpm/electron@42.3.3/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron`。
 - **验证过程**：合入 `09ff7f2 fix: rebuild ActivityWindow after thread close` 后重新执行 Electron targeted tests、Electron 全量测试与 build、`bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`、`bash ./scripts/package-app.sh --mock-llm`。packaged 资源包含 `releaseNativeFocusForNextClick()`、`window.destroy()`、`this.hasLoaded = false` 和 visible ThreadWindow close 时的 release 调用。提交 `ELECTRON_STATUSBUBBLE_REBUILD_QA_20260609 [mock:assistant-ok]` 生成 thread 后，关闭 Electron `HandAgent ThreadWindow`，ActivityWindow 变为 `AXMain=false` / `AXFocused=false`；立即用 CGEvent 点击 `{1280,870}` 后，Swift `PromptPanel` 出现为 640x448 system dialog。
 - **证据**：thread 文件 `~/.spotAgent/threads/thread-1780953633259-tiygm2.json` 包含同一 user prompt 与 `Mock assistant response: main chain is reachable.`；截图 `/tmp/handagent-qa/statusbubble-rebuild-after-click.png`；退出 QA app 后无 HandAgent / Electron / agent-server 残留，`127.0.0.1:4317` 无监听。
+
+### ThreadWindow workspace 分组标题展开缺陷修复
+
+- **验证日期**：2026-06-09
+- **验证环境**：mock-llm / 默认 WKWebView packaged app / macOS 15+
+- **修复提交**：`42860fe fix: restore ThreadWindow workspace expansion`
+- **验证过程**：合入修复后重新执行 ThreadWindow store、history sidebar、持久化测试，执行 ThreadWindow Web 构建、仓库级 TypeScript 验证、Swift test/build，并重新打包 mock app。实机提交 `THREADWINDOW_SCENE4_EXPAND_FIX_QA_20260609 [mock:assistant-ok]` 后，`/api/thread thread.list` 返回四个 `qa-scene4-*` fixture；CoreGraphics 点击 `default`、`handagent-test`、`qa-workspace`、`tmp` 分组标题后均可展开并显示对应 `SCENE4_*` 历史项，再次点击 `default` 可收起，点击 `SCENE4_DEFAULT...` 历史项会激活对应 thread/tab。关闭 ThreadWindow 后重新提交 `THREADWINDOW_SCENE4_PERSISTENCE_QA_20260609 [mock:assistant-ok]`，新建 WKWebView 恢复此前展开/收起状态。
+- **证据**：thread 文件 `~/.spotAgent/threads/thread-1780955175109-a0tl2r.json`、`~/.spotAgent/threads/thread-1780955402861-qedb4a.json`；截图 `/tmp/handagent-qa/threadwindow-scenario4-expand-fix-all-expanded.png`、`/tmp/handagent-qa/threadwindow-scenario4-expand-fix-qa-expanded.png`、`/tmp/handagent-qa/threadwindow-scenario4-expand-fix-default-collapsed.png`、`/tmp/handagent-qa/threadwindow-scenario4-expand-fix-reopen-persisted.png`；退出 QA app 后无 HandAgent / agent-server 残留，`127.0.0.1:4317` 无监听。
+- **结论**：workspace 分组标题无法展开缺陷已修复并通过主仓库 packaged live 回归；该缺陷已从 `docs/bugs.md` 移除。
