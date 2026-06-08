@@ -947,3 +947,11 @@
 - **验证过程**：在同一 packaged mock app 的 ThreadWindow composer 中，空输入框 AX 尺寸为 `482x64`；输入 1 行后仍为 `482x64`。用 Shift+Return 验证换行可插入后，通过剪贴板粘贴 5 行真实触发 textarea input 事件，输入框增高到 `482x120`；粘贴 6 行后保持 `482x120`，内部出现垂直滚动条，外层 pill 仍居中且宽度不变。按无修饰 Return 后输入框清空并恢复为 `482x52`，thread 文件随后持久化 6 行 user message 与 mock assistant 回复。
 - **证据**：thread 文件 `~/.spotAgent/threads/thread-1780957822168-ghgnjc.json`；截图 `/tmp/handagent-qa/threadwindow-scenario9-composer-paste-1line.png`、`/tmp/handagent-qa/threadwindow-scenario9-composer-paste-5lines.png`、`/tmp/handagent-qa/threadwindow-scenario9-composer-paste-6lines.png`、`/tmp/handagent-qa/threadwindow-scenario9-after-submit.png`。
 - **结论**：通过。
+
+### ThreadWindow 场景 10：视觉一致性验证
+
+- **验证日期**：2026-06-09
+- **验证环境**：默认 WKWebView packaged app，`mock-llm`
+- **验证过程**：当前 ThreadWindow 显示 cream sidebar + dark workspace 的双 surface 节奏，不再是 dark-only Raycast Glass 风格；顶部没有 connection pill，TabBar 只显示 browser-style tab 和关闭按钮，无状态点。点击 `SCENE4_QA_WORKSPACE_THREAD` 历史 row 空白区域后打开 `qa-scene` tab；点击同一 row 最右侧删除图标后只显示删除确认面板，未触发 row open 传播；点击取消后确认面板关闭。场景原第 4 条文案只写到“触发 permission 请求，确认请求面板是”，缺少期望描述；本轮按可观察 request panel 行为验证：提交 `THREADWINDOW_SCENE10_PERMISSION_PANEL_QA_20260609 [mock:permission-write]` 后出现 permission 面板，深色 elevated card 内含 monospace 参数 code block、coral `允许` 与 secondary `拒绝` 按钮，右下 StatusBubble 显示 `Running / 等待权限确认`；点击 `拒绝` 后面板消失并显示 tool 拒绝结果，未执行 `file.write`。
+- **证据**：thread 文件 `~/.spotAgent/threads/qa-scene4-qa-workspace.json`，其中事件记录 `permission_request file.write deny` 与 `tool_result error`；截图 `/tmp/handagent-qa/threadwindow-scenario10-visual-current.png`、`/tmp/handagent-qa/threadwindow-scenario10-history-row-click.png`、`/tmp/handagent-qa/threadwindow-scenario10-history-delete-click.png`、`/tmp/handagent-qa/threadwindow-scenario10-delete-cancel.png`、`/tmp/handagent-qa/threadwindow-scenario10-permission-panel.png`、`/tmp/handagent-qa/threadwindow-scenario10-permission-denied-after.png`。
+- **结论**：通过；原手工条目第 4 条文案不完整已在本归档说明中保留。
