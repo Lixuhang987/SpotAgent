@@ -79,13 +79,7 @@ final class AppServices {
         },
         showsStatusBubble: Bool = true
     ) {
-        self.appServer = appServer ?? AppServer(
-            agentServer: AgentServerService(),
-            platformClient: PlatformBridgeConnectionClient(
-                connection: AppServerConnection(serverURL: platformServerURL),
-                platformBridge: PlatformBridgeService()
-            )
-        )
+        self.appServer = appServer ?? AppServices.defaultAppServer(platformServerURL: platformServerURL)
         self.threadRegistry = threadRegistry
         self.settingsStore = settingsStore
         self.threadHistoryStore = threadHistoryStore
@@ -120,6 +114,32 @@ final class AppServices {
             fatalAlertPresenter: NopFatalAlertPresenter(),
             setActivationPolicy: setActivationPolicy,
             showsStatusBubble: false
+        )
+    }
+
+    static func defaultAppServer(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        platformServerURL: URL
+    ) -> any AppServerManaging {
+        let platformClient = PlatformBridgeConnectionClient(
+            connection: AppServerConnection(serverURL: platformServerURL),
+            platformBridge: PlatformBridgeService()
+        )
+
+        if environment["HANDAGENT_ELECTRON_SHELL"] == "1" {
+            let electronBinary = environment["HANDAGENT_ELECTRON_BINARY"] ?? "/usr/bin/env"
+            let electronMain = environment["HANDAGENT_ELECTRON_MAIN"] ?? "apps/electron-shell/dist/main/main.js"
+            let shell = ElectronShellProcess(
+                launchPath: electronBinary,
+                arguments: electronBinary == "/usr/bin/env" ? ["electron", electronMain] : [electronMain],
+                environment: environment
+            )
+            return ElectronBackedAppServer(shell: shell, platformClient: platformClient)
+        }
+
+        return AppServer(
+            agentServer: AgentServerService(),
+            platformClient: platformClient
         )
     }
 
