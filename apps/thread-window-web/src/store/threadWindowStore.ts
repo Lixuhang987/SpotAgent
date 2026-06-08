@@ -10,6 +10,56 @@ import type {
   WorkspaceAskCandidate,
 } from "../protocol/threadProtocol.ts";
 
+const EXPANDED_WORKSPACE_IDS_STORAGE_KEY = "handAgent.threadWindow.expandedWorkspaceIds";
+
+function getLocalStorage(): Storage | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function loadExpandedWorkspaceIds(): Set<string> {
+  const storage = getLocalStorage();
+  if (!storage) {
+    return new Set();
+  }
+
+  try {
+    const rawValue = storage.getItem(EXPANDED_WORKSPACE_IDS_STORAGE_KEY);
+    if (!rawValue) {
+      return new Set();
+    }
+
+    const parsed = JSON.parse(rawValue);
+    if (!Array.isArray(parsed)) {
+      return new Set();
+    }
+
+    return new Set(parsed.filter((value): value is string => typeof value === "string"));
+  } catch {
+    return new Set();
+  }
+}
+
+function persistExpandedWorkspaceIds(workspaceIds: Set<string>): void {
+  const storage = getLocalStorage();
+  if (!storage) {
+    return;
+  }
+
+  try {
+    storage.setItem(EXPANDED_WORKSPACE_IDS_STORAGE_KEY, JSON.stringify(Array.from(workspaceIds)));
+  } catch {
+    // Persistence is best-effort; losing it must not block the UI toggle.
+  }
+}
+
 export type ConnectionState = "disconnected" | "connecting" | "connected" | "reconnecting";
 
 export type ThreadMessage = {
@@ -105,7 +155,7 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
   pendingInitialPrompts: {},
   processedNotificationIds: {},
   workspaces: [],
-  expandedWorkspaceIds: new Set(),
+  expandedWorkspaceIds: loadExpandedWorkspaceIds(),
   searchQuery: "",
 
   setConnectionState(state) {
@@ -117,13 +167,18 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
   },
 
   toggleWorkspaceExpanded(workspaceId) {
-    set(produce<ThreadWindowState>((draft) => {
-      if (draft.expandedWorkspaceIds.has(workspaceId)) {
-        draft.expandedWorkspaceIds.delete(workspaceId);
+    set((state) => {
+      const nextExpandedWorkspaceIds = new Set(state.expandedWorkspaceIds);
+
+      if (nextExpandedWorkspaceIds.has(workspaceId)) {
+        nextExpandedWorkspaceIds.delete(workspaceId);
       } else {
-        draft.expandedWorkspaceIds.add(workspaceId);
+        nextExpandedWorkspaceIds.add(workspaceId);
       }
-    }));
+
+      persistExpandedWorkspaceIds(nextExpandedWorkspaceIds);
+      return { expandedWorkspaceIds: nextExpandedWorkspaceIds };
+    });
   },
 
   setSearchQuery(query) {

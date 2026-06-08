@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createThreadWindowStore } from "../src/store/threadWindowStore.ts";
 
 const timestamp = "2026-06-06T00:00:00.000Z";
@@ -6,6 +6,10 @@ const timestamp = "2026-06-06T00:00:00.000Z";
 describe("threadWindowStore", () => {
   beforeEach(() => {
     createThreadWindowStore.setState(createThreadWindowStore.getInitialState(), true);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("creates a tab from a started notification and keeps pending initial prompt", () => {
@@ -280,6 +284,33 @@ describe("threadWindowStore", () => {
       "tmp",
       "handagent-test",
     ]);
+  });
+
+  it("toggles workspace expansion ids", () => {
+    const store = createThreadWindowStore;
+
+    expect(store.getState().expandedWorkspaceIds.has("default")).toBe(false);
+
+    store.getState().toggleWorkspaceExpanded("default");
+    expect(store.getState().expandedWorkspaceIds.has("default")).toBe(true);
+
+    store.getState().toggleWorkspaceExpanded("default");
+    expect(store.getState().expandedWorkspaceIds.has("default")).toBe(false);
+  });
+
+  it("persists workspace expansion ids when they change", () => {
+    const setItem = vi.fn();
+    vi.stubGlobal("window", { localStorage: { setItem } });
+
+    const store = createThreadWindowStore;
+    store.getState().toggleWorkspaceExpanded("default");
+
+    expect(setItem).toHaveBeenCalledWith(
+      "handAgent.threadWindow.expandedWorkspaceIds",
+      JSON.stringify(["default"]),
+    );
+
+    vi.unstubAllGlobals();
   });
 
   it("clears pending initial prompt and exposes window error when thread error has only commandId", () => {

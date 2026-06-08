@@ -66,7 +66,7 @@ React `App` 挂载后通过 `installInitialPromptReceiver` 替换正式 receiver
 - tabs：每个 tab 持有 `threadId`、title、run status、messages、pending initial prompt、权限请求、workspace 请求和 tab 级错误。
 - 请求面板：`permission.requested` / `workspace.requested` 按 `threadId` 放到当前 tab；用户回答后根组件发送 response 并调用显式 resolve action 移除请求。
 - composer running 输入：当前 tab running 或已有 queued input 派发中时，`App` 不发送 `input.submit`，而是写入 tab 的 `queuedComposerInputs` 并在 Composer 上方展示队列；等对应 thread 离开 running 且连接可用后，每个 thread 一次只取一条 queued input 发送，防止多个 user message 连续插到当前 assistant 回复前。
-- workspace：`workspaces` 来自 `workspace.listed`，`expandedWorkspaceIds` 和 `searchQuery` 驱动历史侧栏。
+- workspace：`workspaces` 来自 `workspace.listed`，`expandedWorkspaceIds` 和 `searchQuery` 驱动历史侧栏；`expandedWorkspaceIds` 会用 `localStorage` 做轻量持久化，刷新或重开同一 ThreadWindow 前端后保留展开状态。
 - 去重：`processedNotificationIds` 防止重复处理同一 notification，特别是 streaming delta。
 
 恢复历史 thread 时，`HistorySidebar` 先调用 `openHistoryThread(threadId)` 创建或激活 tab，再由根组件调用 `resumeThread(threadId)` 等待 `thread.snapshot` 回填消息。

@@ -17,6 +17,15 @@
 
 ## 开发验证记录
 
+### ThreadWindow workspace 分组标题展开修复
+
+- 完成日期：2026-06-09
+- 实现位置：`apps/thread-window-web/src/store/threadWindowStore.ts`、`apps/thread-window-web/tests/threadWindowStore.test.ts`、`apps/thread-window-web/tests/threadWindowStorePersistence.test.ts`
+- 链路证明：已知 live 证据证明 `/api/thread thread.list -> thread.listed -> ThreadWindow 历史侧栏显示 workspace 分组` 成立，但 `default` trigger 点击、AXPress 和 Space 后 `AXExpanded=false`、region 子项数为 0。此次按 `$trace-and-verify-call-chain` 继续验证 `WorkspaceGroup trigger -> toggleWorkspaceExpanded -> expandedWorkspaceIds -> Accordion value -> Accordion.Content`，新增 RED 测试 `toggles workspace expansion ids` 在 `toggleWorkspaceExpanded` 抛出 `[Immer] The plugin for 'MapSet' has not been loaded into Immer`，失败 hop 定位为 store action 直接通过 Immer draft 读取/修改 `Set`。
+- 修复结论：`toggleWorkspaceExpanded` 改为基于当前状态创建新的 `Set` 并返回局部状态更新，不再让 Immer 代理 `Set`；同时补齐 `expandedWorkspaceIds` 的 `localStorage` 轻量持久化，满足刷新或重开同一 ThreadWindow 前端后保持展开状态的产品预期。该持久化是 UI 展开状态，不进入 thread 协议或 `~/.spotAgent/threads/`。
+- 自动化验证：`pnpm --filter handagent-thread-window-web exec vitest run tests/groupThreads.test.ts tests/threadWindowStore.test.ts tests/threadWindowStorePersistence.test.ts tests/historySidebar.test.ts` 覆盖 workspace 分组排序、Accordion context、展开/收起 store 状态、持久化写入和初始化读取；`pnpm --filter handagent-thread-window-web build` 覆盖 ThreadWindow Web 类型检查与生产构建。
+- 后续 live 回归方式：沿场景 4 重新启动默认 WKWebView packaged mock app，使用已有四个 `qa-scene4-*` workspace fixture，点击或键盘激活 `default`、`handagent-test`、`qa-workspace`、`tmp` 分组标题，确认分组展开显示对应 thread；再次激活收起；刷新或重开 ThreadWindow 后确认已展开分组仍保持展开。
+
 ### Electron StatusBubble 关闭 ThreadWindow 后重建 ActivityWindow 修复
 
 - 完成日期：2026-06-09
