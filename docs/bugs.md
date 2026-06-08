@@ -31,21 +31,6 @@
 
 ## 当前 bug
 
-### 真实 LLM 工具调用后进入权限等待但 ThreadWindow 无可见权限面板
-
-- **严重级别**：P1
-- **发现日期**：2026-06-09
-- **复现步骤**：
-  1. 在主仓库 `main` 重新执行 `bash ./scripts/package-app.sh`，确认 `dist/HandAgentDesktop.app/Contents/Resources/HandAgentRuntimeMode.json` 不存在，即使用 settings / real LLM 模式。
-  1. 启动 packaged app，通过真实全局快捷键 `osascript -e 'tell application "System Events" to key code 49 using {command down, shift down}'` 打开 PromptPanel。
-  1. 提交 `HANDAGENT_REAL_TOOL_SCENE0_A_20260609 请看一下我的屏幕，并简要说明你看到了什么。`。
-  1. 等待真实 provider 返回，观察 ThreadWindow、`/api/activity`、`/api/thread` snapshot 与 `~/.spotAgent/threads/thread-1780961051324-1d663h.json`。
-- **实际结果**：ThreadWindow 显示 user prompt、`use_tools` tool result 和 `screen.capture` tool result，但右侧没有出现“权限请求”面板，Composer 仍显示“停止”。`/api/activity` snapshot 持续为 `status:"waiting"`、`latestSummary:"等待权限确认"`、`waitingRequest:"permission"`；超过 `ThreadPermissionBridge` 默认 60 秒超时后仍未恢复。`thread.resume` 返回的 `thread.snapshot` 只有 1 条 user message，`payload.status:"running"`；thread 持久化文件也只有 user message，`messageCount:1`。
-- **期望结果**：真实 provider 在工具执行后若触发权限请求，ThreadWindow 应显示可操作的允许/拒绝面板；如果面板不可达或请求超时，turn 应自动继续或失败并持久化明确错误，不应永久停在不可响应的 waiting 状态。
-- **证据**：截图 `/tmp/handagent-qa/real-tool-scene0-permission-waiting-no-panel.png`；thread 文件 `~/.spotAgent/threads/thread-1780961051324-1d663h.json`；network 日志 `~/.spotAgent/log/2026-06-09/network-001.jsonl` 显示三轮真实 `responses` 请求：第一轮 tools 仅 `use_tools`，第二轮激活后包含完整工具集，第三轮 input 含 `screen_capture` function call/output 且 provider 返回 HTTP 200 streaming；`/api/activity` snapshot 为 `waiting / 等待权限确认`；`/api/thread` snapshot 只有 user message 且 `status:"running"`。
-- **已定位失败 hop**：已验证 `PromptPanel submit -> thread.start -> real LLM request -> use_tools -> full tool catalog -> screen.capture -> real LLM follow-up response` 成立。失败点在 running thread 的 `/api/thread thread.resume` 恢复路径：`permission.requested` 是运行中临时 `ServerRequest`，不在 `thread.snapshot` 持久化消息里；旧实现只在 `input.submit` 建立 `ThreadPermissionBridge` 绑定，`thread.resume` 返回 `status:"running"` 后不会重放 pending `permission.requested`，导致新 ThreadWindow 连接只能看到 running/user-only snapshot 与 activity waiting，却没有可操作 request panel。
-- **修复状态**：worktree `fix/p1-permission-panel-replay` 已让 `ThreadPermissionBridge` 在同 thread rebind 时迁移 pending token 并重放原 `permission.requested`，且 `/api/thread` 在 `thread.resume` snapshot 后补建 permission 绑定。已用 targeted tests 覆盖 bridge replay、旧 socket fencing、新 socket answer、`thread.resume` replay；仍需主仓库重新 package 后执行真实 LLM 场景 0 live QA，确认该 bug 可从当前清单移除。
-
 ### `AI SDK stream finished without assistant content or tool calls`
 
 - **严重级别**：P1
