@@ -29,6 +29,19 @@ const supervisor = new NodeAgentServerSupervisor({
 const prewarmer = new ThreadWindowPrewarmer({
   threadWindowURL,
   preloadPath,
+  onClosed: (wasPrepared) => {
+    if (hasStoppedSupervisor) {
+      return;
+    }
+    send({
+      channel: "electron_shell",
+      type: "thread_window.closed",
+      timestamp: now(),
+    });
+    if (wasPrepared && hasAgentServerHealth) {
+      void prepareThreadWindowAfterServerReady();
+    }
+  },
   createWindow: (options) => {
     const window = new BrowserWindow(options);
     window.webContents.on("render-process-gone", (_event, details) => {
@@ -48,6 +61,7 @@ const prewarmer = new ThreadWindowPrewarmer({
 
 let hasStartedSupervisor = false;
 let hasStoppedSupervisor = false;
+let hasAgentServerHealth = false;
 let prepareAfterServerReadyPromise: Promise<void> | null = null;
 
 function send(event: ElectronToSwiftEvent): void {
@@ -72,6 +86,19 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "unknown error";
 }
 
+function commandIdFromRawLine(line: string): string | null {
+  try {
+    const value = JSON.parse(line) as unknown;
+    if (typeof value === "object" && value !== null && "commandId" in value) {
+      const commandId = (value as { commandId?: unknown }).commandId;
+      return typeof commandId === "string" ? commandId : null;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 async function prepareThreadWindowAfterServerReady(): Promise<void> {
   if (prepareAfterServerReadyPromise) {
     return prepareAfterServerReadyPromise;
@@ -94,9 +121,8 @@ async function prepareThreadWindowAfterServerReady(): Promise<void> {
       }
       send({
         channel: "electron_shell",
-        type: "renderer.crashed",
-        window: "thread",
-        reason: errorMessage(error),
+        type: "thread_window.prepare_failed",
+        message: errorMessage(error),
       });
     })
     .finally(() => {
@@ -131,12 +157,16 @@ async function handleCommandLine(line: string): Promise<void> {
   try {
     command = parseCommand(line);
   } catch (error) {
-    send({
-      channel: "electron_shell",
-      type: "renderer.crashed",
-      window: "thread",
-      reason: errorMessage(error),
-    });
+    const commandId = commandIdFromRawLine(line);
+    if (commandId) {
+      send({
+        channel: "electron_shell",
+        type: "command.ack",
+        commandId,
+        ok: false,
+        error: errorMessage(error),
+      });
+    }
     return;
   }
 
@@ -161,6 +191,7 @@ async function handleCommandLine(line: string): Promise<void> {
 }
 
 supervisor.onHealth((event) => {
+  hasAgentServerHealth = event.available;
   send({
     channel: "electron_shell",
     type: "agent_server.health",
@@ -193,9 +224,8 @@ try {
 } catch (error) {
   send({
     channel: "electron_shell",
-    type: "renderer.crashed",
-    window: "thread",
-    reason: errorMessage(error),
+    type: "thread_window.prepare_failed",
+    message: errorMessage(error),
   });
   app.exit(1);
 }

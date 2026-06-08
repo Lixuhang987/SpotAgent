@@ -37,6 +37,21 @@ final class ElectronBackedAppServerTests: XCTestCase {
         XCTAssertEqual(availability, [false])
     }
 
+    func testThreadWindowPrepareFailureKeepsServerUnavailable() {
+        let shell = RecordingElectronShellProcess()
+        let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
+        var availability: [Bool] = []
+        appServer.onAvailabilityChange = { availability.append($0) }
+
+        appServer.start()
+        shell.emit(.agentServerHealth(available: true, message: nil))
+        shell.emit(.threadWindowPrepareFailed(message: "prewarm failed"))
+
+        XCTAssertFalse(appServer.isAvailable)
+        XCTAssertEqual(appServer.startupErrorMessage, "prewarm failed")
+        XCTAssertEqual(availability, [false])
+    }
+
     func testStopSendsShutdownDisconnectsPlatformClientAndStopsShell() {
         let shell = RecordingElectronShellProcess()
         let transport = RecordingElectronBackedConnectionTransport()

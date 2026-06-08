@@ -48,6 +48,16 @@ final class ElectronShellProtocolTests: XCTestCase {
         XCTAssertEqual(event, .rendererCrashed(window: .thread, reason: "gone"))
     }
 
+    func testDecodesThreadWindowPrepareFailedEvent() throws {
+        let data = """
+        {"channel":"electron_shell","type":"thread_window.prepare_failed","message":"load failed"}
+        """.data(using: .utf8)!
+
+        let event = try JSONDecoder().decode(ElectronShellEvent.self, from: data)
+
+        XCTAssertEqual(event, .threadWindowPrepareFailed(message: "load failed"))
+    }
+
     func testRejectsUnknownRendererCrashedWindow() {
         let data = """
         {"channel":"electron_shell","type":"renderer.crashed","window":"settings","reason":"gone"}

@@ -59,6 +59,22 @@ describe("NodeAgentServerSupervisor", () => {
     expect(health).toEqual([{ available: true }]);
   });
 
+  it("drains child stdout and stderr", () => {
+    const process = new FakeChildProcess();
+    const supervisor = new NodeAgentServerSupervisor({
+      repoRoot: "/repo",
+      nodePath: "/usr/bin/node",
+      env: {},
+      waitForReady: () => Promise.resolve(),
+      spawnProcess: () => process,
+    });
+
+    supervisor.start();
+
+    expect(process.stdout.listenerCount("data")).toBeGreaterThan(0);
+    expect(process.stderr.listenerCount("data")).toBeGreaterThan(0);
+  });
+
   it("emits unavailable health on non-zero exit", () => {
     const process = new FakeChildProcess();
     const health: Array<{ available: boolean; message?: string }> = [];

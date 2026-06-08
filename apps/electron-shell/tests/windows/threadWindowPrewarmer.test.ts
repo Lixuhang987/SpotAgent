@@ -82,9 +82,60 @@ describe("ThreadWindowPrewarmer", () => {
 
     expect(window.loadCount).toBe(2);
   });
+
+  it("resets state and notifies when a prepared window closes", async () => {
+    const window = new FakeBrowserWindow();
+    let closedCount = 0;
+    const prewarmer = new ThreadWindowPrewarmer({
+      threadWindowURL: "http://127.0.0.1:4317/thread-window/index.html",
+      preloadPath: "/preload.js",
+      createWindow: () => window,
+      onClosed: () => {
+        closedCount += 1;
+      },
+    });
+    const prepared = prewarmer.prepare();
+    window.webContents.emit("did-finish-load");
+    await prepared;
+
+    window.emit("closed");
+
+    expect(closedCount).toBe(1);
+    await expect(prewarmer.openInitialPrompt({
+      clientRequestId: "prompt-1",
+      text: "hello",
+      attachments: [],
+      actionBinding: null,
+    })).rejects.toThrow("thread window is not prepared");
+  });
+
+  it("rejects in-flight prepare when the window closes and allows retry", async () => {
+    const windows = [new FakeBrowserWindow(), new FakeBrowserWindow()];
+    const prewarmer = new ThreadWindowPrewarmer({
+      threadWindowURL: "http://127.0.0.1:4317/thread-window/index.html",
+      preloadPath: "/preload.js",
+      createWindow: () => {
+        const window = windows.shift();
+        if (!window) {
+          throw new Error("unexpected createWindow");
+        }
+        return window;
+      },
+    });
+
+    const firstWindow = windows[0];
+    const failedPrepare = prewarmer.prepare();
+    firstWindow?.emit("closed");
+    await expect(failedPrepare).rejects.toThrow("thread window closed before it was prepared");
+
+    const secondWindow = windows[0];
+    const retriedPrepare = prewarmer.prepare();
+    secondWindow?.webContents.emit("did-finish-load");
+    await retriedPrepare;
+  });
 });
 
-class FakeBrowserWindow {
+class FakeBrowserWindow extends EventEmitter {
   webContents = new EventEmitter() as EventEmitter & {
     executeJavaScript: (source: string) => Promise<void>;
   };
@@ -95,6 +146,7 @@ class FakeBrowserWindow {
   executedJavaScript: string[] = [];
 
   constructor() {
+    super();
     this.webContents.executeJavaScript = async (source: string) => {
       this.executedJavaScript.push(source);
     };
@@ -112,6 +164,4 @@ class FakeBrowserWindow {
   focus(): void {
     this.focusCount += 1;
   }
-
-  on(): void {}
 }

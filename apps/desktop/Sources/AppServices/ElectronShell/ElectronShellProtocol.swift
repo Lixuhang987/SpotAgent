@@ -62,6 +62,7 @@ enum ElectronShellCommand: Encodable, Equatable {
 enum ElectronShellEvent: Decodable, Equatable {
     case electronReady(timestamp: String)
     case threadWindowPrepared(timestamp: String)
+    case threadWindowPrepareFailed(message: String)
     case commandAck(commandId: String, ok: Bool, error: String?)
     case threadWindowClosed(timestamp: String)
     case rendererCrashed(window: ElectronShellRendererWindow, reason: String)
@@ -87,6 +88,8 @@ enum ElectronShellEvent: Decodable, Equatable {
             self = .electronReady(timestamp: try container.decode(String.self, forKey: .timestamp))
         case "thread_window.prepared":
             self = .threadWindowPrepared(timestamp: try container.decode(String.self, forKey: .timestamp))
+        case "thread_window.prepare_failed":
+            self = .threadWindowPrepareFailed(message: try container.decode(String.self, forKey: .message))
         case "command.ack":
             self = .commandAck(
                 commandId: try container.decode(String.self, forKey: .commandId),

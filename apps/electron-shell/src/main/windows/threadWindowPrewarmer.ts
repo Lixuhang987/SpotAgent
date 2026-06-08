@@ -12,6 +12,7 @@ type BrowserWindowLike = {
     once(event: "did-finish-load" | "did-fail-load", listener: () => void): unknown;
     executeJavaScript(source: string): Promise<unknown>;
   };
+  on(event: "closed", listener: () => void): unknown;
   loadURL(url: string): Promise<unknown> | unknown;
   show(): void;
   focus(): void;
@@ -21,12 +22,14 @@ type Options = {
   threadWindowURL: string;
   preloadPath: string;
   createWindow: (options: BrowserWindowConstructorOptions) => BrowserWindowLike;
+  onClosed?: (wasPrepared: boolean) => void;
 };
 
 export class ThreadWindowPrewarmer {
   private window: BrowserWindowLike | null = null;
   private prepared = false;
   private preparePromise: Promise<void> | null = null;
+  private rejectPrepare: ((error: Error) => void) | null = null;
 
   constructor(private readonly options: Options) {}
 
@@ -48,6 +51,7 @@ export class ThreadWindowPrewarmer {
           nodeIntegration: false,
         },
       });
+      this.window.on("closed", () => this.handleClosed());
     }
 
     const window = this.window;
@@ -60,20 +64,23 @@ export class ThreadWindowPrewarmer {
         settled = true;
         this.prepared = true;
         this.preparePromise = null;
+        this.rejectPrepare = null;
         resolve();
       };
-      const fail = () => {
+      const fail = (error = new Error("thread window failed to load")) => {
         if (settled) {
           return;
         }
         settled = true;
         this.prepared = false;
         this.preparePromise = null;
-        reject(new Error("thread window failed to load"));
+        this.rejectPrepare = null;
+        reject(error);
       };
+      this.rejectPrepare = fail;
 
       window.webContents.once("did-finish-load", finish);
-      window.webContents.once("did-fail-load", fail);
+      window.webContents.once("did-fail-load", () => fail());
       const loadResult = window.loadURL(this.options.threadWindowURL);
       if (isPromiseLike(loadResult)) {
         loadResult.then(finish, fail);
@@ -92,6 +99,17 @@ export class ThreadWindowPrewarmer {
     await this.window.webContents.executeJavaScript(`window.handAgentReceiveInitialPrompt(${serialized});`);
     this.window.show();
     this.window.focus();
+  }
+
+  private handleClosed(): void {
+    const wasPrepared = this.prepared;
+    this.window = null;
+    this.prepared = false;
+    const rejectPrepare = this.rejectPrepare;
+    this.preparePromise = null;
+    this.rejectPrepare = null;
+    rejectPrepare?.(new Error("thread window closed before it was prepared"));
+    this.options.onClosed?.(wasPrepared);
   }
 }
 

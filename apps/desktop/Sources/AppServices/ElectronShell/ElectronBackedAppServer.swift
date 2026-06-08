@@ -77,7 +77,13 @@ final class ElectronBackedAppServer: AppServerManaging {
 
         case .threadWindowPrepared:
             hasPreparedThreadWindow = true
+            startupErrorMessage = nil
             publishAvailability()
+
+        case .threadWindowPrepareFailed(let message):
+            hasPreparedThreadWindow = false
+            startupErrorMessage = message
+            publishAvailability(force: true)
 
         case .threadWindowClosed:
             hasPreparedThreadWindow = false

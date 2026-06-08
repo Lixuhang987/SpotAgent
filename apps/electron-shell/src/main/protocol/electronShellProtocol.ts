@@ -42,6 +42,7 @@ export type SwiftToElectronCommand =
 export type ElectronToSwiftEvent =
   | { channel: "electron_shell"; type: "electron.ready"; timestamp: string }
   | { channel: "electron_shell"; type: "thread_window.prepared"; timestamp: string }
+  | { channel: "electron_shell"; type: "thread_window.prepare_failed"; message: string }
   | { channel: "electron_shell"; type: "command.ack"; commandId: string; ok: boolean; error?: string }
   | { channel: "electron_shell"; type: "thread_window.closed"; timestamp: string }
   | { channel: "electron_shell"; type: "renderer.crashed"; window: "thread" | "activity"; reason: string }

@@ -98,6 +98,7 @@ export class NodeAgentServerSupervisor {
     child.on("error", (error: Error) =>
       this.handleProcessError(child, error),
     );
+    this.drainChildOutput(child);
     void this.emitAvailableWhenReady(child, this.restartGeneration);
   }
 
@@ -187,6 +188,15 @@ export class NodeAgentServerSupervisor {
       listener(event);
     }
   }
+
+  private drainChildOutput(child: AgentServerChildProcess): void {
+    child.stdout?.on("data", (chunk: unknown) => {
+      process.stderr.write(formatChildOutput("stdout", chunk));
+    });
+    child.stderr?.on("data", (chunk: unknown) => {
+      process.stderr.write(formatChildOutput("stderr", chunk));
+    });
+  }
 }
 
 type TcpReadinessOptions = {
@@ -225,4 +235,9 @@ function sleep(delayMs: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, delayMs);
   });
+}
+
+function formatChildOutput(streamName: "stdout" | "stderr", chunk: unknown): string {
+  const text = Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk);
+  return `[agent-server ${streamName}] ${text}`;
 }
