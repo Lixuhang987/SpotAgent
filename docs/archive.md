@@ -963,3 +963,11 @@
 - **验证过程**：重新执行 `bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build` 与 `bash ./scripts/package-app.sh --mock-llm` 后启动主仓库 packaged app。此前已验证 `pnpm --filter handagent-thread-window-web build` 生成 Tailwind CSS 产物，CSS 产物包含 `bg-canvas`、`bg-surface-dark`、`bg-primary`、`rounded-lg` 和 warm-canvas 色值。此次通过当前 app-server 的 `http://127.0.0.1:4317/thread-window/index.html` 用 Playwright 读取运行时 DOM，确认 `main` class 包含 `bg-canvas` 且计算背景为 `rgb(250, 249, 245)`，`aside` class 包含 `bg-surface-card` 且背景为 `rgb(239, 233, 222)`，`section[aria-label="Thread workspace"]` class 包含 `bg-surface-dark` 且背景为 `rgb(24, 23, 21)`，`新建对话` button class 包含 `rounded-md bg-primary` 且背景为 `rgb(204, 120, 92)`，empty state card class 包含 `rounded-lg bg-surface-dark-elevated`。
 - **证据**：CSS 产物 `apps/thread-window-web/dist/assets/index-BQgOjT3d.css`；DOM 证据 `/tmp/handagent-qa/threadwindow-scenario1-dom-classes.json`、`/tmp/handagent-qa/threadwindow-scenario1-dom-theme-nodes.json`；截图 `/tmp/handagent-qa/threadwindow-scenario1-theme.png`、`/tmp/handagent-qa/threadwindow-scenario1-playwright-dom.png`；thread 文件 `~/.spotAgent/threads/thread-1780949983762-ki8lb7.json`。
 - **结论**：通过。
+
+### ThreadWindow 场景 2：workspaceId 向后兼容验证
+
+- **验证日期**：2026-06-09
+- **验证环境**：默认 WKWebView packaged app，`mock-llm`
+- **验证过程**：创建旧版本 thread 文件 `~/.spotAgent/threads/test-old-thread.json`，其 `metadata` 不含 `workspaceId`。启动默认 WKWebView packaged mock app 后，历史侧栏可搜索到旧 thread，且该旧 thread 出现在“默认对话”分组，没有解析错误或崩溃；旧文件保持不含 `workspaceId` 且 `updatedAt` 未变化。随后提交 `THREADWINDOW_SCENARIO2_NEW_THREAD_QA_20260609 [mock:assistant-ok]` 创建新 thread，`~/.spotAgent/threads/thread-1780950632340-na2sg4.json` 的 `metadata.workspaceId` 为 `null`，并包含同一 user prompt 与 mock assistant。测试旧文件已删除。
+- **证据**：截图 `/tmp/handagent-qa/threadwindow-scenario2-old-thread.png`、`/tmp/handagent-qa/threadwindow-scenario2-old-thread-search.png`；thread 文件 `~/.spotAgent/threads/thread-1780950632340-na2sg4.json`；当前复核显示 `~/.spotAgent/threads/test-old-thread.json` 已不存在。
+- **结论**：通过。

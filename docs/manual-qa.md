@@ -205,32 +205,6 @@
 
 ### 验收场景
 
-#### 场景 2: workspaceId 向后兼容验证
-
-1. 创建测试用旧版本 thread 文件（不含 `workspaceId` 字段）：
-   ```bash
-   cat > ~/.spotAgent/threads/test-old-thread.json <<'EOF'
-   {
-     "version": 1,
-     "metadata": {
-       "id": "test-old-thread",
-       "preview": "测试旧版本 thread",
-       "createdAt": "2026-06-01T10:00:00.000Z",
-       "updatedAt": "2026-06-01T10:00:00.000Z",
-       "messageCount": 0
-     },
-     "messages": [],
-     "events": []
-   }
-   EOF
-   ```
-2. 启动 desktop app：`bash ./scripts/swiftw run HandAgentDesktop`
-3. 打开 ThreadWindow 历史列表
-4. 确认旧 thread 出现在"默认对话"分组（最下方），不出现解析错误或崩溃
-5. 用 `cat ~/.spotAgent/threads/test-old-thread.json` 确认文件未被意外修改
-6. 创建新 thread，用 `cat ~/.spotAgent/threads/<新threadId>.json | jq .metadata.workspaceId` 确认新文件包含 `"workspaceId": null` 字段
-7. 清理测试文件：`rm ~/.spotAgent/threads/test-old-thread.json`
-
 #### 场景 3: workspace.list 协议与 workspace 分组刷新验证
 
 1. 审查 `packages/core/src/protocol/ThreadCommand.ts`，确认 `workspace.list` 命令类型存在
