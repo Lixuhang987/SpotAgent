@@ -23,7 +23,7 @@
 - 实现位置：`apps/electron-shell/src/main/windows/activityWindowController.ts`、`apps/electron-shell/src/main/electronShellRuntime.ts`、`apps/electron-shell/src/main/main.ts`、`apps/electron-shell/tests/windows/activityWindowController.test.ts`、`apps/electron-shell/tests/main/electronShellRuntime.test.ts`
 - 链路证明：期望链路是 `CGEvent 点击 ActivityWindow -> renderer onClick -> activity-window:focus-thread IPC -> ElectronShellRuntime.handleActivityWindowFocusRequest -> prompt_panel.show_requested -> Swift PromptPanel`。上一轮主仓库 packaged 回归已证明 `/api/activity`、ActivityWindow 可见、packaged 产物中的 `focusable: true` / `acceptFirstMouse: true`、agent-server 常驻和 Swift downstream prompt request 测试均成立；真实 CGEvent 点击后 ActivityWindow 变为 `AXMain=true` 但 PromptPanel 未出现，失败边界收敛在 renderer click / IPC 上游。此次修复新增 ActivityWindow native `focus` 兜底：若真实点击只让 native 窗口获得 focus / AXMain 而未送达 renderer IPC，Electron main 仍按同一语义先聚焦 visible ThreadWindow，失败则发送 `prompt_panel.show_requested`。
 - 自动化验证：先运行 `pnpm --filter handagent-electron-shell exec vitest run tests/windows/activityWindowController.test.ts tests/main/electronShellRuntime.test.ts`，新增测试在修复前失败：ActivityWindow focus 未上报，runtime 无 `handleActivityWindowNativeFocus()`。修复后同命令通过，覆盖 native focus 上报、无 visible ThreadWindow 时发送 `prompt_panel.show_requested`、有 visible ThreadWindow 时只聚焦 ThreadWindow。
-- 主仓库 live 回归状态：未在主仓库 packaged app 执行实机回归；不得声称已通过。合入后需重新 build/package，并按下方 Electron UI Shell 最终态待回归项验证关闭 visible Electron ThreadWindow 后点击 ActivityWindow 是否打开 Swift PromptPanel。
+- 主仓库 live 回归结果：2026-06-09 合入 `366a706` 后重新执行 `pnpm --filter handagent-electron-shell test`、`pnpm --filter handagent-electron-shell build`、`bash ./scripts/test.sh` 与 `bash ./scripts/package-app.sh --mock-llm`；packaged app 已包含 `focusable: true`、`acceptFirstMouse: true`、`onNativeFocus?.()` 和 `runtime.handleActivityWindowNativeFocus()`。提交 `ELECTRON_STATUSBUBBLE_NATIVE_FOCUS_QA_20260609 [mock:assistant-ok]` 后生成 `~/.spotAgent/threads/thread-1780950395783-sxe1nw.json`，关闭 Electron `HandAgent ThreadWindow` 后只剩 `HandAgent Activity`，agent-server 仍监听 `127.0.0.1:4317`。立即用 CGEvent 点击 `{1280,870}` 后，Swift `PromptPanel` 仍未出现，截图 `/tmp/handagent-qa/electron-statusbubble-native-focus-after-click.png`；先激活 Finder 再点击同一坐标时 Swift `PromptPanel` 出现，截图 `/tmp/handagent-qa/electron-statusbubble-native-focus-after-finder-click.png`。结论：native focus 兜底只覆盖从其他前台 App 点击回来的路径；ActivityWindow 已是 `AXMain=true` 时，同 App 内后续点击仍不触发 PromptPanel。该缺陷已重新写入 `docs/bugs.md`，退出 QA app 后无 HandAgent / Electron / agent-server 残留，`127.0.0.1:4317` 无监听。
 
 ### Electron StatusBubble 无可聚焦 ThreadWindow 回退 PromptPanel 二次修复
 
@@ -115,7 +115,7 @@
 
 **2026-06-09 待回归修复项**：
 
-- 关闭可见 Electron ThreadWindow 后，ActivityWindow 仍显示且 agent-server 继续监听 `127.0.0.1:4317` 时，用 CGEvent 点击 ActivityWindow 中心应打开 Swift `PromptPanel`。`2af9ba0` 的 `acceptFirstMouse: true` 修复不足；`412e1e9` 的 `focusable: true` + `acceptFirstMouse: true` 也已在主仓库 packaged app 实机回归失败。本轮 worktree 修复新增 ActivityWindow native focus 兜底，仍需合入主仓库后重新执行 packaged app 实机回归，确认 `prompt_panel.show_requested` 最终打开 Swift PromptPanel。
+- 关闭可见 Electron ThreadWindow 后，ActivityWindow 仍显示且 agent-server 继续监听 `127.0.0.1:4317` 时，用 CGEvent 点击 ActivityWindow 中心应打开 Swift `PromptPanel`。`2af9ba0` 的 `acceptFirstMouse: true` 修复不足；`412e1e9` 的 `focusable: true` + `acceptFirstMouse: true` 也已在主仓库 packaged app 实机回归失败；`366a706` 的 native focus 兜底只覆盖从 Finder 等其他前台 App 点击回来的路径，关闭 ThreadWindow 后同 App 内立即点击仍失败。当前缺陷已写入 `docs/bugs.md`，下一轮需继续定位 ActivityWindow 已 `AXMain=true` 时的点击 fallback。
 
 **2026-06-09 阻塞子项**：
 
