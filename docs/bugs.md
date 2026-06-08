@@ -31,6 +31,19 @@
 
 ## 当前 bug
 
+### Electron flag 路径下 Swift 启动 Electron 后未拉起 agent-server
+
+- **严重级别**：P1
+- **发现日期**：2026-06-09
+- **复现步骤**：
+  1. 执行 `pnpm --filter handagent-electron-shell build`，确认 Electron shell 构建通过。
+  1. 确认 `dist/HandAgentDesktop.app/Contents/Resources/ElectronShell/dist/main/main.js` 存在。
+  1. 设置 `HANDAGENT_ELECTRON_SHELL=1` 和 `HANDAGENT_ELECTRON_BINARY=/Users/mu9/proj/handAgent/node_modules/.pnpm/electron@42.3.3/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron`，运行 `dist/HandAgentDesktop.app/Contents/MacOS/HandAgentDesktop`。
+- **实际结果**：只出现 Swift `HandAgentDesktop` 进程和 Electron main 进程，没有 `apps/agent-server/src/server/server.ts` 子进程，`lsof -nP -iTCP:4317 -sTCP:LISTEN` 无监听；Computer Use 读取 `HandAgentDesktop` 状态超时，Electron UI Shell 最终态验收无法进入 PromptPanel / ThreadWindow / ActivityWindow 链路。
+- **期望结果**：Electron main 应上报 `electron.ready`、记录 agent-server supervisor description，并拉起唯一 agent-server，使 `127.0.0.1:4317` 可用；随后 hidden ThreadWindow 预热并展示 Electron ActivityWindow。
+- **证据**：Swift flag 启动后 `ps -axo pid,ppid,stat,command` 仅显示 `dist/HandAgentDesktop.app/Contents/MacOS/HandAgentDesktop` 与 `.../Electron.app/Contents/MacOS/Electron .../ElectronShell/dist/main/main.js`；同一时刻 `lsof -nP -iTCP:4317 -sTCP:LISTEN` 为空。直接运行同一个 Electron binary 和同一个 `main.js` 可输出 `{"channel":"electron_shell","type":"electron.ready",...}` 以及 `[electron-shell] agent-server supervisor: {"mode":"node_child","entry":"apps/agent-server/src/server/server.ts","coreRuntimeHost":"agent-server","utilityProcessBlocker":"apps/agent-server/dist/server/server.js 不存在；当前 agent-server 仍依赖 TypeScript 源码入口和 Node --experimental-transform-types"}`，说明 packaged Electron main 产物本身存在且能进入 supervisor 初始化。
+- **初步调用链 / 根因边界**：失败边界位于 Swift Electron flag 启动路径到 Electron main supervisor 可观测事件之间。当前证据尚未证明是 Swift `ElectronBackedAppServer` stdio bridge 未读取/阻塞、Electron 子进程环境差异、Electron main 早期等待 stdin/事件循环，还是 Electron 启动参数处理差异；需要按 `$trace-and-verify-call-chain` 逐跳验证 `Swift launch -> Electron process -> electron.ready stdout -> Swift bridge receive -> supervisor start -> agent-server listen`。
+
 ### `AI SDK stream finished without assistant content or tool calls`
 
 - **严重级别**：P1
