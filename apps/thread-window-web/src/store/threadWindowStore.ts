@@ -22,6 +22,11 @@ export type ThreadMessage = {
   status?: string;
 };
 
+export type QueuedComposerInput = {
+  text: string;
+  attachments: ThreadAttachment[];
+};
+
 export type PermissionRequestState = {
   id: string;
   toolName: string;
@@ -41,6 +46,8 @@ export type ThreadTabState = {
   status: RunStatus;
   messages: ThreadMessage[];
   pendingInitialPrompt: InitialPromptPayload | null;
+  queuedComposerInputs: QueuedComposerInput[];
+  queuedInputDispatchPending: boolean;
   permissionRequests: PermissionRequestState[];
   workspaceRequests: WorkspaceRequestState[];
   errorMessage: string | null;
@@ -66,6 +73,8 @@ export type ThreadWindowState = {
   setWorkspaces(workspaces: Array<{ id: string; name: string; rootPath: string }>): void;
   toggleWorkspaceExpanded(workspaceId: string): void;
   setSearchQuery(query: string): void;
+  queueComposerInput(threadId: string, text: string, attachments?: ThreadAttachment[]): void;
+  takeNextQueuedInputForDispatch(threadId: string): QueuedComposerInput | null;
   handleNotification(notification: ThreadNotification): void;
   handleRequest(request: ServerRequest): void;
 };
@@ -77,6 +86,8 @@ function emptyTab(threadId: string, title: string | null = null): ThreadTabState
     status: "idle",
     messages: [],
     pendingInitialPrompt: null,
+    queuedComposerInputs: [],
+    queuedInputDispatchPending: false,
     permissionRequests: [],
     workspaceRequests: [],
     errorMessage: null,
@@ -115,6 +126,37 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
 
   setSearchQuery(query) {
     set({ searchQuery: query });
+  },
+
+  queueComposerInput(threadId, text, attachments = []) {
+    set(produce<ThreadWindowState>((draft) => {
+      const tab = draft.tabs[threadId] ??= emptyTab(threadId);
+      tab.queuedComposerInputs.push({ text, attachments });
+    }));
+  },
+
+  takeNextQueuedInputForDispatch(threadId) {
+    let nextInput: QueuedComposerInput | null = null;
+    set(produce<ThreadWindowState>((draft) => {
+      const tab = draft.tabs[threadId];
+      if (
+        !tab
+        || tab.status === "running"
+        || tab.queuedInputDispatchPending
+        || tab.queuedComposerInputs.length === 0
+      ) {
+        return;
+      }
+      const queuedInput = tab.queuedComposerInputs.shift() ?? null;
+      if (queuedInput) {
+        nextInput = {
+          text: queuedInput.text,
+          attachments: [...queuedInput.attachments],
+        };
+        tab.queuedInputDispatchPending = true;
+      }
+    }));
+    return nextInput;
   },
 
   enqueueInitialPrompt(prompt) {
@@ -216,6 +258,7 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
           draft.processedNotificationIds[notification.notificationId] = true;
           const tab = draft.tabs[notification.threadId] ??= emptyTab(notification.threadId);
           tab.status = "running";
+          tab.queuedInputDispatchPending = false;
           break;
         }
 
@@ -317,6 +360,7 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
             const tab = draft.tabs[notification.threadId] ??= emptyTab(notification.threadId);
             tab.errorMessage = notification.payload.message;
             tab.status = "failed";
+            tab.queuedInputDispatchPending = false;
           } else {
             draft.windowErrorMessage = notification.payload.message;
           }

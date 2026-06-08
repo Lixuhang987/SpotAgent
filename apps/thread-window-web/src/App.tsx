@@ -32,6 +32,14 @@ export function App() {
   const [deleteTargetThreadId, setDeleteTargetThreadId] = useState<string | null>(null);
   const [windowWidth, setWindowWidth] = useState(() => window.innerWidth);
   const sidebarLayout = getThreadWindowSidebarLayout(windowWidth);
+  const queuedDispatchKey = tabs
+    .map((tab) => [
+      tab.threadId,
+      tab.status,
+      tab.queuedComposerInputs.length,
+      tab.queuedInputDispatchPending ? "pending" : "ready",
+    ].join(":"))
+    .join("|");
 
   useEffect(() => {
     const socket = new ThreadSocketClient({
@@ -63,6 +71,19 @@ export function App() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  useEffect(() => {
+    if (state.connectionState !== "connected") {
+      return;
+    }
+    const store = createThreadWindowStore.getState();
+    for (const tab of Object.values(store.tabs)) {
+      const nextInput = store.takeNextQueuedInputForDispatch(tab.threadId);
+      if (nextInput) {
+        clientRef.current?.submitInput(tab.threadId, nextInput.text, nextInput.attachments);
+      }
+    }
+  }, [state.connectionState, queuedDispatchKey]);
 
   const handleNewThread = () => {
     const commandId = id('start');
@@ -149,7 +170,21 @@ export function App() {
             <Composer
               disabled={state.connectionState !== "connected"}
               stopDisabled={state.connectionState !== "connected" || activeTab.status !== "running"}
-              onSubmit={(text) => clientRef.current?.submitInput(activeTab.threadId, text)}
+              onSubmit={(text) => {
+                const latestTab = createThreadWindowStore.getState().tabs[activeTab.threadId];
+                if (!latestTab) {
+                  return;
+                }
+                const shouldQueue =
+                  latestTab.status === "running"
+                  || latestTab.queuedInputDispatchPending
+                  || latestTab.queuedComposerInputs.length > 0;
+                if (shouldQueue) {
+                  createThreadWindowStore.getState().queueComposerInput(activeTab.threadId, text);
+                  return;
+                }
+                clientRef.current?.submitInput(activeTab.threadId, text);
+              }}
               onStop={() => {
                 if (state.connectionState !== "connected" || activeTab.status !== "running") {
                   return;

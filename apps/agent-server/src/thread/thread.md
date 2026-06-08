@@ -29,25 +29,27 @@ sequenceDiagram
   participant Publisher as ThreadNotificationPublisher
 
   Router->>Orchestrator: submitInput(input.submit)
-  Orchestrator->>Orchestrator: persist user message
-  Orchestrator-->>Publisher: user.message.recorded
   Orchestrator->>Queue: enqueue ThreadInputItem
   alt thread idle
+    Orchestrator->>Orchestrator: persist user message
+    Orchestrator-->>Publisher: user.message.recorded
     Orchestrator-->>Publisher: turn.started
     Orchestrator->>Runtime: runWithMessages(history)
   else thread running
-    Queue-->>Orchestrator: pending input for active turn follow-up
+    Queue-->>Orchestrator: hold as pending input
   end
   Runtime-->>Orchestrator: AgentRuntimeEvent / result
   Orchestrator->>Orchestrator: append runtime delta
   alt queued input exists
+    Orchestrator->>Orchestrator: persist queued user message after runtime delta
+    Orchestrator-->>Publisher: user.message.recorded
     Orchestrator->>Runtime: runWithMessages(updated history)
   else no queued input
     Orchestrator-->>Publisher: turn.completed + thread.status.changed
   end
 ```
 
-运行中收到新的 `input.submit` 不会 abort 当前 run；新输入会立即记录为用户消息，并在当前 active turn 的下一次 follow-up 中进入模型上下文。每个 thread 进程内最多一个 active run，晚到 runtime event 必须通过 generation 检查后才能发布或落盘。
+运行中收到新的 `input.submit` 不会 abort 当前 run；后端会先把新输入留在 thread queue，等当前 active run 的 generated messages / events 追加完成后，再记录 queued user message 并在下一次 follow-up 中进入模型上下文。这样持久化与 UI 恢复顺序保持为“当前 user -> assistant/tool 输出 -> queued user”，而不是两个 user input 连在一起。每个 thread 进程内最多一个 active run，晚到 runtime event 必须通过 generation 检查后才能发布或落盘。
 
 ## 关键机制
 
@@ -57,7 +59,7 @@ sequenceDiagram
 - `thread.resume`：恢复既有 thread，并返回 `thread.snapshot`。
 - `thread.list`：返回 `thread.listed`。
 - `thread.delete`：删除指定 thread；若该 thread 正在运行，先中断再删。
-- `input.submit`：用户输入入口；后端内部归一化为 user input item，idle 时唤醒 session loop，running 时 steer 到 active turn follow-up。
+- `input.submit`：用户输入入口；后端内部归一化为 user input item，idle 时立即记录并唤醒 session loop，running 时在当前 active run 完成写回后再记录并 steer 到 follow-up。
 - `turn.interrupt`：中断当前运行中的 turn。
 - `workspace.list`：读取 workspace 注册表，并在当前连接返回 `workspace.listed`；未配置 registry 时返回 `thread.error(workspace_registry_not_configured)`。
 
@@ -82,7 +84,7 @@ sequenceDiagram
 ### active turn 与 append-only 写回
 
 - runtime 回调落通知或持久化前都要检查当前 generation；被中断或超时清理的旧 run 的晚到 delta / tool result / error 不得污染当前状态。
-- runtime 结果通过 `persistRunDelta` 追加 generated messages 和 events，避免覆盖运行期间已经持久化的新 user input。
+- runtime 结果通过 `persistRunDelta` 追加 generated messages 和 events；运行期间到达的新 user input 会在这一步之后再持久化，避免覆盖已有消息，也避免把 queued user 放到当前 assistant 输出前面。
 - 每轮 runtime 使用稳定输入快照；active run 准备阶段收到的新 input 只进入 follow-up，不会被当前 runtime 和 follow-up 重复处理。
 
 ### 中断与重启恢复

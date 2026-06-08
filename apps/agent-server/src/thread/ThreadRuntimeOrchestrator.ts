@@ -52,7 +52,7 @@ type ActiveRun = {
   interruptionPersisted: boolean;
 };
 
-type QueuedThreadUserInputItem = ThreadUserInputItem & {
+type RecordedThreadUserInputItem = ThreadUserInputItem & {
   persistedMessageCount: number;
 };
 
@@ -107,9 +107,11 @@ export class ThreadRuntimeOrchestrator {
     };
 
     await this.withThreadInputLock(message.threadId, async () => {
-      const queuedItem = await this.recordUserInput(item, push);
       const session = this.getOrCreateSession(message.threadId, push);
       session.push = push;
+      const queuedItem = this.isSessionIdle(session)
+        ? await this.recordUserInput(item, push)
+        : item;
       session.queue.enqueue(queuedItem);
       this.ensureSessionLoop(session);
     });
@@ -199,7 +201,7 @@ export class ThreadRuntimeOrchestrator {
   private async recordUserInput(
     item: ThreadUserInputItem,
     push: PushMessage,
-  ): Promise<QueuedThreadUserInputItem> {
+  ): Promise<RecordedThreadUserInputItem> {
     await this.persistence.persistUserMessage(
       item.threadId,
       item.payload.text,
@@ -220,6 +222,29 @@ export class ThreadRuntimeOrchestrator {
       ...item,
       persistedMessageCount: (await this.persistence.getMessages(item.threadId)).length,
     };
+  }
+
+  private async recordQueuedUserInput(
+    item: ThreadUserInputItem,
+    push: PushMessage,
+  ): Promise<RecordedThreadUserInputItem> {
+    if (isRecordedThreadUserInputItem(item)) {
+      return item;
+    }
+    return this.recordUserInput(item, push);
+  }
+
+  private async recordQueuedUserInputs(
+    items: ReturnType<ThreadInputQueue["takeAll"]>,
+    push: PushMessage,
+  ): Promise<RecordedThreadUserInputItem[]> {
+    const recordedItems: RecordedThreadUserInputItem[] = [];
+    for (const item of items) {
+      if (item.kind === "user") {
+        recordedItems.push(await this.recordQueuedUserInput(item, push));
+      }
+    }
+    return recordedItems;
   }
 
   private async withThreadInputLock<T>(
@@ -295,22 +320,32 @@ export class ThreadRuntimeOrchestrator {
       const queuedItems = await session.queue.waitForItems();
       session.processing = true;
       const firstUserInput = queuedItems.find(
-        (item): item is QueuedThreadUserInputItem =>
-          item.kind === "user" && "persistedMessageCount" in item,
+        (item): item is ThreadUserInputItem => item.kind === "user",
       );
       if (!firstUserInput) {
         session.processing = false;
         this.resolveIdleWaitersIfIdle(session);
         continue;
       }
+      const firstUserInputIndex = queuedItems.indexOf(firstUserInput);
+      for (let index = 0; index < queuedItems.length; index += 1) {
+        if (index !== firstUserInputIndex) {
+          session.queue.enqueue(queuedItems[index]);
+        }
+      }
 
-      const activeRun = this.createActiveRun(firstUserInput.messageId);
+      const recordedFirstUserInput = await this.withThreadInputLock(
+        session.threadId,
+        () => this.recordQueuedUserInput(firstUserInput, session.push),
+      );
+
+      const activeRun = this.createActiveRun(recordedFirstUserInput.messageId);
       session.activeRun = activeRun;
       this.activeRuns.set(session.threadId, activeRun);
-      this.emitTurnStarted(session.threadId, firstUserInput.messageId, session.push);
+      this.emitTurnStarted(session.threadId, recordedFirstUserInput.messageId, session.push);
 
       try {
-        await this.runActiveTurnUntilDrained(session, activeRun, firstUserInput);
+        await this.runActiveTurnUntilDrained(session, activeRun, recordedFirstUserInput);
       } finally {
         if (this.isActive(session.threadId, activeRun)) {
           this.activeRuns.delete(session.threadId);
@@ -350,7 +385,7 @@ export class ThreadRuntimeOrchestrator {
   private async runActiveTurnUntilDrained(
     session: ThreadSession,
     activeRun: ActiveRun,
-    firstUserInput: QueuedThreadUserInputItem,
+    firstUserInput: RecordedThreadUserInputItem,
   ): Promise<void> {
     let maxVisibleMessageCount = firstUserInput.persistedMessageCount;
     while (this.isActive(session.threadId, activeRun) && !activeRun.controller.signal.aborted) {
@@ -394,10 +429,6 @@ export class ThreadRuntimeOrchestrator {
           return;
         }
 
-        const generatedMessageCount = Math.max(
-          0,
-          result.messages.length - runtimeBaseMessageCount,
-        );
         const steeredItems = await this.withThreadInputLock(
           session.threadId,
           async () => {
@@ -407,7 +438,10 @@ export class ThreadRuntimeOrchestrator {
               result.messages,
               events,
             );
-            const queuedItems = session.queue.takeAll();
+            const queuedItems = await this.recordQueuedUserInputs(
+              session.queue.takeAll(),
+              session.push,
+            );
             if (queuedItems.length === 0) {
               this.emitCompleted(session.threadId, session.push, activeRun, "completed");
               this.emitThreadStatus(session.threadId, session.push, activeRun.turnId, "idle");
@@ -420,14 +454,10 @@ export class ThreadRuntimeOrchestrator {
           return;
         }
 
-        const steeredUserItems = steeredItems.filter(
-          (item): item is QueuedThreadUserInputItem =>
-            item.kind === "user" && "persistedMessageCount" in item,
-        );
         maxVisibleMessageCount = Math.max(
           maxVisibleMessageCount,
-          ...steeredUserItems.map((item) => item.persistedMessageCount),
-        ) + generatedMessageCount;
+          ...steeredItems.map((item) => item.persistedMessageCount),
+        );
         continue;
       } catch (error) {
         await this.handleActiveRunError(session, activeRun, error);
@@ -565,4 +595,10 @@ export class ThreadRuntimeOrchestrator {
 
 function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === "AbortError";
+}
+
+function isRecordedThreadUserInputItem(
+  item: ThreadUserInputItem,
+): item is RecordedThreadUserInputItem {
+  return "persistedMessageCount" in item;
 }

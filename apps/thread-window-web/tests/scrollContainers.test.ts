@@ -14,6 +14,8 @@ function tabState(threadId: string): ThreadTabState {
     status: "idle",
     messages: [],
     pendingInitialPrompt: null,
+    queuedComposerInputs: [],
+    queuedInputDispatchPending: false,
     permissionRequests: [],
     workspaceRequests: [],
     errorMessage: null,

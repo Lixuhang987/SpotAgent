@@ -65,6 +65,7 @@ React `App` 挂载后通过 `installInitialPromptReceiver` 替换正式 receiver
 - 历史：`history` 来自 `thread.listed`。
 - tabs：每个 tab 持有 `threadId`、title、run status、messages、pending initial prompt、权限请求、workspace 请求和 tab 级错误。
 - 请求面板：`permission.requested` / `workspace.requested` 按 `threadId` 放到当前 tab；用户回答后根组件发送 response 并调用显式 resolve action 移除请求。
+- composer running 输入：当前 tab running 或已有 queued input 派发中时，`App` 不立即发送 `input.submit`，而是写入 tab 的 `queuedComposerInputs`；等对应 thread 离开 running 且连接可用后，每个 thread 一次只取一条 queued input 发送，防止多个 user message 连续插到当前 assistant 回复前。
 - workspace：`workspaces` 来自 `workspace.listed`，`expandedWorkspaceIds` 和 `searchQuery` 驱动历史侧栏。
 - 去重：`processedNotificationIds` 防止重复处理同一 notification，特别是 streaming delta。
 
@@ -80,7 +81,7 @@ React `App` 挂载后通过 `installInitialPromptReceiver` 替换正式 receiver
 - 窗口错误提示行由常驻 slot 占位，错误为空时高度为 0，避免 active content 与 Composer 因 grid 自动放置而前移。
 - 页面级横向滚动必须保持关闭；右侧唯一允许横向滚动的区域是 TabBar，多个 tab 时由 TabBar 自身 `overflow-x-auto` 承接，消息区、Composer、请求面板均使用 `min-w-0` / `overflow-x-hidden` 或换行布局避免撑宽窗口。
 - `WorkspaceGroup` 使用 Radix `Accordion.Item/Header/Trigger/Content`，父级 `HistorySidebar` 的滚动列表必须由 `Accordion.Root type="multiple"` 包裹，并以 `expandedWorkspaceIds` 作为受控 `value`，否则 workspace 分组渲染时会因缺少 Radix 上下文导致 React 挂载失败。
-- `Composer` 只负责提交文本和停止当前 running turn；附件按钮、编辑和重新生成仍是 UI 占位，不能在文档或代码中当作已完成能力。
+- `Composer` 只负责提交文本和停止当前 running turn；running 时提交由 `App`/store 排队，附件按钮、编辑和重新生成仍是 UI 占位，不能在文档或代码中当作已完成能力。
 
 ## 样式前提
 

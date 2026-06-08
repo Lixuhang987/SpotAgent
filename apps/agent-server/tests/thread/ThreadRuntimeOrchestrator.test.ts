@@ -112,7 +112,7 @@ describe("ThreadRuntimeOrchestrator", () => {
 
     expect(runSignals[0]?.aborted).toBe(false);
     expect(eventTypes(pushed).filter((type) => type === "turn.started")).toHaveLength(1);
-    expect(eventTypes(pushed).filter((type) => type === "user.message.recorded")).toHaveLength(2);
+    expect(eventTypes(pushed).filter((type) => type === "user.message.recorded")).toHaveLength(1);
 
     firstRunGate.resolve();
     await waitUntil(() => runtimeCalls.length === 2, "follow-up runtime call");
@@ -122,16 +122,17 @@ describe("ThreadRuntimeOrchestrator", () => {
       [{ role: "user", content: "first" }],
       [
         { role: "user", content: "first" },
-        { role: "user", content: "second" },
         { role: "assistant", content: "first reply" },
+        { role: "user", content: "second" },
       ],
     ]);
     expect(await persistence.getMessages("thread-steer")).toEqual([
       { role: "user", content: "first" },
-      { role: "user", content: "second" },
       { role: "assistant", content: "first reply" },
+      { role: "user", content: "second" },
       { role: "assistant", content: "second reply" },
     ]);
+    expect(eventTypes(pushed).filter((type) => type === "user.message.recorded")).toHaveLength(2);
     expect(eventTypes(pushed).filter((type) => type === "turn.completed")).toHaveLength(1);
     expect(pushed.at(-1)).toMatchObject({
       type: "thread.status.changed",
@@ -198,8 +199,8 @@ describe("ThreadRuntimeOrchestrator", () => {
       [{ role: "user", content: "first" }],
       [
         { role: "user", content: "first" },
-        { role: "user", content: "second" },
         { role: "assistant", content: "reply 1" },
+        { role: "user", content: "second" },
       ],
     ]);
     expect(eventTypes(pushed).filter((type) => type === "turn.started")).toHaveLength(1);
@@ -267,15 +268,15 @@ describe("ThreadRuntimeOrchestrator", () => {
       [{ role: "user", content: "first" }],
       [
         { role: "user", content: "first" },
-        { role: "user", content: "second" },
         { role: "assistant", content: "reply 1" },
+        { role: "user", content: "second" },
       ],
       [
         { role: "user", content: "first" },
-        { role: "user", content: "second" },
         { role: "assistant", content: "reply 1" },
-        { role: "user", content: "third" },
+        { role: "user", content: "second" },
         { role: "assistant", content: "reply 2" },
+        { role: "user", content: "third" },
       ],
     ]);
   });
@@ -1173,30 +1174,11 @@ describe("ThreadRuntimeOrchestrator", () => {
     ]);
   });
 
-  it("clears input that finishes enqueueing during interrupt cleanup", async () => {
+  it("clears queued input when interrupting an active run before follow-up", async () => {
     const pushed: ThreadNotification[] = [];
     const runtimeCalls: AgentMessage[][] = [];
-    const secondPersistStarted = createDeferred();
-    const releaseSecondPersist = createDeferred();
-    const store = new InMemoryThreadStore();
-    class DelayedSecondUserPersistence extends ThreadPersistence {
-      private persistCount = 0;
-
-      override async persistUserMessage(
-        threadId: string,
-        text: string,
-        attachments?: ThreadAttachment[],
-      ): Promise<void> {
-        this.persistCount += 1;
-        if (this.persistCount === 2) {
-          secondPersistStarted.resolve();
-          await releaseSecondPersist.promise;
-        }
-        await super.persistUserMessage(threadId, text, attachments);
-      }
-    }
-    const persistence = new DelayedSecondUserPersistence(
-      store,
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
       () => "2026-06-07T00:00:00.000Z",
     );
     let firstRunFinish: (() => void) | undefined;
@@ -1237,21 +1219,20 @@ describe("ThreadRuntimeOrchestrator", () => {
       createUserMessage("Thread-interrupt-enqueue", "second", "user-2"),
       (message) => pushed.push(message),
     );
-    await secondPersistStarted.promise;
+    await secondInputPromise;
     const interruptPromise = orchestrator.interruptAndWait(
       "Thread-interrupt-enqueue",
       (message) => pushed.push(message),
     );
 
-    releaseSecondPersist.resolve();
-    await Promise.all([secondInputPromise, interruptPromise, runPromise]);
+    await Promise.all([interruptPromise, runPromise]);
     await new Promise((resolve) => setTimeout(resolve, 20));
 
     expect(runtimeCalls).toHaveLength(1);
     expect(await persistence.getMessages("Thread-interrupt-enqueue")).toEqual([
       { role: "user", content: "first" },
-      { role: "user", content: "second" },
     ]);
+    expect(eventTypes(pushed).filter((type) => type === "user.message.recorded")).toHaveLength(1);
     expect(eventTypes(pushed).filter((type) => type === "turn.completed")).toEqual([
       "turn.completed",
     ]);
