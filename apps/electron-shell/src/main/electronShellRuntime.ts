@@ -20,8 +20,13 @@ type ThreadWindowHost = {
   focus(): boolean;
 };
 
+type ActivityWindowHost = {
+  show(): Promise<void>;
+};
+
 type Options = {
   prewarmer: ThreadWindowHost;
+  activityWindow: ActivityWindowHost;
   send: (event: ElectronToSwiftEvent) => void;
   now: () => string;
   stopSupervisor: () => void;
@@ -61,6 +66,18 @@ export class ElectronShellRuntime {
     }
   }
 
+  handleActivityWindowFocusRequest(threadId: string | null): void {
+    if (threadId && this.options.prewarmer.focus()) {
+      return;
+    }
+
+    this.options.send({
+      channel: "electron_shell",
+      type: "prompt_panel.show_requested",
+      reason: "activity_window.clicked_without_thread",
+    });
+  }
+
   async handleCommand(command: SwiftToElectronCommand): Promise<void> {
     switch (command.type) {
       case "thread_window.prepare":
@@ -80,7 +97,7 @@ export class ElectronShellRuntime {
         }
         return;
       case "activity_window.show":
-        this.ack(command, false, "command is not active in phase 1");
+        await this.runCommand(command, () => this.options.activityWindow.show());
         return;
       case "shutdown":
         this.ack(command, true);

@@ -1,4 +1,4 @@
-import { BrowserWindow, app } from "electron";
+import { BrowserWindow, app, ipcMain, screen } from "electron";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ElectronShellRuntime, errorMessage } from "./electronShellRuntime.js";
@@ -9,6 +9,7 @@ import {
 } from "./protocol/electronShellProtocol.js";
 import { NodeAgentServerSupervisor } from "./serverSupervisor/nodeAgentServerSupervisor.js";
 import { JsonLineBridge } from "./swiftBridge/jsonLineBridge.js";
+import { ActivityWindowController } from "./windows/activityWindowController.js";
 import { ThreadWindowPrewarmer } from "./windows/threadWindowPrewarmer.js";
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
@@ -16,7 +17,9 @@ const repoRoot = process.env.HANDAGENT_REPO_ROOT ?? resolve(currentDir, "../../.
 const nodePath = process.env.HANDAGENT_NODE_PATH ?? "node";
 const threadWindowURL =
   process.env.HANDAGENT_THREAD_WINDOW_WEB_URL ?? "http://127.0.0.1:4317/thread-window/index.html";
-const preloadPath = join(currentDir, "../preload/threadWindowPreload.js");
+const threadPreloadPath = join(currentDir, "../preload/threadWindowPreload.js");
+const activityWindowHTMLPath = join(currentDir, "../activity-window/index.html");
+const activityPreloadPath = join(currentDir, "../preload/activityWindowPreload.js");
 
 const bridge = new JsonLineBridge({ input: process.stdin, output: process.stdout });
 const supervisor = new NodeAgentServerSupervisor({
@@ -29,7 +32,7 @@ const supervisor = new NodeAgentServerSupervisor({
 
 const prewarmer = new ThreadWindowPrewarmer({
   threadWindowURL,
-  preloadPath,
+  preloadPath: threadPreloadPath,
   onClosed: (event) => {
     if (hasStoppedSupervisor) {
       return;
@@ -50,6 +53,23 @@ const prewarmer = new ThreadWindowPrewarmer({
       });
     });
     return window;
+  },
+});
+
+const activityWindow = new ActivityWindowController({
+  activityWindowHTMLPath,
+  preloadPath: activityPreloadPath,
+  createWindow: (options) => new BrowserWindow(options),
+  screenProvider: {
+    getPrimaryWorkArea: () => screen.getPrimaryDisplay().workArea,
+  },
+  onRendererCrashed: (reason) => {
+    send({
+      channel: "electron_shell",
+      type: "renderer.crashed",
+      window: "activity",
+      reason,
+    });
   },
 });
 
@@ -99,10 +119,15 @@ function stopSupervisor(): void {
 
 const runtime = new ElectronShellRuntime({
   prewarmer,
+  activityWindow,
   send,
   now,
   stopSupervisor,
   quit: () => app.quit(),
+});
+
+ipcMain.on("activity-window:focus-thread", (_event, threadId: string | null) => {
+  runtime.handleActivityWindowFocusRequest(threadId);
 });
 
 async function handleCommandLine(line: string): Promise<void> {

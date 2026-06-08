@@ -85,6 +85,50 @@ describe("ElectronShellRuntime", () => {
     });
   });
 
+  it("acknowledges activity window show commands", async () => {
+    const harness = createHarness();
+
+    await harness.runtime.handleCommand({
+      channel: "electron_shell",
+      type: "activity_window.show",
+      commandId: "cmd-activity",
+    });
+
+    expect(harness.activityWindow.show).toHaveBeenCalledTimes(1);
+    expect(harness.events).toContainEqual({
+      channel: "electron_shell",
+      type: "command.ack",
+      commandId: "cmd-activity",
+      ok: true,
+    });
+  });
+
+  it("requests the Swift prompt panel when activity click cannot focus a thread window", () => {
+    const harness = createHarness({ focusResult: false });
+
+    harness.runtime.handleActivityWindowFocusRequest(null);
+
+    expect(harness.prewarmer.focus).not.toHaveBeenCalled();
+    expect(harness.events).toContainEqual({
+      channel: "electron_shell",
+      type: "prompt_panel.show_requested",
+      reason: "activity_window.clicked_without_thread",
+    });
+  });
+
+  it("focuses the thread window when an activity click has a visible thread", () => {
+    const harness = createHarness();
+
+    harness.runtime.handleActivityWindowFocusRequest("thread-1");
+
+    expect(harness.prewarmer.focus).toHaveBeenCalledTimes(1);
+    expect(harness.events).not.toContainEqual({
+      channel: "electron_shell",
+      type: "prompt_panel.show_requested",
+      reason: "activity_window.clicked_without_thread",
+    });
+  });
+
   it("acks focus false when no visible thread window exists", async () => {
     const harness = createHarness({ focusResult: false });
 
@@ -178,15 +222,19 @@ function createHarness(options: { focusResult?: boolean; prepareError?: Error } 
     openHistory: vi.fn(async () => {}),
     focus: vi.fn(() => options.focusResult ?? true),
   };
+  const activityWindow = {
+    show: vi.fn(async () => {}),
+  };
   const stopSupervisor = vi.fn();
   const quit = vi.fn();
   const runtime = new ElectronShellRuntime({
     prewarmer,
+    activityWindow,
     send: (event) => events.push(event),
     now: () => "2026-06-08T00:00:00.000Z",
     stopSupervisor,
     quit,
   });
 
-  return { runtime, prewarmer, events, stopSupervisor, quit };
+  return { runtime, prewarmer, activityWindow, events, stopSupervisor, quit };
 }

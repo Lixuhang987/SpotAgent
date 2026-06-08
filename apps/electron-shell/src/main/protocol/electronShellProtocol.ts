@@ -51,6 +51,11 @@ export type ElectronToSwiftEvent =
   | { channel: "electron_shell"; type: "command.ack"; commandId: string; ok: boolean; error?: string }
   | { channel: "electron_shell"; type: "thread_window.closed"; timestamp: string; wasVisible: boolean }
   | { channel: "electron_shell"; type: "renderer.crashed"; window: "thread" | "activity"; reason: string }
+  | {
+      channel: "electron_shell";
+      type: "prompt_panel.show_requested";
+      reason: "activity_window.clicked_without_thread";
+    }
   | { channel: "electron_shell"; type: "agent_server.health"; available: boolean; message?: string };
 
 export function parseCommand(raw: string): SwiftToElectronCommand {
