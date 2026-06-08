@@ -260,6 +260,120 @@ describe("AgentActivityPublisher", () => {
     ]);
   });
 
+  it("keeps a full interrupted sequence completed instead of overwriting it with error", () => {
+    const events: AgentActivityEvent[] = [];
+    const publisher = new AgentActivityPublisher(() => "2026-06-08T00:00:00.000Z");
+    publisher.attachConnection("activity-1", (event) => events.push(event));
+
+    publisher.observe({
+      type: "turn.completed",
+      threadId: "thread-1",
+      notificationId: "n-turn-interrupted",
+      turnId: "turn-1",
+      timestamp: "2026-06-08T00:00:01.000Z",
+      payload: { status: "interrupted" },
+    });
+    publisher.observe({
+      type: "thread.status.changed",
+      threadId: "thread-1",
+      notificationId: "n-thread-interrupted",
+      timestamp: "2026-06-08T00:00:02.000Z",
+      payload: { value: "interrupted" },
+    });
+
+    expect(events.at(-1)).toMatchObject({
+      type: "activity.changed",
+      activeThreadId: "thread-1",
+      status: "completed",
+      latestSummary: "已中断",
+      waitingRequest: null,
+      error: null,
+    });
+  });
+
+  it("derives terminal states from thread status changes", () => {
+    const events: AgentActivityEvent[] = [];
+    const publisher = new AgentActivityPublisher(() => "2026-06-08T00:00:00.000Z");
+    publisher.attachConnection("activity-1", (event) => events.push(event));
+
+    publisher.observe({
+      type: "thread.status.changed",
+      threadId: "thread-1",
+      notificationId: "n-idle",
+      timestamp: "2026-06-08T00:00:01.000Z",
+      payload: { value: "idle" },
+    });
+    publisher.observe({
+      type: "thread.status.changed",
+      threadId: "thread-2",
+      notificationId: "n-failed",
+      timestamp: "2026-06-08T00:00:02.000Z",
+      payload: { value: "failed" },
+    });
+    publisher.observe({
+      type: "thread.status.changed",
+      threadId: "thread-3",
+      notificationId: "n-interrupted",
+      timestamp: "2026-06-08T00:00:03.000Z",
+      payload: { value: "interrupted" },
+    });
+
+    expect(events.slice(1).map((event) => ({
+      activeThreadId: event.activeThreadId,
+      status: event.status,
+      latestSummary: event.latestSummary,
+      error: event.error,
+    }))).toEqual([
+      {
+        activeThreadId: "thread-1",
+        status: "idle",
+        latestSummary: "点击开始",
+        error: null,
+      },
+      {
+        activeThreadId: "thread-2",
+        status: "error",
+        latestSummary: "运行失败",
+        error: "运行失败",
+      },
+      {
+        activeThreadId: "thread-3",
+        status: "completed",
+        latestSummary: "已中断",
+        error: null,
+      },
+    ]);
+  });
+
+  it("does not attribute thread errors without a thread id to the active thread", () => {
+    const events: AgentActivityEvent[] = [];
+    const publisher = new AgentActivityPublisher(() => "2026-06-08T00:00:00.000Z");
+    publisher.attachConnection("activity-1", (event) => events.push(event));
+
+    publisher.observe({
+      type: "turn.started",
+      threadId: "thread-1",
+      notificationId: "n-turn",
+      turnId: "turn-1",
+      timestamp: "2026-06-08T00:00:01.000Z",
+      payload: {},
+    });
+    publisher.observe({
+      type: "thread.error",
+      notificationId: "n-connection-error",
+      timestamp: "2026-06-08T00:00:02.000Z",
+      payload: { message: "connection failed" },
+    });
+
+    expect(events.at(-1)).toMatchObject({
+      type: "activity.changed",
+      activeThreadId: null,
+      status: "error",
+      latestSummary: "connection failed",
+      error: "connection failed",
+    });
+  });
+
   it("trims summaries, truncates long text, and preserves internal whitespace", () => {
     const events: AgentActivityEvent[] = [];
     const publisher = new AgentActivityPublisher(() => "2026-06-08T00:00:00.000Z");
@@ -290,6 +404,25 @@ describe("AgentActivityPublisher", () => {
 
     expect(events.at(-2)?.latestSummary).toBe("keep   multiple    spaces");
     expect(events.at(-1)?.latestSummary).toBe(`${"a".repeat(77)}...`);
+    expect(events.at(-1)?.latestSummary).toHaveLength(80);
+  });
+
+  it("truncates long tool names in started summaries", () => {
+    const events: AgentActivityEvent[] = [];
+    const publisher = new AgentActivityPublisher(() => "2026-06-08T00:00:00.000Z");
+    publisher.attachConnection("activity-1", (event) => events.push(event));
+
+    publisher.observe({
+      type: "tool.started",
+      threadId: "thread-1",
+      notificationId: "n-tool",
+      turnId: "turn-1",
+      itemId: "tool-1",
+      timestamp: "2026-06-08T00:00:01.000Z",
+      payload: { name: `tool.${"a".repeat(100)}`, input: {} },
+    });
+
+    expect(events.at(-1)?.latestSummary).toBe(`正在使用 tool.${"a".repeat(67)}...`);
     expect(events.at(-1)?.latestSummary).toHaveLength(80);
   });
 
@@ -358,5 +491,34 @@ describe("AgentActivityPublisher", () => {
 
     expect(first.map((event) => event.type)).toEqual(["activity.snapshot", "activity.changed"]);
     expect(second.map((event) => event.type)).toEqual(["activity.snapshot"]);
+  });
+
+  it("continues notifying subscribers when one send throws", () => {
+    const received: AgentActivityEvent[] = [];
+    let shouldThrow = false;
+    const publisher = new AgentActivityPublisher(() => "2026-06-08T00:00:00.000Z");
+    publisher.attachConnection("healthy", (event) => received.push(event));
+    publisher.attachConnection("throwing", () => {
+      if (shouldThrow) {
+        throw new Error("socket closed");
+      }
+    });
+    shouldThrow = true;
+
+    expect(() => publisher.observe({
+      type: "turn.started",
+      threadId: "thread-1",
+      notificationId: "n-turn",
+      turnId: "turn-1",
+      timestamp: "2026-06-08T00:00:01.000Z",
+      payload: {},
+    })).not.toThrow();
+
+    expect(received.at(-1)).toMatchObject({
+      type: "activity.changed",
+      activeThreadId: "thread-1",
+      status: "running",
+      latestSummary: "正在回复",
+    });
   });
 });

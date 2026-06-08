@@ -75,7 +75,11 @@ export class AgentActivityPublisher {
       case "assistant.delta":
         return this.nextState(event.threadId, "running", "正在回复");
       case "tool.started":
-        return this.nextState(event.threadId, "tool_running", `正在使用 ${event.payload.name}`);
+        return this.nextState(
+          event.threadId,
+          "tool_running",
+          summarize(`正在使用 ${event.payload.name}`) ?? "正在调用工具",
+        );
       case "permission.requested":
         return this.nextState(event.threadId, "waiting", "等待权限确认", "permission");
       case "workspace.requested":
@@ -96,12 +100,12 @@ export class AgentActivityPublisher {
           return this.nextState(event.threadId, "error", "运行失败", null, "运行失败");
         }
         if (event.payload.value === "interrupted") {
-          return this.nextState(event.threadId, "error", "已中断", null, "已中断");
+          return this.nextState(event.threadId, "completed", "已中断");
         }
         return null;
       case "thread.error": {
         const message = summarize(event.payload.message) ?? "运行失败";
-        return this.nextState(event.threadId ?? this.state.activeThreadId, "error", message, null, message);
+        return this.nextState(event.threadId ?? null, "error", message, null, message);
       }
       case "tool.finished":
       case "thread.snapshot":
@@ -131,7 +135,11 @@ export class AgentActivityPublisher {
 
   private broadcast(event: AgentActivityEvent): void {
     for (const send of this.connections.values()) {
-      send(event);
+      try {
+        send(event);
+      } catch {
+        // Keep other activity subscribers isolated from a closed or failing socket.
+      }
     }
   }
 }
