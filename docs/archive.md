@@ -898,3 +898,11 @@
 - **验证过程**：先关闭 ThreadWindow 并激活 Finder，再通过原生全局快捷键 `Command+Shift+Space` 打开 PromptPanel。Computer Use 观察到输入框自动聚焦，首行左侧无独立图标、无独立输入框卡片或边框；单行输入占满设置按钮左侧剩余空间。使用 CoreGraphics 鼠标事件从 placeholder 右侧空白区域拖动，窗口位置从 `400,147` 移到 `490,192`。通过 Shift+Return 输入多行，输入区域增高到 5 行；通过 accessibility 设置 6 行文本后出现垂直滚动条，布局不继续撑高。普通 Return 提交后 PromptPanel 关闭并打开 ThreadWindow。点击面板外侧、按 Esc、再次按全局快捷键均能关闭面板，前台 App 保持/恢复为 Finder。切换 macOS 深色模式后再次打开 PromptPanel，输入文字和 placeholder 仍保持深色高对比，随后恢复系统外观。
 - **证据**：Computer Use 观察 PromptPanel 输入框 focused；`System Events` 前台 App 查询为 `Finder`；`System Events` 窗口位置从 `400,147` 变为 `490,192`；6 行文本状态下 accessibility tree 显示输入 scroll area 出现 scroll bar。
 - **结论**：通过。PromptPanel 输入框视觉、拖动、自动增高、提交与焦点恢复符合预期。
+
+### 全前端 DESIGN.md 视觉一致性 smoke（P2）
+
+- **验证日期**：2026-06-09
+- **验证环境**：mock-llm packaged app，默认 WKWebView 路径，macOS 15+
+- **验证过程**：启动 `dist/HandAgentDesktop.app` 后通过全局快捷键打开 PromptPanel，确认面板为 warm cream canvas、浅 hairline、深色输入文字，不再是旧暗色玻璃或 Mango Amber。通过 PromptPanel 设置按钮打开 Settings，确认顶部 Tab 区为 cream/surface-soft、导航按钮等分、选中态有 coral 强调线，Provider / 接口 segmented picker 和模型/Base URL/API Key 字段使用同一 warm-canvas token；切换 macOS 深色模式后 Settings 仍保持固定 warm-canvas 单主题且字段内容高对比可读。观察 StatusBubble：idle 为 cream 小浮窗，running 时通过 `DESIGN_VISUAL_STATUS_QA_20260609 [mock:slow-focus]` 触发，截图显示 teal 状态点、coral `Running` 标题、cream 背景和 glow 不遮挡文本。ThreadWindow 打开后左侧历史栏为 cream surface，`新建对话` 为 coral primary，右侧 workspace 为 dark product surface，Composer 与 tab bar 使用深色 surface。将 ThreadWindow 缩到 `640x448` 后 sidebar 隐藏，消息、TabBar 和 Composer 未重叠；Settings 缩到系统最小 `660x548` 后顶部 tabs、segmented picker 和输入框仍可读无重叠。
+- **证据**：`/tmp/handagent-qa/design-status-idle.png`、`/tmp/handagent-qa/design-status-running.png`、`/tmp/handagent-qa/design-settings-min.png`、`/tmp/handagent-qa/design-threadwindow-min.png`；Computer Use 观察 PromptPanel、Settings、ThreadWindow accessibility tree；`/api/activity` snapshot 返回 running/`正在回复`。
+- **结论**：通过。SwiftUI 原生界面与 React ThreadWindow 保持 DESIGN.md 的 warm-canvas / coral / dark product surface 视觉节奏，最小尺寸附近未发现文本重叠、不可读截断或布局溢出。
