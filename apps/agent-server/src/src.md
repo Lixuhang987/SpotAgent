@@ -10,6 +10,7 @@
 
 | 子目录 | 子文档 | 职责 |
 |------|------|------|
+| `activity/` | [activity/activity.md](/Users/mu9/proj/handAgent/apps/agent-server/src/activity/activity.md) | 从 thread 通知和待回执请求派生 `/api/activity` 轻量运行态 |
 | `server/` | [server/server.md](/Users/mu9/proj/handAgent/apps/agent-server/src/server/server.md) | 进程入口、WebSocket socket 绑定、组合根与 `~/.spotAgent` 路径解析 |
 | `thread/` | [thread/thread.md](/Users/mu9/proj/handAgent/apps/agent-server/src/thread/thread.md) | thread 路由、一轮 turn 编排、持久化恢复与删除 |
 | `protocol/` | [protocol/protocol.md](/Users/mu9/proj/handAgent/apps/agent-server/src/protocol/protocol.md) | core runtime event、thread 消息、审计事件与多模态 STUB 的翻译 |
