@@ -34,7 +34,7 @@
 
 1. 从 `AGENTS.md → handAgent.md → apps/apps.md / packages/packages.md` 逐层打开文档，确认每级 `<dir>.md` 只索引直接子节点。
 1. 检索当前文档中的 `SessionWindow` / `sessionWindow`，确认非归档命中只作为历史旧称说明出现，当前实现统一使用 `ThreadWindow`。
-1. 对照 `apps/desktop/Sources/ThreadWindow/thread-window.md`、`apps/thread-window-web/thread-window-web.md` 和 `apps/agent-server/agent-server.md`，确认 Swift 只做 WKWebView host 与 `/api/platform`，React 持有 `/api/thread` 和 ThreadWindow UI 状态。
+1. 对照 `apps/desktop/Sources/ThreadWindow/thread-window.md`、`apps/thread-window-web/thread-window-web.md`、`apps/electron-shell/electron-shell.md` 和 `apps/agent-server/agent-server.md`，确认默认路径下 Swift 只做 WKWebView host 与 `/api/platform`，Electron flag 路径承载 ThreadWindow `BrowserWindow` 并监督 agent-server，React 持有 `/api/thread` 和 ThreadWindow UI 状态。
 1. 对照 `packages/core/src/protocol/protocol.md` 与 Web/agent-server 文档，确认 `workspace.list` / `workspace.listed`、`permission.requested` / `permission.answered`、`workspace.requested` / `workspace.answered` 的归属一致。
 
 ## Anthropic Provider 真实调用（P1）
@@ -76,13 +76,71 @@
 1. 再次打开 PromptPanel，连续提交第二条不同 prompt，确认复用同一个 ThreadWindow 但创建新的 tab/thread，而不是写入当前 active tab 的 composer thread。
 1. 在 `~/.spotAgent/threads/` 找到对应两个 thread 文件，确认每个文件都包含各自的首条 user message。
 
-## PromptPanel ThreadWindow 预热 smoke（P2）
+## PromptPanel ThreadWindow no-prewarm smoke（P2）
 
 1. 从当前 worktree 执行 `bash ./scripts/swiftw run HandAgentDesktop`。
-1. 通过全局快捷键打开 PromptPanel，先不要提交，确认没有 ThreadWindow 跳出，App 不因为隐藏预热额外切到前台窗口。
-1. 等待约 1 秒后提交普通 prompt，确认复用已预热的 WKWebView 打开 ThreadWindow，并创建新的 tab/thread。
+1. 通过全局快捷键打开 PromptPanel，先不要提交，确认没有 ThreadWindow 跳出，App 不因为 ThreadWindow 创建额外切到前台窗口。
+1. 确认仅打开 PromptPanel 不会创建 Swift WKWebView ThreadWindow；提交普通 prompt 后才打开 ThreadWindow，并创建新的 tab/thread。
 1. 关闭 ThreadWindow，再次打开 PromptPanel；确认打开 PromptPanel 本身不卡住输入焦点，仍可立即输入。
-1. 暂停或断开 agent-server 后打开 PromptPanel，确认只显示 server 不可用提示，不创建隐藏 ThreadWindow，也不丢草稿。
+1. 暂停或断开 agent-server 后打开 PromptPanel，确认只显示 server 不可用提示，不创建 ThreadWindow，也不丢草稿。
+
+## Electron UI Shell Phase 0 基础启动（P2）
+
+本项只保留 Phase 1 仍依赖的 Electron 启动、supervisor 和隐藏预热基础；Electron flag 路径下 PromptPanel submit 已由 Phase 1 改为打开 Electron ThreadWindow。
+
+1. 默认不设置 `HANDAGENT_ELECTRON_SHELL`，运行 `bash ./scripts/swiftw run HandAgentDesktop`，确认 PromptPanel 提交仍打开 Swift `WKWebView` ThreadWindow。
+1. 先运行 `pnpm --filter handagent-electron-shell build`。
+1. 设置 `HANDAGENT_ELECTRON_SHELL=1` 后运行桌面 App；默认应通过 `pnpm --filter handagent-electron-shell exec electron apps/electron-shell/dist/main/main.js` 启动 Electron，不要求全局 `electron` 可执行文件。
+1. 启动后确认 Electron shell 和 agent-server 只有各一份进程，且 `127.0.0.1:4317` 没有第二份 server 冲突。
+1. 启动完成前 PromptPanel 不允许提交；收到 Electron `agent_server.health` 与 `thread_window.prepared` 后 PromptPanel 恢复可提交。
+1. 关闭隐藏 Electron ThreadWindow 时，确认 PromptPanel 重新阻止提交并显示 `Electron ThreadWindow 已关闭，正在重新预热…`；模拟预热失败时确认显示具体失败原因，而不是仅显示泛化的 agent-server 断开文案。
+1. 退出 HandAgent 后确认 Electron 和 Node agent-server 进程不残留。
+
+## Electron UI Shell Phase 1（P2）
+
+1. 默认不设置 `HANDAGENT_ELECTRON_SHELL`，运行 `bash ./scripts/swiftw run HandAgentDesktop`，提交 prompt 后确认仍打开 Swift `WKWebView` ThreadWindow。
+1. 运行 `pnpm --filter handagent-electron-shell build`。
+1. 设置 `HANDAGENT_ELECTRON_SHELL=1` 后运行桌面 App，确认 Electron shell 和 agent-server 各一份进程。
+1. 通过全局快捷键打开 PromptPanel，确认不会显示 ThreadWindow；hidden ThreadWindow 已由 Electron main 在 app-server ready 后预热，PromptPanel show/toggle 本身不发送 prepare command。PromptPanel 在 health + prepared 前不可提交。
+1. 提交 `ELECTRON_PHASE1_INITIAL_PROMPT_QA_20260608`，确认打开的是 Electron ThreadWindow，而不是 Swift WKWebView ThreadWindow。
+1. 确认 Electron ThreadWindow 创建新 tab/thread，并显示该 user message；`~/.spotAgent/threads/` 中对应 thread 文件包含该首条 user message。
+1. 再次打开 PromptPanel 连续提交第二条不同 prompt，确认复用同一个 Electron ThreadWindow，但创建新的 tab/thread。
+1. 触发 `openHistory`，确认聚焦 Electron ThreadWindow 并显示历史侧栏，不创建 Swift WKWebView host。
+1. 关闭 visible Electron ThreadWindow 后，确认 Swift 侧不残留打开窗口状态；再次打开 PromptPanel 时先看到预热 gate，预热完成后可再次提交。
+1. 触发 platform tool，例如 `clipboard.read` 或 `app.frontmost`，确认 agent-server 仍通过 `/api/platform` 请求 Swift 回写结果。
+1. 退出 HandAgent 后确认 Electron 和 Node agent-server 进程不残留。
+
+## Electron UI Shell Phase 2 Activity StatusBubble（P2）
+
+**实施状态**：未通过实机 QA；本节为待验收项，不得归档为已通过。
+
+1. 默认不设置 `HANDAGENT_ELECTRON_SHELL`，运行 `bash ./scripts/swiftw run HandAgentDesktop`，确认右下角显示 Swift StatusBubble，PromptPanel 提交仍打开默认路径或当前分支配置下的 ThreadWindow。
+1. 运行 `pnpm --filter handagent-electron-shell build`。
+1. 设置 `HANDAGENT_ELECTRON_SHELL=1` 后运行桌面 App，确认不再显示 Swift StatusBubble，右下角显示 Electron React StatusBubble。
+1. 提交一个普通 prompt，确认 Electron StatusBubble 从 `idle` 变为 `starting` / `running` / `completed`，ThreadWindow 仍显示正常消息流。
+1. 触发一个 tool 调用，确认 Electron StatusBubble 显示工具运行态，例如 `正在使用 <toolName>`。
+1. 触发 permission 或 workspace 请求，确认 Electron StatusBubble 显示等待确认态，ThreadWindow 内联请求面板仍可回执。
+1. 触发模型配置错误或 provider 错误，确认 Electron StatusBubble 显示 `error` 态，ThreadWindow 错误气泡仍可见。
+1. 点击 Electron StatusBubble，若 Electron ThreadWindow 可见，确认聚焦 ThreadWindow；若无可聚焦 ThreadWindow，确认 Swift PromptPanel 打开。
+1. 断开并重连 `/api/activity` subscriber，确认新连接立即收到 `activity.snapshot`，不会影响 `/api/thread` 消息流。
+1. 确认 ActivityWindow 非激活展示：点击气泡不把 ActivityWindow 变成 key window，且不会出现在 Cmd+Tab。
+1. 退出 HandAgent 后确认 Electron、Node agent-server 和 activity renderer 进程不残留。
+
+## Electron UI Shell Phase 3 Supervision Hardening（P2）
+
+**实施状态**：未通过实机 QA；本节为待验收项，不得归档为已通过。
+
+1. 运行 `pnpm --filter handagent-electron-shell build`。
+1. 设置 `HANDAGENT_ELECTRON_SHELL=1` 后运行桌面 App，确认启动日志包含 agent-server supervisor description，并明确 `mode`、`coreRuntimeHost` 与 `utilityProcessBlocker`。
+1. 打开 PromptPanel 多次，确认没有发送 `thread_window.prepare` command；ThreadWindow hidden prewarm 已在 app-server ready 后完成。
+1. 提交 prompt，确认 Electron ThreadWindow 打开新 thread，首条 user message 不丢失。
+1. 关闭 visible ThreadWindow，确认 agent-server 进程仍存在；再次打开 PromptPanel 并提交，确认仍通过同一后台服务执行。
+1. 关闭 Electron StatusBubble，确认 agent-server 进程仍存在，ThreadWindow 仍可继续对话。
+1. 模拟 agent-server 非零退出，确认 supervisor 按退避重启；超过最大次数后 Swift 显示明确 fatal/diagnostic 文案。
+1. 执行 `bash ./scripts/package-app.sh --mock-llm`，确认 `.app/Contents/Resources/ElectronShell/dist/main/main.js` 存在。
+1. 确认 PATH 中存在 `electron`，或设置 `HANDAGENT_ELECTRON_BINARY` 指向可用 Electron binary。
+1. 使用 mock LLM packaged app 路径启动 Electron flag，确认 prompt 返回 mock assistant，不访问真实 LLM。
+1. 退出 HandAgent 后确认 Electron、agent-server 和 renderer 进程不残留。
 
 ## ThreadWindow UI 重构完整验收（P2）
 

@@ -7,6 +7,7 @@ import type { ThreadCommand } from "@handagent/core/protocol/ThreadCommand.ts";
 import type { ClientResponse } from "@handagent/core/protocol/ClientResponse.ts";
 import type { ThreadNotification } from "@handagent/core/protocol/ThreadNotification.ts";
 import type { ServerRequest } from "@handagent/core/protocol/ServerRequest.ts";
+import type { AgentActivityEvent } from "@handagent/core/protocol/AgentActivity.ts";
 import type { MCPClient } from "@handagent/core/mcp/MCPClient.ts";
 import type { MCPServerConfig } from "@handagent/core/mcp/MCPConfig.ts";
 import type { PlatformAdapter } from "@handagent/core/platform/PlatformAdapter.ts";
@@ -14,6 +15,7 @@ import { parseMCPConfig } from "@handagent/core/mcp/MCPConfig.ts";
 import type { AgentMessage } from "@handagent/core/runtime/AgentMessage.ts";
 import { META_TOOL_NAME } from "@handagent/core/tools/MetaToolUseTool.ts";
 import { ThreadPersistence } from "../thread/ThreadPersistence.ts";
+import { AgentActivityPublisher } from "../activity/AgentActivityPublisher.ts";
 import { ThreadCommandRouter } from "../thread/ThreadCommandRouter.ts";
 import { ThreadNotificationPublisher } from "../thread/ThreadNotificationPublisher.ts";
 import { ThreadRuntimeOrchestrator } from "../thread/ThreadRuntimeOrchestrator.ts";
@@ -158,6 +160,26 @@ export function attachPlatformSocketHandlers(
   });
 }
 
+export function attachActivitySocketHandlers(
+  socket: ThreadSocket,
+  {
+    activityPublisher,
+  }: {
+    activityPublisher: AgentActivityPublisher;
+  },
+): void {
+  const connectionId = `activity-${++nextConnectionId}`;
+  const sendActivity = (outgoing: AgentActivityEvent) => {
+    socket.send(JSON.stringify(outgoing));
+  };
+
+  activityPublisher.attachConnection(connectionId, sendActivity);
+
+  socket.on("close", () => {
+    activityPublisher.detachConnection(connectionId);
+  });
+}
+
 function isPlatformBridgeMessage(message: unknown): message is PlatformBridgeMessage {
   return isRecord(message) && message.channel === "platform";
 }
@@ -204,6 +226,7 @@ function threadIdFromRequestId(requestId: string): string {
 export async function startServer({
   commandRouter,
   eventPublisher,
+  activityPublisher,
   bridge,
   permissionBridge,
   permissionPolicy,
@@ -213,6 +236,7 @@ export async function startServer({
 }: {
   commandRouter: ThreadCommandRouter;
   eventPublisher: ThreadNotificationPublisher;
+  activityPublisher?: AgentActivityPublisher;
   bridge?: WebSocketPlatformBridge;
   permissionBridge?: ThreadPermissionBridge;
   permissionPolicy?: FilePermissionPolicy;
@@ -224,6 +248,7 @@ export async function startServer({
   const { WebSocketServer } = await import("ws");
   const threadWebSocketServer = new WebSocketServer({ noServer: true });
   const platformWebSocketServer = new WebSocketServer({ noServer: true });
+  const activityWebSocketServer = new WebSocketServer({ noServer: true });
   const server = createServer((request, response) => {
     void handleStaticRequest(request.url ?? "/", response, staticFilesDir);
   });
@@ -242,8 +267,23 @@ export async function startServer({
     attachPlatformSocketHandlers(socket, { bridge });
   });
 
+  activityWebSocketServer.on("connection", (socket) => {
+    if (!activityPublisher) {
+      socket.close();
+      return;
+    }
+    attachActivitySocketHandlers(socket, { activityPublisher });
+  });
+
   server.on("upgrade", (request, socket, head) => {
     const path = request.url?.split("?")[0];
+    if (path === "/api/activity") {
+      activityWebSocketServer.handleUpgrade(request, socket, head, (webSocket) => {
+        activityWebSocketServer.emit("connection", webSocket, request);
+      });
+      return;
+    }
+
     if (path === "/api/platform") {
       platformWebSocketServer.handleUpgrade(request, socket, head, (webSocket) => {
         platformWebSocketServer.emit("connection", webSocket, request);
@@ -425,7 +465,10 @@ export async function startDefaultServer(port = 4317) {
       await threadScopedTools.refreshForThread(threadId, binding);
     },
   );
-  const eventPublisher = new ThreadNotificationPublisher();
+  const activityPublisher = new AgentActivityPublisher();
+  const eventPublisher = new ThreadNotificationPublisher((event) => {
+    activityPublisher.observe(event);
+  });
   const commandRouter = new ThreadCommandRouter(
     orchestrator,
     persistence,
@@ -443,6 +486,7 @@ export async function startDefaultServer(port = 4317) {
   return startServer({
     commandRouter,
     eventPublisher,
+    activityPublisher,
     bridge: platformBridge,
     permissionBridge,
     permissionPolicy,

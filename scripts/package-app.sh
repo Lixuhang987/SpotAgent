@@ -9,6 +9,7 @@ BUILD_DIR="${HANDAGENT_PACKAGE_BUILD_DIR:-.build/release}"
 DIST_DIR="${HANDAGENT_PACKAGE_DIST_DIR:-dist}"
 APP_DIR="$DIST_DIR/$APP_NAME.app"
 WEB_DIST_DIR="${HANDAGENT_THREAD_WINDOW_WEB_DIST_DIR:-$ROOT_DIR/apps/thread-window-web/dist}"
+ELECTRON_SHELL_DIST_DIR="${HANDAGENT_ELECTRON_SHELL_DIST_DIR:-$ROOT_DIR/apps/electron-shell/dist}"
 SWIFT_BIN="${HANDAGENT_PACKAGE_SWIFT_BIN:-swift}"
 CODESIGN_BIN="${HANDAGENT_PACKAGE_CODESIGN_BIN:-codesign}"
 CODESIGN_IDENTITY="${HANDAGENT_PACKAGE_CODESIGN_IDENTITY:--}"
@@ -82,6 +83,12 @@ if [[ -z "${HANDAGENT_THREAD_WINDOW_WEB_DIST_DIR:-}" ]]; then
   (cd "$ROOT_DIR" && pnpm --filter handagent-thread-window-web build)
 fi
 
+if [[ -z "${HANDAGENT_ELECTRON_SHELL_DIST_DIR:-}" ]]; then
+  ensure_workspace_dependencies
+  echo "[package-app] Building electron-shell..."
+  (cd "$ROOT_DIR" && pnpm --filter handagent-electron-shell build)
+fi
+
 echo "[package-app] Building $APP_NAME release binary..."
 if ! "$SWIFT_BIN" build --cache-path "$SWIFTPM_CACHE_DIR" -c release --product "$APP_NAME" >"$tmp_log" 2>&1; then
   cat "$tmp_log"
@@ -98,12 +105,22 @@ if [[ ! -f "$WEB_DIST_DIR/index.html" ]]; then
   exit 1
 fi
 
+if [[ ! -f "$ELECTRON_SHELL_DIST_DIR/main/main.js" ]]; then
+  printf 'Missing ElectronShell build: %s/main/main.js\n' "$ELECTRON_SHELL_DIST_DIR" >&2
+  printf 'Run pnpm --filter handagent-electron-shell build or set HANDAGENT_ELECTRON_SHELL_DIST_DIR.\n' >&2
+  exit 1
+fi
+
 cp "$BUILD_DIR/$APP_NAME" "$APP_DIR/Contents/MacOS/$APP_NAME"
 chmod +x "$APP_DIR/Contents/MacOS/$APP_NAME"
 
 rm -rf "$APP_DIR/Contents/Resources/ThreadWindowWeb"
 mkdir -p "$APP_DIR/Contents/Resources/ThreadWindowWeb"
 cp -R "$WEB_DIST_DIR"/. "$APP_DIR/Contents/Resources/ThreadWindowWeb/"
+
+rm -rf "$APP_DIR/Contents/Resources/ElectronShell"
+mkdir -p "$APP_DIR/Contents/Resources/ElectronShell/dist"
+cp -R "$ELECTRON_SHELL_DIST_DIR"/. "$APP_DIR/Contents/Resources/ElectronShell/dist/"
 
 cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

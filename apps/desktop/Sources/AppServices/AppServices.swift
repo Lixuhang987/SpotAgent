@@ -46,8 +46,25 @@ protocol FatalAlertPresenting {
 }
 
 @MainActor
+struct ElectronShellLaunchConfiguration: Equatable {
+    let launchPath: String
+    let arguments: [String]
+    let environment: [String: String]
+    let currentDirectoryURL: URL?
+}
+
+@MainActor
+struct AppServicesRuntime {
+    let appServer: any AppServerManaging
+    let threadWindowCommandClient: (any ThreadWindowCommanding)?
+    let activityWindowCommandClient: (any ActivityWindowCommanding)?
+}
+
+@MainActor
 final class AppServices {
     let appServer: any AppServerManaging
+    let threadWindowCommandClient: (any ThreadWindowCommanding)?
+    let activityWindowCommandClient: (any ActivityWindowCommanding)?
     let threadRegistry: ThreadRegistry
     let settingsStore: AgentSettingsStore
     let threadHistoryStore: ThreadHistoryStore
@@ -61,9 +78,12 @@ final class AppServices {
     let fatalAlertPresenter: any FatalAlertPresenting
     let setActivationPolicy: @MainActor (NSApplication.ActivationPolicy) -> Void
     let showsStatusBubble: Bool
+    let showsFatalAlert: Bool
 
     init(
         appServer: (any AppServerManaging)? = nil,
+        threadWindowCommandClient: (any ThreadWindowCommanding)? = nil,
+        activityWindowCommandClient: (any ActivityWindowCommanding)? = nil,
         threadRegistry: ThreadRegistry = ThreadRegistry(),
         settingsStore: AgentSettingsStore = AgentSettingsStore(),
         threadHistoryStore: ThreadHistoryStore = ThreadHistoryStore(),
@@ -78,15 +98,16 @@ final class AppServices {
         setActivationPolicy: @escaping @MainActor (NSApplication.ActivationPolicy) -> Void = {
             NSApplication.shared.setActivationPolicy($0)
         },
-        showsStatusBubble: Bool = true
+        showsStatusBubble: Bool = true,
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        showsFatalAlert: Bool = true
     ) {
-        self.appServer = appServer ?? AppServer(
-            agentServer: AgentServerService(),
-            platformClient: PlatformBridgeConnectionClient(
-                connection: AppServerConnection(serverURL: platformServerURL),
-                platformBridge: PlatformBridgeService()
-            )
-        )
+        let runtime = appServer == nil
+            ? AppServices.defaultRuntime(environment: environment, platformServerURL: platformServerURL)
+            : nil
+        self.appServer = appServer ?? runtime!.appServer
+        self.threadWindowCommandClient = threadWindowCommandClient ?? runtime?.threadWindowCommandClient
+        self.activityWindowCommandClient = activityWindowCommandClient ?? runtime?.activityWindowCommandClient
         self.threadRegistry = threadRegistry
         self.settingsStore = settingsStore
         self.threadHistoryStore = threadHistoryStore
@@ -99,7 +120,8 @@ final class AppServices {
         self.settingsWindowPresenter = settingsWindowPresenter
         self.fatalAlertPresenter = fatalAlertPresenter
         self.setActivationPolicy = setActivationPolicy
-        self.showsStatusBubble = showsStatusBubble
+        self.showsStatusBubble = showsStatusBubble && self.activityWindowCommandClient == nil
+        self.showsFatalAlert = showsFatalAlert
     }
 
     static func testing(
@@ -121,7 +143,113 @@ final class AppServices {
             settingsWindowPresenter: settingsWindowPresenter,
             fatalAlertPresenter: NopFatalAlertPresenter(),
             setActivationPolicy: setActivationPolicy,
-            showsStatusBubble: false
+            showsStatusBubble: false,
+            showsFatalAlert: false
+        )
+    }
+
+    static func defaultAppServer(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        platformServerURL: URL
+    ) -> any AppServerManaging {
+        defaultRuntime(environment: environment, platformServerURL: platformServerURL).appServer
+    }
+
+    static func defaultRuntime(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        platformServerURL: URL
+    ) -> AppServicesRuntime {
+        let platformClient = PlatformBridgeConnectionClient(
+            connection: AppServerConnection(serverURL: platformServerURL),
+            platformBridge: PlatformBridgeService()
+        )
+
+        if environment["HANDAGENT_ELECTRON_SHELL"] == "1" {
+            let configuration = defaultElectronShellLaunchConfiguration(environment: environment)
+            let shell = ElectronShellProcess(
+                launchPath: configuration.launchPath,
+                arguments: configuration.arguments,
+                environment: configuration.environment,
+                currentDirectoryURL: configuration.currentDirectoryURL
+            )
+            let appServer = ElectronBackedAppServer(shell: shell, platformClient: platformClient)
+            return AppServicesRuntime(
+                appServer: appServer,
+                threadWindowCommandClient: appServer,
+                activityWindowCommandClient: appServer
+            )
+        }
+
+        return AppServicesRuntime(
+            appServer: AppServer(
+                agentServer: AgentServerService(),
+                platformClient: platformClient
+            ),
+            threadWindowCommandClient: nil,
+            activityWindowCommandClient: nil
+        )
+    }
+
+    static func defaultElectronShellLaunchConfiguration(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        currentDirectoryURL: URL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true),
+        bundleExecutableURL: URL? = Bundle.main.executableURL,
+        bundleResourceURL: URL? = Bundle.main.resourceURL,
+        bundleURL: URL? = Bundle.main.bundleURL,
+        fileExists: @escaping (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+    ) -> ElectronShellLaunchConfiguration {
+        let bundledElectronMain = bundleResourceURL?
+            .appendingPathComponent("ElectronShell/dist/main/main.js")
+        let explicitElectronMain = environment["HANDAGENT_ELECTRON_MAIN"].flatMap { $0.isEmpty ? nil : $0 }
+        let bundledElectronMainPath = bundledElectronMain.flatMap { fileExists($0.path) ? $0.path : nil }
+        let electronMain = explicitElectronMain
+            ?? bundledElectronMainPath
+            ?? "apps/electron-shell/dist/main/main.js"
+        let repoRoot = AgentServerRepositoryRootLocator(
+            agentServerRelativePath: "apps/electron-shell/package.json",
+            fileExists: fileExists
+        ).locate(
+            bundleExecutableURL: bundleExecutableURL,
+            bundleResourceURL: bundleResourceURL,
+            bundleURL: bundleURL,
+            currentDirectoryURL: currentDirectoryURL
+        )
+        var launchEnvironment = environment
+        if let repoRoot {
+            launchEnvironment["HANDAGENT_REPO_ROOT"] = repoRoot.path
+        }
+        AgentServerRuntimeMode.apply(to: &launchEnvironment, resourcesURL: bundleResourceURL)
+
+        if let electronBinary = environment["HANDAGENT_ELECTRON_BINARY"].flatMap({ $0.isEmpty ? nil : $0 }) {
+            return ElectronShellLaunchConfiguration(
+                launchPath: electronBinary,
+                arguments: electronBinary == "/usr/bin/env" ? ["electron", electronMain] : [electronMain],
+                environment: launchEnvironment,
+                currentDirectoryURL: repoRoot
+            )
+        }
+
+        if explicitElectronMain == nil && bundledElectronMainPath != nil {
+            return ElectronShellLaunchConfiguration(
+                launchPath: "/usr/bin/env",
+                arguments: ["electron", electronMain],
+                environment: launchEnvironment,
+                currentDirectoryURL: nil
+            )
+        }
+
+        return ElectronShellLaunchConfiguration(
+            launchPath: "/usr/bin/env",
+            arguments: [
+                "pnpm",
+                "--filter",
+                "handagent-electron-shell",
+                "exec",
+                "electron",
+                electronMain
+            ],
+            environment: launchEnvironment,
+            currentDirectoryURL: repoRoot
         )
     }
 

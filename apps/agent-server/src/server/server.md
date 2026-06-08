@@ -2,7 +2,7 @@
 
 ## 目录职责
 
-`server/` 是 agent-server 的进程入口与组合根。它负责启动同端口 HTTP + WebSocket 服务，按 request path 拆分 `/api/thread`、`/api/platform` 与 `/thread-window/*`，并把 core 与本目录其他模块组装成生产运行图。
+`server/` 是 agent-server 的进程入口与组合根。它负责启动同端口 HTTP + WebSocket 服务，按 request path 拆分 `/api/thread`、`/api/activity`、`/api/platform` 与 `/thread-window/*`，并把 core 与本目录其他模块组装成生产运行图。
 
 本目录可以读取本地配置路径、创建长驻依赖和绑定 socket；不要在这里写 runtime event 翻译、tool 业务逻辑或平台原生实现。
 
@@ -28,6 +28,10 @@ node --experimental-transform-types --experimental-specifier-resolution=node app
 
 ```ts
 const path = request.url?.split("?")[0];
+if (path === "/api/activity") {
+  attachActivitySocketHandlers(socket, { activityPublisher });
+  return;
+}
 if (path === "/api/platform") {
   attachPlatformSocketHandlers(socket, { bridge });
   return;
@@ -39,11 +43,12 @@ if (path === "/api/thread") {
 socket.close();
 ```
 
-`/api/thread` 和 `/api/platform` 是两条独立 WebSocket，不共享消息 union。`/thread-window/*` 由同一个 HTTP server 直接返回 React 静态资源，供桌面端 `WKWebView` 使用。未知 path 或缺失 path 会被关闭或返回 404，不默认为 thread socket。
+`/api/thread`、`/api/activity` 和 `/api/platform` 是三条独立 WebSocket，不共享消息 union。`/thread-window/*` 由同一个 HTTP server 直接返回 React 静态资源，供桌面端 `WKWebView` 和 Electron ThreadWindow `BrowserWindow` 使用。未知 path 或缺失 path 会被关闭或返回 404，不默认为 thread socket。
 
 按当前协议约束：
 
 - `/api/thread` 接收 `ClientResponse` 和 `ThreadCommand`，其中 `ThreadCommand` 包含 `thread.start`、`thread.resume`、`thread.list`、`thread.delete`、`input.submit`、`turn.interrupt`、`workspace.list`。
+- `/api/activity` 只向 subscriber 发送 `AgentActivityEvent`；连接建立后由 `AgentActivityPublisher.attachConnection()` 立即发送 `activity.snapshot`，后续状态变化发送 `activity.changed`。如果启动测试未注入 activity publisher，该 path 会被关闭。
 - `/api/platform` 接收 `PlatformBridgeMessage`，其中 `platform_bridge_hello` 会为当前 socket 生成 fencing token；之后的 `platform_response` 必须带着这条 socket 当前 token 才能唤醒 pending request，避免旧 socket 的晚到响应污染新连接。
 
 ### thread 绑定与关闭清理

@@ -1,6 +1,6 @@
 # ThreadWindow
 
-`ThreadWindow` 目录只保留 Swift 侧的 WKWebView host。ThreadWindow 的 UI 状态、历史、tabs、消息、请求面板和 composer 都由 `apps/thread-window-web` 的 React 前端管理。
+`ThreadWindow` 目录只保留 Swift 侧的 WKWebView host。它服务默认路径；当 `HANDAGENT_ELECTRON_SHELL=1` 时，真实 ThreadWindow host 由 `apps/electron-shell` 的 Electron `BrowserWindow` 承载。ThreadWindow 的 UI 状态、历史、tabs、消息、请求面板和 composer 都由 `apps/thread-window-web` 的 React 前端管理。
 
 ## 文件
 
@@ -21,11 +21,10 @@ sequenceDiagram
   participant React as apps/thread-window-web
   participant Server as agent-server
 
-  Coord->>Life: PromptPanel shown -> prepareHiddenWindow
-  Life->>View: create hidden NSWindow/WKWebView
-  Coord->>Life: submit prompt
+  Coord->>Life: submit prompt / openHistory
+  Life->>View: create or reuse NSWindow/WKWebView
   Life->>Host: enqueueInitialPrompt(...)
-  Life->>View: show prepared WKWebView
+  Life->>View: show WKWebView
   View->>React: load web bundle
   View->>React: handAgentReceiveInitialPrompt(payload)
   React->>Server: /api/thread ThreadCommand
@@ -34,29 +33,30 @@ sequenceDiagram
 
 Swift 在 `WKUserScript.atDocumentStart` 注入 `window.handAgentThreadWindowConfig` 时，也会初始化 `window.handAgentPendingInitialPrompts` 和临时 `window.handAgentReceiveInitialPrompt`。如果 `WKNavigationDelegate.didFinish` 早于 React `useEffect` 安装正式 receiver，初始 prompt 会先进入 pending 队列；React 启动后由 `installInitialPromptReceiver` flush，再发送 `thread.start` 和首轮 `input.submit`。改动这个桥时必须同时覆盖 Swift 配置脚本和 React native config 测试。
 
-## 隐藏预热
+## 创建与显示
 
-- `PromptPanel` 显示后，Coordinator 会在下一轮 main runloop 调用 `ThreadWindowLifecycle.prepareHiddenWindow`。
-- 预热只创建隐藏的 `NSWindow/WKWebView` 并加载 web bundle，不注入初始 prompt，不显示窗口，不激活 App，不把 ThreadWindow 计入 `.regular` 激活策略。
-- 用户提交 prompt 或打开历史时才会真实显示窗口；若预热窗口已存在，会复用同一个 `ThreadWindowWebHost` 和 `WKWebView`。
-- agent-server 不可用时不做预热，避免隐藏 WebView 加载不可达的 `/thread-window/index.html`。
+- 默认 Swift/WKWebView 路径下，`PromptPanel` show/toggle 不创建 `ThreadWindow`，也不加载 `WKWebView`。
+- 用户提交 prompt 或打开历史时才会创建并显示 `NSWindow/WKWebView`，同时切换 `.regular` 激活策略。
+- Electron flag 路径下，本目录不创建 ThreadWindow；隐藏 `BrowserWindow` 预热由 `apps/electron-shell` 在 agent-server ready 后完成。
+- agent-server 不可用时拒绝提交并保留 PromptPanel 草稿，不创建隐藏 WebView。
 
 ## 调试前提
 
-- 仅通过全局快捷键打开 `PromptPanel`，会触发隐藏 WebView 预热，但不会显示 ThreadWindow，也不会创建新 thread。
-- 新 thread 的加载链路只会在以下入口触发：
+- 默认路径下，仅通过全局快捷键打开 `PromptPanel`，**不会**触发 Swift `ThreadWindow` 创建或 `WKWebView` 加载。Electron flag 路径下，PromptPanel show/toggle 也不会请求 ThreadWindow 预热；hidden `BrowserWindow` 由 Electron main 在 agent-server ready 后主动预热。
+- `ThreadWindow` 的加载链路只会在以下入口触发：
   - 用户在 `PromptPanel` 中输入内容并提交（回车）；
   - Coordinator 显式调用历史入口 `openOrFocusHistory(...)`。
-- 因此排查 `ThreadWindow` 白屏、`WKWebView` 导航、React 首屏渲染等问题时，可以先打开 `PromptPanel` 观察隐藏预热日志；但要验证 `thread.start / input.submit` 仍必须完成一次真实提交。
+- 因此排查 `ThreadWindow` 白屏、`WKWebView` 导航、React 首屏渲染等问题时，需要完成一次真实提交或打开历史入口；仅打开 `PromptPanel` 不足以触发加载。
 
 ## 边界
 
 - Swift 不再持有 ThreadWindow tab/message/history 状态。
 - Swift 不发送 `ThreadCommand`，不解析 `ThreadNotification`，不回执 `ClientResponse`。
-- Swift 只负责 `NSWindow` 生命周期、`WKWebView` 加载、注入配置和 initial prompt。
+- 本目录只负责默认路径的 `NSWindow` 生命周期、`WKWebView` 加载、注入配置和 initial prompt。
+- Electron flag 路径不使用本目录创建 ThreadWindow；Swift 只通过 Coordinator/AppServices 的 `ThreadWindowManaging` 与 `ThreadWindowCommanding` 发送 Electron command。
 - 默认加载入口是 `http://127.0.0.1:4317/thread-window/index.html`。本地 React 静态资源由 `agent-server` 在同端口按 `/thread-window/*` 提供，避免 `file://` 下 `type="module"` bundle 在 `WKWebView` 中不执行导致白屏。
 - React 直接连接 `/api/thread` 并持有 ThreadWindow 状态源。
-- StatusBubble 仍从 Swift `ThreadRegistry` 派生，当前没有接入 React / agent-server 的实时 thread 摘要。
+- 默认路径的 Swift StatusBubble 仍从 Swift `ThreadRegistry` 派生，当前没有接入 React / agent-server 的实时 thread 摘要；`HANDAGENT_ELECTRON_SHELL=1` 路径由 Electron ActivityWindow 的 React StatusBubble 订阅 `/api/activity`。
 
 ## 编辑此目录的约束
 

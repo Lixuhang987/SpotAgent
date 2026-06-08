@@ -11,16 +11,19 @@ import type { PlatformBridgeMessage } from "@handagent/core/protocol/PlatformBri
 import type { ThreadCommand } from "@handagent/core/protocol/ThreadCommand.ts";
 import type { ClientResponse } from "@handagent/core/protocol/ClientResponse.ts";
 import type { ServerRequest } from "@handagent/core/protocol/ServerRequest.ts";
+import type { AgentActivityEvent } from "@handagent/core/protocol/AgentActivity.ts";
 import type { FilePermissionPolicy } from "@handagent/core/permission/FilePermissionPolicy.ts";
 import type { MCPClient } from "@handagent/core/mcp/MCPClient.ts";
 import { InMemoryThreadStore } from "@handagent/core/storage/index.ts";
 import { ThreadPermissionBridge } from "../../src/bridges/ThreadPermissionBridge.ts";
+import { AgentActivityPublisher } from "../../src/activity/AgentActivityPublisher.ts";
 import { ThreadPersistence } from "../../src/thread/ThreadPersistence.ts";
 import { ThreadRuntimeOrchestrator } from "../../src/thread/ThreadRuntimeOrchestrator.ts";
 import { ThreadCommandRouter } from "../../src/thread/ThreadCommandRouter.ts";
 import { ThreadNotificationPublisher } from "../../src/thread/ThreadNotificationPublisher.ts";
 import { ThreadWorkspaceAskBridge } from "../../src/bridges/ThreadWorkspaceAskBridge.ts";
 import {
+  attachActivitySocketHandlers,
   attachPlatformSocketHandlers,
   attachThreadSocketHandlers,
   createMCPClientFromConfig,
@@ -475,6 +478,38 @@ describe("attachThreadSocketHandlers", () => {
   });
 });
 
+describe("attachActivitySocketHandlers", () => {
+  it("sends a snapshot on activity socket attach and removes subscriber on close", () => {
+    const socket = new FakeSocket();
+    const publisher = new AgentActivityPublisher(() => "2026-06-08T00:00:00.000Z");
+
+    attachActivitySocketHandlers(socket as never, { activityPublisher: publisher });
+
+    expect(lastSent<AgentActivityEvent>(socket)).toEqual({
+      channel: "activity",
+      type: "activity.snapshot",
+      activeThreadId: null,
+      status: "idle",
+      latestSummary: null,
+      waitingRequest: null,
+      error: null,
+      updatedAt: "2026-06-08T00:00:00.000Z",
+    });
+
+    socket.emit("close");
+    publisher.observe({
+      type: "turn.started",
+      threadId: "thread-1",
+      notificationId: "n1",
+      turnId: "turn-1",
+      timestamp: "2026-06-08T00:00:00.000Z",
+      payload: {},
+    });
+
+    expect(socket.sent).toHaveLength(1);
+  });
+});
+
 describe("startServer", () => {
   it.each(["/api/unknown", "/"])(
     "closes sockets on %s without attaching thread or platform handlers",
@@ -571,6 +606,75 @@ describe("startServer", () => {
       server.close();
       await once(server, "close");
       await rm(staticDir, { recursive: true, force: true });
+    }
+  });
+
+  it("routes /api/activity websocket clients to the activity publisher", async () => {
+    const activityPublisher = new AgentActivityPublisher(() => "2026-06-08T00:00:00.000Z");
+    const server = await startServer({
+      ...makeHandlerDependencies(),
+      activityPublisher,
+      port: 0,
+    });
+    const address = server.address() as AddressInfo;
+    const socket = new WebSocket(`ws://127.0.0.1:${address.port}/api/activity`);
+
+    try {
+      const [raw] = await once(socket, "message");
+      const snapshot = JSON.parse(raw.toString()) as AgentActivityEvent;
+      expect(snapshot.type).toBe("activity.snapshot");
+    } finally {
+      socket.close();
+      server.close();
+      await once(server, "close");
+    }
+  });
+
+  it("closes /api/activity clients when no activity publisher is configured", async () => {
+    const commandRouter = {
+      receive: vi.fn(async () => {}),
+      interruptThread: vi.fn(),
+      handleResponse: vi.fn(),
+    } as unknown as ThreadCommandRouter;
+    const eventPublisher = {
+      attachConnection: vi.fn(),
+      detachConnection: vi.fn(),
+      subscribe: vi.fn(),
+      publishToConnection: vi.fn(),
+    } as unknown as ThreadNotificationPublisher;
+    const bridge = {
+      attach: vi.fn(),
+      detach: vi.fn(),
+      handleResponse: vi.fn(),
+    };
+    const server = await startServer({
+      commandRouter,
+      eventPublisher,
+      bridge: bridge as never,
+      port: 0,
+    });
+    const address = server.address() as AddressInfo;
+    const socket = new WebSocket(`ws://127.0.0.1:${address.port}/api/activity`);
+
+    try {
+      const opened = await new Promise<boolean>((resolve) => {
+        socket.once("open", () => resolve(true));
+        socket.once("error", () => resolve(false));
+      });
+      expect(opened).toBe(true);
+      await expect(waitForClose(socket)).resolves.toBe(true);
+      expect(eventPublisher.attachConnection).not.toHaveBeenCalled();
+      expect(commandRouter.receive).not.toHaveBeenCalled();
+      expect(bridge.attach).not.toHaveBeenCalled();
+    } finally {
+      if (
+        socket.readyState === WebSocket.OPEN ||
+        socket.readyState === WebSocket.CONNECTING
+      ) {
+        socket.terminate();
+      }
+      server.close();
+      await once(server, "close");
     }
   });
 });

@@ -20,7 +20,7 @@
 | `workspace/` | [workspace/workspace.md](/Users/mu9/proj/handAgent/packages/core/src/workspace/workspace.md) | 显式 workspace 沙箱 + 默认播种 |
 | `config/` | [config/config.md](/Users/mu9/proj/handAgent/packages/core/src/config/config.md) | settings.json 模型与 tool 设置解析 |
 | `logging/` | [logging/logging.md](/Users/mu9/proj/handAgent/packages/core/src/logging/logging.md) | LLM 网络日志 JSONL 落盘 |
-| `protocol/` | [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md) | React ThreadWindow ↔ agent-server 的 Thread 协议，以及独立 `/api/platform` 的 `PlatformBridgeMessage` |
+| `protocol/` | [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md) | React ThreadWindow ↔ agent-server 的 Thread 协议、`/api/activity` 轻量活动流，以及独立 `/api/platform` 的 `PlatformBridgeMessage` |
 | `conversation/` | [conversation/conversation.md](/Users/mu9/proj/handAgent/packages/core/src/conversation/conversation.md) | UI / 持久化用 ConversationMessage 模型 |
 | `selection/` | [selection/selection.md](/Users/mu9/proj/handAgent/packages/core/src/selection/selection.md) | 用户主动选区抽象 |
 
@@ -72,6 +72,7 @@ plugin action 绑定的外部能力不由 core tools 目录加载私有插件进
 ### 7. 跨进程协议
 
 - React ThreadWindow 与 agent-server 走 `/api/thread` WebSocket；Thread 主路径拆为 `ThreadCommand`、`ThreadNotification`、`ServerRequest`、`ClientResponse` 四类消息。
+- Electron StatusBubble 和后续桌宠订阅 `/api/activity` WebSocket，只接收 `AgentActivityEvent` 轻量状态，不接收完整 thread 消息。
 - `ThreadCommand` 只表示 UI 主动提交的命令；`ThreadNotification` 只表示 agent-server 向 UI 推送的结果通知。
 - `ServerRequest` / `ClientResponse` 只覆盖少量“server 提问，UI 回执”的交互，如权限审批与 workspace 选择。
 - Swift desktop 不参与 thread 主协议，只通过 `/api/platform` 处理独立 `PlatformBridgeMessage`，并用 `channel: "platform"` 分流。

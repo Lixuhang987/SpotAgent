@@ -3,6 +3,72 @@ import { ThreadNotificationPublisher } from "../../src/thread/ThreadNotification
 import type { ThreadNotification } from "@handagent/core/protocol/ThreadNotification.ts";
 
 describe("ThreadNotificationPublisher", () => {
+  it("observes published messages without changing thread fanout", () => {
+    const observed: string[] = [];
+    const publisher = new ThreadNotificationPublisher((event) => observed.push(event.type));
+    const sent: string[] = [];
+    publisher.attachConnection("c1", (event) => sent.push(event.type));
+    publisher.subscribe("c1", "thread-1");
+
+    publisher.publish({
+      type: "turn.started",
+      threadId: "thread-1",
+      notificationId: "n1",
+      turnId: "turn-1",
+      timestamp: "2026-06-08T00:00:00.000Z",
+      payload: {},
+    });
+    publisher.publishToConnection("c1", {
+      type: "permission.requested",
+      requestId: "thread-1:tool-1",
+      threadId: "thread-1",
+      timestamp: "2026-06-08T00:00:00.000Z",
+      payload: {
+        toolName: "file.write",
+        toolCallId: "tool-1",
+        arguments: { path: "a.txt" },
+      },
+    });
+
+    expect(sent).toEqual(["turn.started", "permission.requested"]);
+    expect(observed).toEqual(["turn.started", "permission.requested"]);
+  });
+
+  it("keeps fanout best-effort when the observer throws", () => {
+    const publisher = new ThreadNotificationPublisher(() => {
+      throw new Error("observer failed");
+    });
+    const sent: string[] = [];
+    publisher.attachConnection("c1", (event) => sent.push(event.type));
+    publisher.subscribe("c1", "thread-1");
+
+    expect(() =>
+      publisher.publish({
+        type: "turn.started",
+        threadId: "thread-1",
+        notificationId: "n1",
+        turnId: "turn-1",
+        timestamp: "2026-06-08T00:00:00.000Z",
+        payload: {},
+      }),
+    ).not.toThrow();
+    expect(() =>
+      publisher.publishToConnection("c1", {
+        type: "permission.requested",
+        requestId: "thread-1:tool-1",
+        threadId: "thread-1",
+        timestamp: "2026-06-08T00:00:00.000Z",
+        payload: {
+          toolName: "file.write",
+          toolCallId: "tool-1",
+          arguments: { path: "a.txt" },
+        },
+      }),
+    ).not.toThrow();
+
+    expect(sent).toEqual(["turn.started", "permission.requested"]);
+  });
+
   it("fans out thread-scoped notifications only to subscribed connections", () => {
     const publisher = new ThreadNotificationPublisher();
     const first: Array<ThreadNotification["type"]> = [];

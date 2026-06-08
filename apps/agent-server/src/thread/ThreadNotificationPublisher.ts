@@ -12,6 +12,8 @@ type ConnectionState = {
 export class ThreadNotificationPublisher {
   private readonly connections = new Map<string, ConnectionState>();
 
+  constructor(private readonly observer: SendEvent = () => {}) {}
+
   attachConnection(connectionId: string, send: SendEvent): void {
     this.connections.set(connectionId, {
       send,
@@ -32,6 +34,8 @@ export class ThreadNotificationPublisher {
   }
 
   publish(event: PublishedThreadMessage): void {
+    this.observe(event);
+
     if (hasThreadId(event)) {
       for (const state of this.connections.values()) {
         if (state.subscriptions.has(event.threadId)) {
@@ -47,7 +51,16 @@ export class ThreadNotificationPublisher {
   }
 
   publishToConnection(connectionId: string, event: PublishedThreadMessage): void {
+    this.observe(event);
     this.connections.get(connectionId)?.send(event);
+  }
+
+  private observe(event: PublishedThreadMessage): void {
+    try {
+      this.observer(event);
+    } catch {
+      // Observer side effects must not break thread notification fanout.
+    }
   }
 }
 

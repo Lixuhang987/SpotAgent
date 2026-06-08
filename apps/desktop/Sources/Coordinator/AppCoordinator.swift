@@ -27,7 +27,8 @@ final class AppCoordinator {
         AppFeature()
     }
     @ObservationIgnored private let agentServerHealth: AgentServerHealth
-    @ObservationIgnored private let threadWindowLifecycle: ThreadWindowLifecycle
+    @ObservationIgnored private let threadWindowLifecycle: any ThreadWindowManaging
+    @ObservationIgnored private let activityWindowCommandClient: (any ActivityWindowCommanding)?
     @ObservationIgnored private let settingsLifecycle: SettingsLifecycle
     @ObservationIgnored private let activationPolicy = AppActivationPolicyCoordinator()
     @ObservationIgnored private var registeredActionShortcutNames: Set<KeyboardShortcuts.Name> = []
@@ -48,15 +49,20 @@ final class AppCoordinator {
         self.agentServerHealth = AgentServerHealth(
             appServer: services.appServer,
             fatalAlertPresenter: services.fatalAlertPresenter,
-            showsFatalAlert: services.showsStatusBubble
+            showsFatalAlert: services.showsFatalAlert
         )
-        self.threadWindowLifecycle = ThreadWindowLifecycle(
-            threadWebSocketURL: services.appServerURL,
-            webAppURL: services.threadWindowWebAppURL,
-            windowPresenter: services.threadWindowPresenter,
-            activationPolicy: activationPolicy,
-            setActivationPolicy: services.setActivationPolicy
-        )
+        self.activityWindowCommandClient = services.activityWindowCommandClient
+        if let threadWindowCommandClient = services.threadWindowCommandClient {
+            self.threadWindowLifecycle = ElectronThreadWindowLifecycle(client: threadWindowCommandClient)
+        } else {
+            self.threadWindowLifecycle = ThreadWindowLifecycle(
+                threadWebSocketURL: services.appServerURL,
+                webAppURL: services.threadWindowWebAppURL,
+                windowPresenter: services.threadWindowPresenter,
+                activationPolicy: activationPolicy,
+                setActivationPolicy: services.setActivationPolicy
+            )
+        }
         self.settingsLifecycle = SettingsLifecycle(
             windowPresenter: services.settingsWindowPresenter,
             activationPolicy: activationPolicy,
@@ -69,6 +75,7 @@ final class AppCoordinator {
         setupPromptPanel()
         setupHotkey()
         setupStatusBubble()
+        setupElectronActivityWindow()
         setupAgentServerHealth()
         agentServerHealth.start()
         if services.showsStatusBubble { statusBubbleController.show() }
@@ -76,6 +83,7 @@ final class AppCoordinator {
 
     func shutdown() {
         unregisterActionShortcuts()
+        clearElectronActivityWindowCallbacks()
         agentServerHealth.stop()
         settingsLifecycle.close()
         threadWindowLifecycle.close()
@@ -144,9 +152,6 @@ final class AppCoordinator {
         promptPanelController.onOpenSettings = { [weak self] in
             self?.send(.openSettings)
         }
-        promptPanelController.onDidShow = { [weak self] in
-            self?.prepareThreadWindowForPromptPanel()
-        }
     }
 
     private func setupAgentServerHealth() {
@@ -154,6 +159,9 @@ final class AppCoordinator {
             guard let self else { return }
             self.store.send(.appServerAvailabilityChanged(available))
             self.promptPanelController.setSubmissionEnabled(available, message: message)
+            if available {
+                self.showElectronActivityWindowOrFallback()
+            }
         }
     }
 
@@ -175,6 +183,30 @@ final class AppCoordinator {
         }
     }
 
+    private func setupElectronActivityWindow() {
+        activityWindowCommandClient?.onPromptPanelShowRequested = { [weak self] in
+            self?.promptPanelController.show()
+        }
+        activityWindowCommandClient?.onActivityWindowCommandResult = { [weak self] result in
+            guard result.kind == .show, !result.ok else { return }
+            self?.statusBubbleController.show()
+        }
+    }
+
+    private func clearElectronActivityWindowCallbacks() {
+        activityWindowCommandClient?.onPromptPanelShowRequested = nil
+        activityWindowCommandClient?.onActivityWindowCommandResult = nil
+    }
+
+    private func showElectronActivityWindowOrFallback() {
+        guard let activityWindowCommandClient else { return }
+        do {
+            _ = try activityWindowCommandClient.showActivityWindow()
+        } catch {
+            statusBubbleController.show()
+        }
+    }
+
     private func handleSubmitPrompt(
         _ draft: String,
         attachments: [PromptAttachmentResult],
@@ -191,18 +223,20 @@ final class AppCoordinator {
             attachments: attachments,
             actionBinding: actionBinding
         ) else { return }
-        promptPanelController.hide()
-        threadWindowLifecycle.createTabWithInitialPrompt(prompt) { [weak self] in
-            self?.send(.threadWindowClosed)
-        }
-        store.send(.threadWindowOpened)
-    }
-
-    private func prepareThreadWindowForPromptPanel() {
-        guard agentServerError == nil else { return }
-        threadWindowLifecycle.prepareHiddenWindow { [weak self] in
-            self?.send(.threadWindowClosed)
-        }
+        threadWindowLifecycle.createTabWithInitialPrompt(
+            prompt,
+            onOpened: { [weak self] in
+                guard let self else { return }
+                self.promptPanelController.hide()
+                self.store.send(.threadWindowOpened)
+            },
+            onFailed: { [weak self] message in
+                self?.handleThreadWindowOpenFailure(message)
+            },
+            onClosed: { [weak self] in
+                self?.send(.threadWindowClosed)
+            }
+        )
     }
 
     private func handleOpenSettings() {
@@ -222,14 +256,29 @@ final class AppCoordinator {
     }
 
     private func handleOpenHistory() {
-        threadWindowLifecycle.openOrFocusHistory { [weak self] in
-            self?.send(.threadWindowClosed)
-        }
-        store.send(.threadWindowOpened)
+        threadWindowLifecycle.openOrFocusHistory(
+            onOpened: { [weak self] in
+                self?.store.send(.threadWindowOpened)
+            },
+            onFailed: { [weak self] message in
+                self?.handleThreadWindowOpenFailure(message)
+            },
+            onClosed: { [weak self] in
+                self?.send(.threadWindowClosed)
+            }
+        )
     }
 
     private func handleStatusBubbleTap(_ threadID: String?) {
-        if threadID != nil, threadWindowLifecycle.focus() { return }
+        if threadID != nil, threadWindowLifecycle.focus(threadID: threadID, onFailure: { [weak self] in
+            self?.promptPanelController.show()
+        }) { return }
+        promptPanelController.show()
+    }
+
+    private func handleThreadWindowOpenFailure(_ message: String) {
+        store.send(.threadWindowClosed)
+        promptPanelController.setSubmissionEnabled(false, message: message)
         promptPanelController.show()
     }
 

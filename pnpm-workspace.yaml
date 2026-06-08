@@ -1,4 +1,5 @@
 packages:
   - apps/agent-server
   - apps/thread-window-web
+  - apps/electron-shell
   - packages/core

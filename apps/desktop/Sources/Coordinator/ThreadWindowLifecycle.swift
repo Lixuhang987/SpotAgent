@@ -3,7 +3,7 @@ import Foundation
 
 @Observable
 @MainActor
-final class ThreadWindowLifecycle {
+final class ThreadWindowLifecycle: ThreadWindowManaging {
     private(set) var webHost: ThreadWindowWebHost?
 
     @ObservationIgnored private let threadWebSocketURL: URL
@@ -29,30 +29,39 @@ final class ThreadWindowLifecycle {
         setActivationPolicy(activationPolicy.policyAfterUpdatingOpenThreadWindows(by: 0))
     }
 
-    func openOrFocusHistory(onClosed: @escaping @MainActor () -> Void) {
+    func openOrFocusHistory(
+        onOpened: @escaping @MainActor () -> Void,
+        onFailed: @escaping @MainActor (String) -> Void,
+        onClosed: @escaping @MainActor () -> Void
+    ) {
         _ = ensureVisibleWindow(onClosed: onClosed)
-    }
-
-    func prepareHiddenWindow(onClosed: @escaping @MainActor () -> Void) {
-        _ = ensurePreparedWindow(onClosed: onClosed)
+        onOpened()
     }
 
     func createTabWithInitialPrompt(
         _ prompt: PromptSubmission,
+        onOpened: @escaping @MainActor () -> Void,
+        onFailed: @escaping @MainActor (String) -> Void,
         onClosed: @escaping @MainActor () -> Void
     ) {
         ensureVisibleWindow(onClosed: onClosed).enqueue(initialPrompt: prompt)
+        onOpened()
     }
 
     func createNewTabWithInitialPrompt(
         _ prompt: PromptSubmission,
         onClosed: @escaping @MainActor () -> Void
     ) {
-        createTabWithInitialPrompt(prompt, onClosed: onClosed)
+        createTabWithInitialPrompt(
+            prompt,
+            onOpened: {},
+            onFailed: { _ in },
+            onClosed: onClosed
+        )
     }
 
     @discardableResult
-    func focus() -> Bool {
+    func focus(threadID: String? = nil, onFailure: @escaping @MainActor () -> Void = {}) -> Bool {
         guard let window else { return false }
         show(window)
         return true

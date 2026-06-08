@@ -36,8 +36,7 @@ ActionShortcut → Coordinator.performActionShortcut(ActionDefinition)
               ├─ 无必填参数 skill/plugin：直接渲染并创建 thread
               └─ 有必填参数 skill/plugin：打开 PromptPanel 并预填 `trigger [arg: ]`
 键盘事件 → NSEvent 局部监听 → ESC 隐藏
-PromptPanel.show() → 记录当前前台应用 → 激活面板窗口 → 下一轮 runloop 触发 `focusSeed` 与 `onDidShow`
-Coordinator.onDidShow → 若 agent-server 可用，调用 ThreadWindowLifecycle.prepareHiddenWindow 进行隐藏 WKWebView 预热
+PromptPanel.show() → 记录当前前台应用 → 激活面板窗口 → 下一轮 runloop 触发 `focusSeed`
 PromptPanelGrowingTextView → 若输入框尚未挂到 window，短时重试；挂载后把 `NSTextView` 设为 `initialFirstResponder` 与当前 first responder
 PromptPanel.hide()/失焦隐藏 → 恢复唤起前的前台应用焦点
 AgentServerHealth.onAvailabilityChange → Controller.setSubmissionEnabled(...)
@@ -61,7 +60,7 @@ Action prompt 的参数与提交流程：
 
 - **View 只读 ViewModel**：不要让 View 直接调 `NSEvent` / `NSPanel` / `KeyboardShortcuts.*` API，键盘与窗口副作用全部在 Controller。
 - **ViewModel 不持有 SwiftUI 类型**：不要让 `@Observable` class 引入 `View` / `Color` / `Font`；只暴露 plain Swift 状态与回调。
-- **Controller 是窗口管理 + 事件监听层**：不直接写消息循环或 thread/turn 逻辑，所有跨模块意图通过 `onSubmit` / `onSubmitAction` / `onOpenSettings` / `onDidShow` 闭包出口给 Coordinator。全局快捷键注册由 [Hotkey](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Hotkey/hotkey.md) 承接，不在 PromptPanel 内直接绑定 `KeyboardShortcuts`。
+- **Controller 是窗口管理 + 事件监听层**：不直接写消息循环或 thread/turn 逻辑，所有跨模块意图通过 `onSubmit` / `onSubmitAction` / `onOpenSettings` 闭包出口给 Coordinator。全局快捷键注册由 [Hotkey](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Hotkey/hotkey.md) 承接，不在 PromptPanel 内直接绑定 `KeyboardShortcuts`。
 - **Action 全局快捷键**：每个 `ActionDefinition` 通过 `shortcutName = "action.<id>"` 获得可配置全局快捷键名；plugin manifest 可通过 prompt 级 `globalShortcut` 声明默认值，用户改过后不覆盖。
 - **动态 action 刷新**：Controller 可多次 `register(actions:)`；首次创建 ViewModel，后续只刷新 ViewModel action 列表。Coordinator 同步刷新 Action 全局快捷键注册。新增动态 action 不要覆盖已有用户自定义快捷键。
 - **Styles 抽取阈值**：跨 View 复用的样式才放 `PromptPanelStyles.swift`；一次性样式写在 View 里，避免 ViewModifier 爆炸。
@@ -76,6 +75,6 @@ Action prompt 的参数与提交流程：
 ## 与其他模块的关系
 
 - 由 [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 持有并注入 actions。
-- PromptPanel 显示后由 Coordinator 隐藏预热全局 [ThreadWindow](/Users/mu9/proj/handAgent/apps/desktop/Sources/ThreadWindow/thread-window.md) 的 `WKWebView`；提交 prompt 后才显示该窗口并把 initial prompt 注入 React，React 通过 `/api/thread` 创建新 thread 并提交首轮 `input.submit`。当前 active tab 不会接收 PromptPanel 的初始提交。
+- 提交 prompt 后由 Coordinator 聚焦或创建全局 [ThreadWindow](/Users/mu9/proj/handAgent/apps/desktop/Sources/ThreadWindow/thread-window.md)，并把 initial prompt 注入 React；React 通过 `/api/thread` 创建新 thread 并提交首轮 `input.submit`。当前 active tab 不会接收 PromptPanel 的初始提交。
 - [AgentServer](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/AgentServer/agent-server.md) 可用性变化会同步到 `setSubmissionEnabled`，避免重启期间提交新 prompt。
 - 全局热键来自 [AppServices/Hotkey](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Hotkey/hotkey.md)。

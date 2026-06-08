@@ -4,6 +4,7 @@
 
 - React ThreadWindow 只提交 `ThreadCommand`，并回覆 `ClientResponse`
 - agent-server 向 React ThreadWindow 推送 `ThreadNotification`，并在需要用户决定时发 `ServerRequest`
+- Electron StatusBubble 和后续桌宠只订阅 `/api/activity`，接收轻量 `AgentActivityEvent`
 - 平台 RPC 独立于 thread 主路径，由 Swift desktop 通过 `/api/platform` 处理 `PlatformBridgeMessage`
 
 ## 文件
@@ -15,6 +16,7 @@
 | `ServerRequest.ts` | 待回执请求：`permission.requested` / `workspace.requested`，按 `threadId` 路由 |
 | `ClientResponse.ts` | 回执协议：`permission.answered` / `workspace.answered` |
 | `ThreadProtocolShared.ts` | 共享类型：`RunStatus` / `ThreadListEntry` / `WorkspaceAskCandidate` / `ThreadAttachment` |
+| `AgentActivity.ts` | `/api/activity` 轻量活动流：`activity.snapshot` / `activity.changed` |
 | `PlatformBridgeMessage.ts` | `PlatformBridgeMessage`（平台反向 RPC 帧）/ `PlatformResponsePayload` |
 
 ## 单向边界
@@ -27,12 +29,14 @@ flowchart LR
   B -->|/api/thread ThreadNotification| A
   B -->|/api/thread ServerRequest| A
   A -->|/api/thread ClientResponse| B
+  B -->|/api/activity AgentActivityEvent| E[Electron StatusBubble / 桌宠]
   B -->|/api/platform PlatformBridgeMessage| D[Swift desktop]
 ```
 
 - React ThreadWindow 不直接驱动 `AgentRuntime`，只发命令、收事件。
 - Swift desktop 不处理 thread DTO，只处理 platform bridge DTO。
 - agent-server 负责 socket、订阅路由、持久化、权限 / workspace 回执桥接，以及把 `AgentRuntimeEvent` 归一化为 `ThreadNotification`。
+- `/api/activity` 不承载 `ThreadCommand`、`ClientResponse`、`ThreadNotification` 或 `ServerRequest`，只发送 `AgentActivityEvent`。
 - core 只定义协议 DTO 与 runtime 事件，不负责 WebSocket 生命周期或连接分发。
 
 ## 主协议分类
@@ -69,6 +73,13 @@ flowchart LR
 - `workspace.requested` <-> `workspace.answered`
 
 这两组消息只用于“server 发起问题，等待 UI 回执”的少量交互，不承担普通 thread 流。
+
+### `AgentActivityEvent`
+
+- `activity.snapshot`
+- `activity.changed`
+
+这组消息只用于状态气泡、桌宠等轻量运行态展示。它由 agent-server 从 thread 通知和待回执请求派生，不暴露完整消息内容。`/api/activity` subscriber 连接后先收到 `activity.snapshot`，只有状态变化时才收到 `activity.changed`。
 
 ## Thread Socket 恢复模型
 

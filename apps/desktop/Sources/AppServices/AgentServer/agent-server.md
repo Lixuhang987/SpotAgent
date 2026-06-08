@@ -25,6 +25,8 @@
 桌面端 `AppServer` 不再持有 `/api/thread` client，也不维护 ThreadWindow tabs/messages/history。
 它不发送 `ThreadCommand`，不解析 `ThreadNotification`；ThreadWindow 的 thread 协议由 React 前端通过 `/api/thread` 处理。
 
+Phase 0 引入 Electron feature flag 后，默认路径仍使用本模块的 `AppServer + AgentServerService`。当 `HANDAGENT_ELECTRON_SHELL=1` 时，agent-server 进程由 `ElectronBackedAppServer` 间接交给 Electron shell 监督，本模块仍保留 `/api/platform` 的连接能力与默认路径。
+
 ## 设计备注
 
 - 非 `@MainActor`（`@unchecked Sendable`），进程管理在后台执行；回调通过 `DispatchQueue.main.async` 切回主线程，`AppCoordinator` 再用 `Task { @MainActor in ... }` 二次切回。
@@ -34,7 +36,7 @@
 - **错误恢复**：子进程非零退出码触发自动重启，指数退避 `2^n` 秒（封顶 30s），最多 `maxRestartAttempts = 5` 次；
   - 重启次数超限时通过 `onFatalError(message)` 通知 Coordinator，弹原生 `NSAlert`（"确定" / "查看日志"，后者打开 `~/.spotAgent/`）。
   - `userRequestedStop`（来自 `stop()`）与 `exitCode == 0` 都不会触发重启。
-  - 可用性变化通过 `onAvailabilityChange(Bool)` 暴露给 `AgentServerHealth`；`AgentServerHealth.onAvailabilityChange(Bool, String?)` 再把可提交状态同步给 PromptPanel。
+  - 可用性变化通过 `onAvailabilityChange(Bool)` 暴露给 `AgentServerHealth`；`AgentServerHealth` 每次不可用回调都会读取最新 `startupErrorMessage`，再通过 `onAvailabilityChange(Bool, String?)` 把可提交状态同步给 PromptPanel。
   - server 不可用期间 PromptPanel 阻止新 prompt 提交并保留草稿；server 恢复可用后自动解除阻止。
 
 ## 编辑此目录的约束
