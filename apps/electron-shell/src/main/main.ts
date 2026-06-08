@@ -25,7 +25,7 @@ const activityPreloadPath = join(currentDir, "../preload/activityWindowPreload.j
 const commandSocketPath = process.env.HANDAGENT_ELECTRON_COMMAND_SOCKET;
 
 const bridge = new JsonLineBridge({ input: process.stdin, output: process.stdout });
-const commandSocketServer = commandSocketPath ? new CommandSocketServer(commandSocketPath) : null;
+let commandSocketServer: CommandSocketServer | null = null;
 const supervisor = createAgentServerSupervisor({
   repoRoot,
   nodePath,
@@ -168,12 +168,9 @@ supervisor.onHealth((event) => {
 bridge.onLine((line) => {
   void handleCommandLine(line);
 });
-commandSocketServer?.onLine((line) => {
-  void handleCommandLine(line);
-});
 
 process.stdin.on("end", () => {
-  if (!commandSocketServer) {
+  if (!commandSocketPath) {
     stopSupervisor();
     app.quit();
   }
@@ -184,17 +181,27 @@ app.on("before-quit", () => {
   stopSupervisor();
 });
 
-try {
-  await commandSocketServer?.start();
-  await app.whenReady();
-  send({ channel: "electron_shell", type: "electron.ready", timestamp: now() });
-  process.stderr.write(`[electron-shell] agent-server supervisor: ${JSON.stringify(supervisor.describe())}\n`);
-  startSupervisor();
-} catch (error) {
-  send({
-    channel: "electron_shell",
-    type: "thread_window.prepare_failed",
-    message: errorMessage(error),
-  });
-  app.exit(1);
+void bootElectronShell();
+
+async function bootElectronShell(): Promise<void> {
+  try {
+    await app.whenReady();
+    if (commandSocketPath) {
+      commandSocketServer = new CommandSocketServer(commandSocketPath);
+      commandSocketServer.onLine((line) => {
+        void handleCommandLine(line);
+      });
+    }
+    await commandSocketServer?.start();
+    send({ channel: "electron_shell", type: "electron.ready", timestamp: now() });
+    process.stderr.write(`[electron-shell] agent-server supervisor: ${JSON.stringify(supervisor.describe())}\n`);
+    startSupervisor();
+  } catch (error) {
+    send({
+      channel: "electron_shell",
+      type: "thread_window.prepare_failed",
+      message: errorMessage(error),
+    });
+    app.exit(1);
+  }
 }
