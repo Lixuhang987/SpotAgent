@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import type { EventEmitter } from "node:events";
+import { createConnection } from "node:net";
 
 export type AgentServerHealthEvent = {
   available: boolean;
@@ -28,6 +29,11 @@ type SupervisorOptions = {
     options: SpawnOptions,
   ) => AgentServerChildProcess;
   scheduleRestart?: (callback: () => void, delayMs: number) => void;
+  waitForReady?: () => Promise<void>;
+  serverHost?: string;
+  serverPort?: number;
+  readinessTimeoutMs?: number;
+  readinessPollIntervalMs?: number;
   maxRestartAttempts?: number;
 };
 
@@ -43,6 +49,7 @@ export class NodeAgentServerSupervisor {
     options: SpawnOptions,
   ) => AgentServerChildProcess;
   private readonly scheduleRestart: (callback: () => void, delayMs: number) => void;
+  private readonly waitForReady: () => Promise<void>;
   private readonly maxRestartAttempts: number;
 
   constructor(private readonly options: SupervisorOptions) {
@@ -55,6 +62,12 @@ export class NodeAgentServerSupervisor {
       ((callback, delayMs) => {
         setTimeout(callback, delayMs);
       });
+    this.waitForReady = options.waitForReady ?? (() => waitForTcpPort({
+      host: options.serverHost ?? "127.0.0.1",
+      port: options.serverPort ?? 4317,
+      timeoutMs: options.readinessTimeoutMs ?? 30_000,
+      pollIntervalMs: options.readinessPollIntervalMs ?? 100,
+    }));
     this.maxRestartAttempts = options.maxRestartAttempts ?? 5;
   }
 
@@ -85,7 +98,7 @@ export class NodeAgentServerSupervisor {
     child.on("error", (error: Error) =>
       this.handleProcessError(child, error),
     );
-    this.emitHealth({ available: true });
+    void this.emitAvailableWhenReady(child, this.restartGeneration);
   }
 
   stop(): void {
@@ -126,6 +139,31 @@ export class NodeAgentServerSupervisor {
     this.handleFailure(`agent-server process error: ${error.message}`);
   }
 
+  private async emitAvailableWhenReady(
+    child: AgentServerChildProcess,
+    generation: number,
+  ): Promise<void> {
+    try {
+      await this.waitForReady();
+    } catch (error) {
+      if (this.child !== child || this.userRequestedStop || generation !== this.restartGeneration) {
+        return;
+      }
+
+      child.kill();
+      const message = error instanceof Error ? error.message : "unknown error";
+      this.handleFailure(`agent-server readiness failed: ${message}`);
+      return;
+    }
+
+    if (this.child !== child || this.userRequestedStop || generation !== this.restartGeneration) {
+      return;
+    }
+
+    this.restartAttempts = 0;
+    this.emitHealth({ available: true });
+  }
+
   private handleFailure(message: string): void {
     this.child = null;
     this.emitHealth({ available: false, message });
@@ -149,4 +187,42 @@ export class NodeAgentServerSupervisor {
       listener(event);
     }
   }
+}
+
+type TcpReadinessOptions = {
+  host: string;
+  port: number;
+  timeoutMs: number;
+  pollIntervalMs: number;
+};
+
+async function waitForTcpPort(options: TcpReadinessOptions): Promise<void> {
+  const deadline = Date.now() + options.timeoutMs;
+  while (Date.now() <= deadline) {
+    if (await canConnect(options.host, options.port)) {
+      return;
+    }
+    await sleep(options.pollIntervalMs);
+  }
+
+  throw new Error(`timed out waiting for ${options.host}:${options.port}`);
+}
+
+function canConnect(host: string, port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = createConnection({ host, port });
+    const finish = (available: boolean) => {
+      socket.removeAllListeners();
+      socket.destroy();
+      resolve(available);
+    };
+    socket.once("connect", () => finish(true));
+    socket.once("error", () => finish(false));
+  });
+}
+
+function sleep(delayMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, delayMs);
+  });
 }

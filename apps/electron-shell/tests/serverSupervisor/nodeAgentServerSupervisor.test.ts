@@ -13,6 +13,7 @@ describe("NodeAgentServerSupervisor", () => {
       repoRoot: "/repo",
       nodePath: "/usr/bin/node",
       env: { HANDAGENT_LLM_MODE: "mock" },
+      waitForReady: () => Promise.resolve(),
       spawnProcess: (command, args, options) => {
         spawned.push({ command, args, cwd: options.cwd });
         return process;
@@ -35,6 +36,29 @@ describe("NodeAgentServerSupervisor", () => {
     ]);
   });
 
+  it("emits available health only after readiness resolves", async () => {
+    const process = new FakeChildProcess();
+    const health: Array<{ available: boolean; message?: string }> = [];
+    const ready = new Deferred<void>();
+    const supervisor = new NodeAgentServerSupervisor({
+      repoRoot: "/repo",
+      nodePath: "/usr/bin/node",
+      env: {},
+      spawnProcess: () => process,
+      waitForReady: () => ready.promise,
+    });
+    supervisor.onHealth((event) => health.push(event));
+
+    supervisor.start();
+    expect(health).toEqual([]);
+
+    ready.resolve();
+    await ready.promise;
+    await Promise.resolve();
+
+    expect(health).toEqual([{ available: true }]);
+  });
+
   it("emits unavailable health on non-zero exit", () => {
     const process = new FakeChildProcess();
     const health: Array<{ available: boolean; message?: string }> = [];
@@ -42,6 +66,7 @@ describe("NodeAgentServerSupervisor", () => {
       repoRoot: "/repo",
       nodePath: "/usr/bin/node",
       env: {},
+      waitForReady: () => Promise.resolve(),
       spawnProcess: () => process,
       scheduleRestart: vi.fn(),
     });
@@ -63,6 +88,7 @@ describe("NodeAgentServerSupervisor", () => {
       repoRoot: "/repo",
       nodePath: "/usr/bin/node",
       env: {},
+      waitForReady: () => Promise.resolve(),
       spawnProcess: () => process,
       scheduleRestart,
     });
@@ -83,6 +109,7 @@ describe("NodeAgentServerSupervisor", () => {
       repoRoot: "/repo",
       nodePath: "/usr/bin/node",
       env: {},
+      waitForReady: () => Promise.resolve(),
       spawnProcess: () => {
         spawned.push(process);
         return process;
@@ -105,6 +132,7 @@ describe("NodeAgentServerSupervisor", () => {
       repoRoot: "/repo",
       nodePath: "/missing/node",
       env: {},
+      waitForReady: () => Promise.resolve(),
       spawnProcess: () => process,
       scheduleRestart: vi.fn(),
     });
@@ -118,6 +146,30 @@ describe("NodeAgentServerSupervisor", () => {
       message: "agent-server process error: spawn failed",
     });
   });
+
+  it("kills the child and emits unavailable health when readiness fails", async () => {
+    const process = new FakeChildProcess();
+    const health: Array<{ available: boolean; message?: string }> = [];
+    const supervisor = new NodeAgentServerSupervisor({
+      repoRoot: "/repo",
+      nodePath: "/usr/bin/node",
+      env: {},
+      spawnProcess: () => process,
+      scheduleRestart: vi.fn(),
+      waitForReady: () => Promise.reject(new Error("port timeout")),
+    });
+    supervisor.onHealth((event) => health.push(event));
+
+    supervisor.start();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(process.killed).toBe(true);
+    expect(health.at(-1)).toEqual({
+      available: false,
+      message: "agent-server readiness failed: port timeout",
+    });
+  });
 });
 
 class FakeChildProcess extends EventEmitter implements AgentServerChildProcess {
@@ -127,5 +179,20 @@ class FakeChildProcess extends EventEmitter implements AgentServerChildProcess {
 
   kill(): void {
     this.killed = true;
+  }
+}
+
+class Deferred<T> {
+  promise: Promise<T>;
+  private resolveValue?: (value: T | PromiseLike<T>) => void;
+
+  constructor() {
+    this.promise = new Promise<T>((resolve) => {
+      this.resolveValue = resolve;
+    });
+  }
+
+  resolve(value?: T): void {
+    this.resolveValue?.(value as T);
   }
 }
