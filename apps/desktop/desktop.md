@@ -69,7 +69,7 @@
 `apps/desktop` 的直接子节点：
 
 - `HandAgentApp.swift` — SwiftUI `@main` 入口。
-- `Sources/` — Swift 源码目录；具体模块由各自目录下已有 `<dir>.md` 继续说明。
+- `Sources/` — Swift 源码目录；由 [Sources/sources.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/sources.md) 继续索引直接子模块。
 - `TestsSwift/` — Swift 测试目录。
 - `Web/` — desktop 侧 Web 资源目录。
 - `desktop.md` — 本文件。
