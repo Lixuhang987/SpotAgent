@@ -4,7 +4,7 @@
 
 - 日期：2026-06-08
 - 范围：桌面端复杂 UI 从 Swift/WKWebView 逐步迁移到 Electron/React
-- 状态：设计 spec，尚未进入实施计划
+- 状态：迁移 spec；Phase 0-3 已进入实施，Phase 3 已覆盖 prepare command 移除、启动预热和 supervisor 加固
 - 目标读者：后续实现者、架构评审者、QA 维护者
 
 ## 背景

@@ -17,6 +17,7 @@
 
 - Electron main 在 `app.whenReady()` 后启动唯一 agent-server supervisor。
 - supervisor 优先使用 `utilityProcess` 的构建后 JS entry；当前没有 `apps/agent-server/dist/server/server.js` 时，使用 Node child process，并在启动日志中记录 blocker。
+- `utilityProcess` supervisor 候选与 Node child fallback 都承载同一套语义：等待 agent-server ready 后发 health、转写 stdout/stderr、非主动退出后指数退避重启、最多 5 次重启后上报最终 unavailable 诊断，Electron shutdown 时停止后台服务且不再调度重启。
 - agent-server 是唯一承载 `packages/core` thread/runtime/tool 循环的后台进程。
 - 关闭 ThreadWindow 或 ActivityWindow 不停止 agent-server；只有 Electron shutdown 会停止后台服务。
 - hidden ThreadWindow 预热由 Electron main 在 agent-server ready 后主动执行。
