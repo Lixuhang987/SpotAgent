@@ -1,4 +1,4 @@
-import { BrowserWindow, app, ipcMain, screen } from "electron";
+import { BrowserWindow, app, ipcMain, screen, utilityProcess } from "electron";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ElectronShellRuntime, errorMessage } from "./electronShellRuntime.js";
@@ -8,7 +8,7 @@ import {
   type ElectronToSwiftEvent,
   type SwiftToElectronCommand,
 } from "./protocol/electronShellProtocol.js";
-import { NodeAgentServerSupervisor } from "./serverSupervisor/nodeAgentServerSupervisor.js";
+import { createAgentServerSupervisor } from "./serverSupervisor/agentServerSupervisorFactory.js";
 import { JsonLineBridge } from "./swiftBridge/jsonLineBridge.js";
 import { ActivityWindowController } from "./windows/activityWindowController.js";
 import { ThreadWindowPrewarmer } from "./windows/threadWindowPrewarmer.js";
@@ -23,12 +23,15 @@ const activityWindowHTMLPath = join(currentDir, "../activity-window/index.html")
 const activityPreloadPath = join(currentDir, "../preload/activityWindowPreload.js");
 
 const bridge = new JsonLineBridge({ input: process.stdin, output: process.stdout });
-const supervisor = new NodeAgentServerSupervisor({
+const supervisor = createAgentServerSupervisor({
   repoRoot,
   nodePath,
   env: process.env.HANDAGENT_LLM_MODE
     ? { HANDAGENT_LLM_MODE: process.env.HANDAGENT_LLM_MODE }
     : {},
+  forkUtilityProcess: (modulePath, args, options) =>
+    utilityProcess.fork(modulePath, args, options),
+  logSink: (line) => process.stderr.write(line),
 });
 
 const prewarmer = new ThreadWindowPrewarmer({
@@ -175,6 +178,7 @@ app.on("before-quit", () => {
 try {
   await app.whenReady();
   send({ channel: "electron_shell", type: "electron.ready", timestamp: now() });
+  process.stderr.write(`[electron-shell] agent-server supervisor: ${JSON.stringify(supervisor.describe())}\n`);
   startSupervisor();
 } catch (error) {
   send({
