@@ -20,6 +20,7 @@
 - 唯一入口是 `send(_ action: Action)`；所有模块向 Coordinator 报告意图都必须通过该入口。
 - Action 是封闭枚举；新增协调事件必须显式声明分支，不要用 `NotificationCenter` 绕开。
 - 子模块回调统一在 `bootstrap()` 阶段注入闭包，闭包内只允许 `send(.xxx)`。
+- 应用退出由 `HandAgentApplicationDelegate` 接收 macOS termination 回调并调用 `shutdown()`；不要绕过 Coordinator 直接 stop app-server 或 Electron shell。
 - 测试模式走 `AppServices.testing()` 注入 nop 替身，跳过窗口/进程/激活策略副作用。
 - 窗口生命周期由 lifecycle 控制器闭环：默认路径由 `ThreadWindowLifecycle` 管全局 WKWebView ThreadWindow，Electron flag 路径由 `ElectronThreadWindowLifecycle` 通过 `ThreadWindowCommanding` 管 Electron ThreadWindow，`SettingsLifecycle` 管 Settings；Coordinator 不持有 AppKit 对象。
 - 历史入口语义：`openHistory` 聚焦全局 ThreadWindow 并刷新左侧历史，不打开独立窗口，不改变 active tab；Electron flag 路径发送 `thread_window.open_history` 给 Electron main。

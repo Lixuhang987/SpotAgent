@@ -79,6 +79,7 @@
 `HandAgentApp.swift` 是 SwiftUI `@main`：
 
 - 持有 `AppCoordinator` 为 `@State`；非测试态 `init` 自动 `bootstrap()`。
+- 通过 `HandAgentApplicationDelegate` 接入 macOS termination 回调；`applicationShouldTerminate` / `applicationWillTerminate` 会幂等调用 `AppCoordinator.shutdown()`，确保默认 AppServer 或 Electron flag 路径的 Electron shell 在宿主退出时进入 stop 链路。
 - `Settings` scene 仅放空占位，实际设置窗口由 Coordinator 用 `NSWindow` 托管（需要主动 `openOrFocus` 控制）。
 - `CommandGroup(replacing: .appSettings)` 把 ⌘, 路由到 `coordinator.send(.openSettings)`。
 

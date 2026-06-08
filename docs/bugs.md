@@ -31,22 +31,6 @@
 
 ## 当前 bug
 
-### Electron flag 退出后 Electron 与 agent-server 残留
-
-- **严重级别**：P1
-- **发现日期**：2026-06-09
-- **复现步骤**：
-  1. 使用 `HANDAGENT_ELECTRON_SHELL=1` 与 packaged mock app 启动 Electron flag 路径。
-  1. 提交 prompt，确认 Electron ThreadWindow、Electron ActivityWindow 和 agent-server 都正常运行。
-  1. 执行 `osascript -e 'tell application id "com.yourname.HandAgentDesktop" to quit'` 退出 HandAgent。
-  1. 检查 `ps` 与 `lsof -nP -iTCP:4317 -sTCP:LISTEN`。
-- **实际结果**：Swift `HandAgentDesktop` 退出后，Electron main PID 36478 被 reparent 到 PID 1；renderer PID 36496 / 44255 和 agent-server PID 45206 仍残留，`127.0.0.1:4317` 继续由 PID 45206 监听。
-- **期望结果**：退出 HandAgent 后 Electron main、renderer 和 agent-server 都应被关闭；`127.0.0.1:4317` 不应继续监听。
-- **证据**：
-  - 退出命令后 `ps` 仍显示 `/Users/mu9/proj/handAgent/dist/HandAgentDesktop.app/Contents/Resources/ElectronShell/dist/main/main.js`、Electron Helper renderer 和 `apps/agent-server/src/server/server.ts`。
-  - `lsof -nP -iTCP:4317 -sTCP:LISTEN` 显示 `node` PID 45206 仍监听。
-- **初步调用链 / 根因边界**：`macOS quit -> HandAgentApp/AppCoordinator.shutdown -> ElectronBackedAppServer.stop/ElectronShellProcess.stop -> Electron shutdown command or process termination -> Electron supervisor stops agent-server/renderers` 中，Swift 退出没有让 Electron shell 完成 shutdown 或强制回收子进程。失败边界位于 Swift Electron shell 生命周期清理与 Electron main shutdown 处理之间。
-
 ### `AI SDK stream finished without assistant content or tool calls`
 
 - **严重级别**：P1

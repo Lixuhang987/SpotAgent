@@ -17,6 +17,14 @@
 
 ## 开发验证记录
 
+### Electron flag 退出回收修复
+
+- 完成日期：2026-06-09
+- 实现位置：`apps/desktop/HandAgentApp.swift`、`apps/desktop/TestsSwift/HandAgentAppTests.swift`
+- 修复结论：失败 hop 已定位为 `macOS quit -> HandAgentApp/AppCoordinator.shutdown` 未接线；`HandAgentApplicationDelegate` 现在在 `applicationShouldTerminate` / `applicationWillTerminate` 中幂等调用 `AppCoordinator.shutdown()`，后续沿既有链路执行 `AgentServerHealth.stop -> ElectronBackedAppServer.stop -> ElectronShellProcess shutdown command -> Electron main stopSupervisor/app.quit -> agent-server stop`。
+- 自动化验证：`bash ./scripts/swiftw test` 覆盖 macOS termination delegate 会触发 coordinator shutdown，既有 ElectronBackedAppServer 测试覆盖 shutdown command 与 shell stop，`pnpm --filter handagent-electron-shell test` 覆盖 Electron runtime 收到 `shutdown` 后 ack、停止 supervisor 并 quit，以及 Node supervisor stop 不重启。
+- 后续 live 验证方式：合入主仓库后在 `main` 执行 `bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`、`pnpm --filter handagent-electron-shell build`、`bash ./scripts/package-app.sh --mock-llm`；用 `HANDAGENT_ELECTRON_SHELL=1` 与 packaged mock app 启动，提交任意 mock prompt 确认 Electron ThreadWindow、ActivityWindow 与 agent-server 正常运行，再执行 `osascript -e 'tell application id "com.yourname.HandAgentDesktop" to quit'`；退出后用 `ps` 确认无 `ElectronShell/dist/main/main.js`、Electron Helper renderer、`apps/agent-server/src/server/server.ts` 残留，并用 `lsof -nP -iTCP:4317 -sTCP:LISTEN` 确认端口未监听。
+
 ### Electron flag `/api/platform` bridge 连接修复
 
 - 完成日期：2026-06-09
