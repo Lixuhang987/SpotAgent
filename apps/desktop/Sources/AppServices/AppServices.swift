@@ -196,7 +196,10 @@ final class AppServices {
         bundleURL: URL? = Bundle.main.bundleURL,
         fileExists: @escaping (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
     ) -> ElectronShellLaunchConfiguration {
+        let bundledElectronMain = bundleResourceURL?
+            .appendingPathComponent("ElectronShell/dist/main/main.js")
         let electronMain = environment["HANDAGENT_ELECTRON_MAIN"].flatMap { $0.isEmpty ? nil : $0 }
+            ?? bundledElectronMain.flatMap { fileExists($0.path) ? $0.path : nil }
             ?? "apps/electron-shell/dist/main/main.js"
         let repoRoot = AgentServerRepositoryRootLocator(
             agentServerRelativePath: "apps/electron-shell/package.json",

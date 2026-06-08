@@ -110,6 +110,33 @@ final class AppServicesTests: XCTestCase {
     }
 
     @MainActor
+    func testDefaultElectronShellLaunchPrefersBundledMainWhenPackagedResourcesExist() throws {
+        let resourcesURL = URL(fileURLWithPath: "/Applications/HandAgentDesktop.app/Contents/Resources", isDirectory: true)
+        let bundledMain = resourcesURL.appendingPathComponent("ElectronShell/dist/main/main.js")
+        let configuration = AppServices.defaultElectronShellLaunchConfiguration(
+            environment: ["HANDAGENT_ELECTRON_SHELL": "1"],
+            currentDirectoryURL: URL(fileURLWithPath: "/tmp", isDirectory: true),
+            bundleExecutableURL: URL(fileURLWithPath: "/Applications/HandAgentDesktop.app/Contents/MacOS/HandAgentDesktop"),
+            bundleResourceURL: resourcesURL,
+            bundleURL: URL(fileURLWithPath: "/Applications/HandAgentDesktop.app", isDirectory: true),
+            fileExists: { path in
+                path == bundledMain.path
+            }
+        )
+
+        XCTAssertEqual(configuration.launchPath, "/usr/bin/env")
+        XCTAssertEqual(configuration.arguments, [
+            "pnpm",
+            "--filter",
+            "handagent-electron-shell",
+            "exec",
+            "electron",
+            bundledMain.path,
+        ])
+        XCTAssertNil(configuration.currentDirectoryURL)
+    }
+
+    @MainActor
     func testExplicitElectronBinaryPreservesOverride() throws {
         let configuration = AppServices.defaultElectronShellLaunchConfiguration(
             environment: [
