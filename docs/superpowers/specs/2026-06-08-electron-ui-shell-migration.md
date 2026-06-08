@@ -192,7 +192,7 @@ agent-server 不负责：
 
 - Swift PromptPanel 提交后，要求 Electron 显示/聚焦已预热的 ThreadWindow，并交付本次 `InitialPromptPayload`。
 - Swift 请求打开历史或聚焦 ThreadWindow。
-- Electron 回报 ready、`thread_window.prepared`、窗口关闭、renderer crash 和 agent-server health。
+- Electron 回报 ready、`thread_window.prepared`、`thread_window.prepare_failed`、窗口关闭、renderer crash 和 agent-server health。
 
 也就是说，它不是把当前 WKWebView initial prompt 注入机制原样换壳；它是 Swift 原生入口与 Electron Web UI 之间的最小窗口命令边界。
 
@@ -251,6 +251,11 @@ type ElectronToSwiftEvent =
       channel: "electron_shell";
       type: "thread_window.prepared";
       timestamp: string;
+    }
+  | {
+      channel: "electron_shell";
+      type: "thread_window.prepare_failed";
+      message: string;
     }
   | {
       channel: "electron_shell";
