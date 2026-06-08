@@ -971,3 +971,11 @@
 - **验证过程**：创建旧版本 thread 文件 `~/.spotAgent/threads/test-old-thread.json`，其 `metadata` 不含 `workspaceId`。启动默认 WKWebView packaged mock app 后，历史侧栏可搜索到旧 thread，且该旧 thread 出现在“默认对话”分组，没有解析错误或崩溃；旧文件保持不含 `workspaceId` 且 `updatedAt` 未变化。随后提交 `THREADWINDOW_SCENARIO2_NEW_THREAD_QA_20260609 [mock:assistant-ok]` 创建新 thread，`~/.spotAgent/threads/thread-1780950632340-na2sg4.json` 的 `metadata.workspaceId` 为 `null`，并包含同一 user prompt 与 mock assistant。测试旧文件已删除。
 - **证据**：截图 `/tmp/handagent-qa/threadwindow-scenario2-old-thread.png`、`/tmp/handagent-qa/threadwindow-scenario2-old-thread-search.png`；thread 文件 `~/.spotAgent/threads/thread-1780950632340-na2sg4.json`；当前复核显示 `~/.spotAgent/threads/test-old-thread.json` 已不存在。
 - **结论**：通过。
+
+### ThreadWindow 场景 3：workspace.list 协议与 workspace 分组刷新验证
+
+- **验证日期**：2026-06-09
+- **验证环境**：默认 WKWebView packaged app，`mock-llm`
+- **验证过程**：审查 `packages/core/src/protocol/ThreadCommand.ts` 确认 `workspace.list` 命令存在，`packages/core/src/protocol/ThreadNotification.ts` 确认 `workspace.listed` 通知包含 `workspaces[].id/name/rootPath`，`apps/thread-window-web/src/protocol/threadProtocol.ts` 的 guard 覆盖 `workspace.listed` 并校验 workspace 字段，`apps/thread-window-web/src/thread/threadSocketClient.ts` 在 WebSocket open 后发送 `encodeWorkspaceList()` 再发送 `thread.list()`。重新执行 `pnpm --filter handagent-thread-window-web exec vitest run tests/threadProtocol.test.ts tests/threadSocketClient.test.ts tests/threadWindowStore.test.ts tests/historySidebar.test.ts`，4 个文件 35 个用例通过。当前主仓库 packaged app 启动的 agent-server 上，Node WebSocket 客户端连接 `ws://127.0.0.1:4317/api/thread` 并发送 `workspace.list`，收到同 commandId 的 `workspace.listed`，payload 包含 `default`、`tmp`、`qa-workspace`、`handagent-test` 四个 workspace。live UI 历史侧栏已显示这些 workspace 分组和“默认对话”。
+- **证据**：WebSocket frame 证据 `/tmp/handagent-qa/threadwindow-scenario3-workspace-websocket.json`；live UI 截图 `/tmp/handagent-qa/threadwindow-scenario2-old-thread.png`、`/tmp/handagent-qa/threadwindow-scenario2-old-thread-search.png`。
+- **结论**：通过。
