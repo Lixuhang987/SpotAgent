@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { AgentActivityEvent } from "../../src/protocol/AgentActivity.ts";
 import type { ClientResponse } from "../../src/protocol/ClientResponse.ts";
 import type { PlatformBridgeMessage } from "../../src/protocol/PlatformBridgeMessage.ts";
 import type { ServerRequest } from "../../src/protocol/ServerRequest.ts";
@@ -145,5 +146,32 @@ describe("thread command/notification protocol", () => {
 
     expect(platformMessage.channel).toBe("platform");
     expect(platformMessage.type).toBe("platform_request");
+  });
+
+  it("models activity stream separately from thread notifications", () => {
+    const snapshot: AgentActivityEvent = {
+      channel: "activity",
+      type: "activity.snapshot",
+      activeThreadId: "thread-1",
+      status: "running",
+      latestSummary: "正在回复",
+      waitingRequest: null,
+      error: null,
+      updatedAt: "2026-06-08T00:00:00.000Z",
+    };
+    const changed: AgentActivityEvent = {
+      channel: "activity",
+      type: "activity.changed",
+      activeThreadId: "thread-1",
+      status: "tool_running",
+      latestSummary: "正在使用 file.read",
+      waitingRequest: null,
+      error: null,
+      updatedAt: "2026-06-08T00:00:01.000Z",
+    };
+
+    expect(snapshot.channel).toBe("activity");
+    expect(snapshot.type).toBe("activity.snapshot");
+    expect(changed.status).toBe("tool_running");
   });
 });
