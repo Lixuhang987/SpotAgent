@@ -213,6 +213,39 @@ describe("ActivityWindowController", () => {
     expect(onNativeMouseDown).not.toHaveBeenCalled();
     expect(preventDefault).not.toHaveBeenCalled();
   });
+
+  it("releases native focus for the next activity click without showing the window", async () => {
+    const window = new FakeBrowserWindow();
+    const controller = new ActivityWindowController({
+      activityWindowHTMLPath: "/dist/activity-window/index.html",
+      preloadPath: "/dist/preload/activityWindowPreload.js",
+      createWindow: () => window,
+      screenProvider: {
+        getPrimaryWorkArea: () => ({ x: 0, y: 0, width: 1440, height: 900 }),
+      },
+    });
+
+    await controller.show();
+    controller.releaseNativeFocusForNextClick();
+
+    expect(window.blurCount).toBe(1);
+    expect(window.showInactiveCount).toBe(1);
+  });
+
+  it("ignores native focus release before the activity window exists", () => {
+    const controller = new ActivityWindowController({
+      activityWindowHTMLPath: "/dist/activity-window/index.html",
+      preloadPath: "/dist/preload/activityWindowPreload.js",
+      createWindow: () => {
+        throw new Error("window should not be created");
+      },
+      screenProvider: {
+        getPrimaryWorkArea: () => ({ x: 0, y: 0, width: 1440, height: 900 }),
+      },
+    });
+
+    controller.releaseNativeFocusForNextClick();
+  });
 });
 
 class FakeBrowserWindow extends EventEmitter {
@@ -221,6 +254,7 @@ class FakeBrowserWindow extends EventEmitter {
   loadedFile: string | null = null;
   loadFileCount = 0;
   showInactiveCount = 0;
+  blurCount = 0;
 
   setBounds(bounds: { x: number; y: number; width: number; height: number }): void {
     this.bounds = bounds;
@@ -234,5 +268,9 @@ class FakeBrowserWindow extends EventEmitter {
 
   showInactive(): void {
     this.showInactiveCount += 1;
+  }
+
+  blur(): void {
+    this.blurCount += 1;
   }
 }

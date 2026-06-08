@@ -22,6 +22,7 @@ type ThreadWindowHost = {
 
 type ActivityWindowHost = {
   show(): Promise<void>;
+  releaseNativeFocusForNextClick(): void;
 };
 
 type Options = {
@@ -54,6 +55,10 @@ export class ElectronShellRuntime {
   }
 
   handleThreadWindowClosed(event: ThreadWindowClosedEvent): void {
+    if (event.wasVisible) {
+      this.options.activityWindow.releaseNativeFocusForNextClick();
+    }
+
     this.options.send({
       channel: "electron_shell",
       type: "thread_window.closed",

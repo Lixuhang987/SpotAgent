@@ -17,6 +17,15 @@
 
 ## 开发验证记录
 
+### Electron StatusBubble 关闭 ThreadWindow 后释放 ActivityWindow native focus 修复
+
+- 完成日期：2026-06-09
+- 实现位置：`apps/electron-shell/src/main/windows/activityWindowController.ts`、`apps/electron-shell/src/main/electronShellRuntime.ts`、`apps/electron-shell/tests/windows/activityWindowController.test.ts`、`apps/electron-shell/tests/main/electronShellRuntime.test.ts`
+- 链路证明：`e6901d2` 主仓库 packaged 回归证明 `before-mouse-event` 兜底仍未收到同 App / AXMain ActivityWindow 点击；packaged 产物已包含 `before-mouse-event`、`event.preventDefault()` 与 `onNativeMouseDown?.()`，但关闭 visible Electron ThreadWindow 后 ActivityWindow 保持 `AXMain=true / AXFocused=false`，立即点击中心仍不打开 Swift PromptPanel。失败边界继续上移到 native window 状态 / hit testing：点击没有进入 renderer，也没有进入 Electron webContents。
+- 修复结论：visible ThreadWindow 关闭时，runtime 现在调用 ActivityWindow `blur()` 释放 native focus / AXMain 状态，让后续点击重新产生 focus 或 mouse event，再进入既有 native focus / mouse down 兜底链路。hidden prewarm close 不释放 ActivityWindow focus；释放动作不创建 ActivityWindow、不调用 `showInactive()`、不直接请求 PromptPanel，因此不会导致 ActivityWindow 展示时立即打开 PromptPanel，也不会在 visible ThreadWindow 可聚焦时误开 PromptPanel。
+- 自动化验证：`pnpm --filter handagent-electron-shell exec vitest run tests/windows/activityWindowController.test.ts tests/main/electronShellRuntime.test.ts` 覆盖 ActivityWindow `blur()` 包装、无窗口时释放为 no-op、visible ThreadWindow close 调用释放、hidden prewarm close 不调用释放。
+- 主仓库 live 回归状态：未在主仓库 packaged app 执行本轮追加修复后的实机回归；不得声称已通过。合入后需重新 build/package，并按下方 Electron UI Shell 最终态待回归项验证关闭 visible Electron ThreadWindow 后立即点击 ActivityWindow 是否打开 Swift PromptPanel。
+
 ### Electron StatusBubble 已 AXMain 后 mouse down 回退 PromptPanel 修复
 
 - 完成日期：2026-06-09
@@ -124,7 +133,7 @@
 
 **2026-06-09 待回归修复项**：
 
-- 关闭可见 Electron ThreadWindow 后，ActivityWindow 仍显示且 agent-server 继续监听 `127.0.0.1:4317` 时，用 CGEvent 点击 ActivityWindow 中心应打开 Swift `PromptPanel`。`2af9ba0` 的 `acceptFirstMouse: true` 修复不足；`412e1e9` 的 `focusable: true` + `acceptFirstMouse: true` 也已在主仓库 packaged app 实机回归失败；`366a706` 的 native focus 兜底只覆盖从其他前台 App 点击回来；`e6901d2` 的 native mouseDown 兜底仍未覆盖 ActivityWindow 已 `AXMain=true` 后同 App 内立即点击。当前缺陷已写入 `docs/bugs.md`，下一轮需继续定位 native window / hit testing / event delivery 侧失败原因。
+- 关闭可见 Electron ThreadWindow 后，ActivityWindow 仍显示且 agent-server 继续监听 `127.0.0.1:4317` 时，用 CGEvent 点击 ActivityWindow 中心应打开 Swift `PromptPanel`。`2af9ba0` 的 `acceptFirstMouse: true` 修复不足；`412e1e9` 的 `focusable: true` + `acceptFirstMouse: true` 也已在主仓库 packaged app 实机回归失败；`366a706` 的 native focus 兜底只覆盖从其他前台 App 点击回来；`e6901d2` 的 native mouse down 兜底仍收不到已 AXMain ActivityWindow 的同 App 点击。本轮 worktree 追加 visible ThreadWindow close 后释放 ActivityWindow native focus，仍需合入主仓库并重新执行 packaged app 实机回归。
 
 **2026-06-09 阻塞子项**：
 
