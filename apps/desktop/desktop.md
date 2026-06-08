@@ -141,9 +141,9 @@ desktop 与 agent-server 共享的模型和 builtin tool 配置文件。desktop 
 
 ### `ThreadSummary`
 
-`ThreadSummary` 只服务 Swift 侧 `ThreadRegistry` 和 StatusBubble 回跳，不是 React ThreadWindow 的 tabs、消息或运行态来源。实时 thread UI 状态属于 `apps/thread-window-web`。
+`ThreadSummary` 只服务 Swift 侧 `ThreadRegistry` 和 StatusBubble 回跳，不是 React ThreadWindow 的 tabs、消息或完整历史来源。默认路径的运行态摘要由 Swift AppServer 订阅 `/api/activity` 的轻量 `AgentActivityEvent` 写入；实时 thread UI 状态仍属于 `apps/thread-window-web`。
 
-Swift 不订阅 `/api/activity`，也不把 Electron activity 状态写入 `ThreadRegistry`。Electron flag 路径下 Swift StatusBubble 默认关闭，React StatusBubble 直接从 agent-server `/api/activity` 读取轻量状态。
+Electron flag 路径下 Swift StatusBubble 默认关闭，React StatusBubble 直接从 agent-server `/api/activity` 读取轻量状态；Swift 不 mirror Electron activity 状态。
 
 ## 注意事项
 

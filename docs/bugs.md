@@ -31,20 +31,6 @@
 
 ## 当前 bug
 
-### 默认路径 Swift StatusBubble 未展示 ThreadWindow running 状态且点击误开 PromptPanel
-
-- **严重级别**：P2
-- **发现日期**：2026-06-09
-- **复现步骤**：
-  1. 使用 `bash ./scripts/package-app.sh --mock-llm` 打包并启动默认 WKWebView 路径的 `dist/HandAgentDesktop.app`。
-  1. 通过 PromptPanel 提交 `THREAD_HISTORY_STATUS_QA_20260609_MINIMIZE [mock:slow-focus]`，保持 ThreadWindow 打开且不要关闭窗口。
-  1. 在 ThreadWindow 运行中观察右下角 Swift StatusBubble。
-  1. 点击右下角 Swift StatusBubble。
-- **实际结果**：ThreadWindow 中 composer 显示 Stop 按钮，证明当前 thread 仍在 running；`/api/activity` snapshot 也显示 `activeThreadId: "thread-1780942756065-7mr7s5"`、`status: "running"`、`latestSummary: "正在回复"`。但 Swift StatusBubble 截图显示 `Idle / 点击开始`，点击气泡后打开 PromptPanel，而不是聚焦当前 running ThreadWindow。
-- **期望结果**：默认路径 StatusBubble 应展示当前 active thread 的 running 状态与最新摘要；点击气泡应回到当前活跃 thread 对应的 ThreadWindow，而不是在已有 running thread 时打开 PromptPanel。
-- **证据**：`~/.spotAgent/threads/thread-1780942756065-7mr7s5.json` 包含 user message `THREAD_HISTORY_STATUS_QA_20260609_MINIMIZE [mock:slow-focus]`，运行期间 events 为空；Computer Use 观察 ThreadWindow 可见 Stop 按钮。连接 `ws://127.0.0.1:4317/api/activity` 得到 `activity.snapshot`：`status: "running"`、`latestSummary: "正在回复"`。截屏 `/tmp/handagent-qa/status-bubble-running.png` 显示 Swift 气泡文案为 `Idle / 点击开始`。点击坐标 `{1250, 840}` 后 Computer Use 观察到打开的是 PromptPanel 输入窗口。
-- **初步调用链 / 根因边界**：`React ThreadWindow input.submit -> agent-server ThreadRuntimeOrchestrator -> AgentActivityPublisher -> /api/activity snapshot` 已验证为 running；失败边界位于默认路径 Swift StatusBubble 的状态来源。当前文档与源码显示 Swift StatusBubble 只从 `ThreadRegistry` 派生，默认路径 Swift 不订阅 `/api/activity`，且 React ThreadWindow / agent-server 的实时 thread 摘要没有写入 `ThreadRegistry`。修复需要按 `$trace-and-verify-call-chain` 继续验证 `activity subscriber 或 ThreadRegistry 更新 -> StatusBubbleViewModel -> StatusBubbleView -> statusBubble tap(threadID)`。
-
 ### `AI SDK stream finished without assistant content or tool calls`
 
 - **严重级别**：P1

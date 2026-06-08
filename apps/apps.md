@@ -22,6 +22,7 @@ flowchart LR
   E -. supervise .-> B
   W -->|/api/thread WebSocket| B[apps/agent-server<br/>本地 thread 桥]
   S -->|/api/activity WebSocket| B
+  A -->|/api/activity WebSocket<br/>default StatusBubble only| B
   A -->|/api/platform WebSocket| B
   B --> C[packages/core<br/>runtime / tool / LLM]
 ```
@@ -49,9 +50,9 @@ flowchart LR
 
 ### 4. 状态反馈
 
-- 默认路径显示 Swift `StatusBubbleController`，ViewModel 从 Swift 侧 `ThreadRegistry` 派生 `isRunning` / `latestSummary` / `primaryThreadID`。
+- 默认路径显示 Swift `StatusBubbleController`，AppServer 订阅 `/api/activity` 的轻量 `AgentActivityEvent` 并更新 Swift 侧 `ThreadRegistry`；ViewModel 再从 `ThreadRegistry` 派生 `isRunning` / `latestSummary` / `primaryThreadID`。
 - `HANDAGENT_ELECTRON_SHELL=1` 时 Swift StatusBubble 默认关闭，由 Electron ActivityWindow 承载 React StatusBubble；renderer 订阅 `/api/activity`，接收 agent-server 派生的 `AgentActivityEvent`。
-- Swift 不订阅 `/api/activity`，也不把 activity 状态 mirror 回 `ThreadRegistry`；不要把 `ThreadRegistry` 理解为 ThreadWindow tabs、消息或 activity 状态源。
+- 默认路径 Swift 只消费 `/api/activity` 的轻量状态，不解析 `/api/thread`，也不把完整 ThreadWindow tabs、消息或历史同步到 `ThreadRegistry`。
 - 默认路径气泡点击时，若 `ThreadRegistry.primaryThreadID` 存在且全局 ThreadWindow 已打开，则聚焦该窗口；否则回到 PromptPanel。Electron 气泡点击时先请求 Electron main 聚焦 ThreadWindow；无法聚焦时 Electron 回告 Swift 打开 PromptPanel。
 
 ## 本层关键 DTO

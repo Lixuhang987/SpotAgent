@@ -15,6 +15,7 @@ protocol AppServerManaging: AnyObject {
 final class AppServer: AppServerManaging {
     private let agentServer: any AgentServerStarting
     private let platformClient: PlatformBridgeConnectionClient?
+    private let activityClient: AgentActivityConnectionClient?
     private(set) var startupErrorMessage: String?
 
     var isAvailable: Bool {
@@ -31,10 +32,12 @@ final class AppServer: AppServerManaging {
 
     init(
         agentServer: any AgentServerStarting,
-        platformClient: PlatformBridgeConnectionClient? = nil
+        platformClient: PlatformBridgeConnectionClient? = nil,
+        activityClient: AgentActivityConnectionClient? = nil
     ) {
         self.agentServer = agentServer
         self.platformClient = platformClient
+        self.activityClient = activityClient
     }
 
     func start() {
@@ -42,6 +45,7 @@ final class AppServer: AppServerManaging {
             try agentServer.start()
             startupErrorMessage = nil
             platformClient?.connect()
+            activityClient?.connect()
         } catch {
             startupErrorMessage = agentServer.lastStartupError ?? error.localizedDescription
             onAvailabilityChange?(false)
@@ -49,6 +53,7 @@ final class AppServer: AppServerManaging {
     }
 
     func stop() {
+        activityClient?.disconnect()
         platformClient?.disconnect()
         agentServer.stop()
     }

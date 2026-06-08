@@ -1,6 +1,6 @@
 # StatusBubble 模块
 
-> Electron flag 路径说明：当 `HANDAGENT_ELECTRON_SHELL=1` 时，本 Swift StatusBubble 默认不显示。状态气泡由 `apps/electron-shell` 的 React activity renderer 承载，并订阅 `/api/activity`；Swift 不 mirror activity 状态。
+> Electron flag 路径说明：当 `HANDAGENT_ELECTRON_SHELL=1` 时，本 Swift StatusBubble 默认不显示。状态气泡由 `apps/electron-shell` 的 React activity renderer 承载，并订阅 `/api/activity`；Swift 不 mirror Electron activity 状态。
 
 屏幕右下角的常驻状态气泡：显示当前 primary thread 是否在跑、最近摘要；点击后触发 Coordinator 的回跳逻辑。架构是 **View + ViewModel + Controller + Styles** 四件套。
 
@@ -16,7 +16,8 @@
 ## 数据流
 
 ```
-ThreadRegistry (@Observable) 变化
+AgentActivityConnectionClient 订阅 `/api/activity`
+  └─ ThreadRegistry (@Observable) 更新轻量 ThreadSummary
   └─ ViewModel.isRunning / latestSummary 自动重算（计算属性，无内部缓存）
   └─ View 自动刷新
 
@@ -27,7 +28,7 @@ ThreadRegistry (@Observable) 变化
 
 ## 编辑此目录的约束
 
-- **ViewModel 只是 Registry 的派生视图**：不在内部维护 mirror 状态；新增展示字段先看能否从 `ThreadRegistry` 派生。
+- **ViewModel 只是 Registry 的派生视图**：不在内部维护 mirror 状态；默认路径轻量运行态由 `AgentActivityConnectionClient` 写入 `ThreadRegistry`。
 - **Controller 不知道 Registry**：注入路径是 `Controller.init(registry:) → ViewModel(registry:)`，Controller 不直接读 registry。
 - **窗口位置策略写死右下角**：当前 `visibleFrame.maxX - width - 24, minY + 24`；新增多屏 / 拖拽支持需走 Controller，不要在 View 里写 `NSScreen` API。
 - **`onTap` 出口只暴露 `threadID?`**：不要把 `ThreadSummary` 或更多 Registry 状态泄漏给 Coordinator；Coordinator 自己再去 Registry 查。
@@ -39,5 +40,5 @@ ThreadRegistry (@Observable) 变化
 
 ## 与其他模块的关系
 
-- 数据源是 [Thread 注册表](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Thread/thread.md)。
+- 数据源是 [Thread 注册表](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Thread/thread.md)，默认路径由 Swift AppServer 的 activity subscriber 更新。
 - `onTap` 由 [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 在 `setupStatusBubble()` 注入，路由到 ThreadWindow / PromptPanel。

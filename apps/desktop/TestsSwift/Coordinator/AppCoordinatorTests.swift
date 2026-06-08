@@ -64,6 +64,42 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testDefaultStatusBubbleTapFocusesThreadFromActivityRegistry() {
+        let presenter = StubThreadWindowPresenter()
+        let registry = ThreadRegistry()
+        let services = AppServices(
+            appServer: NopAppServer(),
+            threadRegistry: registry,
+            appServerURL: URL(string: "ws://127.0.0.1:0/noop")!,
+            activityServerURL: URL(string: "ws://127.0.0.1:0/noop-activity")!,
+            platformServerURL: URL(string: "ws://127.0.0.1:0/noop-platform")!,
+            threadWindowWebAppURL: URL(fileURLWithPath: "/tmp/index.html"),
+            hotkeyRegistrar: NopHotkeyRegistrar(),
+            threadWindowPresenter: presenter,
+            settingsWindowPresenter: NopSettingsWindowPresenter(),
+            fatalAlertPresenter: NopFatalAlertPresenter(),
+            setActivationPolicy: { _ in },
+            showsStatusBubble: false
+        )
+        let coordinator = AppCoordinator(services: services)
+        coordinator.send(.openHistory)
+        let showCountAfterOpen = presenter.showCount
+
+        registry.apply(activity: AgentActivityEvent(
+            channel: "activity",
+            type: "activity.snapshot",
+            activeThreadId: "thread-from-activity",
+            status: .running,
+            latestSummary: "正在回复",
+            updatedAt: "2026-06-09T01:02:03.000Z"
+        ))
+        coordinator.send(.statusBubbleTapped(registry.primaryThreadID))
+
+        XCTAssertEqual(registry.primaryThreadID, "thread-from-activity")
+        XCTAssertEqual(presenter.showCount, showCountAfterOpen + 1)
+    }
+
+    @MainActor
     func testElectronSubmitPromptSendsCommandWithoutCreatingWebHost() {
         let client = RecordingThreadWindowCommandClient()
         let coordinator = AppCoordinator(services: electronServices(commandClient: client))

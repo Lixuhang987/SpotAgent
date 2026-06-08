@@ -28,7 +28,7 @@
 - Action prompt 由 PromptPanel 先渲染 template。skill action 只携带渲染后的 prompt 创建新 thread；plugin action 额外携带 `{ pluginId, promptName }` 作为 `actionBinding` 创建新 thread。
 - Settings 打开时会创建模型、builtin tool、Plugin、Append Prompt、MCP、权限和 workspace 的 ViewModel。Coordinator 只负责注入，不直接读写 `~/.spotAgent/plugins` 或 `~/.spotAgent/mcp.json`。
 - agent-server 健康状态独立：server 不可用时拒绝 `submitPrompt` 并保留面板草稿。
-- 默认路径的 Swift StatusBubble 只从 `ThreadRegistry` 派生展示；React ThreadWindow / agent-server 的实时 thread 摘要没有接入该注册表。
+- 默认路径的 Swift StatusBubble 从 `ThreadRegistry` 派生展示；`ThreadRegistry` 由默认 AppServer 的 `/api/activity` 轻量 subscriber 更新，不解析完整 `/api/thread`。
 - Electron flag 路径下，`AppCoordinator` 在 app-server available 后调用 `ActivityWindowCommanding.showActivityWindow()`；show 失败时回退显示 Swift StatusBubble。Electron StatusBubble 点击无法聚焦 ThreadWindow 时，Coordinator 只打开 PromptPanel，不解析 `/api/activity` 状态。
 
 ## 当前 Action 列表

@@ -21,6 +21,18 @@ final class ThreadRegistry {
             .map(\.threadId)
     }
 
+    func apply(activity event: AgentActivityEvent) {
+        guard let threadId = event.activeThreadId else { return }
+
+        upsert(ThreadSummary(
+            threadId: threadId,
+            isRunning: event.status.isActive,
+            latestSummary: event.latestSummary ?? summaries[threadId]?.latestSummary ?? "点击开始",
+            lastActiveAt: event.updatedAtDate,
+            windowIsOpen: true
+        ))
+    }
+
     var primaryThreadID: String? {
         recentThreadIDs.first {
             summaries[$0]?.isRunning == true && summaries[$0]?.windowIsOpen == true

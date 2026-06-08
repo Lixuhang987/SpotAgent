@@ -1,6 +1,6 @@
 # AgentServer 模块
 
-管理本地 agent-server 子进程和 desktop 到 `/api/platform` 的连接。
+管理本地 agent-server 子进程、desktop 到 `/api/platform` 的连接，以及默认路径 Swift StatusBubble 到 `/api/activity` 的轻量状态订阅。
 
 ## 文件
 
@@ -10,7 +10,8 @@
 | `AgentServerHealth.swift` | 主线程健康状态桥：订阅 `AppServerManaging` 可用性与 fatal error，向 PromptPanel 暴露可提交状态，并在需要时调用原生 fatal alert |
 | `AgentServerRuntimeMode.swift` | 读取 bundle resource marker 与环境变量，决定 agent-server 子进程是否注入 `HANDAGENT_LLM_MODE=mock` |
 | `AppServerConnection.swift` | 单条 WebSocket 连接抽象：处理 connect / reconnect / receive loop / 原始文本收发 |
-| `AppServer.swift` | AppServer 宿主内核与 `PlatformBridgeConnectionClient`：启动子进程、维护可用性状态、建立 `/api/platform` 连接并转发平台请求 |
+| `AgentActivityConnectionClient.swift` | 默认路径 activity subscriber：解析 `/api/activity` 的轻量 `AgentActivityEvent`，更新 `ThreadRegistry` 供 Swift StatusBubble 展示和点击回跳 |
+| `AppServer.swift` | AppServer 宿主内核与 `PlatformBridgeConnectionClient` / `AgentActivityConnectionClient`：启动子进程、维护可用性状态、建立 `/api/platform` 与默认路径 `/api/activity` 连接 |
 
 ## 职责
 
@@ -21,8 +22,9 @@
 5. 启动 `node --experimental-transform-types --experimental-specifier-resolution=node apps/agent-server/src/server/server.ts`。
 6. 记录 `lastStartupError` 供 UI 展示。
 7. 子进程启动后连接 `ws://127.0.0.1:4317/api/platform`，发送 `channel: "platform"` 的 `platform_bridge_hello` 并处理 `PlatformBridgeMessage`。
+8. 默认路径同时连接 `ws://127.0.0.1:4317/api/activity`，只解析 `AgentActivityEvent` 的 `activeThreadId`、`status`、`latestSummary`、`updatedAt` 写入 `ThreadRegistry`，供 Swift StatusBubble 展示和点击回跳。
 
-桌面端 `AppServer` 不再持有 `/api/thread` client，也不维护 ThreadWindow tabs/messages/history。
+桌面端 `AppServer` 不持有 `/api/thread` client，也不维护 ThreadWindow tabs/messages/history。
 它不发送 `ThreadCommand`，不解析 `ThreadNotification`；ThreadWindow 的 thread 协议由 React 前端通过 `/api/thread` 处理。
 
 Phase 0 引入 Electron feature flag 后，默认路径仍使用本模块的 `AppServer + AgentServerService`。当 `HANDAGENT_ELECTRON_SHELL=1` 时，agent-server 进程由 `ElectronBackedAppServer` 间接交给 Electron shell 监督，本模块仍保留 `/api/platform` 的连接能力与默认路径。

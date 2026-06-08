@@ -56,7 +56,7 @@ Swift 在 `WKUserScript.atDocumentStart` 注入 `window.handAgentThreadWindowCon
 - Electron flag 路径不使用本目录创建 ThreadWindow；Swift 只通过 Coordinator/AppServices 的 `ThreadWindowManaging` 与 `ThreadWindowCommanding` 发送 Electron command。
 - 默认加载入口是 `http://127.0.0.1:4317/thread-window/index.html`。本地 React 静态资源由 `agent-server` 在同端口按 `/thread-window/*` 提供，避免 `file://` 下 `type="module"` bundle 在 `WKWebView` 中不执行导致白屏。
 - React 直接连接 `/api/thread` 并持有 ThreadWindow 状态源。
-- 默认路径的 Swift StatusBubble 仍从 Swift `ThreadRegistry` 派生，当前没有接入 React / agent-server 的实时 thread 摘要；`HANDAGENT_ELECTRON_SHELL=1` 路径由 Electron ActivityWindow 的 React StatusBubble 订阅 `/api/activity`。
+- 默认路径的 Swift StatusBubble 从 Swift `ThreadRegistry` 派生；`ThreadRegistry` 由默认 AppServer 的 `/api/activity` 轻量 subscriber 更新。`HANDAGENT_ELECTRON_SHELL=1` 路径由 Electron ActivityWindow 的 React StatusBubble 订阅 `/api/activity`。
 
 ## 编辑此目录的约束
 

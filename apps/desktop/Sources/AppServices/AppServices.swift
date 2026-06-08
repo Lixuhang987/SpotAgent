@@ -70,6 +70,7 @@ final class AppServices {
     let threadHistoryStore: ThreadHistoryStore
     let actionManifestStore: ActionManifestStore
     let appServerURL: URL
+    let activityServerURL: URL
     let platformServerURL: URL
     let threadWindowWebAppURL: URL
     let hotkeyRegistrar: any HotkeyRegistering
@@ -89,6 +90,7 @@ final class AppServices {
         threadHistoryStore: ThreadHistoryStore = ThreadHistoryStore(),
         actionManifestStore: ActionManifestStore = ActionManifestStore(),
         appServerURL: URL = URL(string: "ws://127.0.0.1:4317/api/thread")!,
+        activityServerURL: URL = URL(string: "ws://127.0.0.1:4317/api/activity")!,
         platformServerURL: URL = URL(string: "ws://127.0.0.1:4317/api/platform")!,
         threadWindowWebAppURL: URL = AppServices.defaultThreadWindowWebAppURL(),
         hotkeyRegistrar: any HotkeyRegistering = ProductionHotkeyRegistrar(),
@@ -102,17 +104,24 @@ final class AppServices {
         environment: [String: String] = ProcessInfo.processInfo.environment,
         showsFatalAlert: Bool = true
     ) {
+        let resolvedThreadRegistry = threadRegistry
         let runtime = appServer == nil
-            ? AppServices.defaultRuntime(environment: environment, platformServerURL: platformServerURL)
+            ? AppServices.defaultRuntime(
+                environment: environment,
+                platformServerURL: platformServerURL,
+                activityServerURL: activityServerURL,
+                threadRegistry: resolvedThreadRegistry
+            )
             : nil
         self.appServer = appServer ?? runtime!.appServer
         self.threadWindowCommandClient = threadWindowCommandClient ?? runtime?.threadWindowCommandClient
         self.activityWindowCommandClient = activityWindowCommandClient ?? runtime?.activityWindowCommandClient
-        self.threadRegistry = threadRegistry
+        self.threadRegistry = resolvedThreadRegistry
         self.settingsStore = settingsStore
         self.threadHistoryStore = threadHistoryStore
         self.actionManifestStore = actionManifestStore
         self.appServerURL = appServerURL
+        self.activityServerURL = activityServerURL
         self.platformServerURL = platformServerURL
         self.threadWindowWebAppURL = threadWindowWebAppURL
         self.hotkeyRegistrar = hotkeyRegistrar
@@ -136,6 +145,7 @@ final class AppServices {
             appServer: NopAppServer(),
             actionManifestStore: actionManifestStore,
             appServerURL: URL(string: "ws://127.0.0.1:0/noop")!,
+            activityServerURL: URL(string: "ws://127.0.0.1:0/noop-activity")!,
             platformServerURL: URL(string: "ws://127.0.0.1:0/noop-platform")!,
             threadWindowWebAppURL: URL(fileURLWithPath: "/tmp/index.html"),
             hotkeyRegistrar: NopHotkeyRegistrar(),
@@ -150,14 +160,23 @@ final class AppServices {
 
     static func defaultAppServer(
         environment: [String: String] = ProcessInfo.processInfo.environment,
-        platformServerURL: URL
+        platformServerURL: URL,
+        activityServerURL: URL = URL(string: "ws://127.0.0.1:4317/api/activity")!,
+        threadRegistry: ThreadRegistry = ThreadRegistry()
     ) -> any AppServerManaging {
-        defaultRuntime(environment: environment, platformServerURL: platformServerURL).appServer
+        defaultRuntime(
+            environment: environment,
+            platformServerURL: platformServerURL,
+            activityServerURL: activityServerURL,
+            threadRegistry: threadRegistry
+        ).appServer
     }
 
     static func defaultRuntime(
         environment: [String: String] = ProcessInfo.processInfo.environment,
-        platformServerURL: URL
+        platformServerURL: URL,
+        activityServerURL: URL = URL(string: "ws://127.0.0.1:4317/api/activity")!,
+        threadRegistry: ThreadRegistry = ThreadRegistry()
     ) -> AppServicesRuntime {
         let platformClient = PlatformBridgeConnectionClient(
             connection: AppServerConnection(serverURL: platformServerURL),
@@ -183,7 +202,11 @@ final class AppServices {
         return AppServicesRuntime(
             appServer: AppServer(
                 agentServer: AgentServerService(),
-                platformClient: platformClient
+                platformClient: platformClient,
+                activityClient: AgentActivityConnectionClient(
+                    connection: AppServerConnection(serverURL: activityServerURL),
+                    registry: threadRegistry
+                )
             ),
             threadWindowCommandClient: nil,
             activityWindowCommandClient: nil

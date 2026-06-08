@@ -69,6 +69,73 @@ final class AppServerConnectionTests: XCTestCase {
 }
 
 @MainActor
+final class AgentActivityConnectionClientTests: XCTestCase {
+    func testRunningActivitySnapshotUpdatesThreadRegistry() async {
+        let transport = RecordingAppServerConnectionTransport()
+        let connection = AppServerConnection(
+            serverURL: URL(string: "ws://127.0.0.1:4317/api/activity")!,
+            transport: transport,
+            reconnectDelay: 0
+        )
+        let registry = ThreadRegistry()
+        let client = AgentActivityConnectionClient(connection: connection, registry: registry)
+
+        client.connect()
+        transport.tasks[0].succeedReceive(
+            """
+            {
+              "channel": "activity",
+              "type": "activity.snapshot",
+              "activeThreadId": "thread-1",
+              "status": "running",
+              "latestSummary": "正在回复",
+              "waitingRequest": null,
+              "error": null,
+              "updatedAt": "2026-06-09T01:02:03.000Z"
+            }
+            """
+        )
+        await Task.yield()
+
+        XCTAssertEqual(registry.primaryThreadID, "thread-1")
+        XCTAssertEqual(registry.summaries["thread-1"]?.isRunning, true)
+        XCTAssertEqual(registry.summaries["thread-1"]?.latestSummary, "正在回复")
+    }
+
+    func testIdleActivityKeepsThreadAsFocusTargetWithoutRunningState() async {
+        let transport = RecordingAppServerConnectionTransport()
+        let connection = AppServerConnection(
+            serverURL: URL(string: "ws://127.0.0.1:4317/api/activity")!,
+            transport: transport,
+            reconnectDelay: 0
+        )
+        let registry = ThreadRegistry()
+        let client = AgentActivityConnectionClient(connection: connection, registry: registry)
+
+        client.connect()
+        transport.tasks[0].succeedReceive(
+            """
+            {
+              "channel": "activity",
+              "type": "activity.changed",
+              "activeThreadId": "thread-1",
+              "status": "idle",
+              "latestSummary": "点击开始",
+              "waitingRequest": null,
+              "error": null,
+              "updatedAt": "2026-06-09T01:02:04.000Z"
+            }
+            """
+        )
+        await Task.yield()
+
+        XCTAssertEqual(registry.primaryThreadID, "thread-1")
+        XCTAssertEqual(registry.summaries["thread-1"]?.isRunning, false)
+        XCTAssertEqual(registry.summaries["thread-1"]?.latestSummary, "点击开始")
+    }
+}
+
+@MainActor
 final class PlatformBridgeConnectionClientTests: XCTestCase {
     func testConnectPlatformBridgeSendsHelloToPlatformConnection() async {
         let transport = RecordingAppServerConnectionTransport()
@@ -126,6 +193,39 @@ final class PlatformBridgeConnectionClientTests: XCTestCase {
         let response = transport.tasks[0].sentObjects[1]
         XCTAssertEqual(response["channel"] as? String, "platform")
         XCTAssertEqual(response["type"] as? String, "platform_response")
+    }
+
+    func testAppServerStartsPlatformAndActivityConnections() async {
+        let platformTransport = RecordingAppServerConnectionTransport()
+        let platformConnection = AppServerConnection(
+            serverURL: URL(string: "ws://127.0.0.1:4317/api/platform")!,
+            transport: platformTransport,
+            reconnectDelay: 0
+        )
+        let activityTransport = RecordingAppServerConnectionTransport()
+        let activityConnection = AppServerConnection(
+            serverURL: URL(string: "ws://127.0.0.1:4317/api/activity")!,
+            transport: activityTransport,
+            reconnectDelay: 0
+        )
+        let appServer = AppServer(
+            agentServer: RecordingAgentServerStarter(),
+            platformClient: PlatformBridgeConnectionClient(
+                connection: platformConnection,
+                platformBridge: PlatformBridgeService(provider: RecordingAppServerClientPlatformProvider())
+            ),
+            activityClient: AgentActivityConnectionClient(
+                connection: activityConnection,
+                registry: ThreadRegistry()
+            )
+        )
+
+        appServer.start()
+        await Task.yield()
+
+        XCTAssertEqual(platformTransport.tasks.count, 1)
+        XCTAssertEqual(activityTransport.tasks.count, 1)
+        XCTAssertEqual(platformTransport.tasks[0].sentObjects.first?["type"] as? String, "platform_bridge_hello")
     }
 }
 

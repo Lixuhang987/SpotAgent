@@ -16,6 +16,6 @@
 
 ## 边界
 
-- Swift 宿主负责 PromptPanel、Settings、Hotkey、焦点恢复、默认路径 Swift StatusBubble 和 `/api/platform` 平台能力。
+- Swift 宿主负责 PromptPanel、Settings、Hotkey、焦点恢复、默认路径 Swift StatusBubble、默认路径 `/api/activity` 轻量状态订阅和 `/api/platform` 平台能力。
 - 默认路径由 Swift `ThreadWindow/` 承载 React ThreadWindow；`HANDAGENT_ELECTRON_SHELL=1` 路径由 `apps/electron-shell` 承载 Electron ThreadWindow 和 React StatusBubble。
-- Swift 不持有 thread client，不解析 `/api/thread` 的 `ThreadNotification`，也不订阅 `/api/activity`。
+- Swift 不持有 thread client，不解析 `/api/thread` 的 `ThreadNotification`；默认路径只消费 `/api/activity` 的轻量 `AgentActivityEvent` 更新 StatusBubble。

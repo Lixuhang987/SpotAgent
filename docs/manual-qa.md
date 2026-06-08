@@ -17,6 +17,14 @@
 
 ## 开发验证记录
 
+### 默认路径 Swift StatusBubble activity 回归修复
+
+- 完成日期：2026-06-09
+- 实现位置：`apps/desktop/Sources/AppServices/AgentServer/AgentActivityConnectionClient.swift`、`apps/desktop/Sources/AppServices/AgentServer/AppServer.swift`、`apps/desktop/Sources/AppServices/Thread/ThreadRegistry.swift`、`apps/desktop/Sources/AppServices/AppServices.swift`
+- 自动化验证：`bash ./scripts/swiftw test` 覆盖 `/api/activity` snapshot 更新 `ThreadRegistry`、默认 StatusBubble tap 使用 activity threadId 聚焦 ThreadWindow、默认 `AppServer` 同时启动 `/api/platform` 与 `/api/activity` 连接。
+- 手工回归步骤：使用 `bash ./scripts/package-app.sh --mock-llm` 打包默认 WKWebView 路径，提交 `THREAD_HISTORY_STATUS_QA_20260609_MINIMIZE [mock:slow-focus]` 并保持 ThreadWindow 打开；运行中观察 Swift StatusBubble 应显示 running 与 `正在回复`，点击气泡应聚焦当前 ThreadWindow，不应打开 PromptPanel。
+- 边界确认：默认 Swift 只消费 `/api/activity` 的轻量 `AgentActivityEvent` 更新 `ThreadRegistry`；不解析 `/api/thread`，不同步完整 React ThreadWindow 状态。Electron flag 路径仍由 Electron ActivityWindow 承载 React StatusBubble。
+
 ### Thread 输入队列与 input.submit 破坏性迁移
 
 - 完成日期：2026-06-07（后端队列）；2026-06-08（输入协议破坏性迁移、running 输入显示顺序修正）
