@@ -13,4 +13,4 @@
 
 - 使用 fake `BrowserWindow` / fake `webContents`，通过事件手动触发 `did-finish-load`、`did-fail-load`、`closed`、`render-process-gone`。
 - ThreadWindow 测试必须确认 initial prompt 在 show/focus 前注入，并覆盖窗口在注入期间关闭的 race。
-- ActivityWindow 测试必须保持 `focusable: false`、`acceptFirstMouse: true`、`skipTaskbar: true`、`showInactive()` 这些非激活展示约束；`acceptFirstMouse` 用来保证 macOS inactive first mouse 仍触发 renderer click。
+- ActivityWindow 测试必须保持 `focusable: true`、`acceptFirstMouse: true`、`skipTaskbar: true`、`showInactive()` 这些点击与展示约束；`showInactive()` 用来非激活展示，`focusable` 和 `acceptFirstMouse` 用来保证 macOS packaged CGEvent 点击仍触发 renderer click。

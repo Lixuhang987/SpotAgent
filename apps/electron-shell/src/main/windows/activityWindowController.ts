@@ -67,7 +67,7 @@ export class ActivityWindowController {
       transparent: true,
       alwaysOnTop: true,
       skipTaskbar: true,
-      focusable: false,
+      focusable: true,
       acceptFirstMouse: true,
       resizable: false,
       webPreferences: {

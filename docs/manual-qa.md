@@ -17,13 +17,21 @@
 
 ## 开发验证记录
 
+### Electron StatusBubble 无可聚焦 ThreadWindow 回退 PromptPanel 二次修复
+
+- 完成日期：2026-06-09
+- 实现位置：`apps/electron-shell/src/main/windows/activityWindowController.ts`、`apps/electron-shell/tests/windows/activityWindowController.test.ts`
+- 修复结论：`acceptFirstMouse: true` 只能允许 inactive first mouse 传入，但 ActivityWindow 仍是 `focusable: false` 时，主仓库 packaged app 的 CGEvent 点击仍不能稳定触发 renderer click。ActivityWindow 现在改为 `focusable: true` + `acceptFirstMouse: true`，并继续用 `showInactive()` 做初始非激活展示；后续链路仍是 renderer click -> preload IPC -> Electron main sender 校验 -> runtime focus fallback -> Swift PromptPanel。
+- 自动化验证：`pnpm --filter handagent-electron-shell exec vitest run tests/windows/activityWindowController.test.ts tests/preload/activityWindowPreload.test.ts tests/main/activityWindowIpc.test.ts tests/main/electronShellRuntime.test.ts` 覆盖 ActivityWindow window options、preload 发 `activity-window:focus-thread`、main IPC sender 校验与 runtime fallback。
+- 后续 live 验证方式：合入主仓库后重新执行 `pnpm --filter handagent-electron-shell build` 和 `bash ./scripts/package-app.sh --mock-llm`，用 Electron flag packaged app 复现 `ELECTRON_STATUSBUBBLE_FALLBACK_FIXED_QA_20260609 [mock:assistant-ok]` 场景；关闭 visible Electron ThreadWindow 后，CGEvent 点击 ActivityWindow 坐标应打开 Swift `PromptPanel`。
+
 ### Electron StatusBubble 无可聚焦 ThreadWindow 回退 PromptPanel 修复
 
 - 完成日期：2026-06-09
 - 实现位置：`apps/electron-shell/src/main/windows/activityWindowController.ts`、`apps/electron-shell/tests/windows/activityWindowController.test.ts`、`apps/electron-shell/tests/main/electronShellRuntime.test.ts`、`apps/desktop/TestsSwift/AppServices/ElectronShell/ElectronBackedAppServerTests.swift`
-- 修复结论：失败 hop 定位在 `ActivityWindow renderer click`。Electron ActivityWindow 使用 `showInactive()` 且 `focusable: false`，macOS inactive first mouse 可能只激活 Electron，不稳定传给 renderer；因此后续 `activity-window:focus-thread IPC -> ElectronShellRuntime -> prompt_panel.show_requested -> Swift PromptPanel` 链路没有机会执行。ActivityWindow 现在设置 `acceptFirstMouse: true`，让点击 inactive ActivityWindow 时直接进入 renderer click。
+- 修复结论：失败 hop 定位在 `ActivityWindow renderer click`。Electron ActivityWindow 使用 `showInactive()` 且 `focusable: false`，macOS inactive first mouse 可能只激活 Electron，不稳定传给 renderer；这一轮只加入 `acceptFirstMouse: true`。主仓库实机回归后证明该修复不足，二次修复见上一条。
 - 自动化验证：`pnpm --filter handagent-electron-shell exec vitest run tests/windows/activityWindowController.test.ts tests/main/electronShellRuntime.test.ts` 覆盖 ActivityWindow `BrowserWindow` options 包含 `acceptFirstMouse: true`，以及 `ThreadWindowPrewarmer.focus()` 返回 false 时发送 `prompt_panel.show_requested`；`bash ./scripts/swiftw test --filter ElectronBackedAppServerTests/testPromptPanelShowRequestStillInvokesCallbackAfterVisibleThreadWindowClosed` 覆盖 visible ThreadWindow 关闭后的 Swift bridge prompt request 不被 availability gate 吞掉。
-- 主仓库 live 回归结果：2026-06-09 合入 `2af9ba0` 并重新执行 `pnpm --filter handagent-electron-shell build && bash ./scripts/package-app.sh --mock-llm` 后，packaged app 已包含 `acceptFirstMouse: true`，但关闭 visible Electron ThreadWindow 后点击 ActivityWindow 仍未打开 Swift `PromptPanel`。该缺陷已重新写入 `docs/bugs.md`，仍需继续定位。
+- 主仓库 live 回归结果：2026-06-09 合入 `2af9ba0` 并重新执行 `pnpm --filter handagent-electron-shell build && bash ./scripts/package-app.sh --mock-llm` 后，packaged app 已包含 `acceptFirstMouse: true`，但关闭 visible Electron ThreadWindow 后点击 ActivityWindow 仍未打开 Swift `PromptPanel`。该失败已作为二次修复输入，当前待主仓库 packaged app 实机回归确认。
 
 ### Electron flag supervisor description 启动日志修复
 
@@ -99,7 +107,7 @@
 
 **2026-06-09 待回归修复项**：
 
-- 关闭可见 Electron ThreadWindow 后，ActivityWindow 仍显示且 agent-server 继续监听 `127.0.0.1:4317` 时，用 CGEvent 点击 ActivityWindow 中心应打开 Swift `PromptPanel`。`2af9ba0` 已加入 ActivityWindow `acceptFirstMouse: true` 并通过自动化覆盖，但主仓库 packaged app 实机回归仍失败：`ELECTRON_STATUSBUBBLE_FALLBACK_FIXED_QA_20260609 [mock:assistant-ok]` 创建 `~/.spotAgent/threads/thread-1780948422082-xum47h.json` 后，关闭 `HandAgent ThreadWindow`，用 CGEvent 点击 `{1280,870}`、`{1165,870}`、`{1235,870}`、`{1320,870}` 均未打开 Swift `PromptPanel`；截图 `/tmp/handagent-qa/electron-statusbubble-fallback-fixed.png`、`/tmp/handagent-qa/electron-statusbubble-fallback-fixed-after-click.png`。该缺陷已重新写入 `docs/bugs.md`。
+- 关闭可见 Electron ThreadWindow 后，ActivityWindow 仍显示且 agent-server 继续监听 `127.0.0.1:4317` 时，用 CGEvent 点击 ActivityWindow 中心应打开 Swift `PromptPanel`。`2af9ba0` 已加入 ActivityWindow `acceptFirstMouse: true` 并通过自动化覆盖，但主仓库 packaged app 实机回归仍失败；二次修复改为 `focusable: true` + `acceptFirstMouse: true`，仍需主仓库 packaged app 实机回归确认。
 
 **2026-06-09 阻塞子项**：
 
