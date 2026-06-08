@@ -37,14 +37,12 @@ describe("electronShellProtocol", () => {
     }))).toThrow("unsupported electron shell command");
   });
 
-  it("parses prepare commands", () => {
-    const command = parseCommand(JSON.stringify({
+  it("rejects prepare commands because prewarming is startup-owned", () => {
+    expect(() => parseCommand(JSON.stringify({
       channel: "electron_shell",
       type: "thread_window.prepare",
       commandId: "cmd-prepare",
-    }));
-
-    expect(command.type).toBe("thread_window.prepare");
+    }))).toThrow("unsupported electron shell command");
   });
 
   it("parses activity window show commands", () => {

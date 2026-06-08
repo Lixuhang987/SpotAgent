@@ -80,9 +80,6 @@ export class ElectronShellRuntime {
 
   async handleCommand(command: SwiftToElectronCommand): Promise<void> {
     switch (command.type) {
-      case "thread_window.prepare":
-        await this.runCommand(command, () => this.options.prewarmer.prepare());
-        return;
       case "thread_window.open_initial_prompt":
         await this.runCommand(command, () => this.options.prewarmer.openInitialPrompt(command.payload));
         return;

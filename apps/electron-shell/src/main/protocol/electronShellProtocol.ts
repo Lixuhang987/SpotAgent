@@ -24,11 +24,6 @@ export type SwiftToElectronCommand =
     }
   | {
       channel: "electron_shell";
-      type: "thread_window.prepare";
-      commandId: string;
-    }
-  | {
-      channel: "electron_shell";
       type: "thread_window.focus";
       commandId: string;
       threadId?: string | null;
@@ -83,7 +78,6 @@ export function isSwiftToElectronCommand(value: unknown): value is SwiftToElectr
         && value.payload.attachments.every(isThreadAttachment)
         && (value.payload.actionBinding === null || isActionBinding(value.payload.actionBinding));
     case "thread_window.open_history":
-    case "thread_window.prepare":
     case "activity_window.show":
     case "shutdown":
       return true;

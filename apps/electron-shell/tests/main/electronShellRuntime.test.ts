@@ -6,42 +6,6 @@ import type {
 } from "../../src/main/protocol/electronShellProtocol.js";
 
 describe("ElectronShellRuntime", () => {
-  it("acknowledges prepare commands after preparing the thread window", async () => {
-    const harness = createHarness();
-
-    await harness.runtime.handleCommand({
-      channel: "electron_shell",
-      type: "thread_window.prepare",
-      commandId: "cmd-prepare",
-    });
-
-    expect(harness.prewarmer.prepare).toHaveBeenCalledTimes(1);
-    expect(harness.events).toContainEqual({
-      channel: "electron_shell",
-      type: "command.ack",
-      commandId: "cmd-prepare",
-      ok: true,
-    });
-  });
-
-  it("acks prepare false when preparation fails", async () => {
-    const harness = createHarness({ prepareError: new Error("load failed") });
-
-    await harness.runtime.handleCommand({
-      channel: "electron_shell",
-      type: "thread_window.prepare",
-      commandId: "cmd-prepare",
-    });
-
-    expect(harness.events).toContainEqual({
-      channel: "electron_shell",
-      type: "command.ack",
-      commandId: "cmd-prepare",
-      ok: false,
-      error: "load failed",
-    });
-  });
-
   it("acknowledges initial prompt commands", async () => {
     const harness = createHarness();
     const payload: InitialPromptPayload = {
@@ -167,10 +131,14 @@ describe("ElectronShellRuntime", () => {
     });
   });
 
-  it("forwards healthy agent server events and prepares the thread window", () => {
+  it("prewarms the thread window only after agent server health is available", async () => {
     const harness = createHarness();
 
+    harness.runtime.handleAgentServerHealth({ available: false, message: "starting" });
+    expect(harness.prewarmer.prepare).not.toHaveBeenCalled();
+
     harness.runtime.handleAgentServerHealth({ available: true });
+    await Promise.resolve();
 
     expect(harness.events).toContainEqual({
       channel: "electron_shell",
@@ -178,6 +146,11 @@ describe("ElectronShellRuntime", () => {
       available: true,
     });
     expect(harness.prewarmer.prepare).toHaveBeenCalledTimes(1);
+    expect(harness.events).toContainEqual({
+      channel: "electron_shell",
+      type: "thread_window.prepared",
+      timestamp: "2026-06-08T00:00:00.000Z",
+    });
   });
 
   it("reports visible close events and prepares a replacement", async () => {
