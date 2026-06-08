@@ -6,6 +6,25 @@ struct ElectronInitialPromptPayload: Encodable, Equatable {
     let attachments: [UserMessageAttachmentPayload]
     let actionBinding: ActionBindingPayload?
 
+    init(
+        clientRequestId: String,
+        text: String,
+        attachments: [UserMessageAttachmentPayload],
+        actionBinding: ActionBindingPayload?
+    ) {
+        self.clientRequestId = clientRequestId
+        self.text = text
+        self.attachments = attachments
+        self.actionBinding = actionBinding
+    }
+
+    init(prompt: PromptSubmission, clientRequestId: String = UUID().uuidString) {
+        self.clientRequestId = clientRequestId
+        self.text = prompt.composed
+        self.attachments = prompt.socketAttachments
+        self.actionBinding = prompt.actionBinding
+    }
+
     private enum CodingKeys: String, CodingKey {
         case clientRequestId, text, attachments, actionBinding
     }

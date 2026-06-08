@@ -3,6 +3,83 @@ import XCTest
 
 @MainActor
 final class ElectronBackedAppServerTests: XCTestCase {
+    func testPrepareThreadWindowSendsPrepareCommand() throws {
+        let shell = RecordingElectronShellProcess()
+        let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
+
+        try appServer.prepareThreadWindow()
+
+        guard case .prepare = shell.sentCommands.first else {
+            return XCTFail("expected prepare command")
+        }
+    }
+
+    func testOpenInitialPromptSendsElectronPayload() throws {
+        let shell = RecordingElectronShellProcess()
+        let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
+        let prompt = try XCTUnwrap(PromptSubmission.compose(draft: "hello", attachments: []))
+
+        try appServer.openInitialPrompt(prompt)
+
+        guard case .openInitialPrompt(_, let payload) = shell.sentCommands.first else {
+            return XCTFail("expected open initial prompt command")
+        }
+        XCTAssertEqual(payload.text, "hello")
+        XCTAssertEqual(payload.attachments, [])
+        XCTAssertNil(payload.actionBinding)
+    }
+
+    func testOpenHistorySendsOpenHistoryCommand() throws {
+        let shell = RecordingElectronShellProcess()
+        let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
+
+        try appServer.openHistory()
+
+        guard case .openHistory = shell.sentCommands.first else {
+            return XCTFail("expected open history command")
+        }
+    }
+
+    func testFocusSendsFocusCommand() throws {
+        let shell = RecordingElectronShellProcess()
+        let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
+
+        try appServer.focus(threadId: "thread-1")
+
+        guard case .focus(_, let threadId) = shell.sentCommands.first else {
+            return XCTFail("expected focus command")
+        }
+        XCTAssertEqual(threadId, "thread-1")
+    }
+
+    func testVisibleThreadWindowClosedInvokesWindowClosedCallback() {
+        let shell = RecordingElectronShellProcess()
+        let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
+        var closeCount = 0
+        appServer.onThreadWindowClosed = { closeCount += 1 }
+
+        appServer.start()
+        shell.emit(.agentServerHealth(available: true, message: nil))
+        shell.emit(.threadWindowPrepared(timestamp: "2026-06-08T00:00:01.000Z"))
+        shell.emit(.threadWindowClosed(timestamp: "2026-06-08T00:00:02.000Z", wasVisible: true))
+
+        XCTAssertEqual(closeCount, 1)
+        XCTAssertFalse(appServer.isAvailable)
+        XCTAssertEqual(appServer.startupErrorMessage, "Electron ThreadWindow 已关闭，正在重新预热…")
+    }
+
+    func testHiddenThreadWindowClosedDoesNotInvokeWindowClosedCallback() {
+        let shell = RecordingElectronShellProcess()
+        let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
+        var closeCount = 0
+        appServer.onThreadWindowClosed = { closeCount += 1 }
+
+        appServer.start()
+        shell.emit(.threadWindowClosed(timestamp: "2026-06-08T00:00:02.000Z", wasVisible: false))
+
+        XCTAssertEqual(closeCount, 0)
+    }
+
     func testAvailableOnlyAfterServerHealthAndThreadPrepared() {
         let shell = RecordingElectronShellProcess()
         let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)

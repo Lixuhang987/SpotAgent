@@ -1,7 +1,7 @@
 import Foundation
 
 @MainActor
-final class ElectronBackedAppServer: AppServerManaging {
+final class ElectronBackedAppServer: AppServerManaging, ThreadWindowCommanding {
     private let shell: any ElectronShellProcessing
     private let platformClient: PlatformBridgeConnectionClient?
     private var hasAgentServerHealth = false
@@ -17,6 +17,7 @@ final class ElectronBackedAppServer: AppServerManaging {
 
     var onAvailabilityChange: ((Bool) -> Void)?
     var onFatalError: ((String) -> Void)?
+    var onThreadWindowClosed: (() -> Void)?
 
     var isAvailable: Bool {
         hasAgentServerHealth && hasPreparedThreadWindow && startupErrorMessage == nil
@@ -56,6 +57,7 @@ final class ElectronBackedAppServer: AppServerManaging {
         isRunning = false
         shell.onEvent = nil
         shell.onTermination = nil
+        onThreadWindowClosed = nil
         platformClient?.disconnect()
         shell.stop()
         hasAgentServerHealth = false
@@ -63,6 +65,25 @@ final class ElectronBackedAppServer: AppServerManaging {
         agentServerErrorMessage = nil
         threadWindowErrorMessage = nil
         publishAvailability(force: lastPublishedAvailability)
+    }
+
+    func prepareThreadWindow() throws {
+        try shell.send(.prepare(commandId: UUID().uuidString))
+    }
+
+    func openInitialPrompt(_ prompt: PromptSubmission) throws {
+        try shell.send(.openInitialPrompt(
+            commandId: UUID().uuidString,
+            payload: ElectronInitialPromptPayload(prompt: prompt)
+        ))
+    }
+
+    func openHistory() throws {
+        try shell.send(.openHistory(commandId: UUID().uuidString))
+    }
+
+    func focus(threadId: String?) throws {
+        try shell.send(.focus(commandId: UUID().uuidString, threadId: threadId))
     }
 
     private func handle(_ event: ElectronShellEvent) {
@@ -91,9 +112,12 @@ final class ElectronBackedAppServer: AppServerManaging {
             threadWindowErrorMessage = message
             publishAvailability(force: true)
 
-        case .threadWindowClosed:
+        case .threadWindowClosed(_, let wasVisible):
             hasPreparedThreadWindow = false
             threadWindowErrorMessage = "Electron ThreadWindow 已关闭，正在重新预热…"
+            if wasVisible {
+                onThreadWindowClosed?()
+            }
             publishAvailability(force: true)
 
         case .rendererCrashed(_, let reason):
