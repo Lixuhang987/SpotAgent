@@ -107,14 +107,14 @@
 6. 创建新 thread，用 `cat ~/.spotAgent/threads/<新threadId>.json | jq .metadata.workspaceId` 确认新文件包含 `"workspaceId": null` 字段
 7. 清理测试文件：`rm ~/.spotAgent/threads/test-old-thread.json`
 
-#### 场景 3: workspace.list 协议与当前 Web 缺口验证
+#### 场景 3: workspace.list 协议与 workspace 分组刷新验证
 
 1. 审查 `packages/core/src/protocol/ThreadCommand.ts`，确认 `workspace.list` 命令类型存在
 2. 审查 `packages/core/src/protocol/ThreadNotification.ts`，确认 `workspace.listed` 通知类型存在
-3. 审查 `apps/thread-window-web/src/protocol/threadProtocol.ts`，确认当前 `isThreadNotification` 仍缺少 `workspace.listed` case 时，本场景只能记录为已知缺口，不能作为 workspace 分组刷新通过标准
+3. 审查 `apps/thread-window-web/src/protocol/threadProtocol.ts`，确认 `isThreadNotification` 已覆盖 `workspace.listed`，并校验 `workspaces[].id/name/rootPath`
 4. 启动 desktop app，打开浏览器开发者工具 Network 标签
 5. 打开 ThreadWindow，确认 WebSocket 连接后自动发送 `workspace.list` 命令
-6. 如 Network 中收到 `workspace.listed`，但历史边栏没有刷新 workspace 列表，应记录为当前 Web 类型守卫缺口；只有补齐类型守卫和对应测试后，才能恢复“workspace 分组刷新通过”的验收项
+6. 确认 Network 中收到 `workspace.listed` 后，历史边栏按返回的 workspace 列表刷新分组；若没有配置 workspace，至少应保留"默认对话"分组且不丢弃通知
 
 #### 场景 4: 左侧边栏 workspace 分组交互
 

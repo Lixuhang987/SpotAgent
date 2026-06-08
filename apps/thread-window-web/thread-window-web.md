@@ -95,12 +95,10 @@ Tailwind 主题配置见 `tailwind.config.js`，关键 token 由 `tests/designTo
 
 - **ThreadMetadata** 扩展了 `workspaceId: string | null` 字段，用于 workspace 分组
 - **ThreadCommand** 新增 `workspace.list` 命令（查询可用 workspace）
-- **ThreadNotification** 新增 `workspace.listed` 响应（返回 workspace 列表）
+- **ThreadNotification** 新增 `workspace.listed` 响应（返回 workspace 列表）；Web 侧类型守卫和 store 均已覆盖该通知
 - **ThreadStartCommand** 的 `workspaceId` 可选参数，用于创建关联到 workspace 的 thread
 
 向后兼容策略：旧 thread 文件缺失 `workspaceId` 时自动补充为 `null`，归入"默认对话"分组。
-
-已知实现缺口：`workspace.listed` 的协议类型和 store 处理分支已存在，但 Web 侧 `isThreadNotification` 类型守卫当前缺少 `workspace.listed` case，socket client 会丢弃该 notification。因此当前不能声明完整支持 workspace 分组列表刷新。
 
 ## Swift 初始 prompt 桥
 

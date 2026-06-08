@@ -169,4 +169,35 @@ describe("thread protocol helpers", () => {
       },
     })).toBe(false);
   });
+
+  it("guards workspace listed notifications", () => {
+    const base = {
+      type: "workspace.listed",
+      notificationId: "n-workspaces",
+      commandId: "workspace-list-1",
+      timestamp: "2026-06-06T00:00:09.000Z",
+    };
+
+    expect(isThreadNotification({
+      ...base,
+      payload: {
+        workspaces: [{
+          id: "docs",
+          name: "Docs",
+          rootPath: "/repo/docs",
+        }],
+      },
+    })).toBe(true);
+
+    expect(isThreadNotification({
+      ...base,
+      payload: {
+        workspaces: [{
+          id: "docs",
+          name: "Docs",
+          rootPath: 123,
+        }],
+      },
+    })).toBe(false);
+  });
 });

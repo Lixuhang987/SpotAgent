@@ -238,6 +238,12 @@ export function isThreadNotification(value: unknown): value is ThreadNotificatio
         && isOptionalString(value.commandId)
         && typeof value.payload.targetThreadId === "string"
         && isThreadDeletedStatus(value.payload.status);
+    case "workspace.listed":
+      return hasNotificationBase(value)
+        && isRecord(value.payload)
+        && isOptionalString(value.commandId)
+        && Array.isArray(value.payload.workspaces)
+        && value.payload.workspaces.every(isWorkspaceListEntry);
     case "thread.error":
       return hasNotificationBase(value)
         && isRecord(value.payload)
@@ -332,6 +338,14 @@ function isConversationMessageStatus(value: unknown): boolean {
 function isOptionalToolCall(value: unknown): boolean {
   return value === undefined
     || (isRecord(value) && !Array.isArray(value) && typeof value.name === "string");
+}
+
+function isWorkspaceListEntry(value: unknown): boolean {
+  return isRecord(value)
+    && !Array.isArray(value)
+    && typeof value.id === "string"
+    && typeof value.name === "string"
+    && typeof value.rootPath === "string";
 }
 
 function isRunStatus(value: unknown): boolean {
