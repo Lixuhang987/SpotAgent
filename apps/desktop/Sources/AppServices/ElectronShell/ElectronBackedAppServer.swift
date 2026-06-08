@@ -1,7 +1,7 @@
 import Foundation
 
 @MainActor
-final class ElectronBackedAppServer: AppServerManaging, ThreadWindowCommanding {
+final class ElectronBackedAppServer: AppServerManaging, ThreadWindowCommanding, ActivityWindowCommanding {
     private let shell: any ElectronShellProcessing
     private let platformClient: PlatformBridgeConnectionClient?
     private var hasAgentServerHealth = false
@@ -11,6 +11,7 @@ final class ElectronBackedAppServer: AppServerManaging, ThreadWindowCommanding {
     private var agentServerErrorMessage: String?
     private var threadWindowErrorMessage: String?
     private var pendingCommandKinds: [String: ThreadWindowCommandKind] = [:]
+    private var pendingActivityCommandKinds: [String: ActivityWindowCommandKind] = [:]
 
     var startupErrorMessage: String? {
         agentServerErrorMessage ?? threadWindowErrorMessage
@@ -20,6 +21,8 @@ final class ElectronBackedAppServer: AppServerManaging, ThreadWindowCommanding {
     var onFatalError: ((String) -> Void)?
     var onThreadWindowClosed: (() -> Void)?
     var onCommandResult: ((ThreadWindowCommandResult) -> Void)?
+    var onActivityWindowCommandResult: ((ActivityWindowCommandResult) -> Void)?
+    var onPromptPanelShowRequested: (() -> Void)?
 
     var isAvailable: Bool {
         hasAgentServerHealth && hasPreparedThreadWindow && startupErrorMessage == nil
@@ -61,7 +64,10 @@ final class ElectronBackedAppServer: AppServerManaging, ThreadWindowCommanding {
         shell.onTermination = nil
         onThreadWindowClosed = nil
         onCommandResult = nil
+        onActivityWindowCommandResult = nil
+        onPromptPanelShowRequested = nil
         pendingCommandKinds.removeAll()
+        pendingActivityCommandKinds.removeAll()
         platformClient?.disconnect()
         shell.stop()
         hasAgentServerHealth = false
@@ -94,6 +100,19 @@ final class ElectronBackedAppServer: AppServerManaging, ThreadWindowCommanding {
     @discardableResult
     func focus(threadId: String?) throws -> String {
         try sendThreadWindowCommand(.focus) { .focus(commandId: $0, threadId: threadId) }
+    }
+
+    @discardableResult
+    func showActivityWindow() throws -> String {
+        let commandId = UUID().uuidString
+        pendingActivityCommandKinds[commandId] = .show
+        do {
+            try shell.send(.showActivityWindow(commandId: commandId))
+            return commandId
+        } catch {
+            pendingActivityCommandKinds.removeValue(forKey: commandId)
+            throw error
+        }
     }
 
     private func handle(_ event: ElectronShellEvent) {
@@ -140,6 +159,9 @@ final class ElectronBackedAppServer: AppServerManaging, ThreadWindowCommanding {
         case .commandAck(let commandId, let ok, let error):
             handleCommandAck(commandId: commandId, ok: ok, error: error)
 
+        case .promptPanelShowRequested:
+            onPromptPanelShowRequested?()
+
         case .electronReady:
             break
         }
@@ -153,6 +175,7 @@ final class ElectronBackedAppServer: AppServerManaging, ThreadWindowCommanding {
         hasPreparedThreadWindow = false
         platformClient?.disconnect()
         pendingCommandKinds.removeAll()
+        pendingActivityCommandKinds.removeAll()
         onFatalError?(message)
         publishAvailability(force: true)
     }
@@ -165,6 +188,7 @@ final class ElectronBackedAppServer: AppServerManaging, ThreadWindowCommanding {
         lastPublishedAvailability = false
         isRunning = false
         pendingCommandKinds.removeAll()
+        pendingActivityCommandKinds.removeAll()
     }
 
     private func publishAvailability(force: Bool = false) {
@@ -191,11 +215,23 @@ final class ElectronBackedAppServer: AppServerManaging, ThreadWindowCommanding {
     }
 
     private func handleCommandAck(commandId: String, ok: Bool, error: String?) {
-        guard let kind = pendingCommandKinds.removeValue(forKey: commandId) else {
+        if let kind = pendingCommandKinds.removeValue(forKey: commandId) {
+            onCommandResult?(
+                ThreadWindowCommandResult(
+                    commandId: commandId,
+                    kind: kind,
+                    ok: ok,
+                    error: error
+                )
+            )
             return
         }
-        onCommandResult?(
-            ThreadWindowCommandResult(
+
+        guard let kind = pendingActivityCommandKinds.removeValue(forKey: commandId) else {
+            return
+        }
+        onActivityWindowCommandResult?(
+            ActivityWindowCommandResult(
                 commandId: commandId,
                 kind: kind,
                 ok: ok,

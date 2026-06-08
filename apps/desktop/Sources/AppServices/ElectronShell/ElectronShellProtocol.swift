@@ -90,6 +90,7 @@ enum ElectronShellEvent: Decodable, Equatable {
     case threadWindowClosed(timestamp: String, wasVisible: Bool)
     case rendererCrashed(window: ElectronShellRendererWindow, reason: String)
     case agentServerHealth(available: Bool, message: String?)
+    case promptPanelShowRequested(reason: PromptPanelShowRequestReason)
 
     private enum CodingKeys: String, CodingKey {
         case channel, type, timestamp, commandId, ok, error, window, reason, available, message, wasVisible
@@ -134,6 +135,10 @@ enum ElectronShellEvent: Decodable, Equatable {
                 available: try container.decode(Bool.self, forKey: .available),
                 message: try container.decodeIfPresent(String.self, forKey: .message)
             )
+        case "prompt_panel.show_requested":
+            self = .promptPanelShowRequested(
+                reason: try container.decode(PromptPanelShowRequestReason.self, forKey: .reason)
+            )
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
@@ -147,4 +152,8 @@ enum ElectronShellEvent: Decodable, Equatable {
 enum ElectronShellRendererWindow: String, Decodable, Equatable {
     case thread
     case activity
+}
+
+enum PromptPanelShowRequestReason: String, Decodable, Equatable {
+    case activityWindowClickedWithoutThread = "activity_window.clicked_without_thread"
 }

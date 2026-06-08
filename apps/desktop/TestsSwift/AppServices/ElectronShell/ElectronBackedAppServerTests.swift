@@ -56,6 +56,18 @@ final class ElectronBackedAppServerTests: XCTestCase {
         XCTAssertEqual(threadId, "thread-1")
     }
 
+    func testShowActivityWindowSendsCommand() throws {
+        let shell = RecordingElectronShellProcess()
+        let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
+
+        let commandId = try appServer.showActivityWindow()
+
+        guard case .showActivityWindow(let sentCommandId) = shell.sentCommands.first else {
+            return XCTFail("expected show activity window command")
+        }
+        XCTAssertEqual(sentCommandId, commandId)
+    }
+
     func testCommandAckPublishesThreadWindowCommandResult() throws {
         let shell = RecordingElectronShellProcess()
         let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
@@ -80,6 +92,30 @@ final class ElectronBackedAppServerTests: XCTestCase {
         ])
     }
 
+    func testActivityWindowCommandAckPublishesActivityCommandResult() throws {
+        let shell = RecordingElectronShellProcess()
+        let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
+        var results: [ActivityWindowCommandResult] = []
+        appServer.onActivityWindowCommandResult = { results.append($0) }
+
+        appServer.start()
+        let commandId = try appServer.showActivityWindow()
+        shell.emit(.commandAck(
+            commandId: commandId,
+            ok: false,
+            error: "activity window is not visible"
+        ))
+
+        XCTAssertEqual(results, [
+            ActivityWindowCommandResult(
+                commandId: commandId,
+                kind: .show,
+                ok: false,
+                error: "activity window is not visible"
+            ),
+        ])
+    }
+
     func testUnknownCommandAckIsIgnored() {
         let shell = RecordingElectronShellProcess()
         let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
@@ -90,6 +126,18 @@ final class ElectronBackedAppServerTests: XCTestCase {
         shell.emit(.commandAck(commandId: "missing", ok: false, error: "ignored"))
 
         XCTAssertTrue(results.isEmpty)
+    }
+
+    func testPromptPanelShowRequestInvokesCallback() {
+        let shell = RecordingElectronShellProcess()
+        let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
+        var showRequestCount = 0
+        appServer.onPromptPanelShowRequested = { showRequestCount += 1 }
+
+        appServer.start()
+        shell.emit(.promptPanelShowRequested(reason: .activityWindowClickedWithoutThread))
+
+        XCTAssertEqual(showRequestCount, 1)
     }
 
     func testVisibleThreadWindowClosedInvokesWindowClosedCallback() {
@@ -239,6 +287,26 @@ final class ElectronBackedAppServerTests: XCTestCase {
 
         XCTAssertFalse(appServer.isAvailable)
         XCTAssertEqual(availability, [true, false])
+    }
+
+    func testStopClearsActivityWindowCallbacksAndPendingCommands() throws {
+        let shell = RecordingElectronShellProcess()
+        let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
+        var results: [ActivityWindowCommandResult] = []
+        var showRequestCount = 0
+        appServer.onActivityWindowCommandResult = { results.append($0) }
+        appServer.onPromptPanelShowRequested = { showRequestCount += 1 }
+
+        appServer.start()
+        let commandId = try appServer.showActivityWindow()
+        appServer.stop()
+        shell.emit(.commandAck(commandId: commandId, ok: true, error: nil))
+        shell.emit(.promptPanelShowRequested(reason: .activityWindowClickedWithoutThread))
+
+        XCTAssertNil(appServer.onActivityWindowCommandResult)
+        XCTAssertNil(appServer.onPromptPanelShowRequested)
+        XCTAssertTrue(results.isEmpty)
+        XCTAssertEqual(showRequestCount, 0)
     }
 
     func testUnexpectedShellTerminationReportsFatalErrorAndMarksUnavailable() {
