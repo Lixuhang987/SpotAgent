@@ -214,7 +214,7 @@ describe("ActivityWindowController", () => {
     expect(preventDefault).not.toHaveBeenCalled();
   });
 
-  it("releases native focus for the next activity click without showing the window", async () => {
+  it("releases native focus for the next activity click by re-showing inactive", async () => {
     const window = new FakeBrowserWindow();
     const controller = new ActivityWindowController({
       activityWindowHTMLPath: "/dist/activity-window/index.html",
@@ -228,8 +228,8 @@ describe("ActivityWindowController", () => {
     await controller.show();
     controller.releaseNativeFocusForNextClick();
 
-    expect(window.blurCount).toBe(1);
-    expect(window.showInactiveCount).toBe(1);
+    expect(window.hideCount).toBe(1);
+    expect(window.showInactiveCount).toBe(2);
   });
 
   it("ignores native focus release before the activity window exists", () => {
@@ -254,7 +254,7 @@ class FakeBrowserWindow extends EventEmitter {
   loadedFile: string | null = null;
   loadFileCount = 0;
   showInactiveCount = 0;
-  blurCount = 0;
+  hideCount = 0;
 
   setBounds(bounds: { x: number; y: number; width: number; height: number }): void {
     this.bounds = bounds;
@@ -270,7 +270,7 @@ class FakeBrowserWindow extends EventEmitter {
     this.showInactiveCount += 1;
   }
 
-  blur(): void {
-    this.blurCount += 1;
+  hide(): void {
+    this.hideCount += 1;
   }
 }

@@ -30,7 +30,7 @@
 - ActivityWindow 的 `webPreferences` 固定为 `contextIsolation: true`、`nodeIntegration: false`。
 - preload 只暴露 activity WebSocket URL 和 `focusThread(threadId)`；renderer 不获得 Node/Electron 全量能力。
 - 点击气泡后 Electron main 优先聚焦 visible ThreadWindow；如果没有可聚焦窗口，发送 `prompt_panel.show_requested` 给 Swift。该语义同时覆盖 renderer `activity-window:focus-thread` IPC、ActivityWindow native focus 和 native mouse down 兜底。
-- visible ThreadWindow 关闭后，Electron main 会对 ActivityWindow 调用 `blur()`，避免 ActivityWindow 保持 AXMain / native focused 状态而吞掉下一次同 App 内点击。
+- visible ThreadWindow 关闭后，Electron main 会对 ActivityWindow 执行 `hide()` 后 `showInactive()`，把小窗重新放回非激活展示状态，避免 ActivityWindow 保持 AXMain / native focused 状态而吞掉下一次同 App 内点击。
 
 ## Phase 3 边界
 

@@ -9,7 +9,7 @@ export type BrowserWindowLike = {
   loadFile(filePath: string): Promise<unknown> | unknown;
   setBounds(bounds: Rectangle): void;
   showInactive(): void;
-  blur(): void;
+  hide(): void;
 };
 
 type ScreenProvider = {
@@ -59,7 +59,13 @@ export class ActivityWindowController {
   }
 
   releaseNativeFocusForNextClick(): void {
-    this.window?.blur();
+    const window = this.window;
+    if (!window) {
+      return;
+    }
+
+    window.hide();
+    window.showInactive();
   }
 
   private ensureWindow(): BrowserWindowLike {
