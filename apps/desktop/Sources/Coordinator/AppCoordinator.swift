@@ -225,7 +225,7 @@ final class AppCoordinator {
     }
 
     private func handleStatusBubbleTap(_ threadID: String?) {
-        if threadWindowLifecycle.focus(threadID: threadID) { return }
+        if threadID != nil, threadWindowLifecycle.focus(threadID: threadID) { return }
         promptPanelController.show()
     }
 

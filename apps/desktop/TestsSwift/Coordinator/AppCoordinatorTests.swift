@@ -68,6 +68,17 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testElectronStatusBubbleTapWithoutThreadIDDoesNotFocusOpenThreadWindow() {
+        let client = RecordingThreadWindowCommandClient()
+        let coordinator = AppCoordinator(services: electronServices(commandClient: client))
+
+        coordinator.send(.openHistory)
+        coordinator.send(.statusBubbleTapped(nil))
+
+        XCTAssertTrue(client.focusedThreadIDs.isEmpty)
+    }
+
+    @MainActor
     func testElectronShowAndTogglePrepareThreadWindow() {
         let client = RecordingThreadWindowCommandClient()
         let coordinator = AppCoordinator(services: electronServices(commandClient: client))
