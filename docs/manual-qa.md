@@ -216,12 +216,6 @@
 1. 继续回到 thread A 发送需要工具的第二轮 prompt，确认 thread A 仍可继续使用真实工具，不会退回只暴露 `use_tools`。
 1. 打开 `~/.spotAgent/log/<YYYY-MM-DD>/network-NNN.jsonl`，对比两条 thread 的请求体：thread A 激活后应包含完整工具集，thread B 未激活时仍只包含 `use_tools`。
 
-### 场景 3：同一 thread 激活后不再重复出现 use_tools
-
-1. 接场景 2，在同一 thread 中再次输入"再读一次桌面前台"或类似 prompt。
-1. 确认 ThreadWindow 中本轮不再出现 `use_tools` tool call 气泡，模型直接调用真实工具。
-1. 打开 `~/.spotAgent/log/` 中本轮对应的网络日志条目，确认请求体 `tools` 数组已包含完整工具集，不再只有 `use_tools`。
-
 ### 场景 4：agent-server 重启后激活状态可恢复
 
 1. 完成场景 2（触发过工具激活的 thread），记录该 thread id。

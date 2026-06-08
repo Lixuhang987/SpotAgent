@@ -1035,3 +1035,11 @@
 - **验证过程**：通过全局快捷键打开 PromptPanel，提交 `HANDAGENT_REAL_TOOL_SCENE2_20260609 请只调用屏幕读取工具看一下我的屏幕，然后用一句话总结。不要写文件，不要请求其他权限。`。ThreadWindow 先显示 `use_tools` tool 结果，随后显示 `screen.capture` tool 结果，最终 assistant 回复为“你的屏幕显示的是一张占满屏幕的抽象彩色图案/艺术壁纸。”；`/api/activity` 先进入 `tool_running / 正在使用 screen.capture`，完成后回到 `idle / 点击开始`。
 - **证据**：thread 文件 `~/.spotAgent/threads/thread-1780961496528-f04ryg.json`，共 6 条消息，包含 user、`use_tools` tool result、`screen.capture` tool result 与最终 assistant；网络日志 `~/.spotAgent/log/2026-06-09/network-003.jsonl` 第 3 行请求 tools 仅包含 `use_tools`，第 5 行激活后包含完整 tool catalog，第 7 行包含 `screen_capture` function call/output；截图 `/tmp/handagent-qa/real-tool-scene2-completed-w44970.png`、`/tmp/handagent-qa/real-tool-scene2-completed-w44960.png`；Computer Use 可访问树确认 ThreadWindow 可见 `[ use_tools ]`、`[ screen.capture ]` 和最终 assistant 文本。
 - **结论**：通过。真实 LLM 在新 thread 中可先调用 `use_tools` 激活完整工具集，再调用 `screen.capture`，并把 tool messages 与最终回复完整展示和持久化。
+
+### 场景 3：真实 LLM 同一 thread 激活后不再重复 use_tools
+
+- **验证日期**：2026-06-09
+- **验证环境**：真实 LLM / packaged app / macOS 15+；沿用场景 2 的 `thread-1780961496528-f04ryg`，bundle 无 `HandAgentRuntimeMode.json`，确认未启用 mock LLM。
+- **验证过程**：场景 2 完成后，在同一 ThreadWindow composer 提交 `HANDAGENT_REAL_TOOL_SCENE3_20260609 再读一次桌面前台，并用一句话说明。`。本轮 ThreadWindow 没有新增 `use_tools` 气泡，直接出现 `[ app.frontmost ]` tool result，最终 assistant 回复为“当前前台应用是 HandAgentDesktop。”；`/api/activity` 完成后回到 `idle / 点击开始`。
+- **证据**：thread 文件 `~/.spotAgent/threads/thread-1780961496528-f04ryg.json` 更新为 10 条消息，场景 3 用户消息之后依次为 assistant 空 tool-call 占位、`app_frontmost` tool result 与最终 assistant；网络日志 `~/.spotAgent/log/2026-06-09/network-004.jsonl` 第 1 行场景 3 首个请求的 `tools` 已包含完整 tool catalog，第 3 行场景 3 用户消息之后的新调用只有 `app_frontmost`，没有新的 `use_tools`；Computer Use 可访问树确认 ThreadWindow 可见 `[ app.frontmost ] {"bundleId":"com.yourname.HandAgentDesktop","pid":34255,"name":"HandAgentDesktop","resolution":"best_effort"}` 与最终 assistant 文本。
+- **结论**：通过。同一 thread 完成工具激活后，后续需要工具的真实 LLM turn 直接使用完整工具集，不再重复执行 `use_tools`。
