@@ -39,6 +39,26 @@
 - 不让 renderer 直接执行 runtime 或平台 tool；React ThreadWindow 仍直接连接 `/api/thread`。
 - 不把完整 thread 状态 mirror 到 Electron main；StatusBubble renderer 只订阅 `/api/activity`。
 
+## 直接子节点
+
+| 子节点 | 文档 | 职责 |
+|------|------|------|
+| `src/` | [src/src.md](/Users/mu9/proj/handAgent/apps/electron-shell/src/src.md) | Electron main、preload、ActivityWindow renderer 源码 |
+| `tests/` | [tests/tests.md](/Users/mu9/proj/handAgent/apps/electron-shell/tests/tests.md) | Electron shell 的 Vitest 单元测试 |
+| `package.json` | 无独立文档 | workspace 包声明；`build` 同时编译 main/preload 并打包 activity renderer |
+| `tsconfig.json` | 无独立文档 | main 与 preload 的 NodeNext TypeScript 编译，输出到 `dist/` |
+| `tsconfig.activity-window.json` | 无独立文档 | ActivityWindow renderer 的 React/Vite TypeScript 检查，不直接输出 |
+| `vite.activity-window.config.ts` | 无独立文档 | 以 `src/activity-window` 为 root，输出 `dist/activity-window` |
+| `vitest.config.ts` | 无独立文档 | Node 环境运行 `tests/**/*.test.ts` |
+| `dist/` | 不纳入仓库文档 | build 产物；packaged app 会复制其中 `main/main.js` |
+| `node_modules/` | 不纳入仓库文档 | pnpm 安装产物 |
+
+## 构建约束
+
+- `pnpm --filter handagent-electron-shell build` 先用 `tsc -p tsconfig.json` 编译 main/preload 到 `dist/`，再用 `tsc -p tsconfig.activity-window.json` 检查 ActivityWindow renderer，最后用 Vite 输出 `dist/activity-window`。
+- Swift packaged app 路径依赖 `dist/main/main.js`；修改 main/preload 后必须重新 build，不能只跑 ActivityWindow Vite。
+- `src/activity-window` 可以使用 React 和 browser API；`src/main` 可以使用 Electron/Node；`src/preload` 只能暴露受控 globals，不把 Node/Electron 全量能力泄漏给 renderer。
+
 ## 验证命令
 
 ```bash

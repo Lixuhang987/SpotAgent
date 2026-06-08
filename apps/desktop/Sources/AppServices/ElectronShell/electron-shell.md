@@ -22,6 +22,24 @@ Swift 通过 `ActivityWindowCommanding.showActivityWindow()` 发送 `activity_wi
 
 Electron StatusBubble 点击且无法聚焦 ThreadWindow 时，会发送 `prompt_panel.show_requested`；Swift 只负责打开 PromptPanel，不解析 activity 状态。
 
+## 文件
+
+| 文件 | 职责 |
+|------|------|
+| `ElectronShellProcess.swift` | 启动 Electron 子进程、写入 command JSON line、读取 stdout event JSON line、处理主动停机和非主动退出 |
+| `ElectronShellProtocol.swift` | Swift 端 command/event DTO，必须与 TS `electronShellProtocol.ts` 字段一致 |
+| `ElectronBackedAppServer.swift` | Electron flag 路径下的 app-server health gate、ThreadWindow command client、ActivityWindow command client 和 platform bridge 连接管理 |
+| `ThreadWindowCommanding.swift` | Coordinator 面向 ThreadWindow 的 command 抽象：open initial prompt、open history、focus |
+| `ActivityWindowCommanding.swift` | Coordinator 面向 Electron ActivityWindow 的 show command 抽象 |
+
+## 可用性 gate
+
+- `ElectronBackedAppServer.isAvailable` 必须同时满足 `agent_server.health available=true`、`thread_window.prepared`、没有 agent-server/thread-window 错误。
+- `thread_window.prepare_failed` 或 hidden/visible ThreadWindow closed 都会让 `hasPreparedThreadWindow=false`，并发布 unavailable。
+- `agent_server.health available=false` 会断开 `/api/platform`；重新 available 后才连接 `PlatformBridgeConnectionClient`。
+- visible ThreadWindow closed 才调用 `onThreadWindowClosed`；hidden prewarm 关闭只影响可提交状态。
+- ActivityWindow renderer crash 不改变 app-server availability；ThreadWindow renderer crash 会按 fatal 处理。
+
 ## 边界
 
 - 不持有 ThreadWindow tabs/messages/history 状态。
@@ -30,3 +48,10 @@ Electron StatusBubble 点击且无法聚焦 ThreadWindow 时，会发送 `prompt
 - 不执行 ScreenCaptureKit、Accessibility、NSWorkspace、NSPasteboard 以外的新平台能力迁移。
 - 不替换默认 `AppServer` 路径；默认路径仍由 Swift 直接启动 agent-server。
 - 不承载 PromptPanel、Settings、Hotkey 或焦点恢复；这些仍由 Swift 宿主负责。
+
+## 修改约束
+
+- 新增或改名 Electron command/event 时，先改 `ElectronShellProtocol.swift`，再同步 `apps/electron-shell/src/main/protocol/electronShellProtocol.ts` 和双方测试。
+- 不把 `ThreadCommand` / `ThreadNotification` 引入本目录；Swift 只传 initial prompt payload 和窗口 command。
+- `ElectronShellProcess` 的 stdout 只能解析 event；stderr 可用于日志但当前不转发 UI。不要把 Electron diagnostic 写到 stdout。
+- `stop()` 必须清理 callbacks、pending command kind、platform client 和 shell handlers，避免旧 Electron 事件影响下一次 start。
