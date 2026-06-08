@@ -17,12 +17,6 @@
 
 ## 开发验证记录
 
-### Worktree 基线与 Swift 缓存优化
-
-- 完成日期：2026-06-08
-- 实现位置：`scripts/swiftw`、`scripts/package-app.sh`、`scripts/swiftw.test.sh`、`scripts/package-app.test.sh`、`AGENTS.md`、`README.md`、`docs/dev.md`
-- 验收结果：新 worktree 的默认基线策略调整为先跑 `bash ./scripts/test.sh`，只有涉及 Swift desktop、`Package.swift`、Swift 脚本、打包脚本或桌面启动链路时才在开始阶段追加 `bash ./scripts/swiftw build`。`swiftw` 与 `package-app.sh` 默认使用主 checkout 的 `.cache/swiftpm/` 作为 SwiftPM 依赖缓存，并支持 `HANDAGENT_SWIFTPM_CACHE_DIR` 与 `HANDAGENT_SWIFT_MODULE_CACHE_DIR` 覆盖缓存路径。已通过 `bash ./scripts/test.sh`、`bash ./scripts/swiftw build`、`bash ./scripts/swiftw test`。
-
 ### Thread 输入队列与 input.submit 破坏性迁移
 
 - 完成日期：2026-06-07（后端队列）；2026-06-08（输入协议破坏性迁移、running 输入显示顺序修正）
@@ -30,21 +24,6 @@
 - 实现位置：`packages/core/src/protocol/ThreadCommand.ts`、`apps/agent-server/src/thread/ThreadInputQueue.ts`、`apps/agent-server/src/thread/ThreadRuntimeOrchestrator.ts`、`apps/agent-server/src/thread/ThreadCommandRouter.ts`、`apps/agent-server/src/server/server.ts`、`apps/thread-window-web/src/protocol/threadProtocol.ts`、`apps/thread-window-web/src/thread/threadSocketClient.ts`、`apps/thread-window-web/src/store/threadWindowStore.ts`、`apps/thread-window-web/src/App.tsx`、`apps/thread-window-web/src/components/Composer.tsx`
 - 验收结果：外部用户输入命令统一为 `input.submit`，旧输入命令已从当前 `ThreadCommand` 移除；ThreadWindow composer 在 running 状态下仍可提交输入并保留 Stop，但 running 输入先进入前端本地 FIFO 队列并显示在 Composer 上方，等 thread 离开 running 后逐条发送，避免两个 user input 连续显示；后端公开 `/api/thread input.submit` 在 running 时返回 `thread.error(code: "thread_running")`，普通用户 follow-up 不走后端排队。已通过 `bash ./scripts/test.sh`、`pnpm --filter handagent-thread-window-web test -- tests/threadWindowStore.test.ts`、`pnpm --filter handagent-thread-window-web build`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`。
 
-## 文档一致性 smoke（P2）
-
-1. 从 `AGENTS.md → handAgent.md → apps/apps.md / packages/packages.md` 逐层打开文档，确认每级 `<dir>.md` 只索引直接子节点。
-1. 检索当前文档中的 `SessionWindow` / `sessionWindow`，确认非归档命中只作为历史旧称说明出现，当前实现统一使用 `ThreadWindow`。
-1. 对照 `apps/desktop/Sources/ThreadWindow/thread-window.md`、`apps/thread-window-web/thread-window-web.md`、`apps/electron-shell/electron-shell.md` 和 `apps/agent-server/agent-server.md`，确认默认路径下 Swift 只做 WKWebView host 与 `/api/platform`，Electron flag 路径承载 ThreadWindow `BrowserWindow` 并监督 agent-server，React 持有 `/api/thread` 和 ThreadWindow UI 状态。
-1. 对照 `packages/core/src/protocol/protocol.md` 与 Web/agent-server 文档，确认 `workspace.list` / `workspace.listed`、`permission.requested` / `permission.answered`、`workspace.requested` / `workspace.answered` 的归属一致。
-
-## Anthropic Provider 真实调用（P1）
-
-1. 配置可用 Anthropic API key 与模型后提交普通文本 prompt，确认 assistant 回复可见且逐段 streaming。
-1. 在 Anthropic provider 下触发一个会调用 tool 的 prompt，确认 tool name 经适配后仍能回到点号风格（如 `file.read`），tool result 可回灌给 LLM。
-
-最近阻塞记录：2026-05-24 复查 `~/.spotAgent/settings.json`，当前 `llm.provider` 为 `openai-compatible`，`llm.api` 为 `responses`，`llm.model` 为 `gpt-5.4`，`llm.baseUrl` 为 `http://127.0.0.1:8317/v1`，API key 仅属于 OpenAI 兼容配置；环境变量中没有 `ANTHROPIC_API_KEY` 或 `CLAUDE_API_KEY`，仅有 `ANTHROPIC_BASE_URL`。配置文件没有可用的 Anthropic key 或 Anthropic 模型；在没有用户提供真实 Anthropic 配置前，不能验证 Anthropic streaming 与 tool call 回灌，本项不归档为通过。
-
-最近阻塞记录：2026-06-06 修复 `Anthropic AI SDK provider 错误流被落成空 assistant` 后，继续使用 Anthropic provider、`llm.api = "chat"`、`llm.model = "claude-3-5-haiku-20241022"`、`llm.baseUrl = "https://anyrouter.top/v1"` 与 `ANTHROPIC_AUTH_TOKEN` 真实模式回归。提交 `Use plain text only. Reply exactly: ANTHROPIC_QA_TEXT_AFTER_FIX_20260606` 后，ThreadWindow 不再静默写空 assistant，而是显示红色错误 `Failed after 3 attempts...ssl/tls alert handshake failure`；thread 记录只有 user message，并记录同名 `error` event。当前 anyrouter endpoint 对 Node/AI SDK streaming TLS 握手失败，因此仍未获得 assistant 文本或 Anthropic tool call 回灌证据，本项不能归档为通过。
 
 ## agent-server thread 主链路 smoke（P2）
 
@@ -75,14 +54,6 @@
 1. 确认 ThreadWindow 打开后不是停留在空的"准备开始"状态，而是创建新 tab，并显示这条 user message。
 1. 再次打开 PromptPanel，连续提交第二条不同 prompt，确认复用同一个 ThreadWindow 但创建新的 tab/thread，而不是写入当前 active tab 的 composer thread。
 1. 在 `~/.spotAgent/threads/` 找到对应两个 thread 文件，确认每个文件都包含各自的首条 user message。
-
-## PromptPanel ThreadWindow no-prewarm smoke（P2）
-
-1. 从当前 worktree 执行 `bash ./scripts/swiftw run HandAgentDesktop`。
-1. 通过全局快捷键打开 PromptPanel，先不要提交，确认没有 ThreadWindow 跳出，App 不因为 ThreadWindow 创建额外切到前台窗口。
-1. 确认仅打开 PromptPanel 不会创建 Swift WKWebView ThreadWindow；提交普通 prompt 后才打开 ThreadWindow，并创建新的 tab/thread。
-1. 关闭 ThreadWindow，再次打开 PromptPanel；确认打开 PromptPanel 本身不卡住输入焦点，仍可立即输入。
-1. 暂停或断开 agent-server 后打开 PromptPanel，确认只显示 server 不可用提示，不创建 ThreadWindow，也不丢草稿。
 
 ## Electron UI Shell Phase 0 基础启动（P2）
 

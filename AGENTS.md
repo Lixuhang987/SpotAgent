@@ -23,22 +23,12 @@
 - `apps/apps.md`：应用层总览，索引 desktop、thread-window-web 与 agent-server。
 - `packages/packages.md`：包层总览，索引 core 跨平台核心。
 - `examples/examples.md`：可复制到 `~/.spotAgent/` 的 Plugin / Append Prompt / MCP 配置示例。
-- `docs/`：开发说明集合；平铺文件在下面列为叶节点，`human/` 与 `superpowers/` 是例外嵌套集合。
+- `docs/`：开发说明集合
 - `codex/`：本地 code agent 的参考项目（权限系统 / tool 系统 / UI 流式展示 / 子 agent 系统等可借鉴）。
-
-### `docs/` 叶文件
-
-- `docs/dev.md`：开发说明。
-- `docs/manual-qa.md`：手工验收清单。
-- `docs/llm-api-integration.md`：LLM 真实 API 集成测试运行方式、输出 JSON 结构与 mock 构造依据。
-- `docs/TODO.md`：按依赖关系分组的待办路线图（P0–P3）。
-- `docs/bugs.md`：当前已知 bug 清单与修复约束。
-- `docs/archive.md`：已通过实机 QA 的历史归档索引。
-- `docs/human/`：手工撰写的设计资料。
-- `docs/superpowers/specs/` 与 `docs/superpowers/plans/`：历史设计稿与实施计划。
 
 ## 文档维护约定
 
+- 文档的标准是：修改当前目录下的代码必须了解的前提，不包括上一级文档已经提到过的
 - 每级 `<dir>.md` 只索引**直接**子节点；不要把孙节点路径平铺上来，避免上层文档随子树膨胀。
 - 新增子目录或子模块时，更新所在目录的 `<dir>.md` 索引；上层文档无需改动。
 - 跨模块约定（协议字段、设置文件路径等）必须在双方文档相互引用，避免单边漂移。
