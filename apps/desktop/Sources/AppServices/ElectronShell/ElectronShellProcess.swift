@@ -18,25 +18,34 @@ final class ElectronShellProcess: ElectronShellProcessing {
     private let launchPath: String
     private let arguments: [String]
     private let environment: [String: String]
+    private let currentDirectoryURL: URL?
     private let encoder = JSONEncoder()
     private let outputDecoder = ElectronShellOutputDecoder()
     private var process: Process?
     private var stdinPipe: Pipe?
     private var stdoutPipe: Pipe?
     private var stderrPipe: Pipe?
+    private var isStopping = false
+    private var forcedTerminationTask: Task<Void, Never>?
 
     init(
         launchPath: String,
         arguments: [String],
-        environment: [String: String]
+        environment: [String: String],
+        currentDirectoryURL: URL? = nil
     ) {
         self.launchPath = launchPath
         self.arguments = arguments
         self.environment = environment
+        self.currentDirectoryURL = currentDirectoryURL
     }
 
     func start() throws {
         guard process == nil else { return }
+
+        forcedTerminationTask?.cancel()
+        forcedTerminationTask = nil
+        isStopping = false
 
         let process = Process()
         let input = Pipe()
@@ -46,6 +55,7 @@ final class ElectronShellProcess: ElectronShellProcessing {
         process.executableURL = URL(fileURLWithPath: launchPath)
         process.arguments = arguments
         process.environment = environment
+        process.currentDirectoryURL = currentDirectoryURL
         process.standardInput = input
         process.standardOutput = output
         process.standardError = errorOutput
@@ -95,16 +105,29 @@ final class ElectronShellProcess: ElectronShellProcessing {
     }
 
     func stop() {
+        guard let process else {
+            stdinPipe = nil
+            stdoutPipe = nil
+            stderrPipe = nil
+            return
+        }
+
+        isStopping = true
         stdoutPipe?.fileHandleForReading.readabilityHandler = nil
         stderrPipe?.fileHandleForReading.readabilityHandler = nil
-        process?.terminationHandler = nil
-        if process?.isRunning == true {
-            process?.terminate()
-        }
-        process = nil
+        try? stdinPipe?.fileHandleForWriting.close()
         stdinPipe = nil
-        stdoutPipe = nil
-        stderrPipe = nil
+        forcedTerminationTask?.cancel()
+        forcedTerminationTask = Task { @MainActor [weak self, weak process] in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            guard
+                let self,
+                let process,
+                self.process === process,
+                process.isRunning
+            else { return }
+            process.terminate()
+        }
     }
 
     private func handleOutput(_ data: Data, from sourceProcess: Process) {
@@ -115,6 +138,10 @@ final class ElectronShellProcess: ElectronShellProcessing {
 
     private func handleTermination(_ terminatedProcess: Process) {
         guard process === terminatedProcess else { return }
+        let wasStopping = isStopping
+        isStopping = false
+        forcedTerminationTask?.cancel()
+        forcedTerminationTask = nil
         stdoutPipe?.fileHandleForReading.readabilityHandler = nil
         stderrPipe?.fileHandleForReading.readabilityHandler = nil
         let status = terminatedProcess.terminationStatus
@@ -122,6 +149,7 @@ final class ElectronShellProcess: ElectronShellProcessing {
         stdinPipe = nil
         stdoutPipe = nil
         stderrPipe = nil
+        guard !wasStopping else { return }
         onTermination?("Electron shell exited with status \(status)")
     }
 

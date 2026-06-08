@@ -73,11 +73,11 @@
 
 1. 默认不设置 `HANDAGENT_ELECTRON_SHELL`，运行 `bash ./scripts/swiftw run HandAgentDesktop`，确认 PromptPanel 提交仍打开 Swift `WKWebView` ThreadWindow。
 1. 先运行 `pnpm --filter handagent-electron-shell build`。
-1. 设置 `HANDAGENT_ELECTRON_SHELL=1`、`HANDAGENT_ELECTRON_BINARY=/usr/bin/env`、`HANDAGENT_ELECTRON_MAIN=apps/electron-shell/dist/main/main.js` 后运行桌面 App。
+1. 设置 `HANDAGENT_ELECTRON_SHELL=1` 后运行桌面 App；默认应通过 `pnpm --filter handagent-electron-shell exec electron apps/electron-shell/dist/main/main.js` 启动 Electron，不要求全局 `electron` 可执行文件。
 1. 启动后确认 Electron shell 和 agent-server 只有各一份进程，且 `127.0.0.1:4317` 没有第二份 server 冲突。
 1. 启动完成前 PromptPanel 不允许提交；收到 Electron `agent_server.health` 与 `thread_window.prepared` 后 PromptPanel 恢复可提交。
 1. 提交 prompt 后仍打开 Swift `WKWebView` ThreadWindow；这说明 Phase 0 未提前切换真实 ThreadWindow。
-1. 关闭隐藏 Electron ThreadWindow 或模拟预热失败时，确认 PromptPanel 重新阻止提交并显示对应错误，而不是仅显示泛化的 agent-server 断开文案。
+1. 关闭隐藏 Electron ThreadWindow 时，确认 PromptPanel 重新阻止提交并显示 `Electron ThreadWindow 已关闭，正在重新预热…`；模拟预热失败时确认显示具体失败原因，而不是仅显示泛化的 agent-server 断开文案。
 1. 退出 HandAgent 后确认 Electron 和 Node agent-server 进程不残留。
 
 ## ThreadWindow UI 重构完整验收（P2）

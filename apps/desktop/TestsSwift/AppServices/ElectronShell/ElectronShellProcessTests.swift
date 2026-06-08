@@ -37,4 +37,38 @@ final class ElectronShellProcessTests: XCTestCase {
             ]
         )
     }
+
+    func testStopClosesStdinBeforeForcingTermination() throws {
+        let temporaryDirectory = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let markerURL = temporaryDirectory.appendingPathComponent("stop-marker.txt")
+        let shell = ElectronShellProcess(
+            launchPath: "/bin/sh",
+            arguments: [
+                "-c",
+                """
+                trap 'printf term > "$1"; exit 0' TERM
+                while IFS= read -r line; do :; done
+                printf eof > "$1"
+                """,
+                "handagent-electron-shell-stop-test",
+                markerURL.path,
+            ],
+            environment: [:]
+        )
+
+        try shell.start()
+        shell.stop()
+
+        let deadline = Date().addingTimeInterval(1)
+        while Date() < deadline && !FileManager.default.fileExists(atPath: markerURL.path) {
+            Thread.sleep(forTimeInterval: 0.01)
+        }
+
+        let marker = try String(contentsOf: markerURL, encoding: .utf8)
+        XCTAssertEqual(marker, "eof")
+    }
 }

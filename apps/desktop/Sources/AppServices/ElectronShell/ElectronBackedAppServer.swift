@@ -93,7 +93,8 @@ final class ElectronBackedAppServer: AppServerManaging {
 
         case .threadWindowClosed:
             hasPreparedThreadWindow = false
-            publishAvailability()
+            threadWindowErrorMessage = "Electron ThreadWindow 已关闭，正在重新预热…"
+            publishAvailability(force: true)
 
         case .rendererCrashed(_, let reason):
             threadWindowErrorMessage = reason

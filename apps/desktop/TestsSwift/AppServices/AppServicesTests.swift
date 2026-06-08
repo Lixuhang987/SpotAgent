@@ -29,13 +29,59 @@ final class AppServicesTests: XCTestCase {
         let appServer = AppServices.defaultAppServer(
             environment: [
                 "HANDAGENT_ELECTRON_SHELL": "1",
-                "HANDAGENT_ELECTRON_BINARY": "/usr/bin/env",
                 "HANDAGENT_ELECTRON_MAIN": "apps/electron-shell/dist/main/main.js",
             ],
             platformServerURL: URL(string: "ws://127.0.0.1:4317/api/platform")!
         )
 
         XCTAssertTrue(appServer is ElectronBackedAppServer)
+    }
+
+    @MainActor
+    func testDefaultElectronShellLaunchUsesPnpmWorkspaceElectron() throws {
+        let repoRoot = URL(fileURLWithPath: "/repo/worktree", isDirectory: true)
+        let configuration = AppServices.defaultElectronShellLaunchConfiguration(
+            environment: ["HANDAGENT_ELECTRON_SHELL": "1"],
+            currentDirectoryURL: repoRoot,
+            bundleExecutableURL: nil,
+            bundleResourceURL: nil,
+            bundleURL: nil,
+            fileExists: { path in
+                path == repoRoot.appendingPathComponent("Package.swift").path ||
+                    path == repoRoot.appendingPathComponent("apps/electron-shell/package.json").path
+            }
+        )
+
+        XCTAssertEqual(configuration.launchPath, "/usr/bin/env")
+        XCTAssertEqual(configuration.arguments, [
+            "pnpm",
+            "--filter",
+            "handagent-electron-shell",
+            "exec",
+            "electron",
+            "apps/electron-shell/dist/main/main.js",
+        ])
+        XCTAssertEqual(configuration.currentDirectoryURL?.path, repoRoot.path)
+        XCTAssertEqual(configuration.environment["HANDAGENT_REPO_ROOT"], repoRoot.path)
+    }
+
+    @MainActor
+    func testExplicitElectronBinaryPreservesOverride() throws {
+        let configuration = AppServices.defaultElectronShellLaunchConfiguration(
+            environment: [
+                "HANDAGENT_ELECTRON_SHELL": "1",
+                "HANDAGENT_ELECTRON_BINARY": "/custom/electron",
+                "HANDAGENT_ELECTRON_MAIN": "/custom/main.js",
+            ],
+            currentDirectoryURL: URL(fileURLWithPath: "/repo/worktree", isDirectory: true),
+            bundleExecutableURL: nil,
+            bundleResourceURL: nil,
+            bundleURL: nil,
+            fileExists: { _ in false }
+        )
+
+        XCTAssertEqual(configuration.launchPath, "/custom/electron")
+        XCTAssertEqual(configuration.arguments, ["/custom/main.js"])
     }
 
     @MainActor

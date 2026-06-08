@@ -45,6 +45,14 @@ protocol FatalAlertPresenting {
 }
 
 @MainActor
+struct ElectronShellLaunchConfiguration: Equatable {
+    let launchPath: String
+    let arguments: [String]
+    let environment: [String: String]
+    let currentDirectoryURL: URL?
+}
+
+@MainActor
 final class AppServices {
     let appServer: any AppServerManaging
     let threadRegistry: ThreadRegistry
@@ -127,12 +135,12 @@ final class AppServices {
         )
 
         if environment["HANDAGENT_ELECTRON_SHELL"] == "1" {
-            let electronBinary = environment["HANDAGENT_ELECTRON_BINARY"] ?? "/usr/bin/env"
-            let electronMain = environment["HANDAGENT_ELECTRON_MAIN"] ?? "apps/electron-shell/dist/main/main.js"
+            let configuration = defaultElectronShellLaunchConfiguration(environment: environment)
             let shell = ElectronShellProcess(
-                launchPath: electronBinary,
-                arguments: electronBinary == "/usr/bin/env" ? ["electron", electronMain] : [electronMain],
-                environment: environment
+                launchPath: configuration.launchPath,
+                arguments: configuration.arguments,
+                environment: configuration.environment,
+                currentDirectoryURL: configuration.currentDirectoryURL
             )
             return ElectronBackedAppServer(shell: shell, platformClient: platformClient)
         }
@@ -140,6 +148,55 @@ final class AppServices {
         return AppServer(
             agentServer: AgentServerService(),
             platformClient: platformClient
+        )
+    }
+
+    static func defaultElectronShellLaunchConfiguration(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        currentDirectoryURL: URL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true),
+        bundleExecutableURL: URL? = Bundle.main.executableURL,
+        bundleResourceURL: URL? = Bundle.main.resourceURL,
+        bundleURL: URL? = Bundle.main.bundleURL,
+        fileExists: @escaping (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+    ) -> ElectronShellLaunchConfiguration {
+        let electronMain = environment["HANDAGENT_ELECTRON_MAIN"].flatMap { $0.isEmpty ? nil : $0 }
+            ?? "apps/electron-shell/dist/main/main.js"
+        let repoRoot = AgentServerRepositoryRootLocator(
+            agentServerRelativePath: "apps/electron-shell/package.json",
+            fileExists: fileExists
+        ).locate(
+            bundleExecutableURL: bundleExecutableURL,
+            bundleResourceURL: bundleResourceURL,
+            bundleURL: bundleURL,
+            currentDirectoryURL: currentDirectoryURL
+        )
+        var launchEnvironment = environment
+        if let repoRoot {
+            launchEnvironment["HANDAGENT_REPO_ROOT"] = repoRoot.path
+        }
+        AgentServerRuntimeMode.apply(to: &launchEnvironment, resourcesURL: bundleResourceURL)
+
+        if let electronBinary = environment["HANDAGENT_ELECTRON_BINARY"].flatMap({ $0.isEmpty ? nil : $0 }) {
+            return ElectronShellLaunchConfiguration(
+                launchPath: electronBinary,
+                arguments: electronBinary == "/usr/bin/env" ? ["electron", electronMain] : [electronMain],
+                environment: launchEnvironment,
+                currentDirectoryURL: repoRoot
+            )
+        }
+
+        return ElectronShellLaunchConfiguration(
+            launchPath: "/usr/bin/env",
+            arguments: [
+                "pnpm",
+                "--filter",
+                "handagent-electron-shell",
+                "exec",
+                "electron",
+                electronMain
+            ],
+            environment: launchEnvironment,
+            currentDirectoryURL: repoRoot
         )
     }
 

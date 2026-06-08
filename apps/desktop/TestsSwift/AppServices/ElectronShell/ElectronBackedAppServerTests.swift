@@ -64,6 +64,22 @@ final class ElectronBackedAppServerTests: XCTestCase {
         XCTAssertEqual(appServer.startupErrorMessage, "port unavailable")
     }
 
+    func testThreadWindowClosedReportsSpecificPrewarmError() {
+        let shell = RecordingElectronShellProcess()
+        let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
+        var availability: [Bool] = []
+        appServer.onAvailabilityChange = { availability.append($0) }
+
+        appServer.start()
+        shell.emit(.agentServerHealth(available: true, message: nil))
+        shell.emit(.threadWindowPrepared(timestamp: "2026-06-08T00:00:01.000Z"))
+        shell.emit(.threadWindowClosed(timestamp: "2026-06-08T00:00:02.000Z"))
+
+        XCTAssertFalse(appServer.isAvailable)
+        XCTAssertEqual(appServer.startupErrorMessage, "Electron ThreadWindow 已关闭，正在重新预热…")
+        XCTAssertEqual(availability, [true, false])
+    }
+
     func testStopSendsShutdownDisconnectsPlatformClientAndStopsShell() {
         let shell = RecordingElectronShellProcess()
         let transport = RecordingElectronBackedConnectionTransport()

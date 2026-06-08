@@ -8,6 +8,8 @@
 
 **Tech Stack:** Swift 6, AppKit, XCTest, Electron, TypeScript, Vitest, Node child process supervision, newline-delimited JSON over stdio.
 
+**Current implementation alignment:** 未设置 `HANDAGENT_ELECTRON_BINARY` 时，Swift 默认通过 `/usr/bin/env pnpm --filter handagent-electron-shell exec electron apps/electron-shell/dist/main/main.js` 从定位到的 repo root 启动 Electron。主动停机先发送 `shutdown` command 并关闭 Electron 子进程 stdin，2 秒后仍未退出才兜底 `terminate()`；这类主动停机不向 `onTermination` 上报 fatal。收到 `thread_window.closed` 时，Swift 会清掉 ThreadWindow prepared gate，强制发布不可用状态，并把 `startupErrorMessage` 设为 `Electron ThreadWindow 已关闭，正在重新预热…`。
+
 ---
 
 ## Scope Check
@@ -343,6 +345,7 @@ export type SwiftToElectronCommand =
 export type ElectronToSwiftEvent =
   | { channel: "electron_shell"; type: "electron.ready"; timestamp: string }
   | { channel: "electron_shell"; type: "thread_window.prepared"; timestamp: string }
+  | { channel: "electron_shell"; type: "thread_window.prepare_failed"; message: string }
   | { channel: "electron_shell"; type: "command.ack"; commandId: string; ok: boolean; error?: string }
   | { channel: "electron_shell"; type: "thread_window.closed"; timestamp: string }
   | { channel: "electron_shell"; type: "renderer.crashed"; window: "thread" | "activity"; reason: string }
@@ -500,6 +503,7 @@ enum ElectronShellCommand: Encodable, Equatable {
 enum ElectronShellEvent: Decodable, Equatable {
     case electronReady(timestamp: String)
     case threadWindowPrepared(timestamp: String)
+    case threadWindowPrepareFailed(message: String)
     case commandAck(commandId: String, ok: Bool, error: String?)
     case threadWindowClosed(timestamp: String)
     case rendererCrashed(window: String, reason: String)
@@ -520,6 +524,8 @@ enum ElectronShellEvent: Decodable, Equatable {
             self = .electronReady(timestamp: try container.decode(String.self, forKey: .timestamp))
         case "thread_window.prepared":
             self = .threadWindowPrepared(timestamp: try container.decode(String.self, forKey: .timestamp))
+        case "thread_window.prepare_failed":
+            self = .threadWindowPrepareFailed(message: try container.decode(String.self, forKey: .message))
         case "command.ack":
             self = .commandAck(
                 commandId: try container.decode(String.self, forKey: .commandId),
@@ -1351,6 +1357,7 @@ import Foundation
 @MainActor
 protocol ElectronShellProcessing: AnyObject {
     var onEvent: ((ElectronShellEvent) -> Void)? { get set }
+    var onTermination: ((String) -> Void)? { get set }
     func start() throws
     func send(_ command: ElectronShellCommand) throws
     func stop()
@@ -1359,24 +1366,31 @@ protocol ElectronShellProcessing: AnyObject {
 @MainActor
 final class ElectronShellProcess: ElectronShellProcessing {
     var onEvent: ((ElectronShellEvent) -> Void)?
+    var onTermination: ((String) -> Void)?
 
     private let launchPath: String
     private let arguments: [String]
     private let environment: [String: String]
+    private let currentDirectoryURL: URL?
     private let encoder = JSONEncoder()
     private let outputDecoder = ElectronShellOutputDecoder()
     private var process: Process?
     private var stdinPipe: Pipe?
     private var stdoutPipe: Pipe?
+    private var stderrPipe: Pipe?
+    private var isStopping = false
+    private var forcedTerminationTask: Task<Void, Never>?
 
     init(
         launchPath: String,
         arguments: [String],
-        environment: [String: String]
+        environment: [String: String],
+        currentDirectoryURL: URL? = nil
     ) {
         self.launchPath = launchPath
         self.arguments = arguments
         self.environment = environment
+        self.currentDirectoryURL = currentDirectoryURL
     }
 
     func start() throws {
@@ -1384,11 +1398,19 @@ final class ElectronShellProcess: ElectronShellProcessing {
         let process = Process()
         let input = Pipe()
         let output = Pipe()
+        let errorOutput = Pipe()
         process.executableURL = URL(fileURLWithPath: launchPath)
         process.arguments = arguments
         process.environment = environment
+        process.currentDirectoryURL = currentDirectoryURL
         process.standardInput = input
         process.standardOutput = output
+        process.standardError = errorOutput
+        process.terminationHandler = { [weak self] process in
+            Task { @MainActor in
+                self?.handleTermination(process)
+            }
+        }
         output.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
             guard !data.isEmpty else { return }
@@ -1398,6 +1420,7 @@ final class ElectronShellProcess: ElectronShellProcessing {
         self.process = process
         self.stdinPipe = input
         self.stdoutPipe = output
+        self.stderrPipe = errorOutput
     }
 
     func send(_ command: ElectronShellCommand) throws {
@@ -1408,16 +1431,51 @@ final class ElectronShellProcess: ElectronShellProcessing {
     }
 
     func stop() {
+        guard let process else {
+            stdinPipe = nil
+            stdoutPipe = nil
+            stderrPipe = nil
+            return
+        }
+
+        isStopping = true
         stdoutPipe?.fileHandleForReading.readabilityHandler = nil
-        process?.terminate()
-        process = nil
+        stderrPipe?.fileHandleForReading.readabilityHandler = nil
+        try? stdinPipe?.fileHandleForWriting.close()
         stdinPipe = nil
-        stdoutPipe = nil
+        forcedTerminationTask?.cancel()
+        forcedTerminationTask = Task { @MainActor [weak self, weak process] in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            guard
+                let self,
+                let process,
+                self.process === process,
+                process.isRunning
+            else { return }
+            process.terminate()
+        }
     }
 
     private func handleOutput(_ data: Data) {
         outputDecoder.onEvent = onEvent
         outputDecoder.receive(data)
+    }
+
+    private func handleTermination(_ terminatedProcess: Process) {
+        guard process === terminatedProcess else { return }
+        let wasStopping = isStopping
+        isStopping = false
+        forcedTerminationTask?.cancel()
+        forcedTerminationTask = nil
+        stdoutPipe?.fileHandleForReading.readabilityHandler = nil
+        stderrPipe?.fileHandleForReading.readabilityHandler = nil
+        let status = terminatedProcess.terminationStatus
+        process = nil
+        stdinPipe = nil
+        stdoutPipe = nil
+        stderrPipe = nil
+        guard !wasStopping else { return }
+        onTermination?("Electron shell exited with status \(status)")
     }
 }
 
@@ -1580,12 +1638,12 @@ static func defaultAppServer(
     platformServerURL: URL
 ) -> any AppServerManaging {
     if environment["HANDAGENT_ELECTRON_SHELL"] == "1" {
-        let electronBinary = environment["HANDAGENT_ELECTRON_BINARY"] ?? "/usr/bin/env"
-        let electronMain = environment["HANDAGENT_ELECTRON_MAIN"] ?? "apps/electron-shell/dist/main/main.js"
+        let configuration = defaultElectronShellLaunchConfiguration(environment: environment)
         let shell = ElectronShellProcess(
-            launchPath: electronBinary,
-            arguments: electronBinary == "/usr/bin/env" ? ["electron", electronMain] : [electronMain],
-            environment: environment
+            launchPath: configuration.launchPath,
+            arguments: configuration.arguments,
+            environment: configuration.environment,
+            currentDirectoryURL: configuration.currentDirectoryURL
         )
         return ElectronBackedAppServer(
             shell: shell,
@@ -1605,6 +1663,8 @@ static func defaultAppServer(
     )
 }
 ```
+
+`defaultElectronShellLaunchConfiguration` 的默认路径不依赖全局 `electron` 可执行文件：未设置 `HANDAGENT_ELECTRON_BINARY` 时，它定位 repo root，将 `HANDAGENT_REPO_ROOT` 注入环境，并使用 `/usr/bin/env pnpm --filter handagent-electron-shell exec electron apps/electron-shell/dist/main/main.js` 作为启动命令。显式设置 `HANDAGENT_ELECTRON_BINARY` 时仍保留覆盖能力。
 
 把 `init` 中原本的 `self.appServer = appServer ?? AppServer(...)` 替换为：
 
@@ -1745,10 +1805,11 @@ Phase 0 引入 Electron feature flag 后，默认路径仍使用本模块的 `Ap
 
 - 默认不设置 `HANDAGENT_ELECTRON_SHELL`，运行 `bash ./scripts/swiftw run HandAgentDesktop`，确认 PromptPanel 提交仍打开 WKWebView ThreadWindow。
 - 先运行 `pnpm --filter handagent-electron-shell build`。
-- 设置 `HANDAGENT_ELECTRON_SHELL=1`、`HANDAGENT_ELECTRON_BINARY=/usr/bin/env`、`HANDAGENT_ELECTRON_MAIN=apps/electron-shell/dist/main/main.js` 后运行桌面 App。
+- 设置 `HANDAGENT_ELECTRON_SHELL=1` 后运行桌面 App；默认应通过 `pnpm --filter handagent-electron-shell exec electron apps/electron-shell/dist/main/main.js` 启动 Electron，不要求全局 `electron` 可执行文件。
 - 启动后确认 Electron shell 和 agent-server 只有各一份进程，且 `127.0.0.1:4317` 没有第二份 server 冲突。
 - 启动完成前 PromptPanel 不允许提交；收到 Electron `agent_server.health` 与 `thread_window.prepared` 后 PromptPanel 恢复可提交。
 - 提交 prompt 后默认路径仍打开 WKWebView ThreadWindow；这说明 Phase 0 未提前切换真实 ThreadWindow。
+- 关闭隐藏 Electron ThreadWindow 时，确认 PromptPanel 重新阻止提交并显示 `Electron ThreadWindow 已关闭，正在重新预热…`。
 - 退出 HandAgent 后确认 Electron 和 Node agent-server 进程不残留。
 ```
 
