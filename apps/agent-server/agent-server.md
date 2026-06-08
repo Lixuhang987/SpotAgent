@@ -2,13 +2,14 @@
 
 `apps/agent-server` 是 desktop 派生的本地 Node 服务。它只做本地 bridge、路由、持久化封装和 runtime 驱动：不渲染 ThreadWindow UI，不实现 macOS 原生能力，也不在本包定义跨进程 DTO。
 
-同一端口 `127.0.0.1:4317` 暴露三类入口：
+同一端口 `127.0.0.1:4317` 暴露四类入口：
 
 | 入口 | 消费方 | 消息边界 |
 |------|------|------|
 | `ws://127.0.0.1:4317/api/thread` | React ThreadWindow | 接收 `ThreadCommand` / `ClientResponse`，发送 `ThreadNotification` / `ServerRequest` |
+| `ws://127.0.0.1:4317/api/activity` | Electron StatusBubble；后续桌宠 | 只发送 `AgentActivityEvent`，连接后先发 `activity.snapshot`，状态变化时发 `activity.changed` |
 | `ws://127.0.0.1:4317/api/platform` | Swift desktop | 只承载 `PlatformBridgeMessage`，用于 core platform tool 反向请求 desktop |
-| `http://127.0.0.1:4317/thread-window/*` | `WKWebView`；Phase 0 Electron hidden `BrowserWindow` | 返回 React 静态资源，不参与 thread 协议；Electron flag 路径当前只用于隐藏预热 |
+| `http://127.0.0.1:4317/thread-window/*` | `WKWebView`；Electron ThreadWindow `BrowserWindow` | 返回 React 静态资源，不参与 thread 协议 |
 
 ## 直接子节点
 
@@ -35,14 +36,15 @@ node --experimental-transform-types --experimental-specifier-resolution=node app
 4. 通过 `SettingsBackedToolRegistry` 注册 builtin tools。
 5. 通过 `SettingsBackedLLMClient` 或 `MockLLMClient` 选择 LLM 模式。
 6. 按 thread 缓存 `AgentRuntime`，注入 thread 级 tool registry、permission policy、blob store 和 turn summarizer；mock 模式使用 `MockLLMClient` 且不启用 summarizer。
-7. 创建 `ThreadPersistence`、`ThreadRuntimeOrchestrator`、`ThreadInputQueue` 驱动的 per-thread session loop、`ThreadNotificationPublisher`、`ThreadCommandRouter`。
-8. 启动同端口 HTTP + WebSocket 服务：`/api/thread` 挂载 thread command/response handler，`/api/platform` 挂载 platform bridge handler，`/thread-window/*` 提供 React 静态资源，未知 path 直接关闭或返回 404。
+7. 创建 `AgentActivityPublisher`、`ThreadPersistence`、`ThreadRuntimeOrchestrator`、`ThreadInputQueue` 驱动的 per-thread session loop、`ThreadNotificationPublisher`、`ThreadCommandRouter`。
+8. 启动同端口 HTTP + WebSocket 服务：`/api/thread` 挂载 thread command/response handler，`/api/activity` 挂载 activity subscriber handler，`/api/platform` 挂载 platform bridge handler，`/thread-window/*` 提供 React 静态资源，未知 path 直接关闭或返回 404。
 
 ## 主消息流
 
 ```mermaid
 flowchart TD
   A["React /api/thread socket"] --> B["server/attachThreadSocketHandlers"]
+  ACT["Electron StatusBubble /api/activity socket"] --> AP["server/attachActivitySocketHandlers"]
   P["Swift /api/platform socket"] --> D["server/attachPlatformSocketHandlers"]
   D --> PB["bridges/WebSocketPlatformBridge"]
   B --> C{"ClientResponse / ThreadCommand"}
@@ -54,6 +56,9 @@ flowchart TD
   I --> J["protocol/MessageTranslator"]
   J --> H
   H --> K["React ThreadWindow"]
+  H --> APub["activity/AgentActivityPublisher"]
+  E --> APub
+  APub --> AP
   G --> L["thread/ThreadPersistence"]
 ```
 
@@ -62,8 +67,10 @@ flowchart TD
 ## 协议主干
 
 - `/api/thread` 顶层只接收 `ThreadCommand`、`ClientResponse`。
+- `/api/activity` 顶层只发送 `AgentActivityEvent`，新连接立即收到 `activity.snapshot`，后续状态变化收到 `activity.changed`。
 - `/api/platform` 顶层只接收 `PlatformBridgeMessage`。
 - thread 通知主干统一走 `ThreadNotification`；`thread.snapshot` 是恢复入口。
+- activity 状态由 `AgentActivityPublisher` 从 `ThreadNotification` / `ServerRequest` 派生；activity subscriber 发送失败只影响该 subscriber，不影响 `/api/thread` 分发。
 - permission / workspace 的交互式回流统一由 server 发 `ServerRequest`，React 回 `ClientResponse`。
 - `workspace.listed` 是 `workspace.list` 的连接级响应，不带 `threadId`，只发给发起命令的 `/api/thread` 连接。
 - permission / workspace request-response 都绑定到 thread 当前连接；断线或旧 token 回包不能影响新连接。

@@ -1,5 +1,7 @@
 # StatusBubble 模块
 
+> Electron flag 路径说明：当 `HANDAGENT_ELECTRON_SHELL=1` 时，本 Swift StatusBubble 默认不显示。状态气泡由 `apps/electron-shell` 的 React activity renderer 承载，并订阅 `/api/activity`；Swift 不 mirror activity 状态。
+
 屏幕右下角的常驻状态气泡：显示当前 primary thread 是否在跑、最近摘要；点击后触发 Coordinator 的回跳逻辑。架构是 **View + ViewModel + Controller + Styles** 四件套。
 
 ## 文件

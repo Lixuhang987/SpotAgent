@@ -95,6 +95,22 @@
 1. 触发 platform tool，例如 `clipboard.read` 或 `app.frontmost`，确认 agent-server 仍通过 `/api/platform` 请求 Swift 回写结果。
 1. 退出 HandAgent 后确认 Electron 和 Node agent-server 进程不残留。
 
+## Electron UI Shell Phase 2 Activity StatusBubble（P2）
+
+**实施状态**：未通过实机 QA；本节为待验收项，不得归档为已通过。
+
+1. 默认不设置 `HANDAGENT_ELECTRON_SHELL`，运行 `bash ./scripts/swiftw run HandAgentDesktop`，确认右下角显示 Swift StatusBubble，PromptPanel 提交仍打开默认路径或当前分支配置下的 ThreadWindow。
+1. 运行 `pnpm --filter handagent-electron-shell build`。
+1. 设置 `HANDAGENT_ELECTRON_SHELL=1` 后运行桌面 App，确认不再显示 Swift StatusBubble，右下角显示 Electron React StatusBubble。
+1. 提交一个普通 prompt，确认 Electron StatusBubble 从 `idle` 变为 `starting` / `running` / `completed`，ThreadWindow 仍显示正常消息流。
+1. 触发一个 tool 调用，确认 Electron StatusBubble 显示工具运行态，例如 `正在使用 <toolName>`。
+1. 触发 permission 或 workspace 请求，确认 Electron StatusBubble 显示等待确认态，ThreadWindow 内联请求面板仍可回执。
+1. 触发模型配置错误或 provider 错误，确认 Electron StatusBubble 显示 `error` 态，ThreadWindow 错误气泡仍可见。
+1. 点击 Electron StatusBubble，若 Electron ThreadWindow 可见，确认聚焦 ThreadWindow；若无可聚焦 ThreadWindow，确认 Swift PromptPanel 打开。
+1. 断开并重连 `/api/activity` subscriber，确认新连接立即收到 `activity.snapshot`，不会影响 `/api/thread` 消息流。
+1. 确认 ActivityWindow 非激活展示：点击气泡不把 ActivityWindow 变成 key window，且不会出现在 Cmd+Tab。
+1. 退出 HandAgent 后确认 Electron、Node agent-server 和 activity renderer 进程不残留。
+
 ## ThreadWindow UI 重构完整验收（P2）
 
 **实施状态**：Phase 1-4 已 100% 完成（2026-06-07 合并到 main）

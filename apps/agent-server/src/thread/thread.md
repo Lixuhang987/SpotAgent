@@ -75,6 +75,7 @@ sequenceDiagram
 ### 连接与通知分发
 
 - `ThreadNotificationPublisher` 维护 `connectionId -> subscribed threadIds`，但不持有 socket；发送函数由 `server/attachThreadSocketHandlers` 注入。
+- Phase 2 起，`ThreadNotificationPublisher` 可接收一个 observer，把每个 `ThreadNotification` 旁路交给 `AgentActivityPublisher`；`ThreadPermissionBridge` / `ThreadWorkspaceAskBridge` 发出的 `ServerRequest` 也会走同一 observer 派生活动状态。observer 发送失败会在 activity 层被隔离，不改变 `/api/thread` 的订阅分发。
 - 同一条 React `/api/thread` socket 可以同时接收多个 thread 的通知。
 - 带 `threadId` 的 notification / server request 按 thread 定向；不带 `threadId` 的全局 notification 广播给所有连接。
 - 当前协议不承诺显式 unsubscribe；tab 关闭是 React 本地订阅状态，不会单独通知 server。

@@ -27,7 +27,8 @@
 - Action prompt 由 PromptPanel 先渲染 template。skill action 只携带渲染后的 prompt 创建新 thread；plugin action 额外携带 `{ pluginId, promptName }` 作为 `actionBinding` 创建新 thread。
 - Settings 打开时会创建模型、builtin tool、Plugin、Append Prompt、MCP、权限和 workspace 的 ViewModel。Coordinator 只负责注入，不直接读写 `~/.spotAgent/plugins` 或 `~/.spotAgent/mcp.json`。
 - agent-server 健康状态独立：server 不可用时拒绝 `submitPrompt` 并保留面板草稿。
-- StatusBubble 当前只从 `ThreadRegistry` 派生展示；React ThreadWindow / agent-server 的实时 thread 摘要还没有接入该注册表。
+- 默认路径的 Swift StatusBubble 只从 `ThreadRegistry` 派生展示；React ThreadWindow / agent-server 的实时 thread 摘要没有接入该注册表。
+- Electron flag 路径下，`AppCoordinator` 在 app-server available 后调用 `ActivityWindowCommanding.showActivityWindow()`；show 失败时回退显示 Swift StatusBubble。Electron StatusBubble 点击无法聚焦 ThreadWindow 时，Coordinator 只打开 PromptPanel，不解析 `/api/activity` 状态。
 
 ## 当前 Action 列表
 
@@ -46,6 +47,7 @@ statusBubbleTapped(String?)
 - 持有 `PromptPanelController`、`StatusBubbleController`，通过它们驱动 `NSPanel` / `NSWindow`。
 - 持有 `AgentServerHealth`（来自 AppServices 层）。
 - 通过 `AgentServerHealth.onAvailabilityChange` 驱动 [PromptPanel](/Users/mu9/proj/handAgent/apps/desktop/Sources/PromptPanel/prompt-panel.md) 的提交启停状态。
+- Electron flag 路径下，通过 `ActivityWindowCommanding` 显示 Electron ActivityWindow；该 command client 只承载窗口命令和 PromptPanel show 回调，不承载 activity 数据。
 - `AppActivationPolicyCoordinator` 实例由 Coordinator 创建并注入 lifecycle 控制器，各自负责推送激活策略。
 
 ## 编辑此目录的约束

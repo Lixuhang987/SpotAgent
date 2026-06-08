@@ -19,7 +19,7 @@
 
 | 文件 | 职责 |
 |------|------|
-| `AppServices.swift` | DI 容器：持有 `appServer` / `threadRegistry` / `settingsStore` / `threadHistoryStore` / `actionManifestStore` / `appServerURL` / `platformServerURL` / `threadWindowWebAppURL` / `hotkeyRegistrar` / `threadWindowPresenter` / `settingsWindowPresenter` / `fatalAlertPresenter` / `setActivationPolicy` / `showsStatusBubble`。`appServerURL` 是 React ThreadWindow 使用的 `/api/thread` URL，`platformServerURL` 是 Swift 平台桥使用的 `/api/platform` URL，`threadWindowWebAppURL` 是 WKWebView 加载的 React 入口。生产由 `init()` 默认参数装配；`defaultAppServer` 在 `HANDAGENT_ELECTRON_SHELL=1` 时选择 `ElectronBackedAppServer`，否则选择默认 `AppServer`。测试用 `AppServices.testing()` 注入 nop 替身。同文件还定义 `ThreadWindowPresenting` / `SettingsWindowPresenting` / `HotkeyRegistering` / `FatalAlertPresenting` 协议与 `Nop*` 测试替身 |
+| `AppServices.swift` | DI 容器：持有 `appServer` / `threadWindowCommandClient` / `activityWindowCommandClient` / `threadRegistry` / `settingsStore` / `threadHistoryStore` / `actionManifestStore` / `appServerURL` / `platformServerURL` / `threadWindowWebAppURL` / `hotkeyRegistrar` / `threadWindowPresenter` / `settingsWindowPresenter` / `fatalAlertPresenter` / `setActivationPolicy` / `showsStatusBubble` / `showsFatalAlert`。`appServerURL` 是 React ThreadWindow 使用的 `/api/thread` URL，`platformServerURL` 是 Swift 平台桥使用的 `/api/platform` URL，`threadWindowWebAppURL` 是 WKWebView 加载的 React 入口。`showsStatusBubble` 只控制默认路径的 Swift StatusBubble；`showsFatalAlert` 控制 agent-server fatal alert。Electron flag 路径下 `activityWindowCommandClient` 存在，因此 Swift StatusBubble 默认关闭，但 fatal alert 仍保持开启。生产由 `init()` 默认参数装配；`defaultRuntime` 在 `HANDAGENT_ELECTRON_SHELL=1` 时选择 `ElectronBackedAppServer` 作为 app-server、ThreadWindow command client 和 ActivityWindow command client，否则选择默认 `AppServer`。测试用 `AppServices.testing()` 注入 nop 替身。同文件还定义 `ThreadWindowPresenting` / `SettingsWindowPresenting` / `HotkeyRegistering` / `FatalAlertPresenting` 协议与 `Nop*` 测试替身 |
 | `AppServicesProductionImpls.swift` | 生产实现：`ProductionHotkeyRegistrar` / `ProductionThreadWindowPresenter` / `ProductionSettingsWindowPresenter` / `ProductionFatalAlertPresenter`；window presenter 通过 `WindowCloseObservation` 持有和释放关闭通知 token |
 
 `ProductionThreadWindowPresenter` 只负责构建承载 React ThreadWindow 的 `NSWindow` + `NSHostingController`，不持有 thread 协议状态；视觉由 WKWebView 内 React 前端负责。
@@ -32,6 +32,8 @@
 |------|---------|---------|
 | `AppServerManaging`（在 `AgentServer/AppServer.swift`）| `AppServer` | `NopAppServer` |
 | `ElectronShellProcessing`（在 `ElectronShell/ElectronShellProcess.swift`）| `ElectronShellProcess` | 测试内 recording shell |
+| `ThreadWindowCommanding`（在 `ElectronShell/ThreadWindowCommanding.swift`）| `ElectronBackedAppServer` | 测试内 recording command client |
+| `ActivityWindowCommanding`（在 `ElectronShell/ActivityWindowCommanding.swift`）| `ElectronBackedAppServer` | 测试内 recording command client |
 | `HotkeyRegistering` | `ProductionHotkeyRegistrar` | `NopHotkeyRegistrar` |
 | `ThreadWindowPresenting` | `ProductionThreadWindowPresenter` | `NopThreadWindowPresenter` |
 | `SettingsWindowPresenting` | `ProductionSettingsWindowPresenter` | `NopSettingsWindowPresenter` |
