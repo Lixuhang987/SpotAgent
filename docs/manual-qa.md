@@ -25,14 +25,6 @@
 - 验收结果：外部用户输入命令统一为 `input.submit`，旧输入命令已从当前 `ThreadCommand` 移除；ThreadWindow composer 在 running 状态下仍可提交输入并保留 Stop，但 running 输入先进入前端本地 FIFO 队列并显示在 Composer 上方，等 thread 离开 running 后逐条发送，避免两个 user input 连续显示；后端公开 `/api/thread input.submit` 在 running 时返回 `thread.error(code: "thread_running")`，普通用户 follow-up 不走后端排队。已通过 `bash ./scripts/test.sh`、`pnpm --filter handagent-thread-window-web test -- tests/threadWindowStore.test.ts`、`pnpm --filter handagent-thread-window-web build`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`。
 
 
-## PromptPanel initial prompt bridge smoke（P2）
-
-1. 从当前 worktree 执行 `bash ./scripts/swiftw run HandAgentDesktop`。
-1. 通过全局快捷键打开 PromptPanel，输入 `PROMPTPANEL_INITIAL_PROMPT_QA_20260608` 后按 Return。
-1. 确认 ThreadWindow 打开后不是停留在空的"准备开始"状态，而是创建新 tab，并显示这条 user message。
-1. 再次打开 PromptPanel，连续提交第二条不同 prompt，确认复用同一个 ThreadWindow 但创建新的 tab/thread，而不是写入当前 active tab 的 composer thread。
-1. 在 `~/.spotAgent/threads/` 找到对应两个 thread 文件，确认每个文件都包含各自的首条 user message。
-
 ## Electron UI Shell 最终态验收（P2）
 
 **实施状态**：未通过实机 QA；本节为待验收项，不得归档为已通过。
@@ -285,7 +277,7 @@
 1. 在 ThreadWindow 中打开同一 thread，发送新的 user message（例如"再截一次屏"）。
 1. 打开 `~/.spotAgent/log/` 中本轮对应的网络日志条目，确认请求体 `tools` 数组直接是完整工具集，不出现新的 `use_tools` 调用（验证 agent-server 通过历史 tool message 正确推断了激活状态）。
 
-### 对于每个可交互的点，都验证一遍，看是否符合预期
+### 对于每个可交互的点，都验证一遍，看是否符合预期，这里不当做硬性bug，而是记录下可能不符合的行为，事无巨细
 
 - 本文件中对应条目的用户可见行为、持久化记录、错误文案和隔离边界均符合预期。
 - 所有错误路径均有明确文案，不出现静默失败。
