@@ -28,8 +28,8 @@ final class AgentServerHealth {
                 if available {
                     self.errorMessage = nil
                     self.onAvailabilityChange?(true, nil)
-                } else if self.errorMessage == nil {
-                    self.errorMessage = "agent-server 已断开，正在尝试重连…"
+                } else {
+                    self.errorMessage = self.appServer.startupErrorMessage ?? "agent-server 已断开，正在尝试重连…"
                     self.onAvailabilityChange?(false, self.errorMessage)
                 }
             }

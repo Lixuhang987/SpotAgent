@@ -52,6 +52,18 @@ final class ElectronBackedAppServerTests: XCTestCase {
         XCTAssertEqual(availability, [false])
     }
 
+    func testThreadWindowPreparedDoesNotClearAgentServerFailure() {
+        let shell = RecordingElectronShellProcess()
+        let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
+
+        appServer.start()
+        shell.emit(.agentServerHealth(available: false, message: "port unavailable"))
+        shell.emit(.threadWindowPrepared(timestamp: "2026-06-08T00:00:01.000Z"))
+
+        XCTAssertFalse(appServer.isAvailable)
+        XCTAssertEqual(appServer.startupErrorMessage, "port unavailable")
+    }
+
     func testStopSendsShutdownDisconnectsPlatformClientAndStopsShell() {
         let shell = RecordingElectronShellProcess()
         let transport = RecordingElectronBackedConnectionTransport()

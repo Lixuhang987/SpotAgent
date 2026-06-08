@@ -8,7 +8,12 @@ final class ElectronBackedAppServer: AppServerManaging {
     private var hasPreparedThreadWindow = false
     private var lastPublishedAvailability = false
     private var isRunning = false
-    private(set) var startupErrorMessage: String?
+    private var agentServerErrorMessage: String?
+    private var threadWindowErrorMessage: String?
+
+    var startupErrorMessage: String? {
+        agentServerErrorMessage ?? threadWindowErrorMessage
+    }
 
     var onAvailabilityChange: ((Bool) -> Void)?
     var onFatalError: ((String) -> Void)?
@@ -41,7 +46,7 @@ final class ElectronBackedAppServer: AppServerManaging {
             isRunning = false
             shell.onEvent = nil
             shell.onTermination = nil
-            startupErrorMessage = error.localizedDescription
+            agentServerErrorMessage = error.localizedDescription
             publishAvailability(force: true)
         }
     }
@@ -55,7 +60,8 @@ final class ElectronBackedAppServer: AppServerManaging {
         shell.stop()
         hasAgentServerHealth = false
         hasPreparedThreadWindow = false
-        startupErrorMessage = nil
+        agentServerErrorMessage = nil
+        threadWindowErrorMessage = nil
         publishAvailability(force: lastPublishedAvailability)
     }
 
@@ -66,23 +72,23 @@ final class ElectronBackedAppServer: AppServerManaging {
         case .agentServerHealth(let available, let message):
             hasAgentServerHealth = available
             if available {
-                startupErrorMessage = nil
+                agentServerErrorMessage = nil
                 platformClient?.connect()
                 publishAvailability()
             } else {
-                startupErrorMessage = message ?? "Electron agent-server 不可用"
+                agentServerErrorMessage = message ?? "Electron agent-server 不可用"
                 platformClient?.disconnect()
                 publishAvailability(force: true)
             }
 
         case .threadWindowPrepared:
             hasPreparedThreadWindow = true
-            startupErrorMessage = nil
+            threadWindowErrorMessage = nil
             publishAvailability()
 
         case .threadWindowPrepareFailed(let message):
             hasPreparedThreadWindow = false
-            startupErrorMessage = message
+            threadWindowErrorMessage = message
             publishAvailability(force: true)
 
         case .threadWindowClosed:
@@ -90,7 +96,7 @@ final class ElectronBackedAppServer: AppServerManaging {
             publishAvailability()
 
         case .rendererCrashed(_, let reason):
-            startupErrorMessage = reason
+            threadWindowErrorMessage = reason
             hasAgentServerHealth = false
             platformClient?.disconnect()
             onFatalError?(reason)
@@ -104,7 +110,7 @@ final class ElectronBackedAppServer: AppServerManaging {
     private func handleTermination(_ message: String) {
         guard isRunning else { return }
 
-        startupErrorMessage = message
+        agentServerErrorMessage = message
         hasAgentServerHealth = false
         hasPreparedThreadWindow = false
         platformClient?.disconnect()
@@ -115,7 +121,8 @@ final class ElectronBackedAppServer: AppServerManaging {
     private func resetGate() {
         hasAgentServerHealth = false
         hasPreparedThreadWindow = false
-        startupErrorMessage = nil
+        agentServerErrorMessage = nil
+        threadWindowErrorMessage = nil
         lastPublishedAvailability = false
         isRunning = false
     }
