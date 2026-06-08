@@ -883,3 +883,10 @@
 - **验证环境**：mock-llm packaged app / macOS 15.5 / 主仓库 `main`
 - **验证过程**：通过原生 `System Events` 注入 `Command+Shift+Space` 打开 PromptPanel，输入 `PROMPTPANEL_INITIAL_PROMPT_QA_20260608_A [mock:assistant-ok]` 后按 Return，ThreadWindow 打开后直接创建新 tab，显示该 user message 和 mock assistant 回复，不停留在空白准备状态。再次通过全局快捷键打开 PromptPanel，输入 `PROMPTPANEL_INITIAL_PROMPT_QA_20260608_B [mock:assistant-ok]` 后按 Return，复用同一个 ThreadWindow，但顶部出现第二个 tab，当前 tab 显示第二条 user message，而不是写入第一个 active tab 的 composer thread。
 - **证据**：`System Events` 查询提交后窗口为 `2, , HandAgent`；Computer Use 观察到 ThreadWindow URL 为 `127.0.0.1:4317/thread-window/index.html`，第二次提交后 Thread workspace 中有两个 `thread-1` tab。持久化文件 `~/.spotAgent/threads/thread-1780941623118-ay6u1b.json` 包含首条 `PROMPTPANEL_INITIAL_PROMPT_QA_20260608_A [mock:assistant-ok]`，`~/.spotAgent/threads/thread-1780941669169-3tp6jt.json` 包含首条 `PROMPTPANEL_INITIAL_PROMPT_QA_20260608_B [mock:assistant-ok]`；两个文件均包含 `Mock assistant response: main chain is reachable.`。
+### Thread 历史路径与状态气泡 smoke（P2）
+
+- **验证日期**：2026-06-09
+- **验证环境**：mock-llm packaged app，默认 WKWebView 路径，macOS 15+
+- **验证过程**：使用 `bash ./scripts/package-app.sh --mock-llm` 打包并 `open dist/HandAgentDesktop.app` 启动；通过全局快捷键打开 PromptPanel，提交 `STATUS_BUBBLE_ACTIVITY_FIX_QA_20260609 [mock:slow-focus]`。运行中确认新 thread 写入 `~/.spotAgent/threads/thread-1780944091160-4qjzbd.json`，近 30 分钟旧 `~/.spotAgent/sessions/` 无新增文件；`/api/activity` snapshot 返回 `status: "running"`、`latestSummary: "正在回复"`、`activeThreadId: "thread-1780944091160-4qjzbd"`；Swift StatusBubble 截图显示 `Running / 正在回复`。点击状态气泡后未打开 PromptPanel，焦点回到当前 HandAgent ThreadWindow，Computer Use 可见当前 thread 仍显示该 slow-focus prompt。随后点击 Stop 停止 slow turn。
+- **证据**：`/tmp/handagent-qa/status-bubble-activity-fixed.png`；`~/.spotAgent/threads/thread-1780944091160-4qjzbd.json`；Computer Use 观察到 ThreadWindow 中 Stop 按钮与点击后焦点回到 ThreadWindow；`lsof -nP -iTCP:4317 -sTCP:LISTEN` 显示 agent-server 监听。
+- **结论**：通过。当前历史主路径是 `~/.spotAgent/threads/`；默认路径 Swift StatusBubble 能展示 running 摘要并回跳当前活跃 ThreadWindow。

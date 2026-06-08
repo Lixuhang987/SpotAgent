@@ -227,12 +227,6 @@
 4. 触发 permission  请求，确认请求面板是 
 
 
-## Thread 历史路径与状态气泡 smoke（P2）
-
-1. 提交一个普通 prompt，确认本轮历史写入 `~/.spotAgent/threads/<threadId>.json`，不会写入旧历史目录。
-1. 重启 desktop 后打开历史列表，确认刚才的 thread 可恢复，且旧历史目录文件不会作为 AppServices 主历史来源出现。
-1. 在一个 thread 运行中观察状态气泡，确认气泡展示最新摘要 / running 状态，点击后回到当前活跃 thread 对应窗口。
-
 ## PromptPanel 输入框视觉与拖动 smoke（P2）
 
 1. 从当前 worktree 执行 `bash ./scripts/swiftw run HandAgentDesktop`。
