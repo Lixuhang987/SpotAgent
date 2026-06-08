@@ -35,7 +35,7 @@ type Options = {
 
 export class ElectronShellRuntime {
   private hasAgentServerHealth = false;
-  private prepareAfterServerReadyPromise: Promise<void> | null = null;
+  private prewarmAfterServerReadyPromise: Promise<void> | null = null;
 
   constructor(private readonly options: Options) {}
 
@@ -49,7 +49,7 @@ export class ElectronShellRuntime {
     });
 
     if (event.available) {
-      void this.prepareThreadWindowAfterServerReady();
+      void this.prewarmThreadWindowAfterServerReady();
     }
   }
 
@@ -62,7 +62,7 @@ export class ElectronShellRuntime {
     });
 
     if (event.wasPrepared && this.hasAgentServerHealth) {
-      void this.prepareThreadWindowAfterServerReady();
+      void this.prewarmThreadWindowAfterServerReady();
     }
   }
 
@@ -104,12 +104,12 @@ export class ElectronShellRuntime {
     }
   }
 
-  private async prepareThreadWindowAfterServerReady(): Promise<void> {
-    if (this.prepareAfterServerReadyPromise) {
-      return this.prepareAfterServerReadyPromise;
+  private async prewarmThreadWindowAfterServerReady(): Promise<void> {
+    if (this.prewarmAfterServerReadyPromise) {
+      return this.prewarmAfterServerReadyPromise;
     }
 
-    this.prepareAfterServerReadyPromise = this.options.prewarmer.prepare()
+    this.prewarmAfterServerReadyPromise = this.options.prewarmer.prepare()
       .then(() => {
         this.options.send({
           channel: "electron_shell",
@@ -125,10 +125,10 @@ export class ElectronShellRuntime {
         });
       })
       .finally(() => {
-        this.prepareAfterServerReadyPromise = null;
+        this.prewarmAfterServerReadyPromise = null;
       });
 
-    return this.prepareAfterServerReadyPromise;
+    return this.prewarmAfterServerReadyPromise;
   }
 
   private async runCommand(command: SwiftToElectronCommand, operation: () => Promise<void>): Promise<void> {

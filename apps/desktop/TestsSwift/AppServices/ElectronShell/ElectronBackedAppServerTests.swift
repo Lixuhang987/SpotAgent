@@ -144,6 +144,23 @@ final class ElectronBackedAppServerTests: XCTestCase {
         XCTAssertEqual(appServer.startupErrorMessage, "Electron ThreadWindow 已关闭，正在重新预热…")
     }
 
+    func testThreadWindowClosedDoesNotSendShutdown() {
+        let shell = RecordingElectronShellProcess()
+        let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
+
+        appServer.start()
+        shell.emit(.agentServerHealth(available: true, message: nil))
+        shell.emit(.threadWindowPrepared(timestamp: "2026-06-08T00:00:01.000Z"))
+        shell.emit(.threadWindowClosed(timestamp: "2026-06-08T00:00:02.000Z", wasVisible: true))
+
+        XCTAssertFalse(shell.sentCommands.contains { command in
+            if case .shutdown = command {
+                return true
+            }
+            return false
+        })
+    }
+
     func testHiddenThreadWindowClosedDoesNotInvokeWindowClosedCallback() {
         let shell = RecordingElectronShellProcess()
         let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)

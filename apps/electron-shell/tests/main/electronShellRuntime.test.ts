@@ -168,6 +168,22 @@ describe("ElectronShellRuntime", () => {
     expect(harness.prewarmer.prepare).toHaveBeenCalledTimes(1);
   });
 
+  it("does not stop the supervisor when the visible thread window closes", () => {
+    const harness = createHarness();
+    harness.runtime.handleAgentServerHealth({ available: true });
+
+    harness.runtime.handleThreadWindowClosed({ wasPrepared: true, wasVisible: true });
+
+    expect(harness.stopSupervisor).not.toHaveBeenCalled();
+    expect(harness.quit).not.toHaveBeenCalled();
+    expect(harness.events).toContainEqual({
+      channel: "electron_shell",
+      type: "thread_window.closed",
+      timestamp: "2026-06-08T00:00:00.000Z",
+      wasVisible: true,
+    });
+  });
+
   it("does not prepare a replacement for unprepared closed windows", () => {
     const harness = createHarness();
     harness.runtime.handleAgentServerHealth({ available: true });
