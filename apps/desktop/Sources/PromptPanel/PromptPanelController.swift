@@ -9,10 +9,23 @@ final class PromptPanelController {
     private var eventMonitor: Any?
     private var viewModel: PromptPanelViewModel?
     private let quickLookController = QuickLookPreviewController()
+    private let captureFocusOwner: () -> Any?
+    private let restoreFocusOwner: (Any) -> Void
+    private var previousFocusOwner: Any?
 
     var onSubmit: ((String, [PromptAttachmentResult]) -> Void)?
     var onSubmitAction: ((String, ActionBindingPayload, [PromptAttachmentResult]) -> Void)?
     var onOpenSettings: (() -> Void)?
+
+    init<FocusRestorer: PromptPanelFocusRestoring>(
+        focusRestorer: FocusRestorer = MacPromptPanelFocusRestorer()
+    ) {
+        captureFocusOwner = { focusRestorer.captureCurrentFocusOwner() }
+        restoreFocusOwner = { token in
+            guard let typedToken = token as? FocusRestorer.Token else { return }
+            focusRestorer.restoreFocus(to: typedToken)
+        }
+    }
 
     func configure(viewModel: PromptPanelViewModel) {
         self.viewModel = viewModel
@@ -67,18 +80,25 @@ final class PromptPanelController {
     func show() {
         ensurePanel()
         guard let panel else { return }
-        viewModel?.focusSeed += 1
+        if !panel.isVisible {
+            previousFocusOwner = captureFocusOwner()
+        }
         panel.center()
         panel.orderFrontRegardless()
-        panel.makeKey()
         NSApp.activate(ignoringOtherApps: true)
+        panel.makeKey()
         installEventMonitor()
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.panel?.isVisible == true else { return }
+            self.viewModel?.focusSeed += 1
+        }
     }
 
     func hide() {
         quickLookController.dismiss()
         panel?.orderOut(nil)
         removeEventMonitor()
+        restorePreviousFocusOwner()
     }
 
     private func presentQuickLook(for attachment: PromptAttachmentResult) {
@@ -145,5 +165,11 @@ final class PromptPanelController {
             return nil
         }
         return event
+    }
+
+    private func restorePreviousFocusOwner() {
+        guard let previousFocusOwner else { return }
+        self.previousFocusOwner = nil
+        restoreFocusOwner(previousFocusOwner)
     }
 }

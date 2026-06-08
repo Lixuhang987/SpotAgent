@@ -225,11 +225,14 @@
 ## PromptPanel 输入框视觉与拖动 smoke（P2）
 
 1. 从当前 worktree 执行 `bash ./scripts/swiftw run HandAgentDesktop`。
-1. 通过全局快捷键打开 PromptPanel，确认首行输入区域左侧没有独立图标，也没有独立输入框卡片、背景或边框。
+1. 先聚焦任意其他前台 App（例如 TextEdit）。
+1. 通过全局快捷键打开 PromptPanel，确认面板出现后无需再点输入框即可直接输入；首行输入区域左侧没有独立图标，也没有独立输入框卡片、背景或边框。
 1. 在空输入框状态下，从 placeholder 文字区域右侧到设置按钮左侧的空白区域拖动面板，确认窗口可移动。
 1. 输入一段普通文本，确认输入框占满设置按钮左侧剩余空间，不再保留中间拖动空隙。
 1. 继续输入多行文本，确认输入框随文本自动增高；达到 5 行后停止增高，并在继续输入时出现垂直滚动条。
 1. 按 Return 确认仍会提交 prompt；按 Shift + Return 或 Option + Return 确认可在输入框内插入换行。
+1. 点击 PromptPanel 外侧任意区域关闭面板，确认焦点回到唤起前的前台 App。
+1. 再次通过全局快捷键打开 PromptPanel，按 `Esc` 或同一全局快捷键收起，确认焦点同样回到唤起前的前台 App。
 
 ## 全前端 DESIGN.md 视觉一致性 smoke（P2）
 

@@ -4,7 +4,7 @@ import XCTest
 @MainActor
 final class PromptPanelControllerTests: XCTestCase {
     func testShowDoesNotAppendSelectionAttachment() async throws {
-        let controller = PromptPanelController()
+        let controller = PromptPanelController(focusRestorer: FakePromptPanelFocusRestorer())
         let viewModel = PromptPanelViewModel(actions: [])
         controller.configure(viewModel: viewModel)
         defer { controller.hide() }
@@ -16,7 +16,7 @@ final class PromptPanelControllerTests: XCTestCase {
     }
 
     func testCaptureSelectionCoordinatorStillAppendsSelectionBeforeShowingPanel() async throws {
-        let controller = PromptPanelController()
+        let controller = PromptPanelController(focusRestorer: FakePromptPanelFocusRestorer())
         let viewModel = PromptPanelViewModel(actions: [])
         let provider = FakeSelectionCaptureProvider(result: .selected(text: "active selection"))
         let coordinator = PromptCaptureCoordinator(
@@ -35,7 +35,7 @@ final class PromptPanelControllerTests: XCTestCase {
     }
 
     func testSelectActionAndShowPrefillsArgumentTemplate() async throws {
-        let controller = PromptPanelController()
+        let controller = PromptPanelController(focusRestorer: FakePromptPanelFocusRestorer())
         let action = ActionDefinition.skill(
             id: "review/code",
             trigger: "r",
@@ -55,6 +55,34 @@ final class PromptPanelControllerTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(20))
 
         XCTAssertEqual(viewModel.draft, "r [code: ]")
+    }
+
+    func testHideRestoresFocusToAppCapturedBeforeShow() async throws {
+        let focusRestorer = FakePromptPanelFocusRestorer()
+        let controller = PromptPanelController(focusRestorer: focusRestorer)
+        let viewModel = PromptPanelViewModel(actions: [])
+        controller.configure(viewModel: viewModel)
+
+        controller.show()
+        controller.hide()
+
+        XCTAssertEqual(focusRestorer.captureCount, 1)
+        XCTAssertEqual(focusRestorer.restoreCount, 1)
+        XCTAssertEqual(focusRestorer.restoredTokens, [1])
+    }
+
+    func testRepeatedHideRestoresFocusOnlyOnce() async throws {
+        let focusRestorer = FakePromptPanelFocusRestorer()
+        let controller = PromptPanelController(focusRestorer: focusRestorer)
+        let viewModel = PromptPanelViewModel(actions: [])
+        controller.configure(viewModel: viewModel)
+
+        controller.show()
+        controller.hide()
+        controller.hide()
+
+        XCTAssertEqual(focusRestorer.restoreCount, 1)
+        XCTAssertEqual(focusRestorer.restoredTokens, [1])
     }
 }
 
@@ -81,5 +109,24 @@ private final class FakeRegionCaptureProvider: RegionCaptureProvider, @unchecked
 
     func captureRegion() async -> RegionCaptureResult {
         result
+    }
+}
+
+@MainActor
+private final class FakePromptPanelFocusRestorer: PromptPanelFocusRestoring {
+    typealias Token = Int
+
+    private(set) var captureCount = 0
+    private(set) var restoreCount = 0
+    private(set) var restoredTokens: [Int] = []
+
+    func captureCurrentFocusOwner() -> Int? {
+        captureCount += 1
+        return captureCount
+    }
+
+    func restoreFocus(to token: Int) {
+        restoreCount += 1
+        restoredTokens.append(token)
     }
 }
