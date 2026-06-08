@@ -75,7 +75,8 @@ flowchart LR
 - React ThreadWindow 持有到 `/api/thread` 的长连接。
 - thread 打开或 thread socket 重连时发送 `thread.resume(threadId)`。
 - `thread.resume` 的结果是 `thread.snapshot`，不是新建 socket，也不是额外握手通道。
-- 所有 `ThreadNotification` 与 `ServerRequest` 都带 `threadId`，由 React store 按 thread 分发。
+- 普通 thread 级 `ThreadNotification` 与 `ServerRequest` 都带 `threadId`，由 React store 按 thread 分发。
+- 连接级通知是例外，例如 `workspace.listed` 对应 `workspace.list` 命令，只返回给发起命令的连接，不带 `threadId`。
 
 ## core 侧消费方式
 

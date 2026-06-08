@@ -4,7 +4,7 @@
 
 `thread/` 负责 thread 生命周期与 turn 编排：创建 thread、恢复 thread、列出 / 删除 thread，把一轮用户输入交给 runtime，并把通知与审计结果写回持久化。
 
-当前文档只描述已经提交的最小协议约束：
+当前文档描述已经提交的 thread socket 协议入口与相关通知：
 
 - `thread.start`
 - `thread.resume`
@@ -12,10 +12,12 @@
 - `thread.delete`
 - `turn.start`
 - `turn.interrupt`
+- `workspace.list`
+- `workspace.listed`
 - `notification`
 - `server request`
 
-旧协议里的显式 unsubscribe 语义以及任何额外命令均不再视为目标协议的一部分，统一下沉到 [docs/TODO.md](/Users/mu9/proj/handAgent/docs/TODO.md) 跟踪。
+旧协议里的显式 unsubscribe 语义继续下沉到 [docs/TODO.md](/Users/mu9/proj/handAgent/docs/TODO.md) 跟踪。
 
 ## 文件
 
@@ -62,7 +64,7 @@ sequenceDiagram
 
 ## 关键机制
 
-### 最小命令入口
+### 命令入口
 
 - `thread.start`：创建 thread，并在当前 `/api/thread` socket 上建立该 thread 的通知路由。
 - `thread.resume`：恢复既有 thread，并返回 `thread.snapshot`。
@@ -70,6 +72,12 @@ sequenceDiagram
 - `thread.delete`：删除指定 thread；若该 thread 正在运行，先中断再删。
 - `turn.start`：兼容旧入口；后端内部归一化为 user input item，idle 时唤醒 session loop，running 时 steer 到 active turn follow-up。
 - `turn.interrupt`：中断当前运行中的 turn。
+- `workspace.list`：读取 workspace 注册表，并在当前连接返回 `workspace.listed`；未配置 registry 时返回 `thread.error(workspace_registry_not_configured)`。
+
+### `workspace.listed` 是连接级响应
+
+- `workspace.listed` 对应 `workspace.list` 命令，不带 `threadId`，只发给发起命令的连接。
+- payload 当前包含 `id`、`name`、`rootPath`，用于 ThreadWindow 展示和选择用户已注册 workspace。
 
 ### `thread.snapshot` 是恢复入口
 

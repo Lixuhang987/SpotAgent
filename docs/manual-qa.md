@@ -99,15 +99,14 @@
 6. 创建新 thread，用 `cat ~/.spotAgent/threads/<新threadId>.json | jq .metadata.workspaceId` 确认新文件包含 `"workspaceId": null` 字段
 7. 清理测试文件：`rm ~/.spotAgent/threads/test-old-thread.json`
 
-#### 场景 3: workspace.list 协议与处理器验证
+#### 场景 3: workspace.list 协议与当前 Web 缺口验证
 
 1. 审查 `packages/core/src/protocol/ThreadCommand.ts`，确认 `workspace.list` 命令类型存在
 2. 审查 `packages/core/src/protocol/ThreadNotification.ts`，确认 `workspace.listed` 通知类型存在
-3. 执行 `bash ./scripts/test.sh`，确认协议类型守卫测试通过
+3. 审查 `apps/thread-window-web/src/protocol/threadProtocol.ts`，确认当前 `isThreadNotification` 仍缺少 `workspace.listed` case 时，本场景只能记录为已知缺口，不能作为 workspace 分组刷新通过标准
 4. 启动 desktop app，打开浏览器开发者工具 Network 标签
 5. 打开 ThreadWindow，确认 WebSocket 连接后自动发送 `workspace.list` 命令
-6. 确认收到 `workspace.listed` 响应，包含 `~/.spotAgent/settings.json` 中配置的 workspace 列表
-7. 在设置中添加新 workspace，刷新 ThreadWindow，确认新 workspace 出现在历史边栏分组中
+6. 如 Network 中收到 `workspace.listed`，但历史边栏没有刷新 workspace 列表，应记录为当前 Web 类型守卫缺口；只有补齐类型守卫和对应测试后，才能恢复“workspace 分组刷新通过”的验收项
 
 #### 场景 4: 左侧边栏 workspace 分组交互
 
@@ -140,7 +139,7 @@
 
 #### 场景 7: GPT 风格布局验证
 
-**验收目标**: 确认 ThreadWindow 已按 `docs/superpowers/specs/2026-06-08-session-window-chatgpt-style-ui.md` 改造为 ChatGPT 风格布局，同时保留 DESIGN.md 配色。
+**验收目标**: 确认 ThreadWindow React 前端已按 `apps/thread-window-web/thread-window-web.md` 的 GPT 风格布局实现，同时保留 DESIGN.md 配色。
 
 **前提条件**:
 - 已执行 `pnpm --filter handagent-thread-window-web build`
@@ -205,7 +204,7 @@
 #### 场景 10: 视觉一致性验证
 
 1. 确认 ThreadWindow 整体不再是 dark-only Raycast Glass 风格，而是 cream sidebar + dark product workspace 的双 surface 节奏。
-2. 确认顶部工具栏不再显示 connection pill（已移除），tab 状态点仍能区分 running / failed / interrupted / idle。
+2. 确认顶部工具栏不再显示 connection pill（已移除），TabBar 不显示状态点；running / failed / interrupted / idle 不要求通过 tab 状态点区分，应由消息流、发送/停止按钮、错误提示或状态气泡表达。
 3. 确认历史项的 hover / focus / active 视觉边界与点击边界一致：点击 row 空白区域会打开 thread，点击删除图标只触发删除确认。
 4. 触发 permission 或 workspace 请求，确认请求面板是 dark product card，主动作使用 coral，参数 JSON 区域使用 monospace dark code block。
 

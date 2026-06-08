@@ -4,17 +4,18 @@
 
 `apps/agent-server/tests` 是 agent-server 的 Vitest 测试集合。测试目录按源码职责分组，用来验证当前主路径边界：server 顶层消息分派、thread / turn 命令路由与 notification 发布、protocol 翻译、settings 热加载、actions / MCP 工具组合、bridges 回流通道。
 
-## 子目录索引
+## 直接子节点索引
 
-| 子目录 | 职责 |
+| 子节点 | 职责 |
 |------|------|
-| `server/` | `startServer`、`attachThreadSocketHandlers`、顶层 `PlatformBridgeMessage / ThreadCommand / ClientResponse` 分派、MCP 配置读取、LLM 模式解析、Computer Use client 选择 |
+| `server/` | `startServer`、`attachThreadSocketHandlers`、顶层 `PlatformBridgeMessage / ThreadCommand / ClientResponse` 分派、按 MCP 配置创建 client、LLM 模式解析、Computer Use client 选择；未覆盖缺口：`readMCPConfig` 的 MCP 配置读取 |
 | `thread/` | `ThreadCommandRouter`、`ThreadNotificationPublisher`、`ThreadRuntimeOrchestrator`、`ThreadPersistence`、thread 级工具激活状态 |
 | `protocol/` | `MessageTranslator` 的 `ThreadNotification`、审计事件、用户附件和 image STUB 翻译 |
 | `settings/` | `SettingsBackedLLMClient` 与 `SettingsBackedToolRegistry` 的 stamp 缓存和热加载 |
 | `actions/` | `ActionBindingResolver`、`MCPServerRegistry`、`ComputerUseMCPClient`、`ThreadScopedToolRegistry` |
 | `bridges/` | platform bridge、permission bridge、workspace ask bridge 的 token fencing、超时和断线语义 |
 | `support/` | 测试辅助实现，目前包含内存 BlobStore |
+| `path-alias.test.ts` | 扫描测试目录内跨包 import，验证 `@handagent/core/*` path alias 能覆盖测试引用 |
 
 ## 运行方式
 

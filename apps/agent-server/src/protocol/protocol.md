@@ -2,7 +2,7 @@
 
 ## 目录职责
 
-`protocol/` 是 agent-server 内部的翻译层。它把 core runtime 事件翻译成 desktop 消费的 `ThreadNotification`，把 runtime 事件翻译成持久化审计 `ThreadAuditEvent`，并处理用户附件与持久化 STUB 的双向转换。
+`protocol/` 是 agent-server 内部的翻译层。它把 core runtime 事件翻译成 React ThreadWindow 消费的 `ThreadNotification`，把 runtime 事件翻译成持久化审计 `ThreadAuditEvent`，并处理用户附件与持久化 STUB 的双向转换。
 
 ## 文件
 
@@ -13,7 +13,7 @@
 ## 运行位置
 
 - 上游：`thread/ThreadRuntimeOrchestrator.ts` 在 runtime event 回调中调用 `toThreadNotification()` 和 `toAuditEvent()`。
-- 下游：desktop thread store 消费 `assistant.delta`、`tool.started`、`tool.finished`、`thread.error` 等 `ThreadNotification`；`ThreadStore` 持久化审计 `ThreadAuditEvent`。
+- 下游：React ThreadWindow store 消费 `assistant.delta`、`tool.started`、`tool.finished`、`thread.error` 等 `ThreadNotification`；`ThreadStore` 持久化审计 `ThreadAuditEvent`。
 - 旁路：`thread/ThreadPersistence.ts` 调 `composeUserContent()` 和 `agentMessagesToConversation()`。
 
 ## 关键机制
@@ -49,9 +49,9 @@ case "tool_result":
   };
 ```
 
-`AgentRuntime` 的 assistant `messageId` 只保证单次 run 内部递增；同一 thread 后续 turn 可能再次出现 `assistant-1`。因此 `assistant.delta.itemId` 必须拼入 `turnId`，保证 desktop `ThreadWindow` 的 SwiftUI message identity 在多轮会话中稳定唯一。
+`AgentRuntime` 的 assistant `messageId` 只保证单次 run 内部递增；同一 thread 后续 turn 可能再次出现 `assistant-1`。因此 `assistant.delta.itemId` 必须拼入 `turnId`，保证 React `ThreadWindow` 的 message identity 在多轮会话中稳定唯一。
 
-core runtime 只知道 `tool_result` 成功或失败；desktop UI 需要的是 `tool.finished(status)`。这个映射集中在这里，新增工具事件字段时只改一个地方。
+core runtime 只知道 `tool_result` 成功或失败；React UI 需要的是 `tool.finished(status)`。这个映射集中在这里，新增工具事件字段时只改一个地方。
 
 ### Runtime event 到审计事件
 

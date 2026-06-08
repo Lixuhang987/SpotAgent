@@ -40,6 +40,6 @@ ThreadSummary {
 
 ## 与其他模块的关系
 
-- [ThreadWindowLifecycle](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 在 tab 状态 / 消息变化和 tab 关闭时调用 `upsert(_:)`，保持状态气泡使用的 `isRunning`、`latestSummary` 与 `windowIsOpen` 同步。
-- [StatusBubble ViewModel](/Users/mu9/proj/handAgent/apps/desktop/Sources/StatusBubble/status-bubble.md) 派生 `isRunning` / `latestSummary`。
+- 当前 `ThreadWindowLifecycle` 只管理全局 `NSWindow/WKWebView` 生命周期与 initial prompt 队列，不依赖 `ThreadRegistry`，也不维护 React ThreadWindow 的 tabs、消息或运行态。
+- [StatusBubble ViewModel](/Users/mu9/proj/handAgent/apps/desktop/Sources/StatusBubble/status-bubble.md) 从 `ThreadRegistry` 派生 `isRunning` / `latestSummary`；实时 thread 摘要来源尚未接入本注册表，因此当前注册表不能代表 React ThreadWindow 的完整运行状态。
 - [ThreadWindow](/Users/mu9/proj/handAgent/apps/desktop/Sources/ThreadWindow/thread-window.md) 通过 agent-server 的 thread 列表协议展示左侧历史列表。

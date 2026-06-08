@@ -30,8 +30,8 @@
 
 ### 4. 视觉：Theme token
 
-- 所有颜色、字体、间距、圆角、动画时长**必须**走 `theme.colors.*` / `theme.typography.*` / `theme.spacing.*` / `theme.radius.*` / `theme.animation.*`。
-- View / Styles 中**禁止**硬编码 `Color(...)` / 字号 / `padding(20)` 等魔法数字。Token 缺失先扩 [Theme](Sources/Theme/theme.md)。
+- Swift `Theme` token 是原生 SwiftUI 界面的视觉主入口；新增可复用颜色、字体、间距、圆角、动画时长时，优先扩 `theme.colors.*` / `theme.typography.*` / `theme.spacing.*` / `theme.radius.*` / `theme.animation.*`。
+- 当前代码里仍存在局部 SwiftUI layout 数值，例如窗口尺寸、一次性 padding 或定位偏移；修文档和新代码时按模块逐步收敛，不把阶段性状态写成绝对禁令。
 - 当前 SwiftUI 原生界面通过 Swift `Theme` 映射根目录 `DESIGN.md` 的 warm-canvas / coral / dark product surface 视觉语言，目标 macOS 15+，不为旧系统加 fallback。
 - React ThreadWindow 的视觉 token 不走 Swift `Theme`，由 [thread-window-web.md](/Users/mu9/proj/handAgent/apps/thread-window-web/thread-window-web.md) 和根目录 `DESIGN.md` 约束。
 
@@ -64,15 +64,13 @@
 
 ## 目录索引
 
-下级文档入口：
+`apps/desktop` 的直接子节点：
 
-- [Coordinator/](Sources/Coordinator/coordinator.md) — `AppCoordinator` 单向事件流
-- [Theme/](Sources/Theme/theme.md) — 视觉 token 与 Environment 注入
-- [PromptPanel/](Sources/PromptPanel/prompt-panel.md) — 命令面板 View+ViewModel+Controller+Styles
-- [ThreadWindow/](Sources/ThreadWindow/thread-window.md) — WKWebView host、初始 prompt 注入与 React ThreadWindow 加载
-- [StatusBubble/](Sources/StatusBubble/status-bubble.md) — 右下角状态气泡
-- [Settings/](Sources/Settings/settings.md) — 设置窗口 Tab 容器（model / tools / permissions / shortcuts / workspaces）
-- [AppServices/](Sources/AppServices/app-services.md) — 跨模块共享服务（AppServer / AgentSettings / Hotkey / Lifecycle / PlatformBridge / SelectionCapture / Thread）
+- `HandAgentApp.swift` — SwiftUI `@main` 入口。
+- `Sources/` — Swift 源码目录；具体模块由各自目录下已有 `<dir>.md` 继续说明。
+- `TestsSwift/` — Swift 测试目录。
+- `Web/` — desktop 侧 Web 资源目录。
+- `desktop.md` — 本文件。
 
 ## 入口与启动流程
 

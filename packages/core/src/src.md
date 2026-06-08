@@ -20,7 +20,7 @@
 | `workspace/` | [workspace/workspace.md](/Users/mu9/proj/handAgent/packages/core/src/workspace/workspace.md) | 显式 workspace 沙箱 + 默认播种 |
 | `config/` | [config/config.md](/Users/mu9/proj/handAgent/packages/core/src/config/config.md) | settings.json 模型与 tool 设置解析 |
 | `logging/` | [logging/logging.md](/Users/mu9/proj/handAgent/packages/core/src/logging/logging.md) | LLM 网络日志 JSONL 落盘 |
-| `protocol/` | [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md) | desktop ↔ app-server Thread/Turn 协议（command / notification / request / response + PlatformBridgeMessage） |
+| `protocol/` | [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md) | React ThreadWindow ↔ agent-server 的 Thread 协议，以及独立 `/api/platform` 的 `PlatformBridgeMessage` |
 | `conversation/` | [conversation/conversation.md](/Users/mu9/proj/handAgent/packages/core/src/conversation/conversation.md) | UI / 持久化用 ConversationMessage 模型 |
 | `selection/` | [selection/selection.md](/Users/mu9/proj/handAgent/packages/core/src/selection/selection.md) | 用户主动选区抽象 |
 
@@ -71,10 +71,10 @@ plugin action 绑定的外部能力不由 core tools 目录加载私有插件进
 
 ### 7. 跨进程协议
 
-- desktop 与 app-server 走统一 WebSocket；Thread 主路径拆为 `ThreadCommand`、`ThreadNotification`、`ServerRequest`、`ClientResponse` 四类消息。
+- React ThreadWindow 与 agent-server 走 `/api/thread` WebSocket；Thread 主路径拆为 `ThreadCommand`、`ThreadNotification`、`ServerRequest`、`ClientResponse` 四类消息。
 - `ThreadCommand` 只表示 UI 主动提交的命令；`ThreadNotification` 只表示 server/core 向 UI 推送的结果通知。
 - `ServerRequest` / `ClientResponse` 只覆盖少量“server 提问，UI 回执”的交互，如权限审批与 workspace 选择。
-- 平台反向 IPC 不并入 thread 主协议，继续走独立 `PlatformBridgeMessage`，通过 `channel: "platform"` 分流。
+- Swift desktop 不参与 thread 主协议，只通过 `/api/platform` 处理独立 `PlatformBridgeMessage`，并用 `channel: "platform"` 分流。
 - 字段说明详见 [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md)。
 
 ## 当前实现特点与已知改进项
@@ -83,7 +83,7 @@ plugin action 绑定的外部能力不由 core tools 目录加载私有插件进
 - tool 结果统一序列化为字符串再回灌；`MAX_OUTPUT_BYTES = 8 KiB` 截断。
 - `VercelClient` 当前默认模型 `gpt-5-mini`。
 - user message 支持字符串或多模态 content parts；持久化层仍保存 STUB 文本，agent-server 在 runtime 前展开 image STUB。
-- `assistant.delta` 来自 `LLMStreamEvent.text_delta`，desktop UI 可逐段拼接 assistant 回复。
+- `assistant.delta` 来自 `LLMStreamEvent.text_delta`，React ThreadWindow 可逐段拼接 assistant 回复。
 - 文件 tool 已使用 workspace 沙箱、basename symlink 拒绝、10 MiB 写入上限与原子写。
 - `FilePermissionPolicy.cache` 与 `FileWorkspaceRegistry.cache` 不启 watcher；每次公开读写入口前比较持久化文件 `mtimeMs + size`，检测到外部修改后重读，保证 Settings 或外部撤销权限后下一次 tool 调用可见。
 

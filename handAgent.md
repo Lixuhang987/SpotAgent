@@ -14,7 +14,7 @@
 
 - 当前产品是一个可由全局热键随时唤起的桌面 Agent。
 - 第一版以 macOS 为优先，但核心 runtime 和 tool 协议按跨平台方式设计。
-- 只有用户主动输入和用户主动选区可以作为 thread 初始上下文。
+- 只有用户主动提供的输入或附件可以作为 thread 初始上下文，例如 prompt、文本选区、主动圈选截图。
 - 屏幕、窗口、文件、剪贴板、App 状态等信息不能默认注入模型，只能通过 tool 按需读取。
 
 ## 分层架构
@@ -115,6 +115,7 @@ flowchart TD
 - `AgentTool<TInput, TOutput>`
   - `call(input): Promise<TOutput>`
 - `PlatformAdapter`
+  - `listApps`
   - `currentClipboardText`
   - `frontmostAppInfo`
   - `frontmostWindowList`
@@ -173,7 +174,7 @@ flowchart TD
 - `packages/core/src/storage` 提供持久化 thread 存储，默认使用 `FileThreadStore` 将 thread 写入 `~/.spotAgent/threads/`。
 - React ThreadWindow 通过 agent-server 的 `/api/thread` 读取同一目录，为左侧历史列表提供恢复和删除入口；恢复同一 `threadId` 时优先激活已有 tab，未打开时创建新 tab 并等待 `thread.snapshot` 恢复。
 - `packages/core` 已经定义完整的 tool、platform DTO。
-- macOS 平台能力由 `apps/desktop` 内的 `MacPlatformProvider` 实现：剪贴板（`NSPasteboard`）、App 列表与前台 App（`NSWorkspace`）、窗口列表（`CGWindowListCopyWindowInfo`）、屏幕截图（`ScreenCaptureKit` + `SCScreenshotManager`，支持 display / window / region 三种 target）、OCR（Vision）与 Accessibility snapshot / action。
+- macOS 平台能力由 `apps/desktop` 内的 `MacPlatformProvider` 实现：剪贴板（`NSPasteboard`）、App 列表与前台 App（`NSWorkspace`，对应 `app.list` / `app.frontmost`）、窗口列表（`CGWindowListCopyWindowInfo`）、屏幕截图（`ScreenCaptureKit` + `SCScreenshotManager`，支持 screen / display / window / region target）、OCR（Vision）与 Accessibility snapshot / action。
 - 桌面 App 通过独立 `/api/platform` WebSocket 发送 `platform_bridge_hello`，并把 `channel: "platform"` 的 `platform_request` 分派给 `PlatformBridgeService`；Swift 不再解析 `ThreadNotification`，也不发送 `ThreadCommand`。
 - React ThreadWindow 已有 thread socket 断线自动重连、历史刷新与 tab 重新恢复逻辑；仍需实机验证 agent-server 重启后的 `thread.snapshot` 恢复体验。
 - 图片 attachment 会落 Blob/Stub；agent-server 在 runtime 前把 image STUB 展开为多模态 image part，LLM 是否能理解图片取决于当前 provider capability。

@@ -9,6 +9,7 @@
 | `AgentTool.ts` | `AgentTool<TInput, TOutput>` 接口：`name / description / inputSchema (JSON Schema) / call(input, context?)`；`context` 当前包含 `threadId / toolCallId`；可选 `stubByDefault` 声明 runtime 可把结果写成 Blob/Stub |
 | `defineTool.ts` | `defineTool({ name, description, inputSchema (zod), stubByDefault?, run })` 工厂：`zod` schema 自动转 JSON Schema 2019-09；`.create(deps)` 生成的 `call(input, context?)` 会先用同一个 schema 做运行时入参校验，再调用 `run` |
 | `ToolRegistry.ts` | Map 包装；`register / replaceAll / get / list`，单次注册重名抛错，`replaceAll()` 供 settings 热加载原地刷新；`list()` 返回 `RegisteredTool`（去掉 `call`），供 `LLMClient.stream` 使用 |
+| `MetaToolUseTool.ts` | meta-tool `use_tools`，未激活 thread 默认只暴露它；首次调用后由 thread-scoped registry 注入完整 builtin + MCP 工具集 |
 | `registerBuiltins.ts` | 组合根：根据 `PlatformAdapter` + 可选 `WorkspaceRegistry` + `ToolSettings` 装配 candidates，过 allowlist/denylist 后注册 |
 | `registerTools.ts` | 当前等同于 builtin 注册组合根：按 `PlatformAdapter` / `WorkspaceRegistry` 生成 builtin candidates，再统一套 `allowlist / denylist` |
 | `builtins/*.ts` | 11 个 builtin tool 实现，全部用 `defineTool` 工厂表达 |
@@ -21,7 +22,7 @@
 | `clipboard.read` | `{}` | `PlatformAdapter.currentClipboardText` | 读 NSPasteboard 文本 |
 | `app.frontmost` | `{}` | `PlatformAdapter.frontmostAppInfo` | 当前前台 App 信息 |
 | `window.list` | `{}` | `PlatformAdapter.frontmostWindowList` | 当前可见窗口列表（CGWindowList） |
-| `screen.capture` | `ScreenCaptureRequest` | `PlatformAdapter.captureScreen`（→ ScreenCaptureKit） | 支持 display / window / region 三种 target，base64 PNG 返回 |
+| `screen.capture` | `ScreenCaptureRequest` | `PlatformAdapter.captureScreen`（→ ScreenCaptureKit） | 支持 screen / display / window / region 四种 target，base64 PNG 返回；不传 target、`screen`、`display` 都是整屏/显示器截图路径，`window` 指定窗口，`region` 指定矩形区域 |
 | `ocr.read` | `OCRRequest` | `PlatformAdapter.recognizeText` | macOS Vision OCR，仅读入参图片 |
 | `accessibility.snapshot` | `AccessibilitySnapshotTarget` | `PlatformAdapter.accessibilitySnapshot` | macOS Accessibility 快照 |
 | `accessibility.action` | `AccessibilityActionRequest` | `PlatformAdapter.performAccessibilityAction` | macOS Accessibility 动作 |
@@ -45,7 +46,7 @@ flowchart LR
   H --> I[返回 {registry, registered, disabled}]
 ```
 
-`SettingsBackedToolRegistry` 在 agent-server 启动和每轮 user message 进入 runtime 前按 `settings.json` 文件戳刷新 builtin tool；`disabled` 列表回流到 `console.log`，便于排错；当 `workspaceRegistry` 缺失时，三个 file/workspace tool 直接进 disabled；当缺少 `WorkspaceAskResolver` 时，`workspace.askUser` 单独进 disabled。
+`SettingsBackedToolRegistry` 在 agent-server 启动和每轮 user message 进入 runtime 前按 `settings.json` 文件戳刷新 builtin tool；`disabled` 列表回流到 `console.log`，便于排错；当 `workspaceRegistry` 缺失时，`workspace.list`、`workspace.askUser`、`file.read`、`file.write` 四个 workspace/file tool 直接进 disabled；当缺少 `WorkspaceAskResolver` 时，`workspace.askUser` 单独进 disabled。
 
 本目录不再包含私有 `tools[] + command` 插件运行时。本地 Action manifest 只负责 prompt 模板、`kind`、`globalShortcut` 与可选 `actionBinding`；只有 plugin action 的外部能力通过标准 MCP tool 进入 thread-scoped registry，skill action 只提交渲染后的普通 prompt。
 

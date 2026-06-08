@@ -6,7 +6,7 @@
 
 | 文件 | 职责 |
 |------|------|
-| `PlatformAdapter.ts` | 平台能力的统一接口 + 全部入参 / 出参 DTO（AppInfo / FrontmostAppInfo / WindowInfo / ScreenCapture* / OCR* / Accessibility*）；所有出参都带 `resolution: "best_effort"` 标记 |
+| `PlatformAdapter.ts` | 平台能力的统一接口 + 全部入参 / 出参 DTO（AppInfo / FrontmostAppInfo / WindowInfo / ScreenCapture* / OCR* / Accessibility*）；`resolution: "best_effort"` 只出现在部分对象出参上 |
 | `PlatformBridge.ts` | 跨进程 RPC 接口：`call<T>(method, args, timeoutMs?)`；定义 `PlatformBridgeOfflineError` / `PlatformBridgeTimeoutError` / `PlatformBridgeRemoteError` 三个类型化错误 |
 | `RemotePlatformAdapter.ts` | 实现 `PlatformAdapter`，每个方法转发为对应 `bridge.call(method, args)`；默认 15s 超时 |
 | `OfflinePlatformAdapter.ts` | Null object，所有方法直接抛 `not_implemented`，给测试 / 无桌面环境用 |
@@ -30,12 +30,13 @@ agent-server 内 tool.call(input)
 ## 关键约定
 
 - **方法名稳定**：`PlatformBridgeMethod` 是字面量联合（`clipboard.read | app.list | app.frontmost | window.list | screen.capture | ocr.read | accessibility.snapshot | accessibility.action`），增删字段需要 desktop / agent-server / 协议三处同步。
+- **App 列表**：`PlatformAdapter.listApps()` 通过 `PlatformBridge.call("app.list", {})` 请求宿主 App 列表，返回 `AppInfo[]`。`AppInfo` 字段为 `name / bundleId / pid / isActive / activationPolicy / resolution`。
 - **错误三态**：
   - `Offline`：bridge 未 attach（desktop 还没 hello），立即抛，不等待。
   - `Timeout`：默认 15s 超时；区域截图等耗时方法可调高。
   - `Remote`：desktop 端实现明确返回错误（如 `not_implemented`、权限被拒）。
 - **消息载荷**：所有 RPC 走 `PlatformBridgeMessage.platform_request / platform_response`，外层带 `channel: "platform"`，不占用 thread 路由字段（见 [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md)）。
-- **resolution 字段**：所有出参带 `"best_effort"` 字面量；目前是占位（未来扩展 `"exact" / "estimated"` 等档位用）。
+- **resolution 字段**：`AppInfo`、`FrontmostAppInfo`、`ScreenCaptureResult`、`OCRResult`、`AccessibilityNodeSnapshot`、`AccessibilityActionResult` 带 `"best_effort"` 字面量；`WindowInfo` 没有 `resolution`，仅包含 `id / title / appName`。
 
 ## 编辑此目录的约束
 

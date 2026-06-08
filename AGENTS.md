@@ -10,7 +10,7 @@
 
 仓库文档是一棵 DFS 索引树：每个 `<dir>.md` 只列**直接子节点**，更深层细节由子节点自己继续展开。AI / 新人按 `AGENTS.md → handAgent.md → ...` 一路向下读，需要哪一层就钻到哪一层，不必预先吞下所有路径。
 
-本文件只列根目录的直接入口；所有 `apps/` 下的模块、`packages/` 下的源码细节，由各自的 `<dir>.md` 接力展开。
+本文件只列根目录的直接入口；所有 `apps/` 下的模块、`packages/` 下的源码细节，由各自的 `<dir>.md` 接力展开。`docs/` 下的平铺开发说明在本文件列为叶文件；`docs/human/`、`docs/superpowers/` 是例外嵌套集合，只在此处标出集合入口。
 
 ### 根目录入口
 
@@ -20,10 +20,10 @@
 
 ### 一级子目录（每个目录由其内 `<dir>.md` 接力）
 
-- `apps/apps.md`：应用层总览，索引 desktop 与 agent-server 两个可执行单元。
+- `apps/apps.md`：应用层总览，索引 desktop、thread-window-web 与 agent-server。
 - `packages/packages.md`：包层总览，索引 core 跨平台核心。
 - `examples/examples.md`：可复制到 `~/.spotAgent/` 的 Plugin / Append Prompt / MCP 配置示例。
-- `docs/`：仅是平铺的开发说明集合，下面列出的文件即叶节点。
+- `docs/`：开发说明集合；平铺文件在下面列为叶节点，`human/` 与 `superpowers/` 是例外嵌套集合。
 - `codex/`：本地 code agent 的参考项目（权限系统 / tool 系统 / UI 流式展示 / 子 agent 系统等可借鉴）。
 
 ### `docs/` 叶文件
@@ -33,6 +33,7 @@
 - `docs/llm-api-integration.md`：LLM 真实 API 集成测试运行方式、输出 JSON 结构与 mock 构造依据。
 - `docs/TODO.md`：按依赖关系分组的待办路线图（P0–P3）。
 - `docs/bugs.md`：当前已知 bug 清单与修复约束。
+- `docs/archive.md`：已通过实机 QA 的历史归档索引。
 - `docs/human/`：手工撰写的设计资料。
 - `docs/superpowers/specs/` 与 `docs/superpowers/plans/`：历史设计稿与实施计划。
 
@@ -59,14 +60,15 @@
 flowchart TD
   A[用户按下全局热键] --> B[Swift 宿主打开 PromptPanel]
   B --> C[用户输入 prompt 并提交]
-  C --> D[Swift 创建 ThreadWindow 并通过 AppServer 共享连接发送 ThreadCommand]
-  D --> E[agent-server 接收 ThreadCommand]
-  E --> F[AgentRuntime 调用 LLMClient]
-  F --> G{是否返回 toolCalls}
-  G -- 否 --> H[SwiftUI 渲染 assistant bubbles]
-  G -- 是 --> I[ToolRegistry 查找 tool]
-  I --> J[tool 调用平台适配器或文件能力]
-  J --> F
+  C --> D[Swift 创建或聚焦 ThreadWindow WKWebView 并注入 initial prompt]
+  D --> E[React ThreadWindow 连接 /api/thread 并发送 ThreadCommand]
+  E --> F[agent-server 接收 ThreadCommand]
+  F --> G[AgentRuntime 调用 LLMClient]
+  G --> H{是否返回 toolCalls}
+  H -- 否 --> I[React 渲染 assistant messages]
+  H -- 是 --> J[ToolRegistry 查找 tool]
+  J --> K[tool 调用平台适配器或文件能力]
+  K --> G
 ```
 
 

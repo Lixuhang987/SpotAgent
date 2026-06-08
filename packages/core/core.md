@@ -16,6 +16,7 @@ TypeScript workspace 包名为 `@handagent/core`。应用层代码应通过 `@ha
 |------|------|------|
 | `runtime/` | thread turn 循环、消息模型、tool call 编排 | [runtime/runtime.md](/Users/mu9/proj/handAgent/packages/core/src/runtime/runtime.md) |
 | `actions/` | Action manifest 与 thread binding 解析 | [actions/actions.md](/Users/mu9/proj/handAgent/packages/core/src/actions/actions.md) |
+| `blob/` | 大段上下文内容的本地 Blob 持久化与 summary 元数据 | [blob/blob.md](/Users/mu9/proj/handAgent/packages/core/src/blob/blob.md) |
 | `llm/` | LLMClient 抽象与 Vercel AI SDK 适配 | [llm/llm.md](/Users/mu9/proj/handAgent/packages/core/src/llm/llm.md) |
 | `mcp/` | 标准 MCP client 与 tool adapter | [mcp/mcp.md](/Users/mu9/proj/handAgent/packages/core/src/mcp/mcp.md) |
 | `tools/` | AgentTool 协议、ToolRegistry、11 个 builtin tool | [tools/tools.md](/Users/mu9/proj/handAgent/packages/core/src/tools/tools.md) |
@@ -25,7 +26,7 @@ TypeScript workspace 包名为 `@handagent/core`。应用层代码应通过 `@ha
 | `workspace/` | Workspace 注册表与文件沙箱根目录 | [workspace/workspace.md](/Users/mu9/proj/handAgent/packages/core/src/workspace/workspace.md) |
 | `config/` | settings.json 解析（model / tools） | [config/config.md](/Users/mu9/proj/handAgent/packages/core/src/config/config.md) |
 | `logging/` | NetworkLogger 与 fetch 包装，落 JSONL 到 `~/.spotAgent/log/` | [logging/logging.md](/Users/mu9/proj/handAgent/packages/core/src/logging/logging.md) |
-| `protocol/` | desktop ↔ app-server Thread/Turn 协议：`ThreadCommand` / `ThreadNotification` / `ServerRequest` / `ClientResponse` + `PlatformBridgeMessage` | [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md) |
+| `protocol/` | React ThreadWindow ↔ agent-server 的 Thread 协议，以及独立 `/api/platform` 的 `PlatformBridgeMessage` | [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md) |
 | `conversation/` | UI / 持久化用 ConversationMessage 模型 | [conversation/conversation.md](/Users/mu9/proj/handAgent/packages/core/src/conversation/conversation.md) |
 | `selection/` | 用户主动选区抽象 | [selection/selection.md](/Users/mu9/proj/handAgent/packages/core/src/selection/selection.md) |
 
@@ -33,12 +34,12 @@ TypeScript workspace 包名为 `@handagent/core`。应用层代码应通过 `@ha
 
 ```mermaid
 flowchart TD
-  A[desktop 提交 ThreadCommand] --> B[app-server 路由命令]
+  A[React ThreadWindow 提交 ThreadCommand] --> B[agent-server 路由命令]
   B --> C[core AgentRuntime]
   C --> D[AgentRuntime.runWithMessages]
   D --> E[LLMClient.stream]
   E --> F{toolCalls?}
-  F -- 否 --> G[app-server 输出 ThreadNotification]
+  F -- 否 --> G[agent-server 输出 ThreadNotification]
   F -- 是 --> H[ToolRegistry.get]
   H --> I[AgentTool.call]
   I --> J[tool result -> AgentMessage(tool)]
@@ -98,16 +99,17 @@ flowchart TD
 
 - `PersistedThread` / `ThreadMetadata` / `ThreadAuditEvent`
 - `ThreadStore`（接口）+ `InMemoryThreadStore` + `FileThreadStore`
+- `BlobStore` / `BlobRecord`：大段 tool 结果和用户图片等内容的本地 blob 读写接口与元数据记录。
 - `Workspace` / `WorkspaceRegistry` + `FileWorkspaceRegistry`
 - `PermissionPolicy` / `PermissionDecision` / `PermissionResolution` / `PermissionScope`
 - `FilePermissionPolicy`（持久化到 `~/.spotAgent/permissions.json`）
 
 ### 跨进程协议
 
-- `ThreadCommand`（desktop -> app-server 命令）
-- `ThreadNotification`（app-server/core -> desktop 通知）
-- `ServerRequest`（app-server/core -> desktop 的待回执请求）
-- `ClientResponse`（desktop -> app-server 的请求回执）
+- `ThreadCommand`（React ThreadWindow -> agent-server 命令）
+- `ThreadNotification`（agent-server/core -> React ThreadWindow 通知）
+- `ServerRequest`（agent-server/core -> React ThreadWindow 的待回执请求）
+- `ClientResponse`（React ThreadWindow -> agent-server 的请求回执）
 - `PlatformBridgeMessage` / `PlatformResponsePayload`
 - `ThreadAttachment` / `ThreadListEntry`
 - `ConversationMessage` / `ConversationMessageStatus` / `ToolMessageStatus`
@@ -123,7 +125,7 @@ flowchart TD
 - `workspace` 只管沙箱根目录，不暴露绝对路径给 LLM。
 - `config` 仅同步读取 `~/.spotAgent/settings.json`，无监听器、无缓存。
 - `logging` 仅写网络日志，不参与产品决策。
-- `protocol` 仅定义跨进程消息形状；Thread 主路径以命令、通知、server request、client response 四类单向消息建模，TS / Swift 双侧据此对齐。
+- `protocol` 仅定义跨进程消息形状；Thread 主路径以命令、通知、server request、client response 四类单向消息建模，由 React ThreadWindow 与 agent-server 对齐。Swift desktop 只处理 `/api/platform` 上的 `PlatformBridgeMessage`。
 - `conversation` 是 UI/持久化消息模型，与 LLM 面向的 `AgentMessage` 解耦。
 - `selection` 只定义用户选区抽象，不做宿主编排。
 

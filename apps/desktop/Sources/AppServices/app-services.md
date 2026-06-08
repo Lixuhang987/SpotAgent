@@ -6,20 +6,24 @@
 
 | 目录 | 文档 | 职责 |
 |------|------|------|
-| `AgentServer/` | [agent-server.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/AgentServer/agent-server.md) | `AppServer` 统一内核：启动 node 子进程、维护 thread WebSocket、协调平台桥接与健康状态 |
+| `AgentServer/` | [agent-server.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/AgentServer/agent-server.md) | `AppServer` 统一内核：启动 node 子进程、维护 `/api/platform` WebSocket、协调平台桥接与健康状态 |
 | `AgentSettings/` | [agent-settings.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/AgentSettings/agent-settings.md) | `~/.spotAgent/settings.json` 读写 + 500ms 轮询；模型配置 UI |
 | `Hotkey/` | [hotkey.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Hotkey/hotkey.md) | 固定系统入口快捷键（`showPromptPanel` / `captureSelection` / `captureRegion`）与 manifest Action 全局快捷键注册 |
 | `Lifecycle/` | [lifecycle.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Lifecycle/lifecycle.md) | 根据 ThreadWindow / SettingsWindow 计数切换激活策略 |
 | `PlatformBridge/` | [platform-bridge.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/PlatformBridge/platform-bridge.md) | 反向 IPC：把 macOS 原生能力（剪贴板 / 前台 App / 窗口列表 / ScreenCaptureKit 截图等）通过共享 AppServer WebSocket 暴露给 agent-server |
 | `SelectionCapture/` | [selection-capture.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/SelectionCapture/selection-capture.md) | 文本选区采集（osascript Cmd-C）+ 用户主动区域截图（保留 `screencapture -i`），由 Coordinator 在 `captureSelection` / `captureRegion` 热键路径调用 |
-| `Thread/` | [thread.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Thread/thread.md) | Thread 摘要注册表与本地历史文件读取；驱动 StatusBubble 与 ThreadWindow 历史列表 |
+| `Thread/` | [thread.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Thread/thread.md) | Thread 摘要注册表与本地历史文件读取；StatusBubble 从注册表派生展示，ThreadWindow 历史列表由 React 通过 `/api/thread` 读取 |
 
 ## 文件
 
 | 文件 | 职责 |
 |------|------|
-| `AppServices.swift` | DI 容器：持有 `appServer` / `threadRegistry` / `settingsStore` / `threadHistoryStore` / `actionManifestStore` / `appServerURL` / `hotkeyRegistrar` / `threadWindowPresenter` / `settingsWindowPresenter` / `fatalAlertPresenter` / `setActivationPolicy` / `showsStatusBubble`。生产由 `init()` 默认参数装配，测试用 `AppServices.testing()` 注入 nop 替身。同文件还定义 `ThreadWindowPresenting` / `SettingsWindowPresenting` / `HotkeyRegistering` / `FatalAlertPresenting` 协议与 `Nop*` 测试替身 |
-| `AppServicesProductionImpls.swift` | 生产实现：`ProductionHotkeyRegistrar`（委托 Hotkey 层绑定 `KeyboardShortcuts.Name`）+ `ProductionThreadWindowPresenter` / `ProductionSettingsWindowPresenter`（构建 `NSWindow` + `NSHostingController`，固定浅色 `NSAppearance(.aqua)` 以匹配 warm-canvas 主题，并通过 `WindowCloseObservation` 持有和释放关闭通知 token）+ `ProductionFatalAlertPresenter` |
+| `AppServices.swift` | DI 容器：持有 `appServer` / `threadRegistry` / `settingsStore` / `threadHistoryStore` / `actionManifestStore` / `appServerURL` / `platformServerURL` / `threadWindowWebAppURL` / `hotkeyRegistrar` / `threadWindowPresenter` / `settingsWindowPresenter` / `fatalAlertPresenter` / `setActivationPolicy` / `showsStatusBubble`。`appServerURL` 是 React ThreadWindow 使用的 `/api/thread` URL，`platformServerURL` 是 Swift 平台桥使用的 `/api/platform` URL，`threadWindowWebAppURL` 是 WKWebView 加载的 React 入口。生产由 `init()` 默认参数装配，测试用 `AppServices.testing()` 注入 nop 替身。同文件还定义 `ThreadWindowPresenting` / `SettingsWindowPresenting` / `HotkeyRegistering` / `FatalAlertPresenting` 协议与 `Nop*` 测试替身 |
+| `AppServicesProductionImpls.swift` | 生产实现：`ProductionHotkeyRegistrar` / `ProductionThreadWindowPresenter` / `ProductionSettingsWindowPresenter` / `ProductionFatalAlertPresenter`；window presenter 通过 `WindowCloseObservation` 持有和释放关闭通知 token |
+
+`ProductionThreadWindowPresenter` 只负责构建承载 React ThreadWindow 的 `NSWindow` + `NSHostingController`，视觉由 WKWebView 内 React 前端负责。
+
+`ProductionSettingsWindowPresenter` 构建 Settings `NSWindow` + `NSHostingController`，只有 Settings window 固定浅色 `NSAppearance(.aqua)` 以匹配 warm-canvas 主题。
 
 ## DI 协议
 

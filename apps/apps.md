@@ -30,8 +30,9 @@ flowchart LR
 ### 2. Thread 交互
 
 - 用户提交 prompt 后，`AppCoordinator` 创建或聚焦 `ThreadWindow`。
-- Swift `ThreadWindowLifecycle` 创建 `WKWebView`，加载 `apps/thread-window-web` bundle，并注入 `/api/thread` URL 和初始 prompt。
-- React ThreadWindow 通过 `/api/thread` 编码 `ThreadCommand` / `ClientResponse`，接收 `ThreadNotification` / `ServerRequest`，由后端 `ThreadCommandRouter` 路由并交给 `ThreadRuntimeOrchestrator` 驱动 `AgentRuntime`。
+- Swift `ThreadWindowLifecycle` 创建 `WKWebView`，加载 `apps/thread-window-web` bundle，并注入 `/api/thread` URL 与初始 prompt 队列。
+- React ThreadWindow 接收初始 prompt 后，通过 `/api/thread` 发送 `thread.start`，收到 `thread.started` 后发送首轮 `turn.start` 和 attachments；后续 composer 追问也由 React 发送 `turn.start`。
+- React ThreadWindow 负责 `ThreadCommand` / `ClientResponse` 编码、`ThreadNotification` / `ServerRequest` 接收，以及 tabs、消息、请求面板和 composer 状态。
 - ThreadWindow 左侧历史列表通过 thread 协议读取 `~/.spotAgent/threads/`，用于搜索、预览、恢复和删除持久化 thread。
 
 ### 3. 平台能力反向 IPC
@@ -41,8 +42,9 @@ flowchart LR
 
 ### 4. 状态反馈
 
-- `ThreadRegistry` 聚合最近活跃 thread。
-- `StatusBubbleController` 根据聚合结果回跳正在运行或最近活跃的窗口。
+- `StatusBubbleController` 的 ViewModel 从 Swift 侧 `ThreadRegistry` 派生 `isRunning` / `latestSummary` / `primaryThreadID`。
+- 当前 React ThreadWindow / agent-server 的实时 thread 摘要尚未接入 `ThreadRegistry`；不要把 `ThreadRegistry` 理解为 ThreadWindow tabs 或消息状态源。
+- 气泡点击时，若 `ThreadRegistry.primaryThreadID` 存在且全局 ThreadWindow 已打开，则聚焦该窗口；否则回到 PromptPanel。
 
 ## 本层关键 DTO
 
