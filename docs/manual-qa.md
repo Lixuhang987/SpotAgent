@@ -24,7 +24,7 @@
 - 链路证明：`366a706` 主仓库 packaged 回归证明 native focus 兜底只覆盖“从 Finder 等其他前台 App 点击回来”的路径；当关闭 visible Electron ThreadWindow 后只剩 ActivityWindow，ActivityWindow 已是 `AXMain=true / AXFocused=false`，立即点击同一窗口中心时没有 renderer IPC，也不会再次触发 focus event。失败 hop 进一步收敛为 `ActivityWindow 已 native focused/AXMain -> 同窗口 mouseDown -> 无 main 侧兜底事件 -> prompt_panel.show_requested 未发送`。
 - 修复结论：ActivityWindow 现在监听 Electron `webContents.before-mouse-event` 的左键 `mouseDown`，作为已 AXMain 后重复点击的 main 侧兜底；该兜底复用 runtime 的“先聚焦 visible ThreadWindow，否则发送 `prompt_panel.show_requested`”语义，并 `preventDefault()` 阻止同一次 page mouse event 继续触发 renderer click IPC 造成重复请求。`showInactive()` 展示不会触发该兜底，visible ThreadWindow 可聚焦时不会误开 PromptPanel。
 - 自动化验证：`pnpm --filter handagent-electron-shell exec vitest run tests/windows/activityWindowController.test.ts tests/main/electronShellRuntime.test.ts` 覆盖 left mouseDown、button 缺失 mouseDown、忽略 mouseMove/right click、无 visible ThreadWindow 时发送 PromptPanel 请求、有 visible ThreadWindow 时只聚焦 ThreadWindow。
-- 主仓库 live 回归状态：未在主仓库 packaged app 执行本轮追加修复后的实机回归；不得声称已通过。合入后需重新 build/package，并按下方 Electron UI Shell 最终态待回归项验证关闭 visible Electron ThreadWindow 后立即点击已 AXMain 的 ActivityWindow 是否打开 Swift PromptPanel。
+- 主仓库 live 回归结果：2026-06-09 合入 `e6901d2` 后重新执行 `pnpm --filter handagent-electron-shell test`、`pnpm --filter handagent-electron-shell build`、`bash ./scripts/test.sh` 与 `bash ./scripts/package-app.sh --mock-llm`；packaged app 已包含 `onNativeMouseDown`、`runtime.handleActivityWindowNativeMouseDown()`、`before-mouse-event`、`event.preventDefault()` 和 `onNativeMouseDown?.()`。提交 `ELECTRON_STATUSBUBBLE_MOUSEDOWN_QA_20260609 [mock:assistant-ok]` 后生成 `~/.spotAgent/threads/thread-1780951095354-dk65li.json`，关闭 Electron `HandAgent ThreadWindow` 后只剩 `HandAgent Activity`，agent-server 仍监听 `127.0.0.1:4317`，ActivityWindow 为 `AXMain=true` / `AXFocused=false`。立即用 CGEvent 点击 `{1280,870}` 后，Swift `PromptPanel` 仍未出现，截图 `/tmp/handagent-qa/electron-statusbubble-mousedown-after-click.png`。结论：Electron `webContents.before-mouse-event` 也没有可靠收到该同 App / AXMain ActivityWindow 点击；缺陷已继续写入 `docs/bugs.md`，退出 QA app 后无 HandAgent / Electron / agent-server 残留，`127.0.0.1:4317` 无监听。
 
 ### Electron StatusBubble native focus 回退 PromptPanel 修复
 
@@ -124,7 +124,7 @@
 
 **2026-06-09 待回归修复项**：
 
-- 关闭可见 Electron ThreadWindow 后，ActivityWindow 仍显示且 agent-server 继续监听 `127.0.0.1:4317` 时，用 CGEvent 点击 ActivityWindow 中心应打开 Swift `PromptPanel`。`2af9ba0` 的 `acceptFirstMouse: true` 修复不足；`412e1e9` 的 `focusable: true` + `acceptFirstMouse: true` 也已在主仓库 packaged app 实机回归失败；`366a706` 的 native focus 兜底只覆盖从其他前台 App 点击回来。本轮 worktree 追加 native mouse down 兜底后，仍需合入主仓库并重新执行 packaged app 实机回归，确认已 AXMain 的 ActivityWindow 被立即点击时 `prompt_panel.show_requested` 最终打开 Swift PromptPanel。
+- 关闭可见 Electron ThreadWindow 后，ActivityWindow 仍显示且 agent-server 继续监听 `127.0.0.1:4317` 时，用 CGEvent 点击 ActivityWindow 中心应打开 Swift `PromptPanel`。`2af9ba0` 的 `acceptFirstMouse: true` 修复不足；`412e1e9` 的 `focusable: true` + `acceptFirstMouse: true` 也已在主仓库 packaged app 实机回归失败；`366a706` 的 native focus 兜底只覆盖从其他前台 App 点击回来；`e6901d2` 的 native mouseDown 兜底仍未覆盖 ActivityWindow 已 `AXMain=true` 后同 App 内立即点击。当前缺陷已写入 `docs/bugs.md`，下一轮需继续定位 native window / hit testing / event delivery 侧失败原因。
 
 **2026-06-09 阻塞子项**：
 
