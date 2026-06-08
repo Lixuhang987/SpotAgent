@@ -53,6 +53,7 @@ struct PromptPanelGrowingTextView: NSViewRepresentable {
         context.coordinator.textView = textView
         context.coordinator.scrollView = scrollView
         context.coordinator.recalculateHeight()
+        context.coordinator.focusIfNeeded()
         return scrollView
     }
 
@@ -71,12 +72,7 @@ struct PromptPanelGrowingTextView: NSViewRepresentable {
         textView.isSelectable = !isDisabled
         textView.needsDisplay = true
         context.coordinator.recalculateHeight()
-
-        if isFocused, scrollView.window?.firstResponder !== textView, !isDisabled {
-            DispatchQueue.main.async {
-                scrollView.window?.makeFirstResponder(textView)
-            }
-        }
+        context.coordinator.focusIfNeeded()
     }
 
     private var nsFont: NSFont {
@@ -88,6 +84,7 @@ struct PromptPanelGrowingTextView: NSViewRepresentable {
         var parent: PromptPanelGrowingTextView
         weak var textView: NSTextView?
         weak var scrollView: NSScrollView?
+        private let focusRetrier = PromptPanelInputFocusRetrier()
 
         init(parent: PromptPanelGrowingTextView) {
             self.parent = parent
@@ -111,6 +108,13 @@ struct PromptPanelGrowingTextView: NSViewRepresentable {
                 return true
             }
             return false
+        }
+
+        func focusIfNeeded() {
+            guard parent.isFocused, !parent.isDisabled, let textView else { return }
+            focusRetrier.focus(textView, isDisabled: { [weak self] in
+                self?.parent.isDisabled ?? true
+            })
         }
 
         func recalculateHeight() {

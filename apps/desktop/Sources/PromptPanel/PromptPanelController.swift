@@ -85,6 +85,7 @@ final class PromptPanelController {
         }
         panel.center()
         panel.orderFrontRegardless()
+        panel.contentView?.layoutSubtreeIfNeeded()
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKey()
         installEventMonitor()
@@ -141,7 +142,10 @@ final class PromptPanelController {
             if QuickLookPreviewController.isQuickLookVisible { return }
             self?.hide()
         }
-        panel.contentView = NSHostingView(rootView: PromptPanelView(viewModel: viewModel))
+        let hostingView = NSHostingView(rootView: PromptPanelView(viewModel: viewModel))
+        hostingView.frame = NSRect(origin: .zero, size: panel.contentRect(forFrameRect: panel.frame).size)
+        panel.contentView = hostingView
+        hostingView.layoutSubtreeIfNeeded()
 
         self.panel = panel
     }

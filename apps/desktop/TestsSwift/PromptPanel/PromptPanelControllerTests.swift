@@ -84,6 +84,31 @@ final class PromptPanelControllerTests: XCTestCase {
         XCTAssertEqual(focusRestorer.restoreCount, 1)
         XCTAssertEqual(focusRestorer.restoredTokens, [1])
     }
+
+    func testInputFocusRetrierWaitsForTextViewWindowBeforeFocusing() {
+        var scheduled: [@MainActor () -> Void] = []
+        let retrier = PromptPanelInputFocusRetrier(maxAttempts: 2) { work in
+            scheduled.append(work)
+        }
+        let textView = NSTextView()
+
+        retrier.focus(textView, isDisabled: { false })
+
+        XCTAssertEqual(scheduled.count, 1)
+
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 120, height: 80),
+                              styleMask: [.titled],
+                              backing: .buffered,
+                              defer: false)
+        let contentView = NSView(frame: window.contentView?.bounds ?? .zero)
+        window.contentView = contentView
+        contentView.addSubview(textView)
+
+        scheduled.removeFirst()()
+
+        XCTAssertTrue(window.initialFirstResponder === textView)
+        XCTAssertTrue(window.firstResponder === textView)
+    }
 }
 
 private final class FakeSelectionCaptureProvider: SelectionCaptureProvider, @unchecked Sendable {
