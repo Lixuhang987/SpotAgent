@@ -25,14 +25,6 @@
 - 验收结果：外部用户输入命令统一为 `input.submit`，旧输入命令已从当前 `ThreadCommand` 移除；ThreadWindow composer 在 running 状态下仍可提交输入并保留 Stop，但 running 输入先进入前端本地 FIFO 队列并显示在 Composer 上方，等 thread 离开 running 后逐条发送，避免两个 user input 连续显示；后端公开 `/api/thread input.submit` 在 running 时返回 `thread.error(code: "thread_running")`，普通用户 follow-up 不走后端排队。已通过 `bash ./scripts/test.sh`、`pnpm --filter handagent-thread-window-web test -- tests/threadWindowStore.test.ts`、`pnpm --filter handagent-thread-window-web build`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`。
 
 
-## agent-server thread 主链路 smoke（P2）
-
-1. 从当前 worktree 执行 `bash ./scripts/swiftw run HandAgentDesktop`。
-1. 确认 desktop 成功派生 agent-server，`ps -o pid,ppid,command -p <agent-server-pid>` 中命令路径指向 `apps/agent-server/src/server/server.ts`。
-1. 提交一个普通文本 prompt，确认 thread 视图能收到 assistant 回复或明确的模型配置错误气泡，不出现 `agent-server` 入口文件缺失。
-1. 在同一 thread 触发一次需要 workspace 或 permission 回流的工具场景，确认权限 / workspace 选择气泡仍能回到当前 thread。
-1. 打开对应的 thread 持久化文件，确认本轮 user / assistant 或 tool / event 按预期落盘。
-
 ## ThreadWindow WebView + split WebSocket smoke（P2）
 
 1. 从当前 worktree 执行 `bash ./scripts/swiftw run HandAgentDesktop`。
