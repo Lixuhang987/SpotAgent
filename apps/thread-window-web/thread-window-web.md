@@ -1,6 +1,6 @@
 # thread-window-web
 
-`apps/thread-window-web` 是 React ThreadWindow 前端。默认路径由 Swift `WKWebView` 承载；Phase 0 Electron flag 路径也会用隐藏 `BrowserWindow` 预热同一 bundle，但尚未接管真实 PromptPanel submit。本文只记录修改本目录代码前必须知道的包内前提；整体调用链和 apps 层职责见上级文档。
+`apps/thread-window-web` 是 React ThreadWindow 前端。默认路径由 Swift `WKWebView` 承载；Electron flag 路径由 Electron `BrowserWindow` 承载同一 bundle，并接收 PromptPanel submit、openHistory 和 focus。本文只记录修改本目录代码前必须知道的包内前提；整体调用链和 apps 层职责见上级文档。
 
 ## 目录职责
 
@@ -20,7 +20,7 @@
 ## 运行边界
 
 - React 直接持有 `/api/thread` WebSocket；Swift 不解析 `ThreadNotification`，也不发送 `ThreadCommand`。
-- 默认路径下 Swift 负责加载 Web bundle、注入配置和初始 prompt；Phase 0 Electron hidden prewarm 只提前加载同一 bundle，不改变 React 直接连接 `/api/thread` 的职责。平台 tool 走独立 `/api/platform`。
+- 默认路径下 Swift 负责加载 Web bundle、注入配置和初始 prompt；Electron flag 路径下 Electron preload 注入同名 `window.handAgentThreadWindowConfig` 和 `window.handAgentReceiveInitialPrompt`。React 不区分 host 来源，仍直接连接 `/api/thread`。平台 tool 走独立 `/api/platform`。
 - `ThreadSocketClient` 只处理收发、重连、发送队列和通知副作用，不直接写 UI；UI 状态由 store action 更新。
 - 组件只通过明确 props、store action 或根组件 callback 触发行为，不应绕过根组件直接操作 WebSocket。
 - 当前不把 ThreadWindow tabs、消息或历史同步给 Swift `ThreadRegistry` / StatusBubble。
@@ -40,7 +40,7 @@ Web 侧命令和通知类型以 `packages/core/src/protocol/` 为真相，`src/p
 
 ## 初始 Prompt 流程
 
-Swift 在 document start 注入：
+Swift WKWebView 默认路径和 Electron preload 路径都会在 renderer 启动早期注入：
 
 - `window.handAgentThreadWindowConfig.threadWebSocketURL`
 - 临时 `window.handAgentReceiveInitialPrompt`

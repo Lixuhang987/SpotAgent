@@ -1,6 +1,6 @@
 # desktop
 
-`apps/desktop` 是 macOS 宿主层：应用生命周期、PromptPanel、全局唯一 WKWebView ThreadWindow、StatusBubble、Settings 与全局热键。
+`apps/desktop` 是 macOS 宿主层：应用生命周期、PromptPanel、Settings、全局热键、焦点恢复、StatusBubble、平台能力桥，以及默认路径的全局唯一 WKWebView ThreadWindow。
 
 ## 架构红线（编辑此目录前必读）
 
@@ -21,7 +21,7 @@
 - **Controller**（仅当模块需要 `NSPanel` / `NSWindow` 自定义生命周期时）：纯窗口与事件监听层，不写业务逻辑。
 - **Styles**：跨 View 复用的 `ViewModifier`。一次性样式直接写在 View 里，避免 ViewModifier 爆炸。
 
-`ThreadWindow` 已迁到 React，Swift 侧只保留 `NSWindow/WKWebView` host、配置注入和 initial prompt 队列，不再按 Swift ViewModel / reducer / message view 方式扩展。
+`ThreadWindow` 已迁到 React。默认路径下 Swift 侧只保留 `NSWindow/WKWebView` host、配置注入和 initial prompt 队列；`HANDAGENT_ELECTRON_SHELL=1` 路径下真实 ThreadWindow host 由 Electron `BrowserWindow` 承载。两条路径都不再按 Swift ViewModel / reducer / message view 方式扩展。
 
 ### 3. 协调：AppCoordinator 单向事件流
 
@@ -96,7 +96,7 @@ sequenceDiagram
   Coord->>Coord: statusBubbleController.show()
 ```
 
-当 `HANDAGENT_ELECTRON_SHELL=1` 时，`AppServices.defaultAppServer` 改用 `ElectronBackedAppServer`。此路径下 Swift 不直接启动 `AgentServerService`，而是启动 Electron shell；Electron shell 再作为唯一 supervisor 启动 agent-server，并在隐藏 ThreadWindow 预热完成后向 Swift 回报 `thread_window.prepared`。PromptPanel 的可提交状态仍由 `AgentServerHealth` 控制，真实提交窗口仍是 Swift `WKWebView` ThreadWindow。
+当 `HANDAGENT_ELECTRON_SHELL=1` 时，`AppServices.defaultRuntime` 会创建同一个 `ElectronBackedAppServer` 实例作为 app-server health source 和 Electron ThreadWindow command client。此路径下 Swift 不直接启动 `AgentServerService`，也不创建 WKWebView ThreadWindow；Electron shell 作为唯一 supervisor 启动 agent-server，预热隐藏 ThreadWindow，并在 PromptPanel submit/openHistory/focus 时展示或聚焦 Electron `BrowserWindow`。PromptPanel 的可提交状态仍由 `AgentServerHealth` 控制。
 
 ## 主调用链路
 
@@ -121,6 +121,8 @@ sequenceDiagram
   Server-->>React: ThreadNotification / ServerRequest
 ```
 
+Electron flag 路径下，`Coord->>Window` 改为 `Coord->>Electron: ThreadWindowManaging -> ThreadWindowCommanding`，Swift 发送 `thread_window.open_initial_prompt`、`thread_window.open_history` 或 `thread_window.focus`；React ThreadWindow 后续仍直接连接 `/api/thread`。
+
 ## 跨层数据
 
 ### `~/.spotAgent/settings.json`
@@ -142,6 +144,6 @@ desktop 与 agent-server 共享的模型和 builtin tool 配置文件。desktop 
 - agent-server 是 desktop app fork 的长驻子进程，**修改 TS 源码必须重启 desktop app**，无 hot reload。
 - `AgentServerService` 已实现指数退避重启（最多 5 次），多次失败时通过 `onFatalError` 回调上抛 Coordinator 弹原生 alert（详见 [agent-server.md](Sources/AppServices/AgentServer/agent-server.md)）。
 - 设置窗口与 Thread 窗口共享 `AppActivationPolicyCoordinator`，全部关闭后 app 切回 `.accessory`。
-- desktop 不再持有 thread client。`ThreadWindowLifecycle` 只创建或聚焦 `WKWebView`，并把初始 prompt 队列注入 React。
+- desktop 不再持有 thread client。`ThreadWindowLifecycle` 只服务默认 WKWebView 路径；Electron flag 路径由 `ElectronThreadWindowLifecycle` 通过 `ThreadWindowCommanding` 发送 Electron command，并把初始 prompt payload 交给 Electron main。
 - React ThreadWindow 负责 `/api/thread` 上的 command / notification / request / response 编解码和 UI 状态。
 - `PlatformBridgeConnectionClient` 连接 `/api/platform`，发送 `platform_bridge_hello`，并把 `platform_request` 分派给 `PlatformBridgeService`。

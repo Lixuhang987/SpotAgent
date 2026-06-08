@@ -21,23 +21,23 @@
 
 ```mermaid
 flowchart TD
-  A[apps/desktop<br/>macOS 宿主与 WKWebView 壳] --> W[apps/thread-window-web<br/>React ThreadWindow]
-  A -. HANDAGENT_ELECTRON_SHELL=1 .-> E[apps/electron-shell<br/>Electron shell 预热路径]
-  E -. hidden BrowserWindow prewarm .-> W
+  A[apps/desktop<br/>macOS 宿主与默认 WKWebView 壳] --> W[apps/thread-window-web<br/>React ThreadWindow]
+  A -. HANDAGENT_ELECTRON_SHELL=1 .-> E[apps/electron-shell<br/>Electron shell ThreadWindow host]
+  E -. BrowserWindow host .-> W
   E -. supervise .-> B
   W -->|/api/thread WebSocket| B[apps/agent-server<br/>本地 thread 桥与 runtime 驱动]
   A -->|/api/platform WebSocket| B
   B --> C[packages/core<br/>thread、turn、消息、LLM/tool 循环]
 ```
 
-Phase 0 Electron UI shell 只在 `HANDAGENT_ELECTRON_SHELL=1` 时启用。该路径由 Swift 启动 Electron，Electron 监督 agent-server 并预热隐藏 ThreadWindow；默认路径仍保持 Swift `AppServer` 启动 agent-server、Swift `WKWebView` 承载 ThreadWindow。平台能力仍只通过 Swift `/api/platform` 执行。
+Phase 1 Electron UI shell 只在 `HANDAGENT_ELECTRON_SHELL=1` 时启用。该路径由 Swift 启动 Electron，Electron 监督 agent-server、预热隐藏 ThreadWindow，并在 PromptPanel submit、openHistory 和 focus 时展示或聚焦 Electron `BrowserWindow` ThreadWindow；默认路径仍保持 Swift `AppServer` 启动 agent-server、Swift `WKWebView` 承载 ThreadWindow。平台能力仍只通过 Swift `/api/platform` 执行。
 
 ### 分层职责
 
-- `apps/desktop`：负责宿主生命周期、热键、PromptPanel、全局唯一 ThreadWindow 的 `NSWindow/WKWebView` 生命周期、状态气泡，以及通过 `MacPlatformProvider` 实现 macOS 原生能力（ScreenCaptureKit / NSWorkspace / NSPasteboard 等）。
+- `apps/desktop`：负责宿主生命周期、热键、PromptPanel、Settings、焦点恢复、状态气泡，以及通过 `MacPlatformProvider` 实现 macOS 原生能力（ScreenCaptureKit / NSWorkspace / NSPasteboard 等）。默认路径仍管理全局唯一 Swift `NSWindow/WKWebView` ThreadWindow；Electron flag 路径通过 ThreadWindow command bridge 路由，不持有 Electron renderer UI 状态。
 - `apps/thread-window-web`：负责 React ThreadWindow UI，直接持有 `/api/thread` WebSocket，管理历史、tabs、消息、请求回执和 composer 状态。
 - `apps/agent-server`：负责本地 WebSocket thread 桥、`/api/thread` 与 `/api/platform` 路径分流、thread/turn 路由、持久化封装和 runtime 驱动。
-- `apps/electron-shell`：负责 feature flag 路径下的 Electron main 进程、Swift stdio bridge、agent-server supervisor 和隐藏 ThreadWindow 预热；Phase 0 不接管真实 PromptPanel submit。
+- `apps/electron-shell`：负责 feature flag 路径下的 Electron main 进程、Swift stdio bridge、agent-server supervisor、隐藏 ThreadWindow 预热，以及 PromptPanel submit/openHistory/focus 对应的 Electron `BrowserWindow` ThreadWindow 生命周期。
 - `packages/core`：负责 thread 输入归一化、消息模型、tool 注册、LLM/tool 循环、`RemotePlatformAdapter` 通过 `PlatformBridge` 接口向桌面 App 请求平台能力。
 
 ## 主调用链路
@@ -63,6 +63,8 @@ flowchart TD
   O --> I
 ```
 
+Electron flag 路径下，步骤 `Swift 创建 ThreadWindow WKWebView 并注入初始 prompt` 改为 `Swift 发送 thread_window.open_initial_prompt 给 Electron main`；React 后续仍直接连接 `/api/thread`，不区分 WKWebView 或 Electron host。
+
 ## 跨层合约
 
 - 初始上下文只来自用户主动输入和主动附件。PromptPanel 的 attachment 只通过 initial prompt 进入 React；屏幕、剪贴板、App 状态和文件读取都必须走 tool。
@@ -77,7 +79,7 @@ flowchart TD
 
 ## 当前架构不变量
 
-- Swift desktop 不持有 thread client，不发送 `ThreadCommand`，不解析 `ThreadNotification`；只负责 PromptPanel、`NSWindow/WKWebView` host、initial prompt 注入、StatusBubble 与 macOS 平台能力实现。
+- Swift desktop 不持有 thread client，不发送 `ThreadCommand`，不解析 `ThreadNotification`；只负责 PromptPanel、Settings、Hotkey、focus、StatusBubble 与 macOS 平台能力实现。默认路径还负责 Swift `NSWindow/WKWebView` host 和 initial prompt 注入；Electron flag 路径通过 command bridge 把 ThreadWindow host 交给 `apps/electron-shell`。
 - React ThreadWindow 是 tabs、历史、消息、运行态、permission/workspace 请求面板和 composer 的 UI 状态源。
 - agent-server 是组合根和本地桥：负责 socket 路径拆分、thread/turn 路由、runtime 驱动、持久化封装、permission/workspace 回执桥和 platform bridge 转发；外部用户输入命令统一是 `input.submit`，后端内部归一化为 input item。
 - packages/core 只定义跨平台 runtime、tool、platform、protocol、storage、workspace 和 permission 抽象，不实现 UI 或 macOS 原生能力。

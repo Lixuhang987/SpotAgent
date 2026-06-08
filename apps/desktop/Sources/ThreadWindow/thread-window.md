@@ -1,6 +1,6 @@
 # ThreadWindow
 
-`ThreadWindow` 目录只保留 Swift 侧的 WKWebView host。ThreadWindow 的 UI 状态、历史、tabs、消息、请求面板和 composer 都由 `apps/thread-window-web` 的 React 前端管理。
+`ThreadWindow` 目录只保留 Swift 侧的 WKWebView host。它服务默认路径；当 `HANDAGENT_ELECTRON_SHELL=1` 时，真实 ThreadWindow host 由 `apps/electron-shell` 的 Electron `BrowserWindow` 承载。ThreadWindow 的 UI 状态、历史、tabs、消息、请求面板和 composer 都由 `apps/thread-window-web` 的 React 前端管理。
 
 ## 文件
 
@@ -34,7 +34,7 @@ Swift 在 `WKUserScript.atDocumentStart` 注入 `window.handAgentThreadWindowCon
 
 ## 调试前提
 
-- 仅通过全局快捷键打开 `PromptPanel`，**不会**触发 `ThreadWindow` 创建或 `WKWebView` 加载。
+- 默认路径下，仅通过全局快捷键打开 `PromptPanel`，**不会**触发 Swift `ThreadWindow` 创建或 `WKWebView` 加载。Electron flag 路径下，PromptPanel show 会请求 Electron 预热隐藏 `BrowserWindow`，但不会显示可见 ThreadWindow。
 - `ThreadWindow` 的加载链路只会在以下入口触发：
   - 用户在 `PromptPanel` 中输入内容并提交（回车）；
   - Coordinator 显式调用历史入口 `openOrFocusHistory(...)`。
@@ -44,7 +44,8 @@ Swift 在 `WKUserScript.atDocumentStart` 注入 `window.handAgentThreadWindowCon
 
 - Swift 不再持有 ThreadWindow tab/message/history 状态。
 - Swift 不发送 `ThreadCommand`，不解析 `ThreadNotification`，不回执 `ClientResponse`。
-- Swift 只负责 `NSWindow` 生命周期、`WKWebView` 加载、注入配置和 initial prompt。
+- 本目录只负责默认路径的 `NSWindow` 生命周期、`WKWebView` 加载、注入配置和 initial prompt。
+- Electron flag 路径不使用本目录创建 ThreadWindow；Swift 只通过 Coordinator/AppServices 的 `ThreadWindowManaging` 与 `ThreadWindowCommanding` 发送 Electron command。
 - 默认加载入口是 `http://127.0.0.1:4317/thread-window/index.html`。本地 React 静态资源由 `agent-server` 在同端口按 `/thread-window/*` 提供，避免 `file://` 下 `type="module"` bundle 在 `WKWebView` 中不执行导致白屏。
 - React 直接连接 `/api/thread` 并持有 ThreadWindow 状态源。
 - StatusBubble 仍从 Swift `ThreadRegistry` 派生，当前没有接入 React / agent-server 的实时 thread 摘要。

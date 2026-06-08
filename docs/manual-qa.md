@@ -28,7 +28,7 @@
 
 1. 从 `AGENTS.md → handAgent.md → apps/apps.md / packages/packages.md` 逐层打开文档，确认每级 `<dir>.md` 只索引直接子节点。
 1. 检索当前文档中的 `SessionWindow` / `sessionWindow`，确认非归档命中只作为历史旧称说明出现，当前实现统一使用 `ThreadWindow`。
-1. 对照 `apps/desktop/Sources/ThreadWindow/thread-window.md`、`apps/thread-window-web/thread-window-web.md`、`apps/electron-shell/electron-shell.md` 和 `apps/agent-server/agent-server.md`，确认默认路径下 Swift 只做 WKWebView host 与 `/api/platform`，Electron Phase 0 只做 feature flag 隐藏预热，React 持有 `/api/thread` 和 ThreadWindow UI 状态。
+1. 对照 `apps/desktop/Sources/ThreadWindow/thread-window.md`、`apps/thread-window-web/thread-window-web.md`、`apps/electron-shell/electron-shell.md` 和 `apps/agent-server/agent-server.md`，确认默认路径下 Swift 只做 WKWebView host 与 `/api/platform`，Electron flag 路径承载 ThreadWindow `BrowserWindow` 并监督 agent-server，React 持有 `/api/thread` 和 ThreadWindow UI 状态。
 1. 对照 `packages/core/src/protocol/protocol.md` 与 Web/agent-server 文档，确认 `workspace.list` / `workspace.listed`、`permission.requested` / `permission.answered`、`workspace.requested` / `workspace.answered` 的归属一致。
 
 ## Anthropic Provider 真实调用（P1）
@@ -69,15 +69,30 @@
 1. 再次打开 PromptPanel，连续提交第二条不同 prompt，确认复用同一个 ThreadWindow 但创建新的 tab/thread，而不是写入当前 active tab 的 composer thread。
 1. 在 `~/.spotAgent/threads/` 找到对应两个 thread 文件，确认每个文件都包含各自的首条 user message。
 
-## Electron UI Shell Phase 0（P2）
+## Electron UI Shell Phase 0 基础启动（P2）
+
+本项只保留 Phase 1 仍依赖的 Electron 启动、supervisor 和隐藏预热基础；Electron flag 路径下 PromptPanel submit 已由 Phase 1 改为打开 Electron ThreadWindow。
 
 1. 默认不设置 `HANDAGENT_ELECTRON_SHELL`，运行 `bash ./scripts/swiftw run HandAgentDesktop`，确认 PromptPanel 提交仍打开 Swift `WKWebView` ThreadWindow。
 1. 先运行 `pnpm --filter handagent-electron-shell build`。
 1. 设置 `HANDAGENT_ELECTRON_SHELL=1` 后运行桌面 App；默认应通过 `pnpm --filter handagent-electron-shell exec electron apps/electron-shell/dist/main/main.js` 启动 Electron，不要求全局 `electron` 可执行文件。
 1. 启动后确认 Electron shell 和 agent-server 只有各一份进程，且 `127.0.0.1:4317` 没有第二份 server 冲突。
 1. 启动完成前 PromptPanel 不允许提交；收到 Electron `agent_server.health` 与 `thread_window.prepared` 后 PromptPanel 恢复可提交。
-1. 提交 prompt 后仍打开 Swift `WKWebView` ThreadWindow；这说明 Phase 0 未提前切换真实 ThreadWindow。
 1. 关闭隐藏 Electron ThreadWindow 时，确认 PromptPanel 重新阻止提交并显示 `Electron ThreadWindow 已关闭，正在重新预热…`；模拟预热失败时确认显示具体失败原因，而不是仅显示泛化的 agent-server 断开文案。
+1. 退出 HandAgent 后确认 Electron 和 Node agent-server 进程不残留。
+
+## Electron UI Shell Phase 1（P2）
+
+1. 默认不设置 `HANDAGENT_ELECTRON_SHELL`，运行 `bash ./scripts/swiftw run HandAgentDesktop`，提交 prompt 后确认仍打开 Swift `WKWebView` ThreadWindow。
+1. 运行 `pnpm --filter handagent-electron-shell build`。
+1. 设置 `HANDAGENT_ELECTRON_SHELL=1` 后运行桌面 App，确认 Electron shell 和 agent-server 各一份进程。
+1. 通过全局快捷键打开 PromptPanel，确认不会显示 ThreadWindow，但 Electron 已可完成 hidden ThreadWindow prepare；PromptPanel 在 health + prepared 前不可提交。
+1. 提交 `ELECTRON_PHASE1_INITIAL_PROMPT_QA_20260608`，确认打开的是 Electron ThreadWindow，而不是 Swift WKWebView ThreadWindow。
+1. 确认 Electron ThreadWindow 创建新 tab/thread，并显示该 user message；`~/.spotAgent/threads/` 中对应 thread 文件包含该首条 user message。
+1. 再次打开 PromptPanel 连续提交第二条不同 prompt，确认复用同一个 Electron ThreadWindow，但创建新的 tab/thread。
+1. 触发 `openHistory`，确认聚焦 Electron ThreadWindow 并显示历史侧栏，不创建 Swift WKWebView host。
+1. 关闭 visible Electron ThreadWindow 后，确认 Swift 侧不残留打开窗口状态；再次打开 PromptPanel 时先看到预热 gate，预热完成后可再次提交。
+1. 触发 platform tool，例如 `clipboard.read` 或 `app.frontmost`，确认 agent-server 仍通过 `/api/platform` 请求 Swift 回写结果。
 1. 退出 HandAgent 后确认 Electron 和 Node agent-server 进程不残留。
 
 ## ThreadWindow UI 重构完整验收（P2）

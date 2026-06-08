@@ -7,17 +7,17 @@
 当前包含三个可执行单元和一个 Web 前端包：
 
 - [desktop/desktop.md](/Users/mu9/proj/handAgent/apps/desktop/desktop.md) —— macOS 宿主壳（Swift / SwiftUI）。
-- [thread-window-web/thread-window-web.md](/Users/mu9/proj/handAgent/apps/thread-window-web/thread-window-web.md) —— React ThreadWindow 前端；默认由 WKWebView 承载，Phase 0 Electron flag 路径也会隐藏预热同一 bundle。
-- [agent-server/agent-server.md](/Users/mu9/proj/handAgent/apps/agent-server/agent-server.md) —— 本地 WebSocket thread 桥（Node / TypeScript），由 desktop 派生为子进程。
-- [electron-shell/electron-shell.md](/Users/mu9/proj/handAgent/apps/electron-shell/electron-shell.md) —— Phase 0 Electron UI shell；feature flag 路径下监督 agent-server 并预热隐藏 ThreadWindow。
+- [thread-window-web/thread-window-web.md](/Users/mu9/proj/handAgent/apps/thread-window-web/thread-window-web.md) —— React ThreadWindow 前端；默认由 WKWebView 承载，Electron flag 路径由 Electron `BrowserWindow` 承载同一 bundle。
+- [agent-server/agent-server.md](/Users/mu9/proj/handAgent/apps/agent-server/agent-server.md) —— 本地 WebSocket thread 桥（Node / TypeScript）；默认路径由 desktop 派生为子进程，Electron flag 路径由 electron-shell 监督。
+- [electron-shell/electron-shell.md](/Users/mu9/proj/handAgent/apps/electron-shell/electron-shell.md) —— Phase 1 Electron UI shell；feature flag 路径下监督 agent-server，预热隐藏 ThreadWindow，并承载可见 Electron ThreadWindow。
 
 ## 在整体架构中的位置
 
 ```mermaid
 flowchart LR
-  A[apps/desktop<br/>macOS 宿主] -->|WKWebView load| W[apps/thread-window-web<br/>React ThreadWindow]
+  A[apps/desktop<br/>macOS 宿主] -->|default WKWebView load| W[apps/thread-window-web<br/>React ThreadWindow]
   A -. HANDAGENT_ELECTRON_SHELL=1 .-> E[apps/electron-shell<br/>Electron shell]
-  E -. hidden BrowserWindow prewarm .-> W
+  E -. BrowserWindow host .-> W
   E -. supervise .-> B
   W -->|/api/thread WebSocket| B[apps/agent-server<br/>本地 thread 桥]
   A -->|/api/platform WebSocket| B
@@ -33,9 +33,9 @@ flowchart LR
 
 ### 2. Thread 交互
 
-- 用户提交 prompt 后，`AppCoordinator` 创建或聚焦 `ThreadWindow`。
-- Swift `ThreadWindowLifecycle` 创建 `WKWebView`，加载 `apps/thread-window-web` bundle，并注入 `/api/thread` URL 与初始 prompt 队列。
-- Phase 0 Electron flag 路径会在后台用隐藏 `BrowserWindow` 预热同一 bundle，但真实 PromptPanel submit 仍由 Swift `WKWebView` ThreadWindow 承接。
+- 用户提交 prompt 后，`AppCoordinator` 通过 `ThreadWindowManaging` 创建或聚焦 `ThreadWindow`。
+- 默认路径下 Swift `ThreadWindowLifecycle` 创建 `WKWebView`，加载 `apps/thread-window-web` bundle，并注入 `/api/thread` URL 与初始 prompt 队列。
+- 当 `HANDAGENT_ELECTRON_SHELL=1` 时，Swift 不创建 `WKWebView` ThreadWindow；PromptPanel show 会请求 Electron 预热隐藏 `BrowserWindow`，PromptPanel submit、openHistory 和 focus 会通过 Electron command bridge 展示或聚焦同一个 React ThreadWindow。
 - React ThreadWindow 接收初始 prompt 后，通过 `/api/thread` 发送 `thread.start`，收到 `thread.started` 后发送首轮 `input.submit` 和 attachments；后续 composer 追问也由 React 发送 `input.submit`，运行中输入会进入 active turn 的队列。
 - React ThreadWindow 负责 `ThreadCommand` / `ClientResponse` 编码、`ThreadNotification` / `ServerRequest` 接收，以及 tabs、消息、请求面板和 composer 状态。
 - ThreadWindow 左侧历史列表通过 thread 协议读取 `~/.spotAgent/threads/`，用于搜索、预览、恢复和删除持久化 thread。
