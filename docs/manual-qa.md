@@ -54,6 +54,14 @@
 1. 触发平台能力 tool，例如 `clipboard.read`、`app.frontmost`、`screen.capture` 或 `accessibility.snapshot`，确认 agent-server 通过 `/api/platform` 发出 `platform_request`，Swift 回写 `platform_response`。
 1. 暂停或关闭 platform socket 后确认 platform tool 明确失败，但 thread socket 不因此中断。
 
+## PromptPanel initial prompt bridge smoke（P2）
+
+1. 从当前 worktree 执行 `bash ./scripts/swiftw run HandAgentDesktop`。
+1. 通过全局快捷键打开 PromptPanel，输入 `PROMPTPANEL_INITIAL_PROMPT_QA_20260608` 后按 Return。
+1. 确认 ThreadWindow 打开后不是停留在空的"准备开始"状态，而是创建新 tab，并显示这条 user message。
+1. 再次打开 PromptPanel，连续提交第二条不同 prompt，确认复用同一个 ThreadWindow 但创建新的 tab/thread，而不是写入当前 active tab 的 composer thread。
+1. 在 `~/.spotAgent/threads/` 找到对应两个 thread 文件，确认每个文件都包含各自的首条 user message。
+
 ## ThreadWindow UI 重构完整验收（P2）
 
 **实施状态**：Phase 1-4 已 100% 完成（2026-06-07 合并到 main）

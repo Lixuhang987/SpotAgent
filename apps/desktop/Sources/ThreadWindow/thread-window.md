@@ -6,7 +6,7 @@
 
 | 文件 | 职责 |
 |------|------|
-| `ThreadWindowWebHost.swift` | 保存 web app URL、`/api/thread` WebSocket URL 和待注入的初始 prompt 队列 |
+| `ThreadWindowWebHost.swift` | 保存 web app URL、`/api/thread` WebSocket URL 和待注入的初始 prompt 队列；配置脚本会在 document start 安装 early receiver，避免 React 尚未挂载时丢失初始 prompt |
 | `ThreadWindowWebView.swift` | 创建 `WKWebView`，注入 `window.handAgentThreadWindowConfig`，页面加载完成后调用 `window.handAgentReceiveInitialPrompt(...)` |
 | `UserMessageAttachmentPayload.swift` | Swift 到 React 初始 prompt attachment DTO |
 
@@ -30,6 +30,8 @@ sequenceDiagram
   Server-->>React: ThreadNotification / ServerRequest
 ```
 
+Swift 在 `WKUserScript.atDocumentStart` 注入 `window.handAgentThreadWindowConfig` 时，也会初始化 `window.handAgentPendingInitialPrompts` 和临时 `window.handAgentReceiveInitialPrompt`。如果 `WKNavigationDelegate.didFinish` 早于 React `useEffect` 安装正式 receiver，初始 prompt 会先进入 pending 队列；React 启动后由 `installInitialPromptReceiver` flush，再发送 `thread.start` 和首轮 `turn.start`。改动这个桥时必须同时覆盖 Swift 配置脚本和 React native config 测试。
+
 ## 调试前提
 
 - 仅通过全局快捷键打开 `PromptPanel`，**不会**触发 `ThreadWindow` 创建或 `WKWebView` 加载。
@@ -52,7 +54,7 @@ sequenceDiagram
 - 不要重新引入旧 Swift ThreadWindow view、view model、reducer、event bus 或 Swift thread protocol client。
 - 新增 Swift 代码只能服务 WebView host、资源加载、初始 prompt 注入或窗口生命周期。
 - 改动初始 prompt payload 时，同时更新 `apps/thread-window-web/src/protocol/threadProtocol.ts` 和相关测试。
-- 改动 WebView 注入配置时，运行 `bash ./scripts/swiftw test --filter ThreadWindowWebHostTests`。
+- 改动 WebView 注入配置时，运行 `bash ./scripts/swiftw test --filter ThreadWindowWebHostTests`，并运行 `pnpm --filter handagent-thread-window-web test nativeConfig.test.ts`。
 
 ## 相关文档
 

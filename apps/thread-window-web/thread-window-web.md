@@ -102,6 +102,15 @@ Tailwind 主题配置见 `tailwind.config.js`，关键 token 由 `tests/designTo
 
 已知实现缺口：`workspace.listed` 的协议类型和 store 处理分支已存在，但 Web 侧 `isThreadNotification` 类型守卫当前缺少 `workspace.listed` case，socket client 会丢弃该 notification。因此当前不能声明完整支持 workspace 分组列表刷新。
 
+## Swift 初始 prompt 桥
+
+Swift `ThreadWindowWebHost.configurationScript` 在 document start 注入 `/api/thread` URL，并安装一个临时 `window.handAgentReceiveInitialPrompt`。这个临时 receiver 只把早到的 payload 放进 `window.handAgentPendingInitialPrompts`。React `App` 挂载后通过 `installInitialPromptReceiver` 安装正式 receiver，立即 flush pending 队列，并调用 `ThreadSocketClient.startInitialPrompt(payload)`。这样即使 `WKNavigationDelegate.didFinish` 早于 React `useEffect`，PromptPanel 提交也不会只打开窗口而丢失新对话。
+
+相关测试：
+
+- `tests/nativeConfig.test.ts`：覆盖 early pending prompt flush。
+- Swift 侧 `ThreadWindowWebHostTests`：覆盖配置脚本会安装可排队 receiver。
+
 ## 边界
 
 - React 直接持有 `/api/thread` socket。
