@@ -24,6 +24,12 @@
 - 实现位置：`packages/core/src/protocol/ThreadCommand.ts`、`apps/agent-server/src/thread/ThreadInputQueue.ts`、`apps/agent-server/src/thread/ThreadRuntimeOrchestrator.ts`、`apps/agent-server/src/thread/ThreadCommandRouter.ts`、`apps/agent-server/src/server/server.ts`、`apps/thread-window-web/src/protocol/threadProtocol.ts`、`apps/thread-window-web/src/thread/threadSocketClient.ts`、`apps/thread-window-web/src/store/threadWindowStore.ts`、`apps/thread-window-web/src/App.tsx`、`apps/thread-window-web/src/components/Composer.tsx`
 - 验收结果：外部用户输入命令统一为 `input.submit`，旧输入命令已从当前 `ThreadCommand` 移除；ThreadWindow composer 在 running 状态下仍可提交输入并保留 Stop，但 running 输入先进入前端本地 FIFO 队列并显示在 Composer 上方，等 thread 离开 running 后逐条发送，避免两个 user input 连续显示；后端公开 `/api/thread input.submit` 在 running 时返回 `thread.error(code: "thread_running")`，普通用户 follow-up 不走后端排队。已通过 `bash ./scripts/test.sh`、`pnpm --filter handagent-thread-window-web test -- tests/threadWindowStore.test.ts`、`pnpm --filter handagent-thread-window-web build`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`。
 
+### ThreadWindow workspace 分组排序修复
+
+- 完成日期：2026-06-09
+- 实现位置：`apps/thread-window-web/src/utils/groupThreads.ts`、`apps/thread-window-web/tests/groupThreads.test.ts`、`apps/thread-window-web/tests/historySidebar.test.ts`、`apps/thread-window-web/tests/threadWindowStore.test.ts`
+- 验收结果：`workspace.listed` 仍按后端 registry 原序写入 store；ThreadWindow 历史侧栏在 `groupThreadsByWorkspace` 层按 workspace 名称排序，名为 `default` 的 workspace 参与正常字母序，`workspaceId: null` 的"默认对话"仍独立固定在最下方。已通过 `pnpm --filter handagent-thread-window-web exec vitest run tests/groupThreads.test.ts tests/threadWindowStore.test.ts tests/historySidebar.test.ts`。
+
 
 ## Electron UI Shell 最终态验收（P2）
 
@@ -109,7 +115,7 @@
 
 1. 确认历史边栏顶部显示"新建对话"按钮
 2. 确认显示搜索输入框
-3. 确认 workspace 分组按字母顺序排列，"默认对话"分组固定在最下方
+3. 准备一个 registry 原序不是字母序的 `~/.spotAgent/workspaces.json`，例如 `default -> tmp -> qa-workspace -> handagent-test`；确认历史侧栏显示为 `default -> handagent-test -> qa-workspace -> tmp -> 默认对话`，即 workspace 分组按字母顺序排列，名为 `default` 的 workspace 不等同于"默认对话"，"默认对话"分组固定在最下方。
 4. 点击 workspace 分组标题，确认可展开/收起，图标有旋转动画
 5. 在搜索框输入关键词，确认过滤所有分组的 thread（按 preview 字段匹配）
 6. 清空搜索，确认恢复完整列表

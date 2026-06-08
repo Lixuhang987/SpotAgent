@@ -1,6 +1,11 @@
 // apps/thread-window-web/src/utils/groupThreads.ts
 import type { ThreadListEntry } from '../protocol/threadProtocol.ts';
 
+const workspaceNameCollator = new Intl.Collator("en", {
+  numeric: true,
+  sensitivity: "base",
+});
+
 export interface GroupedThreads {
   workspaceGroups: Array<{
     workspace: { id: string; name: string; rootPath: string };
@@ -29,8 +34,14 @@ export function groupThreadsByWorkspace(
     grouped.get(key)!.push(thread);
   }
 
+  const sortedWorkspaces = [...workspaces].sort((a, b) => {
+    const byName = workspaceNameCollator.compare(a.name, b.name);
+    if (byName !== 0) return byName;
+    return a.id.localeCompare(b.id);
+  });
+
   return {
-    workspaceGroups: workspaces.map(ws => ({
+    workspaceGroups: sortedWorkspaces.map(ws => ({
       workspace: ws,
       threads: grouped.get(ws.id) ?? [],
     })),

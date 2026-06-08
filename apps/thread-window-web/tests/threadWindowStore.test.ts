@@ -260,6 +260,28 @@ describe("threadWindowStore", () => {
     expect(store.getState().activeTabId).toBeNull();
   });
 
+  it("stores workspaces from workspace.listed notifications", () => {
+    const store = createThreadWindowStore;
+
+    store.getState().handleNotification({
+      type: "workspace.listed",
+      notificationId: "n-workspaces",
+      commandId: "workspace-list-1",
+      timestamp,
+      payload: {
+        workspaces: [
+          { id: "tmp", name: "tmp", rootPath: "/tmp" },
+          { id: "handagent-test", name: "handagent-test", rootPath: "/handagent" },
+        ],
+      },
+    });
+
+    expect(store.getState().workspaces.map((workspace) => workspace.name)).toEqual([
+      "tmp",
+      "handagent-test",
+    ]);
+  });
+
   it("clears pending initial prompt and exposes window error when thread error has only commandId", () => {
     const store = createThreadWindowStore;
     store.getState().enqueueInitialPrompt({

@@ -45,19 +45,6 @@
 - **证据**：`~/.spotAgent/threads/thread-1780942756065-7mr7s5.json` 包含 user message `THREAD_HISTORY_STATUS_QA_20260609_MINIMIZE [mock:slow-focus]`，运行期间 events 为空；Computer Use 观察 ThreadWindow 可见 Stop 按钮。连接 `ws://127.0.0.1:4317/api/activity` 得到 `activity.snapshot`：`status: "running"`、`latestSummary: "正在回复"`。截屏 `/tmp/handagent-qa/status-bubble-running.png` 显示 Swift 气泡文案为 `Idle / 点击开始`。点击坐标 `{1250, 840}` 后 Computer Use 观察到打开的是 PromptPanel 输入窗口。
 - **初步调用链 / 根因边界**：`React ThreadWindow input.submit -> agent-server ThreadRuntimeOrchestrator -> AgentActivityPublisher -> /api/activity snapshot` 已验证为 running；失败边界位于默认路径 Swift StatusBubble 的状态来源。当前文档与源码显示 Swift StatusBubble 只从 `ThreadRegistry` 派生，默认路径 Swift 不订阅 `/api/activity`，且 React ThreadWindow / agent-server 的实时 thread 摘要没有写入 `ThreadRegistry`。修复需要按 `$trace-and-verify-call-chain` 继续验证 `activity subscriber 或 ThreadRegistry 更新 -> StatusBubbleViewModel -> StatusBubbleView -> statusBubble tap(threadID)`。
 
-### ThreadWindow workspace 分组未按字母顺序排列
-
-- **严重级别**：P2
-- **发现日期**：2026-06-09
-- **复现步骤**：
-  1. 使用 mock-llm packaged app 启动默认 WKWebView 路径。
-  1. 打开 `http://127.0.0.1:4317/thread-window/index.html` 或 WKWebView ThreadWindow。
-  1. 查看左侧历史边栏的 workspace 分组顺序。
-- **实际结果**：左侧 workspace 分组按 `~/.spotAgent/workspaces.json` / `workspace.listed` 返回顺序显示为 `default -> tmp -> qa-workspace -> handagent-test`，不是按名称字母顺序排列；这与 `docs/manual-qa.md` 中 `ThreadWindow UI 重构完整验收 / 场景 4` 的验收目标冲突。
-- **期望结果**：workspace 分组应按名称字母顺序稳定排列，且“默认对话”分组固定在最下方。
-- **证据**：Playwright snapshot 显示分组标题顺序为 `default /Users/mu9/.spotAgent/workspace`、`tmp /Users/mu9/tmp`、`qa-workspace /Users/mu9/.spotAgent/qa-workspace`、`handagent-test /Users/mu9/Desktop/handagent-test`，随后才是 `默认对话`；`jq -r '.workspaces[] | .name' ~/.spotAgent/workspaces.json` 输出同样顺序。源码 `apps/thread-window-web/src/utils/groupThreads.ts` 中 `groupThreadsByWorkspace()` 直接 `workspaces.map(...)` 渲染分组，没有排序；`apps/agent-server/src/thread/ThreadCommandRouter.ts` 也按 registry list 原序发出 `workspace.listed`。
-- **初步调用链 / 根因边界**：失败边界位于 React ThreadWindow 历史分组构造层：`workspace.listed -> threadWindowStore.workspaces -> groupThreadsByWorkspace -> HistorySidebar render`。当前证据显示 UI 未对 workspace group 排序；具体应在前端分组函数排序还是后端 `workspace.listed` 排序，需要按 `$trace-and-verify-call-chain` 结合测试覆盖确认。
-
 ### Electron flag 路径下 Swift 启动 Electron 后未拉起 agent-server
 
 - **严重级别**：P1
