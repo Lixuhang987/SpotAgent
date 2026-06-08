@@ -41,13 +41,13 @@ socket.close();
 
 按当前协议约束：
 
-- `/api/thread` 接收 `ClientResponse` 和 `ThreadCommand`，其中 `ThreadCommand` 包含 `thread.start`、`thread.resume`、`thread.list`、`thread.delete`、`turn.start`、`turn.interrupt`、`workspace.list`。
+- `/api/thread` 接收 `ClientResponse` 和 `ThreadCommand`，其中 `ThreadCommand` 包含 `thread.start`、`thread.resume`、`thread.list`、`thread.delete`、`input.submit`、`turn.interrupt`、`workspace.list`。
 - `/api/platform` 接收 `PlatformBridgeMessage`，其中 `platform_bridge_hello` 会为当前 socket 生成 fencing token；之后的 `platform_response` 必须带着这条 socket 当前 token 才能唤醒 pending request，避免旧 socket 的晚到响应污染新连接。
 
 ### thread 绑定与关闭清理
 
 ```ts
-if (message.type === "turn.start") {
+if (message.type === "input.submit") {
   if (permissionBridge && !boundThreads.has(message.threadId)) {
     boundThreads.set(
       message.threadId,
@@ -57,7 +57,7 @@ if (message.type === "turn.start") {
 }
 ```
 
-`turn.start` 是 permission / workspace 回流的绑定时机。当前连接在收到带 `threadId` 的命令后会建立该 thread 的通知路由。socket close 时会按 token 解绑，旧 socket 只能取消自己 token 下的 pending 请求；如果同一 thread 已被新 socket 绑定，旧 socket close 不会清掉新绑定。
+`input.submit` 是 permission / workspace 回流的绑定时机。当前连接在收到带 `threadId` 的命令后会建立该 thread 的通知路由。socket close 时会按 token 解绑，旧 socket 只能取消自己 token 下的 pending 请求；如果同一 thread 已被新 socket 绑定，旧 socket close 不会清掉新绑定。
 
 `ThreadNotificationPublisher` 负责 `connectionId -> subscribed threadIds` 映射，所以一条 desktop 连接可以同时接收多个 thread 的通知，并靠 `thread.snapshot` 恢复各自状态。若关闭的 socket 仍持有某个 thread 的 permission binding，server 会异步触发 `commandRouter.interruptThread(threadId)` 并清理该 thread 的临时权限规则；若 binding 已被新 socket 接管，旧 socket close 不会中断新连接。
 

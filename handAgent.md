@@ -158,7 +158,7 @@ flowchart TD
 
 当前跨进程协议分为五组 DTO：
 
-- `ThreadCommand`：React ThreadWindow -> agent-server 的命令，例如 `thread.start`、`thread.resume`、`thread.list`、`thread.delete`、`turn.start`、`turn.interrupt`。
+- `ThreadCommand`：React ThreadWindow -> agent-server 的命令，例如 `thread.start`、`thread.resume`、`thread.list`、`thread.delete`、`input.submit`、`turn.interrupt`。
 - `ThreadNotification`：agent-server / core -> React ThreadWindow 的通知，例如 `thread.started`、`thread.snapshot`、`user.message.recorded`、`turn.started`、`assistant.delta`、`tool.started`、`tool.finished`、`turn.completed`、`thread.status.changed`、`thread.error`。
 - `ServerRequest`：server -> React ThreadWindow 的待回执请求，当前包括 `permission.requested` 与 `workspace.requested`。
 - `ClientResponse`：React ThreadWindow -> server 的请求回执，当前包括 `permission.answered` 与 `workspace.answered`。
@@ -170,7 +170,7 @@ flowchart TD
 
 - 当前桌面壳已经切到 `PromptPanel + 全局唯一 WKWebView ThreadWindow + StatusBubble`。
 - 当前 ThreadWindow 由 Swift `WKWebView` 承载 React 前端。React 左侧展示持久化 thread 历史；点击历史项会在当前窗口创建或激活 tab。React 持有 tabs、`threadId`、消息、运行态、权限请求和 workspace 选择等完整 thread UI 生命周期，并通过 `/api/thread` 接收各自事件。
-- `agent-server` 通过 `ThreadCommandRouter + ThreadRuntimeOrchestrator + ThreadInputQueue + ThreadNotificationPublisher + ThreadPersistence + ThreadStore` 管理 thread；旧 `turn.start` 协议在后端内部归一化为 input item，运行中的 thread 会优先把新输入 steer 到当前 active turn。
+- `agent-server` 通过 `ThreadCommandRouter + ThreadRuntimeOrchestrator + ThreadInputQueue + ThreadNotificationPublisher + ThreadPersistence + ThreadStore` 管理 thread；外部用户输入命令是 `input.submit`，后端内部归一化为 input item，运行中的 thread 会优先把新输入 steer 到当前 active turn。
 - `packages/core/src/storage` 提供持久化 thread 存储，默认使用 `FileThreadStore` 将 thread 写入 `~/.spotAgent/threads/`。
 - React ThreadWindow 通过 agent-server 的 `/api/thread` 读取同一目录，为左侧历史列表提供恢复和删除入口；恢复同一 `threadId` 时优先激活已有 tab，未打开时创建新 tab 并等待 `thread.snapshot` 恢复。
 - `packages/core` 已经定义完整的 tool、platform DTO。

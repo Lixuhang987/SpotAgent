@@ -8,9 +8,9 @@ import type { ThreadNotification } from "../../src/protocol/ThreadNotification.t
 describe("thread command/notification protocol", () => {
   it("keeps UI commands separate from server notifications", () => {
     const command: ThreadCommand = {
-      type: "turn.start",
+      type: "input.submit",
       threadId: "thread-1",
-      commandId: "command-1",
+      inputId: "input-1",
       timestamp: "2026-06-05T00:00:00.000Z",
       payload: { text: "hello" },
     };
@@ -24,11 +24,11 @@ describe("thread command/notification protocol", () => {
       payload: { text: "world" },
     };
 
-    expect(command.type).toBe("turn.start");
+    expect(command.type).toBe("input.submit");
     expect(notification.type).toBe("assistant.delta");
   });
 
-  it("exposes the minimal thread and turn commands", () => {
+  it("exposes the minimal thread, input, and turn commands", () => {
     const start: ThreadCommand = {
       type: "thread.start",
       commandId: "command-start",
@@ -55,6 +55,13 @@ describe("thread command/notification protocol", () => {
       timestamp: "2026-06-05T00:00:03.000Z",
       payload: { targetThreadId: "thread-1" },
     };
+    const submitInput: ThreadCommand = {
+      type: "input.submit",
+      threadId: "thread-1",
+      inputId: "input-1",
+      timestamp: "2026-06-05T00:00:03.500Z",
+      payload: { text: "hello" },
+    };
     const interrupt: ThreadCommand = {
       type: "turn.interrupt",
       threadId: "thread-1",
@@ -67,12 +74,14 @@ describe("thread command/notification protocol", () => {
       resume.type,
       list.type,
       deleteCommand.type,
+      submitInput.type,
       interrupt.type,
     ]).toEqual([
       "thread.start",
       "thread.resume",
       "thread.list",
       "thread.delete",
+      "input.submit",
       "turn.interrupt",
     ]);
   });

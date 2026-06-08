@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  encodeInputSubmit,
   encodePermissionAnswer,
   encodeThreadList,
   encodeThreadStart,
-  encodeTurnStart,
   isServerRequest,
   isThreadNotification,
 } from "../src/protocol/threadProtocol.ts";
@@ -23,16 +23,17 @@ describe("thread protocol helpers", () => {
     });
   });
 
-  it("encodes turn.start with attachments", () => {
-    expect(JSON.parse(encodeTurnStart({
+  it("encodes input.submit with attachments", () => {
+    expect(JSON.parse(encodeInputSubmit({
       threadId: "thread-1",
-      commandId: "cmd-2",
+      inputId: "input-2",
       timestamp: "2026-06-06T00:00:01.000Z",
       text: "hello",
       attachments: [{ kind: "text_selection", id: "sel-1", text: "selected" }],
     }))).toMatchObject({
-      type: "turn.start",
+      type: "input.submit",
       threadId: "thread-1",
+      inputId: "input-2",
       payload: {
         text: "hello",
         attachments: [{ kind: "text_selection", id: "sel-1", text: "selected" }],

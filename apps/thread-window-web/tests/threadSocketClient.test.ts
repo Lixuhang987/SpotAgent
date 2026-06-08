@@ -83,7 +83,7 @@ describe("ThreadSocketClient", () => {
         .mockReturnValueOnce("workspace-list-1")
         .mockReturnValueOnce("list-1")
         .mockReturnValueOnce("resume-1")
-        .mockReturnValueOnce("turn-1"),
+        .mockReturnValueOnce("input-1"),
       reconnectDelayMs: 0,
       onConnectionState: () => {},
       onNotification: () => {},
@@ -116,7 +116,7 @@ describe("ThreadSocketClient", () => {
       { type: "thread.list", commandId: "list-1" },
       { type: "thread.start", commandId: "prompt-1", payload: { actionBinding: null, workspaceId: null } },
       { type: "thread.resume", threadId: "thread-1", commandId: "resume-1" },
-      { type: "turn.start", threadId: "thread-1", commandId: "turn-1", payload: { text: "hello" } },
+      { type: "input.submit", threadId: "thread-1", inputId: "input-1", payload: { text: "hello" } },
     ]);
   });
 
@@ -285,7 +285,7 @@ describe("ThreadSocketClient", () => {
         .mockReturnValueOnce("workspace-list-1")
         .mockReturnValueOnce("list-1")
         .mockReturnValueOnce("resume-1")
-        .mockReturnValueOnce("turn-1"),
+        .mockReturnValueOnce("input-1"),
       reconnectDelayMs: 0,
       onConnectionState: () => {},
       onNotification: () => {},
@@ -321,7 +321,7 @@ describe("ThreadSocketClient", () => {
       { type: "workspace.list", commandId: "workspace-list-1" },
       { type: "thread.list", commandId: "list-1" },
       { type: "thread.resume", threadId: "thread-1", commandId: "resume-1" },
-      { type: "turn.start", threadId: "thread-1", commandId: "turn-1", payload: { text: "hello before open" } },
+      { type: "input.submit", threadId: "thread-1", inputId: "input-1", payload: { text: "hello before open" } },
     ]);
   });
 
@@ -343,7 +343,7 @@ describe("ThreadSocketClient", () => {
 
       client.connect();
       const socket = FakeWebSocket.instances[0];
-      client.startTurn("thread-1", "queued before open");
+      client.submitInput("thread-1", "queued before open");
       socket.onclose?.();
       client.disconnect();
       vi.advanceTimersByTime(25);
@@ -365,7 +365,7 @@ describe("ThreadSocketClient", () => {
         .mockReturnValueOnce("workspace-list-1")
         .mockReturnValueOnce("list-1")
         .mockReturnValueOnce("resume-1")
-        .mockReturnValueOnce("turn-1"),
+        .mockReturnValueOnce("input-1"),
       reconnectDelayMs: 0,
       onConnectionState: () => {},
       onNotification: () => {},
@@ -428,7 +428,7 @@ describe("ThreadSocketClient", () => {
       { type: "thread.list", commandId: "list-1" },
       { type: "thread.start", commandId: "prompt-1", payload: { actionBinding: null, workspaceId: null } },
     ]);
-    expect(sent.some((command) => command.type === "turn.start")).toBe(false);
+    expect(sent.some((command) => command.type === "input.submit")).toBe(false);
     expect(sent.some((command) => command.type === "thread.resume" && command.threadId === "thread-1")).toBe(false);
   });
 
@@ -441,7 +441,7 @@ describe("ThreadSocketClient", () => {
         .mockReturnValueOnce("workspace-list-1")
         .mockReturnValueOnce("list-1")
         .mockReturnValueOnce("resume-1")
-        .mockReturnValueOnce("turn-1"),
+        .mockReturnValueOnce("input-1"),
       reconnectDelayMs: 0,
       onConnectionState: () => {},
       onNotification: () => {},
@@ -482,7 +482,7 @@ describe("ThreadSocketClient", () => {
       { type: "thread.list", commandId: "list-1" },
       { type: "thread.start", commandId: "prompt-1", payload: { actionBinding: null, workspaceId: null } },
       { type: "thread.resume", threadId: "thread-1", commandId: "resume-1" },
-      { type: "turn.start", threadId: "thread-1", commandId: "turn-1", payload: { text: "first" } },
+      { type: "input.submit", threadId: "thread-1", inputId: "input-1", payload: { text: "first" } },
     ]);
   });
 });

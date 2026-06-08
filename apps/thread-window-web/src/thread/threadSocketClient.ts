@@ -2,7 +2,7 @@ import {
   encodeThreadList,
   encodeThreadResume,
   encodeThreadStart,
-  encodeTurnStart,
+  encodeInputSubmit,
   encodeWorkspaceList,
   isServerRequest,
   isThreadNotification,
@@ -102,14 +102,14 @@ export class ThreadSocketClient {
     }));
   }
 
-  startTurn(
+  submitInput(
     threadId: string,
     text: string,
     attachments: InitialPromptPayload["attachments"] = [],
   ): void {
-    this.sendRaw(encodeTurnStart({
+    this.sendRaw(encodeInputSubmit({
       threadId,
-      commandId: this.nextId(),
+      inputId: this.nextId(),
       timestamp: this.now(),
       text,
       attachments,
@@ -194,7 +194,7 @@ export class ThreadSocketClient {
 
     this.pendingInitialPrompts.delete(notification.commandId);
     this.resumeThread(notification.threadId);
-    this.startTurn(notification.threadId, pending.text, pending.attachments);
+    this.submitInput(notification.threadId, pending.text, pending.attachments);
   }
 
   private hasActiveSocket(): boolean {

@@ -26,7 +26,7 @@ flowchart TD
   B --> F["thread: persistence + orchestrator + router"]
   F --> G["WebSocket thread message"]
   G --> H["ThreadCommandRouter.receive"]
-  H --> I["ThreadRuntimeOrchestrator.handleUserMessage"]
+  H --> I["ThreadRuntimeOrchestrator.submitInput"]
   I --> J["core AgentRuntime.runWithMessages"]
   J --> K["protocol/MessageTranslator"]
   K --> L["desktop ThreadWindow messages"]

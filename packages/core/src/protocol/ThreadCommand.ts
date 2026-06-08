@@ -33,9 +33,9 @@ export type ThreadCommand =
       };
     }
   | {
-      type: "turn.start";
+      type: "input.submit";
       threadId: string;
-      commandId: string;
+      inputId: string;
       timestamp: string;
       payload: {
         text: string;

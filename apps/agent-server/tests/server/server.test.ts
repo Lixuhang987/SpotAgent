@@ -36,11 +36,11 @@ class FakeSocket extends EventEmitter {
   }
 }
 
-function turnStart(threadId: string, text: string): ThreadCommand {
+function inputSubmit(threadId: string, text: string): ThreadCommand {
   return {
-    type: "turn.start",
+    type: "input.submit",
     threadId,
-    commandId: `message-${threadId}-${text}`,
+    inputId: `message-${threadId}-${text}`,
     timestamp: new Date().toISOString(),
     payload: { text },
   };
@@ -118,7 +118,7 @@ async function waitForClose(socket: WebSocket, timeoutMs = 250): Promise<boolean
 }
 
 describe("attachThreadSocketHandlers", () => {
-  it("binds every turn.start thread on a socket and clears them all on close", async () => {
+  it("binds every input.submit thread on a socket and clears them all on close", async () => {
     const socket = new FakeSocket();
     const { commandRouter, eventPublisher } = makeHandlerDependencies();
     const permissionBridge = {
@@ -136,8 +136,8 @@ describe("attachThreadSocketHandlers", () => {
       permissionPolicy,
     });
 
-    await emitMessage(socket, turnStart("Thread-A", "first"));
-    await emitMessage(socket, turnStart("Thread-B", "second"));
+    await emitMessage(socket, inputSubmit("Thread-A", "first"));
+    await emitMessage(socket, inputSubmit("Thread-B", "second"));
 
     expect(permissionBridge.bindThread).toHaveBeenCalledWith(
       "Thread-A",
@@ -176,7 +176,7 @@ describe("attachThreadSocketHandlers", () => {
       permissionPolicy,
     });
 
-    await emitMessage(socket, turnStart("Thread-A", "first"));
+    await emitMessage(socket, inputSubmit("Thread-A", "first"));
     socket.emit("close");
 
     expect(permissionBridge.unbindThread).toHaveBeenCalledWith("Thread-A", 101);
@@ -205,7 +205,7 @@ describe("attachThreadSocketHandlers", () => {
       permissionPolicy,
     });
 
-    await emitMessage(firstSocket, turnStart("Thread-A", "first"));
+    await emitMessage(firstSocket, inputSubmit("Thread-A", "first"));
     const staleAsk = permissionBridge.ask({
       threadId: "Thread-A",
       toolName: "file.write",
@@ -215,7 +215,7 @@ describe("attachThreadSocketHandlers", () => {
     const staleRequest = lastSent<ServerRequest>(firstSocket);
     if (staleRequest.type !== "permission.requested") throw new Error("type");
 
-    await emitMessage(secondSocket, turnStart("Thread-A", "reconnect"));
+    await emitMessage(secondSocket, inputSubmit("Thread-A", "reconnect"));
     await emitMessage(
       firstSocket,
       permissionResponse(staleRequest.requestId, "allow"),
@@ -251,7 +251,7 @@ describe("attachThreadSocketHandlers", () => {
     await expect(currentAsk).resolves.toEqual({ decision: "allow", remember: "thread" });
   });
 
-  it("keeps the same binding token for repeated turn.start commands on one socket", async () => {
+  it("keeps the same binding token for repeated input.submit commands on one socket", async () => {
     const socket = new FakeSocket();
     const deps = makeHandlerDependencies();
     const permissionBridge = new ThreadPermissionBridge();
@@ -261,7 +261,7 @@ describe("attachThreadSocketHandlers", () => {
       permissionBridge,
     });
 
-    await emitMessage(socket, turnStart("Thread-A", "first"));
+    await emitMessage(socket, inputSubmit("Thread-A", "first"));
     const ask = permissionBridge.ask({
       threadId: "Thread-A",
       toolName: "file.write",
@@ -271,7 +271,7 @@ describe("attachThreadSocketHandlers", () => {
     const request = lastSent<ServerRequest>(socket);
     if (request.type !== "permission.requested") throw new Error("type");
 
-    await emitMessage(socket, turnStart("Thread-A", "second"));
+    await emitMessage(socket, inputSubmit("Thread-A", "second"));
     await emitMessage(socket, permissionResponse(request.requestId, "allow"));
 
     await expect(ask).resolves.toEqual({ decision: "allow", remember: "thread" });
@@ -287,7 +287,7 @@ describe("attachThreadSocketHandlers", () => {
       workspaceAskBridge,
     });
 
-    await emitMessage(socket, turnStart("Thread-A", "first"));
+    await emitMessage(socket, inputSubmit("Thread-A", "first"));
     const ask = workspaceAskBridge.ask({
       threadId: "Thread-A",
       toolCallId: "tool-1",
@@ -315,7 +315,7 @@ describe("attachThreadSocketHandlers", () => {
       permissionBridge,
     });
 
-    await emitMessage(socket, turnStart("workspace:Thread-A", "first"));
+    await emitMessage(socket, inputSubmit("workspace:Thread-A", "first"));
     const ask = permissionBridge.ask({
       threadId: "workspace:Thread-A",
       toolName: "file.write",
@@ -379,7 +379,7 @@ describe("attachThreadSocketHandlers", () => {
       permissionBridge,
     });
 
-    await emitMessage(socket, turnStart("Thread-A", "close me"));
+    await emitMessage(socket, inputSubmit("Thread-A", "close me"));
     await runStarted.promise;
 
     socket.emit("close");
@@ -425,7 +425,7 @@ describe("attachThreadSocketHandlers", () => {
     expect(commandRouter.receive).not.toHaveBeenCalled();
     expect(commandRouter.handleResponse).not.toHaveBeenCalled();
 
-    await emitMessage(socket, turnStart("Thread-A", "after bad frames"));
+    await emitMessage(socket, inputSubmit("Thread-A", "after bad frames"));
 
     expect(commandRouter.receive).toHaveBeenCalledTimes(1);
   });

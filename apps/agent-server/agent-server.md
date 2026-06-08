@@ -60,7 +60,7 @@ flowchart TD
   G --> L["thread/ThreadPersistence"]
 ```
 
-`turn.start` 是兼容入口；进入 `ThreadRuntimeOrchestrator` 后会变成 thread-local input item，优先 steer 到当前 active turn，没有 active turn 时才唤醒新的 backend turn worker。
+`input.submit` 是用户输入入口；进入 `ThreadRuntimeOrchestrator` 后会变成 thread-local input item，优先 steer 到当前 active turn，没有 active turn 时才唤醒新的 backend turn worker。旧 `turn.start` 不再属于当前 thread command 协议。
 
 ## 协议主干
 

@@ -34,7 +34,7 @@ type OrchestratorOptions = {
   interruptPollIntervalMs?: number;
 };
 
-type UserMessageInput = {
+type UserInputSubmission = {
   threadId: string;
   messageId: string;
   timestamp: string;
@@ -91,8 +91,8 @@ export class ThreadRuntimeOrchestrator {
       options.interruptPollIntervalMs ?? DEFAULT_INTERRUPT_POLL_INTERVAL_MS;
   }
 
-  async handleUserMessage(
-    message: UserMessageInput,
+  async submitInput(
+    message: UserInputSubmission,
     push: PushMessage,
   ): Promise<void> {
     const item: ThreadUserInputItem = {

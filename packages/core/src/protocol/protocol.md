@@ -10,7 +10,7 @@
 
 | 文件 | 职责 |
 |------|------|
-| `ThreadCommand.ts` | 最小命令协议：`thread.start` / `thread.resume` / `thread.list` / `thread.delete` / `turn.start` / `turn.interrupt` / `workspace.list` |
+| `ThreadCommand.ts` | 最小命令协议：`thread.start` / `thread.resume` / `thread.list` / `thread.delete` / `input.submit` / `turn.interrupt` / `workspace.list` |
 | `ThreadNotification.ts` | 通知协议：`thread.started` / `thread.snapshot` / `assistant.delta` / `tool.started` / `turn.completed` 等 |
 | `ServerRequest.ts` | 待回执请求：`permission.requested` / `workspace.requested`，按 `threadId` 路由 |
 | `ClientResponse.ts` | 回执协议：`permission.answered` / `workspace.answered` |
@@ -43,7 +43,7 @@ flowchart LR
 - `thread.resume`
 - `thread.list`
 - `thread.delete`
-- `turn.start`
+- `input.submit`
 - `turn.interrupt`
 - `workspace.list`
 
@@ -87,7 +87,7 @@ flowchart LR
 
 plugin action 绑定信息位于 `thread.start.payload.actionBinding`。app-server 会重新读取本地 manifest，确认该 prompt 是可绑定的 plugin action，解析并持久化 thread metadata 的 `actionBinding.mcpServerIds`，随后只在该 thread 的 runtime 前组合对应 MCP tools。`kind: "skill"` 的 action 只提交渲染后的普通 prompt，不携带 action binding。
 
-普通 `turn.start` 不携带 action binding；一个 thread 的 MCP scope 由创建时 metadata 决定，不随后续消息变化。
+普通 `input.submit` 不携带 action binding；一个 thread 的 MCP scope 由创建时 metadata 决定，不随后续消息变化。
 
 ## Turn 中断
 
