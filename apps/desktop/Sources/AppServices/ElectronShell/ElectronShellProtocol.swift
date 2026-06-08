@@ -1,0 +1,116 @@
+import Foundation
+
+struct ElectronInitialPromptPayload: Encodable, Equatable {
+    let clientRequestId: String
+    let text: String
+    let attachments: [UserMessageAttachmentPayload]
+    let actionBinding: ActionBindingPayload?
+
+    private enum CodingKeys: String, CodingKey {
+        case clientRequestId, text, attachments, actionBinding
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(clientRequestId, forKey: .clientRequestId)
+        try container.encode(text, forKey: .text)
+        try container.encode(attachments, forKey: .attachments)
+        if let actionBinding {
+            try container.encode(actionBinding, forKey: .actionBinding)
+        } else {
+            try container.encodeNil(forKey: .actionBinding)
+        }
+    }
+}
+
+enum ElectronShellCommand: Encodable, Equatable {
+    case openInitialPrompt(commandId: String, payload: ElectronInitialPromptPayload)
+    case openHistory(commandId: String)
+    case focus(commandId: String, threadId: String?)
+    case showActivityWindow(commandId: String)
+    case shutdown(commandId: String)
+
+    private enum CodingKeys: String, CodingKey {
+        case channel, type, commandId, payload, threadId
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode("electron_shell", forKey: .channel)
+        switch self {
+        case .openInitialPrompt(let commandId, let payload):
+            try container.encode("thread_window.open_initial_prompt", forKey: .type)
+            try container.encode(commandId, forKey: .commandId)
+            try container.encode(payload, forKey: .payload)
+        case .openHistory(let commandId):
+            try container.encode("thread_window.open_history", forKey: .type)
+            try container.encode(commandId, forKey: .commandId)
+        case .focus(let commandId, let threadId):
+            try container.encode("thread_window.focus", forKey: .type)
+            try container.encode(commandId, forKey: .commandId)
+            try container.encodeIfPresent(threadId, forKey: .threadId)
+        case .showActivityWindow(let commandId):
+            try container.encode("activity_window.show", forKey: .type)
+            try container.encode(commandId, forKey: .commandId)
+        case .shutdown(let commandId):
+            try container.encode("shutdown", forKey: .type)
+            try container.encode(commandId, forKey: .commandId)
+        }
+    }
+}
+
+enum ElectronShellEvent: Decodable, Equatable {
+    case electronReady(timestamp: String)
+    case threadWindowPrepared(timestamp: String)
+    case commandAck(commandId: String, ok: Bool, error: String?)
+    case threadWindowClosed(timestamp: String)
+    case rendererCrashed(window: String, reason: String)
+    case agentServerHealth(available: Bool, message: String?)
+
+    private enum CodingKeys: String, CodingKey {
+        case channel, type, timestamp, commandId, ok, error, window, reason, available, message
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let channel = try container.decode(String.self, forKey: .channel)
+        guard channel == "electron_shell" else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .channel,
+                in: container,
+                debugDescription: "unsupported channel"
+            )
+        }
+
+        switch try container.decode(String.self, forKey: .type) {
+        case "electron.ready":
+            self = .electronReady(timestamp: try container.decode(String.self, forKey: .timestamp))
+        case "thread_window.prepared":
+            self = .threadWindowPrepared(timestamp: try container.decode(String.self, forKey: .timestamp))
+        case "command.ack":
+            self = .commandAck(
+                commandId: try container.decode(String.self, forKey: .commandId),
+                ok: try container.decode(Bool.self, forKey: .ok),
+                error: try container.decodeIfPresent(String.self, forKey: .error)
+            )
+        case "thread_window.closed":
+            self = .threadWindowClosed(timestamp: try container.decode(String.self, forKey: .timestamp))
+        case "renderer.crashed":
+            self = .rendererCrashed(
+                window: try container.decode(String.self, forKey: .window),
+                reason: try container.decode(String.self, forKey: .reason)
+            )
+        case "agent_server.health":
+            self = .agentServerHealth(
+                available: try container.decode(Bool.self, forKey: .available),
+                message: try container.decodeIfPresent(String.self, forKey: .message)
+            )
+        default:
+            throw DecodingError.dataCorruptedError(
+                forKey: .type,
+                in: container,
+                debugDescription: "unsupported event"
+            )
+        }
+    }
+}
