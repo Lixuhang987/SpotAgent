@@ -31,6 +31,21 @@
 
 ## 当前 bug
 
+### Electron StatusBubble 无可聚焦 ThreadWindow 时仍未打开 PromptPanel
+
+- **严重级别**：P1
+- **发现日期**：2026-06-09
+- **复现步骤**：
+  1. 在 `main` 合入 `2af9ba0 fix: 修复 Electron 状态气泡 PromptPanel 回退` 后执行 `pnpm --filter handagent-electron-shell build && bash ./scripts/package-app.sh --mock-llm`。
+  1. 使用 `HANDAGENT_ELECTRON_SHELL=1` 与 `HANDAGENT_ELECTRON_BINARY=/Users/mu9/proj/handAgent/node_modules/.pnpm/electron@42.3.3/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron` 启动 packaged app。
+  1. 提交 `ELECTRON_STATUSBUBBLE_FALLBACK_FIXED_QA_20260609 [mock:assistant-ok]`，确认 Electron `HandAgent ThreadWindow` 与 `HandAgent Activity` 均可见，thread 文件为 `~/.spotAgent/threads/thread-1780948422082-xum47h.json`。
+  1. 点击 Electron `HandAgent ThreadWindow` 关闭按钮，确认只剩 `HandAgent Activity`，且 `lsof -nP -iTCP:4317 -sTCP:LISTEN` 仍显示 agent-server 监听。
+  1. 使用 CGEvent 分别点击 ActivityWindow 坐标 `{1280,870}`、`{1165,870}`、`{1235,870}`、`{1320,870}`。
+- **实际结果**：点击后前台进程为 Electron，但 `HandAgentDesktop` 没有可见 `PromptPanel`，Electron 仍只有 `HandAgent Activity`。截图为 `/tmp/handagent-qa/electron-statusbubble-fallback-fixed.png` 与 `/tmp/handagent-qa/electron-statusbubble-fallback-fixed-after-click.png`。
+- **期望结果**：当 Electron StatusBubble 无可聚焦 ThreadWindow 时，应通过 `prompt_panel.show_requested` 请求 Swift 打开 `PromptPanel`。
+- **证据**：packaged app 资源 `dist/HandAgentDesktop.app/Contents/Resources/ElectronShell/dist/main/windows/activityWindowController.js` 已包含 `acceptFirstMouse: true`；`/api/activity` snapshot 返回 `activeThreadId: "thread-1780948422082-xum47h"`；thread 文件包含 user prompt 与 `Mock assistant response: main chain is reachable.`；关闭 ThreadWindow 后 `lsof` 显示 node 仍监听 `127.0.0.1:4317`。
+- **初步调用链 / 根因边界**：`acceptFirstMouse: true` 未能让原始 CGEvent packaged app 场景通过。当前已验证 packaged app 包含该 option、ActivityWindow 可见、activity 有 activeThreadId、agent-server 可用；失败边界仍在 `ActivityWindow renderer click -> activity-window:focus-thread IPC -> ElectronShellRuntime.handleActivityWindowFocusRequest -> prompt_panel.show_requested`，需要继续用 `$trace-and-verify-call-chain` 定位 renderer click/IPC/main runtime 哪一跳未发生。
+
 ### Electron supervisor description 启动日志不可见
 
 - **严重级别**：P2

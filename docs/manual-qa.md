@@ -89,7 +89,7 @@
 
 **2026-06-09 待回归修复项**：
 
-- 关闭可见 Electron ThreadWindow 后，ActivityWindow 仍显示且 agent-server 继续监听 `127.0.0.1:4317` 时，用 CGEvent 点击 ActivityWindow 中心应打开 Swift `PromptPanel`。该缺陷已通过 ActivityWindow `acceptFirstMouse: true` 自动化覆盖，仍需在主仓库 packaged app 上实机回归。
+- 关闭可见 Electron ThreadWindow 后，ActivityWindow 仍显示且 agent-server 继续监听 `127.0.0.1:4317` 时，用 CGEvent 点击 ActivityWindow 中心应打开 Swift `PromptPanel`。`2af9ba0` 已加入 ActivityWindow `acceptFirstMouse: true` 并通过自动化覆盖，但主仓库 packaged app 实机回归仍失败：`ELECTRON_STATUSBUBBLE_FALLBACK_FIXED_QA_20260609 [mock:assistant-ok]` 创建 `~/.spotAgent/threads/thread-1780948422082-xum47h.json` 后，关闭 `HandAgent ThreadWindow`，用 CGEvent 点击 `{1280,870}`、`{1165,870}`、`{1235,870}`、`{1320,870}` 均未打开 Swift `PromptPanel`；截图 `/tmp/handagent-qa/electron-statusbubble-fallback-fixed.png`、`/tmp/handagent-qa/electron-statusbubble-fallback-fixed-after-click.png`。该缺陷已重新写入 `docs/bugs.md`。
 - Electron flag 启动时 supervisor description 未出现在可观察启动日志中：使用 `HANDAGENT_ELECTRON_SHELL=1` 与 packaged mock app 启动后，Swift / Electron main / agent-server 均启动成功，`127.0.0.1:4317` 有 node 监听，`/api/activity` 返回 idle snapshot，但 `/tmp/handagent-qa/electron-log-description-20260609.log` 为 0 行，`log show --last 3m --predicate 'process == "HandAgentDesktop" OR process == "Electron"'` 和 `/tmp/handagent-qa/*.log` 中均未找到 `agent-server supervisor` / `coreRuntimeHost` / `utilityProcessBlocker`。该缺陷已写入 `docs/bugs.md`。
 
 **2026-06-09 阻塞子项**：
