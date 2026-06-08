@@ -33,6 +33,8 @@ type Options = {
     options: UtilityForkOptions,
   ) => UtilityProcessLike;
   waitForReady: () => Promise<void>;
+  scheduleRestart?: (callback: () => void, delayMs: number) => void;
+  maxRestartAttempts?: number;
   logSink?: AgentServerLogSink;
 };
 
@@ -40,8 +42,19 @@ export class UtilityProcessAgentServerSupervisor implements AgentServerSuperviso
   private process: UtilityProcessLike | null = null;
   private listeners = new Set<(event: AgentServerHealthEvent) => void>();
   private userRequestedStop = false;
+  private restartAttempts = 0;
+  private restartGeneration = 0;
+  private readonly scheduleRestart: (callback: () => void, delayMs: number) => void;
+  private readonly maxRestartAttempts: number;
 
-  constructor(private readonly options: Options) {}
+  constructor(private readonly options: Options) {
+    this.scheduleRestart =
+      options.scheduleRestart ??
+      ((callback, delayMs) => {
+        setTimeout(callback, delayMs);
+      });
+    this.maxRestartAttempts = options.maxRestartAttempts ?? 5;
+  }
 
   describe(): AgentServerSupervisorDescription {
     return {
@@ -80,22 +93,26 @@ export class UtilityProcessAgentServerSupervisor implements AgentServerSuperviso
       );
     });
     this.drainOutput(utilityProcess);
-    void this.emitAvailableWhenReady(utilityProcess);
+    void this.emitAvailableWhenReady(utilityProcess, this.restartGeneration);
   }
 
   stop(): void {
     this.userRequestedStop = true;
+    this.restartGeneration += 1;
     const utilityProcess = this.process;
     this.process = null;
     utilityProcess?.kill();
     this.emitHealth({ available: false, message: "agent-server stopped" });
   }
 
-  private async emitAvailableWhenReady(utilityProcess: UtilityProcessLike): Promise<void> {
+  private async emitAvailableWhenReady(
+    utilityProcess: UtilityProcessLike,
+    generation: number,
+  ): Promise<void> {
     try {
       await this.options.waitForReady();
     } catch (error) {
-      if (this.process !== utilityProcess || this.userRequestedStop) {
+      if (this.process !== utilityProcess || this.userRequestedStop || generation !== this.restartGeneration) {
         return;
       }
 
@@ -104,7 +121,8 @@ export class UtilityProcessAgentServerSupervisor implements AgentServerSuperviso
       return;
     }
 
-    if (this.process === utilityProcess && !this.userRequestedStop) {
+    if (this.process === utilityProcess && !this.userRequestedStop && generation === this.restartGeneration) {
+      this.restartAttempts = 0;
       this.emitHealth({ available: true });
     }
   }
@@ -114,13 +132,15 @@ export class UtilityProcessAgentServerSupervisor implements AgentServerSuperviso
       return;
     }
 
-    this.process = null;
-    if (!this.userRequestedStop && code !== 0) {
-      this.emitHealth({
-        available: false,
-        message: `agent-server exited with code ${code ?? "unknown"}`,
-      });
+    if (this.userRequestedStop || code === 0) {
+      this.process = null;
+      return;
     }
+
+    this.handleFailure(
+      utilityProcess,
+      `agent-server exited with code ${code ?? "unknown"}`,
+    );
   }
 
   private handleFailure(utilityProcess: UtilityProcessLike, message: string): void {
@@ -129,7 +149,24 @@ export class UtilityProcessAgentServerSupervisor implements AgentServerSuperviso
     }
 
     this.process = null;
+    if (this.restartAttempts >= this.maxRestartAttempts) {
+      this.emitHealth({
+        available: false,
+        message: `agent-server stopped after ${this.maxRestartAttempts} restart attempts: ${message}`,
+      });
+      return;
+    }
+
     this.emitHealth({ available: false, message });
+    const delayMs = Math.min(30_000, 2 ** this.restartAttempts * 1_000);
+    this.restartAttempts += 1;
+    const generation = this.restartGeneration;
+    this.scheduleRestart(() => {
+      if (this.userRequestedStop || generation !== this.restartGeneration) {
+        return;
+      }
+      this.start();
+    }, delayMs);
   }
 
   private emitHealth(event: AgentServerHealthEvent): void {

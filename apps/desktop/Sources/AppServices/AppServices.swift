@@ -198,8 +198,10 @@ final class AppServices {
     ) -> ElectronShellLaunchConfiguration {
         let bundledElectronMain = bundleResourceURL?
             .appendingPathComponent("ElectronShell/dist/main/main.js")
-        let electronMain = environment["HANDAGENT_ELECTRON_MAIN"].flatMap { $0.isEmpty ? nil : $0 }
-            ?? bundledElectronMain.flatMap { fileExists($0.path) ? $0.path : nil }
+        let explicitElectronMain = environment["HANDAGENT_ELECTRON_MAIN"].flatMap { $0.isEmpty ? nil : $0 }
+        let bundledElectronMainPath = bundledElectronMain.flatMap { fileExists($0.path) ? $0.path : nil }
+        let electronMain = explicitElectronMain
+            ?? bundledElectronMainPath
             ?? "apps/electron-shell/dist/main/main.js"
         let repoRoot = AgentServerRepositoryRootLocator(
             agentServerRelativePath: "apps/electron-shell/package.json",
@@ -222,6 +224,15 @@ final class AppServices {
                 arguments: electronBinary == "/usr/bin/env" ? ["electron", electronMain] : [electronMain],
                 environment: launchEnvironment,
                 currentDirectoryURL: repoRoot
+            )
+        }
+
+        if explicitElectronMain == nil && bundledElectronMainPath != nil {
+            return ElectronShellLaunchConfiguration(
+                launchPath: "/usr/bin/env",
+                arguments: ["electron", electronMain],
+                environment: launchEnvironment,
+                currentDirectoryURL: nil
             )
         }
 

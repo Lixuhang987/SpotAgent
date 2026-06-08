@@ -81,6 +81,7 @@ enum ElectronShellCommand: Encodable, Equatable {
 enum ElectronShellEvent: Decodable, Equatable {
     case electronReady(timestamp: String)
     case threadWindowPrepared(timestamp: String)
+    case threadWindowPrepareFailed(message: String)
     case commandAck(commandId: String, ok: Bool, error: String?)
     case threadWindowClosed(timestamp: String, wasVisible: Bool)
     case rendererCrashed(window: ElectronShellRendererWindow, reason: String)
@@ -134,6 +135,10 @@ enum ElectronShellEvent: Decodable, Equatable {
         default:
             if type == "thread_window." + "prepared" {
                 self = .threadWindowPrepared(timestamp: try container.decode(String.self, forKey: .timestamp))
+                return
+            }
+            if type == "thread_window." + "prepare_failed" {
+                self = .threadWindowPrepareFailed(message: try container.decode(String.self, forKey: .message))
                 return
             }
             throw DecodingError.dataCorruptedError(

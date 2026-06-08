@@ -219,6 +219,22 @@ final class ElectronBackedAppServerTests: XCTestCase {
         XCTAssertEqual(appServer.startupErrorMessage, "port unavailable")
     }
 
+    func testThreadWindowPrepareFailedMarksUnavailableWithMessage() {
+        let shell = RecordingElectronShellProcess()
+        let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
+        var availability: [Bool] = []
+        appServer.onAvailabilityChange = { availability.append($0) }
+
+        appServer.start()
+        shell.emit(.agentServerHealth(available: true, message: nil))
+        shell.emit(.threadWindowPrepared(timestamp: "2026-06-08T00:00:01.000Z"))
+        shell.emit(.threadWindowPrepareFailed(message: "load failed"))
+
+        XCTAssertFalse(appServer.isAvailable)
+        XCTAssertEqual(appServer.startupErrorMessage, "load failed")
+        XCTAssertEqual(availability, [true, false])
+    }
+
     func testThreadWindowClosedReportsSpecificPrewarmError() {
         let shell = RecordingElectronShellProcess()
         let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)

@@ -126,10 +126,6 @@ final class AppServicesTests: XCTestCase {
 
         XCTAssertEqual(configuration.launchPath, "/usr/bin/env")
         XCTAssertEqual(configuration.arguments, [
-            "pnpm",
-            "--filter",
-            "handagent-electron-shell",
-            "exec",
             "electron",
             bundledMain.path,
         ])

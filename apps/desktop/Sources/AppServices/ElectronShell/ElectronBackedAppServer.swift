@@ -131,6 +131,11 @@ final class ElectronBackedAppServer: AppServerManaging, ThreadWindowCommanding, 
             threadWindowErrorMessage = nil
             publishAvailability()
 
+        case .threadWindowPrepareFailed(let message):
+            hasPreparedThreadWindow = false
+            threadWindowErrorMessage = message
+            publishAvailability(force: true)
+
         case .threadWindowClosed(_, let wasVisible):
             hasPreparedThreadWindow = false
             threadWindowErrorMessage = "Electron ThreadWindow 已关闭，正在重新预热…"

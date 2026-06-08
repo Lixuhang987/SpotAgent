@@ -110,6 +110,54 @@ describe("UtilityProcessAgentServerSupervisor", () => {
       message: "agent-server utility process error at server.js: diagnostic report",
     });
   });
+
+  it("schedules a restart after utility process exits non-zero", () => {
+    const first = new FakeUtilityProcess();
+    const second = new FakeUtilityProcess();
+    const spawned = [first, second];
+    const scheduled: Array<() => void> = [];
+    const supervisor = new UtilityProcessAgentServerSupervisor({
+      repoRoot: "/repo",
+      entry: "/repo/apps/agent-server/dist/server/server.js",
+      env: {},
+      forkUtilityProcess: () => spawned.shift() ?? new FakeUtilityProcess(),
+      waitForReady: () => Promise.resolve(),
+      scheduleRestart: (callback) => scheduled.push(callback),
+    });
+
+    supervisor.start();
+    first.emit("exit", 9);
+    scheduled[0]?.();
+
+    expect(scheduled).toHaveLength(1);
+    expect(second.listenerCount("exit")).toBeGreaterThan(0);
+  });
+
+  it("reports a final unavailable health event after max restart attempts", () => {
+    const utility = new FakeUtilityProcess();
+    const health: Array<{ available: boolean; message?: string }> = [];
+    const scheduled: Array<() => void> = [];
+    const supervisor = new UtilityProcessAgentServerSupervisor({
+      repoRoot: "/repo",
+      entry: "/repo/apps/agent-server/dist/server/server.js",
+      env: {},
+      maxRestartAttempts: 1,
+      forkUtilityProcess: () => utility,
+      waitForReady: () => Promise.resolve(),
+      scheduleRestart: (callback) => scheduled.push(callback),
+    });
+    supervisor.onHealth((event) => health.push(event));
+
+    supervisor.start();
+    utility.emit("exit", 9);
+    scheduled[0]?.();
+    utility.emit("exit", 9);
+
+    expect(health.at(-1)).toEqual({
+      available: false,
+      message: "agent-server stopped after 1 restart attempts: agent-server exited with code 9",
+    });
+  });
 });
 
 class FakeUtilityProcess extends EventEmitter {

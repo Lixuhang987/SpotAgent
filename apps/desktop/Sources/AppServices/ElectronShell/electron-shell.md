@@ -4,7 +4,7 @@
 
 ## 职责
 
-- 启动 Electron 子进程；`HANDAGENT_ELECTRON_BINARY` 可覆盖 Electron binary，`HANDAGENT_ELECTRON_MAIN` 可覆盖 main entry。未显式覆盖 main entry 时，packaged app 优先使用 `Contents/Resources/ElectronShell/dist/main/main.js`，开发态回退为 `pnpm --filter handagent-electron-shell exec electron apps/electron-shell/dist/main/main.js`。
+- 启动 Electron 子进程；`HANDAGENT_ELECTRON_BINARY` 可覆盖 Electron binary，`HANDAGENT_ELECTRON_MAIN` 可覆盖 main entry。未显式覆盖 main entry 时，packaged app 优先使用 `Contents/Resources/ElectronShell/dist/main/main.js`，并通过 `HANDAGENT_ELECTRON_BINARY` 或 PATH 中的 `electron` 启动；开发态回退为 `pnpm --filter handagent-electron-shell exec electron apps/electron-shell/dist/main/main.js`。
 - 通过 stdio newline-delimited JSON 发送 `ElectronShellCommand`，接收 `ElectronShellEvent`。
 - 主动停机时先发送 `shutdown` command 并关闭子进程 stdin；Electron 未在 2 秒内退出时才兜底 `terminate()`，主动停机不作为 fatal termination 上报。
 - 在 `agent_server.health available=true` 与 `thread_window.prepared` 同时成立后，向 `AgentServerHealth` 暴露可提交状态。

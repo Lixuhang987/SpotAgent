@@ -123,6 +123,7 @@
 1. 关闭 Electron StatusBubble，确认 agent-server 进程仍存在，ThreadWindow 仍可继续对话。
 1. 模拟 agent-server 非零退出，确认 supervisor 按退避重启；超过最大次数后 Swift 显示明确 fatal/diagnostic 文案。
 1. 执行 `bash ./scripts/package-app.sh --mock-llm`，确认 `.app/Contents/Resources/ElectronShell/dist/main/main.js` 存在。
+1. 确认 PATH 中存在 `electron`，或设置 `HANDAGENT_ELECTRON_BINARY` 指向可用 Electron binary。
 1. 使用 mock LLM packaged app 路径启动 Electron flag，确认 prompt 返回 mock assistant，不访问真实 LLM。
 1. 退出 HandAgent 后确认 Electron、agent-server 和 renderer 进程不残留。
 
