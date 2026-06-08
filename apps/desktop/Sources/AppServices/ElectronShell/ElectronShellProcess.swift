@@ -3,6 +3,7 @@ import Foundation
 @MainActor
 protocol ElectronShellProcessing: AnyObject {
     var onEvent: ((ElectronShellEvent) -> Void)? { get set }
+    var onTermination: ((String) -> Void)? { get set }
 
     func start() throws
     func send(_ command: ElectronShellCommand) throws
@@ -12,6 +13,7 @@ protocol ElectronShellProcessing: AnyObject {
 @MainActor
 final class ElectronShellProcess: ElectronShellProcessing {
     var onEvent: ((ElectronShellEvent) -> Void)?
+    var onTermination: ((String) -> Void)?
 
     private let launchPath: String
     private let arguments: [String]
@@ -47,16 +49,33 @@ final class ElectronShellProcess: ElectronShellProcessing {
         process.standardInput = input
         process.standardOutput = output
         process.standardError = errorOutput
-
-        output.fileHandleForReading.readabilityHandler = { [weak self] handle in
-            let data = handle.availableData
-            guard !data.isEmpty else { return }
+        process.terminationHandler = { [weak self] process in
             Task { @MainActor in
-                self?.handleOutput(data)
+                self?.handleTermination(process)
             }
         }
-        errorOutput.fileHandleForReading.readabilityHandler = { handle in
-            _ = handle.availableData
+
+        output.fileHandleForReading.readabilityHandler = { [weak self, weak process] handle in
+            let data = handle.availableData
+            guard !data.isEmpty else {
+                Task { @MainActor in
+                    self?.clearStdoutHandlerIfCurrent(process)
+                }
+                return
+            }
+            Task { @MainActor in
+                guard let process else { return }
+                self?.handleOutput(data, from: process)
+            }
+        }
+        errorOutput.fileHandleForReading.readabilityHandler = { [weak self, weak process] handle in
+            let data = handle.availableData
+            guard !data.isEmpty else {
+                Task { @MainActor in
+                    self?.clearStderrHandlerIfCurrent(process)
+                }
+                return
+            }
         }
 
         try process.run()
@@ -67,7 +86,9 @@ final class ElectronShellProcess: ElectronShellProcessing {
     }
 
     func send(_ command: ElectronShellCommand) throws {
-        guard let stdinPipe else { return }
+        guard process?.isRunning == true, let stdinPipe else {
+            throw ElectronShellProcessError.notRunning
+        }
         var data = try encoder.encode(command)
         data.append(0x0A)
         stdinPipe.fileHandleForWriting.write(data)
@@ -76,6 +97,7 @@ final class ElectronShellProcess: ElectronShellProcessing {
     func stop() {
         stdoutPipe?.fileHandleForReading.readabilityHandler = nil
         stderrPipe?.fileHandleForReading.readabilityHandler = nil
+        process?.terminationHandler = nil
         if process?.isRunning == true {
             process?.terminate()
         }
@@ -85,10 +107,37 @@ final class ElectronShellProcess: ElectronShellProcessing {
         stderrPipe = nil
     }
 
-    private func handleOutput(_ data: Data) {
+    private func handleOutput(_ data: Data, from sourceProcess: Process) {
+        guard process === sourceProcess else { return }
         outputDecoder.onEvent = onEvent
         outputDecoder.receive(data)
     }
+
+    private func handleTermination(_ terminatedProcess: Process) {
+        guard process === terminatedProcess else { return }
+        stdoutPipe?.fileHandleForReading.readabilityHandler = nil
+        stderrPipe?.fileHandleForReading.readabilityHandler = nil
+        let status = terminatedProcess.terminationStatus
+        process = nil
+        stdinPipe = nil
+        stdoutPipe = nil
+        stderrPipe = nil
+        onTermination?("Electron shell exited with status \(status)")
+    }
+
+    private func clearStdoutHandlerIfCurrent(_ sourceProcess: Process?) {
+        guard let sourceProcess, process === sourceProcess else { return }
+        stdoutPipe?.fileHandleForReading.readabilityHandler = nil
+    }
+
+    private func clearStderrHandlerIfCurrent(_ sourceProcess: Process?) {
+        guard let sourceProcess, process === sourceProcess else { return }
+        stderrPipe?.fileHandleForReading.readabilityHandler = nil
+    }
+}
+
+enum ElectronShellProcessError: Error {
+    case notRunning
 }
 
 @MainActor

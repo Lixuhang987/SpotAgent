@@ -64,6 +64,42 @@ final class ElectronBackedAppServerTests: XCTestCase {
         XCTAssertFalse(appServer.isAvailable)
     }
 
+    func testStopPublishesUnavailableAndIgnoresLaterShellEvents() {
+        let shell = RecordingElectronShellProcess()
+        let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
+        var availability: [Bool] = []
+        appServer.onAvailabilityChange = { availability.append($0) }
+
+        appServer.start()
+        shell.emit(.threadWindowPrepared(timestamp: "2026-06-08T00:00:00.000Z"))
+        shell.emit(.agentServerHealth(available: true, message: nil))
+        appServer.stop()
+        shell.emit(.agentServerHealth(available: true, message: nil))
+        shell.emit(.threadWindowPrepared(timestamp: "2026-06-08T00:00:01.000Z"))
+
+        XCTAssertFalse(appServer.isAvailable)
+        XCTAssertEqual(availability, [true, false])
+    }
+
+    func testUnexpectedShellTerminationReportsFatalErrorAndMarksUnavailable() {
+        let shell = RecordingElectronShellProcess()
+        let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
+        var fatalMessages: [String] = []
+        var availability: [Bool] = []
+        appServer.onFatalError = { fatalMessages.append($0) }
+        appServer.onAvailabilityChange = { availability.append($0) }
+
+        appServer.start()
+        shell.emit(.threadWindowPrepared(timestamp: "2026-06-08T00:00:00.000Z"))
+        shell.emit(.agentServerHealth(available: true, message: nil))
+        shell.terminate(message: "Electron shell exited with status 9")
+
+        XCTAssertFalse(appServer.isAvailable)
+        XCTAssertEqual(appServer.startupErrorMessage, "Electron shell exited with status 9")
+        XCTAssertEqual(fatalMessages, ["Electron shell exited with status 9"])
+        XCTAssertEqual(availability, [true, false])
+    }
+
     func testRendererCrashReportsFatalErrorAndMarksUnavailable() {
         let shell = RecordingElectronShellProcess()
         let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
@@ -87,6 +123,7 @@ final class ElectronBackedAppServerTests: XCTestCase {
 @MainActor
 private final class RecordingElectronShellProcess: ElectronShellProcessing {
     var onEvent: ((ElectronShellEvent) -> Void)?
+    var onTermination: ((String) -> Void)?
     private(set) var startCount = 0
     private(set) var stopCount = 0
     private(set) var sentCommands: [ElectronShellCommand] = []
@@ -105,6 +142,10 @@ private final class RecordingElectronShellProcess: ElectronShellProcessing {
 
     func emit(_ event: ElectronShellEvent) {
         onEvent?(event)
+    }
+
+    func terminate(message: String) {
+        onTermination?(message)
     }
 }
 
