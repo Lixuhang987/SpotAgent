@@ -995,3 +995,11 @@
 - **验证过程**：提交 `THREADWINDOW_SCENE5_RESPONSIVE_QA_20260609 [mock:assistant-ok]` 后生成 `~/.spotAgent/threads/thread-1780954592680-hdn67v.json`。用 AX 调整 `HandAgent` 窗口尺寸并读取 sidebar `complementary` 区域：窗口 920x640 时 sidebar 为 276x612，接近窗口宽度 30%；窗口放大到实际 1280x640 时 sidebar 为 320x612，达到最大宽度上限；窗口 800x640 时 sidebar 为 240x612，仍接近 30% 且高于 220；窗口 740x640 时 main 只有右侧 region，sidebar 隐藏；重新放回 920x640 后 main 恢复为 2 个区域，sidebar 为 276x612，搜索框仍存在且为空。
 - **证据**：thread 文件 `~/.spotAgent/threads/thread-1780954592680-hdn67v.json`；截图 `/tmp/handagent-qa/threadwindow-scenario5-width-920.png`、`/tmp/handagent-qa/threadwindow-scenario5-width-1300.png`、`/tmp/handagent-qa/threadwindow-scenario5-width-800.png`、`/tmp/handagent-qa/threadwindow-scenario5-width-740.png`、`/tmp/handagent-qa/threadwindow-scenario5-width-920-restored.png`。
 - **结论**：通过。
+
+### ThreadWindow 场景 5A：滚动容器验证
+
+- **验证日期**：2026-06-09
+- **验证环境**：默认 WKWebView packaged app，`mock-llm`
+- **验证过程**：使用当前 packaged mock app 中的 `THREADWINDOW_SCENE5A_SCROLL_QA_20260609 [mock:assistant-ok]` thread，其持久化文件为 `~/.spotAgent/threads/thread-1780955664655-r0vptz.json`，user prompt 包含 80 行长文本。WKWebView live 窗口保留初始静态截图，确认右侧消息区出现独立纵向滚动条、顶部 TabBar 和底部 Composer 位于固定区域。随后通过同一 app-server 的 ThreadWindow 运行时 DOM 执行动态滚动：左侧历史列表 `scrollHeight=4013`、`clientHeight=451`，滚动后 `scrollTop` 从 0 到 900，HandAgent 标题、新建对话按钮和搜索框坐标不变；右侧 MessageList `scrollHeight=4143`、`clientHeight=238`，滚动后 `scrollTop` 从 0 到 1200，TabBar 和 Composer 坐标不变；打开 10 个历史 thread 后 TabBar `scrollWidth=1164`、`clientWidth=620`，横向滚动后 `scrollLeft=544`，页面级 `docScrollWidth/bodyScrollWidth` 仍等于 920；最小宽度 640 下含权限请求面板时，`docScrollWidth/bodyScrollWidth` 仍等于 640。
+- **证据**：thread 文件 `~/.spotAgent/threads/thread-1780955664655-r0vptz.json`；JSON `/tmp/handagent-qa/threadwindow-scenario5a-scroll-evidence-cli.json`、`/tmp/handagent-qa/threadwindow-scenario5a-tabs-evidence-cli.json`；截图 `/tmp/handagent-qa/threadwindow-scenario5a-initial-long-message.png`、`/tmp/handagent-qa/threadwindow-scenario5a-sidebar-scrolled.png`、`/tmp/handagent-qa/threadwindow-scenario5a-message-scrolled.png`、`/tmp/handagent-qa/threadwindow-scenario5a-tabs-history-overflow.png`、`/tmp/handagent-qa/threadwindow-scenario5a-minwidth-permission-panel.png`。
+- **结论**：通过。
