@@ -31,6 +31,20 @@
 
 ## 当前 bug
 
+### 真实 LLM 工具调用后进入权限等待但 ThreadWindow 无可见权限面板
+
+- **严重级别**：P1
+- **发现日期**：2026-06-09
+- **复现步骤**：
+  1. 在主仓库 `main` 重新执行 `bash ./scripts/package-app.sh`，确认 `dist/HandAgentDesktop.app/Contents/Resources/HandAgentRuntimeMode.json` 不存在，即使用 settings / real LLM 模式。
+  1. 启动 packaged app，通过真实全局快捷键 `osascript -e 'tell application "System Events" to key code 49 using {command down, shift down}'` 打开 PromptPanel。
+  1. 提交 `HANDAGENT_REAL_TOOL_SCENE0_A_20260609 请看一下我的屏幕，并简要说明你看到了什么。`。
+  1. 等待真实 provider 返回，观察 ThreadWindow、`/api/activity`、`/api/thread` snapshot 与 `~/.spotAgent/threads/thread-1780961051324-1d663h.json`。
+- **实际结果**：ThreadWindow 显示 user prompt、`use_tools` tool result 和 `screen.capture` tool result，但右侧没有出现“权限请求”面板，Composer 仍显示“停止”。`/api/activity` snapshot 持续为 `status:"waiting"`、`latestSummary:"等待权限确认"`、`waitingRequest:"permission"`；超过 `ThreadPermissionBridge` 默认 60 秒超时后仍未恢复。`thread.resume` 返回的 `thread.snapshot` 只有 1 条 user message，`payload.status:"running"`；thread 持久化文件也只有 user message，`messageCount:1`。
+- **期望结果**：真实 provider 在工具执行后若触发权限请求，ThreadWindow 应显示可操作的允许/拒绝面板；如果面板不可达或请求超时，turn 应自动继续或失败并持久化明确错误，不应永久停在不可响应的 waiting 状态。
+- **证据**：截图 `/tmp/handagent-qa/real-tool-scene0-permission-waiting-no-panel.png`；thread 文件 `~/.spotAgent/threads/thread-1780961051324-1d663h.json`；network 日志 `~/.spotAgent/log/2026-06-09/network-001.jsonl` 显示三轮真实 `responses` 请求：第一轮 tools 仅 `use_tools`，第二轮激活后包含完整工具集，第三轮 input 含 `screen_capture` function call/output 且 provider 返回 HTTP 200 streaming；`/api/activity` snapshot 为 `waiting / 等待权限确认`；`/api/thread` snapshot 只有 user message 且 `status:"running"`。
+- **初步调用链 / 根因边界**：已验证 `PromptPanel submit -> thread.start -> real LLM request -> use_tools -> full tool catalog -> screen.capture -> real LLM follow-up response` 成立。失败边界位于第三轮 provider 返回后的 `permission.requested -> ThreadWindow request panel / permission timeout / turn completion` 链路：activity 能观察到 `permission.requested`，但当前 ThreadWindow 未出现 request panel，且 `ThreadPermissionBridge` 60 秒超时未把 turn 推进到 deny / failed / completed。
+
 ### `AI SDK stream finished without assistant content or tool calls`
 
 - **严重级别**：P1
