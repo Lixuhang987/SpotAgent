@@ -156,6 +156,7 @@
 - packaged app 产物与 mock LLM 路径已验证：`dist/HandAgentDesktop.app/Contents/Resources/ElectronShell/dist/main/main.js` 存在；`HANDAGENT_ELECTRON_BINARY` 指向的 Electron binary 可执行且版本为 `v42.3.3`；`~/.spotAgent/threads/thread-1780947483869-t8ou50.json` 中 assistant 内容为 `Mock assistant response: main chain is reachable.`，确认 mock packaged app 未访问真实 LLM。
 - PromptPanel 连续提交已验证复用同一个 Electron ThreadWindow 并创建不同 thread/tab：第一次提交 `ELECTRON_MULTI_PROMPT_QA_20260609_A [mock:assistant-ok]` 生成 `~/.spotAgent/threads/thread-1780948156864-2ttk2d.json`；第二次提交 `ELECTRON_MULTI_PROMPT_QA_20260609_B [mock:assistant-ok]` 生成 `~/.spotAgent/threads/thread-1780948177419-qwq8of.json`；两次提交后 `HandAgent ThreadWindow` 的 CoreGraphics window number 均为 `43975`，截图 `/tmp/handagent-qa/electron-two-prompt-tabs.png` 显示同一 Electron ThreadWindow 内有两个 tab，当前内容为 B prompt。
 - Electron flag 启动日志 supervisor description 已验证：主仓库 packaged mock app stdout/stderr 重定向到 `/tmp/handagent-qa/electron-log-description-main-20260609.log` 后，日志包含 `mode:"node_child"`、`coreRuntimeHost:"agent-server"` 与 Node child fallback 的 `utilityProcessBlocker`；同轮 `lsof` 显示 `127.0.0.1:4317` 由 node 监听，`/api/activity` WebSocket 首条消息为 idle `activity.snapshot`，退出后无残留。
+- `/api/activity` subscriber 断开重连已验证：Electron flag packaged mock app 启动后，Swift host pid `67148`、Electron main pid `67149`、agent-server pid `67163` 各一份，`127.0.0.1:4317` 由 node 监听，Computer Use 观察 Electron `HandAgent Activity` 显示 `点击开始 / HandAgent 空闲`。连续两次新建 `/api/activity` WebSocket 连接，首包均为 `activity.snapshot` 且 `status:"idle"`；随后通过 `/api/thread` 创建 `thread-1780964395791-tvbdeb` 并提交 `ELECTRON_ACTIVITY_RECONNECT_QA_20260609 [mock:assistant-ok]`，收到 assistant delta 与 `turn.completed(status:"completed")`，thread 文件持久化同一 user prompt 与 `Mock assistant response: main chain is reachable.`；再次新建 `/api/activity` 连接首包为 `activity.snapshot`，`activeThreadId:"thread-1780964395791-tvbdeb"`、`status:"idle"`、`latestSummary:"点击开始"`。
 
 **2026-06-09 待回归修复项**：
 
@@ -177,7 +178,6 @@
 1. 触发 platform tool，例如 `clipboard.read`、`app.frontmost`、`screen.capture` 或 `accessibility.snapshot`，确认 agent-server 仍通过 `/api/platform` 请求 Swift 回写结果。
 1. 确认不再显示 Swift StatusBubble，右下角显示 Electron React StatusBubble；提交 prompt 后 Electron StatusBubble 能展示 `starting` / `running` / `completed`。
 1. 触发 tool、permission/workspace request、模型配置错误或 provider 错误，确认 Electron StatusBubble 分别展示 tool running、waiting、error 状态，ThreadWindow 内联请求面板和错误气泡仍正常可见。
-1. 断开并重连 `/api/activity` subscriber，确认新连接立即收到 `activity.snapshot`，不会影响 `/api/thread` 消息流。
 1. 关闭 visible Electron ThreadWindow，确认 agent-server 进程仍存在；再次打开 PromptPanel 并提交，确认仍通过同一后台服务执行。
 1. 关闭 Electron StatusBubble，确认 agent-server 进程仍存在，ThreadWindow 仍可继续对话。
 1. 模拟 agent-server 非零退出，确认 supervisor 按退避重启；超过最大次数后 Swift 显示明确 fatal/diagnostic 文案。

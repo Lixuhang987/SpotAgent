@@ -1074,3 +1074,11 @@
 - **修复内容**：`apps/agent-server/src/actions/ThreadScopedToolRegistry.ts` 改为已激活 thread 只暴露 builtin + MCP tools，不再把 `use_tools` 传给 provider；同步更新 `apps/agent-server/src/actions/actions.md` 与 `ThreadScopedToolRegistry` 回归测试。主仓库修复提交：`c165031 fix: 激活后移除 use_tools 元工具`。
 - **验证结果**：`pnpm exec vitest run apps/agent-server/tests/thread/ThreadScopedToolRegistry.test.ts apps/agent-server/tests/actions/ThreadScopedToolRegistry.test.ts packages/core/tests/runtime/agent-runtime.test.ts packages/core/tests/runtime/system-prompt.test.ts` 通过，当前仓库目标测试与 `.worktrees` 副本共 74 files / 599 tests passed；`bash ./scripts/test.sh` 通过，Electron shell 16 files / 89 tests passed，agent-server + core 54 files passed / 329 tests passed / 1 skipped。
 - **结论**：通过。`docs/bugs.md` 当前 bug 已移除；后续真实 provider 若仍出现空流，应按新的 network log 与当前 `~/.spotAgent/threads/<threadId>.json` 重新定位，不沿用 2026-05-24 旧 session 证据。
+
+### Electron UI Shell `/api/activity` subscriber 重连
+
+- **验证日期**：2026-06-09
+- **验证环境**：Electron flag packaged app，`mock-llm`；`launchctl setenv HANDAGENT_ELECTRON_SHELL 1`，`HANDAGENT_ELECTRON_BINARY` 指向 `electron@42.3.3` binary，标准 `open dist/HandAgentDesktop.app` 启动。
+- **验证过程**：启动后确认 Swift host、Electron main、agent-server 各一份，`127.0.0.1:4317` 由 node 监听，Computer Use 观察 Electron `HandAgent Activity` 显示 `点击开始 / HandAgent 空闲`。连续两次新建 `/api/activity` WebSocket 连接，首包均为 `activity.snapshot` 且状态为 `idle`。随后通过 `/api/thread` 创建 thread 并提交 `ELECTRON_ACTIVITY_RECONNECT_QA_20260609 [mock:assistant-ok]`，收到 assistant delta 与 `turn.completed(status:"completed")`；再次新建 `/api/activity` 连接，首包仍立即返回 snapshot，且指向刚完成的 active thread。
+- **证据**：进程 pid 为 Swift host `67148`、Electron main `67149`、agent-server `67163`；thread 文件 `~/.spotAgent/threads/thread-1780964395791-tvbdeb.json` 持久化 user prompt 与 `Mock assistant response: main chain is reachable.`；重连后 `/api/activity` snapshot 为 `activeThreadId:"thread-1780964395791-tvbdeb"`、`status:"idle"`、`latestSummary:"点击开始"`。
+- **结论**：通过。`/api/activity` subscriber 断开重连不会影响 `/api/thread` 消息流，新 subscriber 会立即收到当前 activity snapshot。
