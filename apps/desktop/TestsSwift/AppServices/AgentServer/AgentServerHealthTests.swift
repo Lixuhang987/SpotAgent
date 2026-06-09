@@ -35,6 +35,7 @@ private final class RecordingHealthAppServer: AppServerManaging {
     var startupErrorMessage: String?
     var onAvailabilityChange: ((Bool) -> Void)?
     var onFatalError: ((String) -> Void)?
+    var onHostTerminationRequest: (() -> Void)?
 
     func start() {}
     func stop() {}

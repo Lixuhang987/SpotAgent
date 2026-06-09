@@ -1226,3 +1226,15 @@
 - **验证过程**：先结合自动化测试确认 gate 语义；再用 live QA 设置无效 `HANDAGENT_THREAD_WINDOW_WEB_URL`，制造 agent-server health 可用但 ThreadWindow prewarm 失败的状态，检查 PromptPanel 禁用和 Return 不提交；最后 unset URL 正常重启，确认 ready 后同一路径可提交。
 - **证据**：自动化侧 `ElectronBackedAppServerTests/testAvailableOnlyAfterServerHealthAndThreadPrepared` 覆盖必须同时收到 `agent_server.health available=true` 与 `thread_window.prepared` 才 available，`PromptPanelViewModelTests` 覆盖禁用态不提交、恢复后可提交。live QA 中无效 URL 启动后 agent-server pid `90575` 监听 `127.0.0.1:4317`，但 PromptPanel 的 AX 与 Computer Use 均显示 `thread window failed to load`；按 Return 后仍只有 Swift PromptPanel，无 Electron ThreadWindow。恢复正常 URL 重启后 agent-server pid `90856` 监听，PromptPanel 无禁用文案且可编辑；提交 `ELECTRON_READY_GATE_CURRENT_QA_20260609 [mock:assistant-ok]` 后 Electron 出现 `HandAgent ThreadWindow`（`920x640`），`~/.spotAgent/threads/thread-1780967883716-fskb5x.json` 持久化同一 user prompt 与 assistant `Mock assistant response: main chain is reachable.`，`/api/activity` snapshot 回到 `status:"idle"`。
 - **结论**：通过。PromptPanel 在 ThreadWindow 未 prepared 时禁止提交；恢复到 health + prepared 后可提交并打开 Electron ThreadWindow。
+
+## Electron ThreadWindow 前台 Command+Q 退出宿主（2026-06-10 实机验证）
+
+- **验证日期**：2026-06-10
+- **验证环境**：macOS / worktree `codex/electron-quit-terminal-exit` / 用户手工 packaged app 回归
+- **验证过程**：
+  1. 启动包含 Electron ThreadWindow 的 HandAgentDesktop packaged app。
+  2. 通过 PromptPanel 提交 prompt，使 Electron `HandAgent ThreadWindow` 成为前台。
+  3. 在 ThreadWindow 前台按 `Command+Q`。
+  4. 确认不再出现 `Agent Server 已停止 / Electron shell exited with status 0` fatal alert，宿主退出链路能正常回收。
+- **自动化证据**：`ElectronBackedAppServerTests/testCleanShellTerminationRequestsHostTerminationWithoutFatalAlert` 覆盖 Electron clean exit status 0 转为宿主 terminate 请求；`AppCoordinatorTests/testHostTerminationRequestTerminatesApplication` 覆盖 Coordinator 调用 `terminateApplication`；`ElectronBackedAppServerTests/testUnexpectedShellTerminationReportsFatalErrorAndMarksUnavailable` 覆盖非 0 status 仍走 fatal error。
+- **结论**：通过。Electron ThreadWindow 前台 `Command+Q` 不再把 status 0 当作 agent-server fatal termination。

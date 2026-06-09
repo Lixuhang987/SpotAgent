@@ -10,7 +10,13 @@ import type { OpenAIApiType } from "../config/ModelSettings.ts";
 import type { NetworkLogger } from "../logging/NetworkLogger.ts";
 import { createLoggingFetch } from "../logging/createLoggingFetch.ts";
 import { resolveOpenAIApiKey, resolveOpenAIBaseURL } from "./OpenAIConfig.ts";
-import { hasImageContent, sanitizeToolName, toVercelMessages, toVercelTools } from "./VercelAdapters.ts";
+import {
+  createOpenAICompatibleFetch,
+  hasImageContent,
+  sanitizeToolName,
+  toVercelMessages,
+  toVercelTools,
+} from "./VercelAdapters.ts";
 
 type OpenAIProviderSettings = NonNullable<Parameters<typeof createOpenAI>[0]>;
 type VercelStreamRequest = Parameters<typeof streamText>[0];
@@ -45,17 +51,18 @@ export class VercelClient implements LLMClient {
       ...providerSettings
     } = options;
     const createOpenAIProvider = dependencies.createOpenAI ?? createOpenAI;
-    const fetchImpl = networkLogger
+    const loggingFetch = networkLogger
       ? createLoggingFetch({
           logger: networkLogger,
           baseFetch: fetchOverride as typeof fetch | undefined,
         })
       : fetchOverride;
+    const fetchImpl = createOpenAICompatibleFetch(loggingFetch as typeof fetch | undefined);
     const provider = createOpenAIProvider({
       ...providerSettings,
       apiKey: resolveOpenAIApiKey({ apiKey }),
       baseURL: resolveOpenAIBaseURL({ baseURL }),
-      ...(fetchImpl ? { fetch: fetchImpl } : {}),
+      fetch: fetchImpl,
     });
     this.api = api;
     this.model = selectLanguageModel(provider, api, model);

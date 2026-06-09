@@ -319,6 +319,24 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testHostTerminationRequestTerminatesApplication() {
+        let appServer = TriggerableAppServer()
+        var terminateCount = 0
+        let coordinator = AppCoordinator(
+            services: electronServices(
+                appServer: appServer,
+                commandClient: RecordingThreadWindowCommandClient(),
+                terminateApplication: { terminateCount += 1 }
+            )
+        )
+
+        appServer.requestHostTermination()
+
+        _ = coordinator
+        XCTAssertEqual(terminateCount, 1)
+    }
+
+    @MainActor
     func testShortcutActionsComeOnlyFromManifestActions() throws {
         let root = try FileManager.default.url(
             for: .itemReplacementDirectory,
@@ -385,7 +403,8 @@ private func electronServices(
     appServer: any AppServerManaging = NopAppServer(),
     commandClient: RecordingThreadWindowCommandClient,
     activityClient: RecordingActivityWindowCommandClient? = nil,
-    setActivationPolicy: @escaping @MainActor (NSApplication.ActivationPolicy) -> Void = { _ in }
+    setActivationPolicy: @escaping @MainActor (NSApplication.ActivationPolicy) -> Void = { _ in },
+    terminateApplication: @escaping @MainActor () -> Void = {}
 ) -> AppServices {
     let settingsStore = AgentSettingsStore(homeDirectoryURL: TestFiles.makeTemporaryHomeDirectory())
     return AppServices(
@@ -398,7 +417,8 @@ private func electronServices(
         hotkeyRegistrar: NopHotkeyRegistrar(),
         settingsWindowPresenter: NopSettingsWindowPresenter(),
         fatalAlertPresenter: NopFatalAlertPresenter(),
-        setActivationPolicy: setActivationPolicy
+        setActivationPolicy: setActivationPolicy,
+        terminateApplication: terminateApplication
     )
 }
 
@@ -457,6 +477,7 @@ private final class TriggerableAppServer: AppServerManaging {
     var startupErrorMessage: String?
     var onAvailabilityChange: ((Bool) -> Void)?
     var onFatalError: ((String) -> Void)?
+    var onHostTerminationRequest: (() -> Void)?
     private(set) var startCount = 0
 
     func start() { startCount += 1 }
@@ -465,6 +486,10 @@ private final class TriggerableAppServer: AppServerManaging {
     func publishAvailability(_ available: Bool) {
         isAvailable = available
         onAvailabilityChange?(available)
+    }
+
+    func requestHostTermination() {
+        onHostTerminationRequest?()
     }
 }
 

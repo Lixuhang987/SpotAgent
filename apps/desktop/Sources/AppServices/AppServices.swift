@@ -66,6 +66,7 @@ final class AppServices {
     let settingsWindowPresenter: any SettingsWindowPresenting
     let fatalAlertPresenter: any FatalAlertPresenting
     let setActivationPolicy: @MainActor (NSApplication.ActivationPolicy) -> Void
+    let terminateApplication: @MainActor () -> Void
     let showsFatalAlert: Bool
 
     init(
@@ -82,6 +83,9 @@ final class AppServices {
         fatalAlertPresenter: any FatalAlertPresenting = ProductionFatalAlertPresenter(),
         setActivationPolicy: @escaping @MainActor (NSApplication.ActivationPolicy) -> Void = {
             NSApplication.shared.setActivationPolicy($0)
+        },
+        terminateApplication: @escaping @MainActor () -> Void = {
+            NSApplication.shared.terminate(nil)
         },
         environment: [String: String] = ProcessInfo.processInfo.environment,
         showsFatalAlert: Bool = true
@@ -104,6 +108,7 @@ final class AppServices {
         self.settingsWindowPresenter = settingsWindowPresenter
         self.fatalAlertPresenter = fatalAlertPresenter
         self.setActivationPolicy = setActivationPolicy
+        self.terminateApplication = terminateApplication
         self.showsFatalAlert = showsFatalAlert
     }
 
@@ -132,6 +137,7 @@ final class AppServices {
             settingsWindowPresenter: settingsWindowPresenter,
             fatalAlertPresenter: NopFatalAlertPresenter(),
             setActivationPolicy: setActivationPolicy,
+            terminateApplication: {},
             showsFatalAlert: false
         )
     }
@@ -253,6 +259,7 @@ final class NopAppServer: AppServerManaging {
     var startupErrorMessage: String?
     var onAvailabilityChange: ((Bool) -> Void)?
     var onFatalError: ((String) -> Void)?
+    var onHostTerminationRequest: (() -> Void)?
 
     func start() {}
     func stop() {}
