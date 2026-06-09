@@ -17,6 +17,19 @@
 
 ## 开发验证记录
 
+### PromptPanel Warm Command Sheet / theme sync
+
+- 完成日期：待实机 QA
+- 实现位置：`apps/desktop/Sources/PromptPanel/PromptPanelView.swift`、`apps/desktop/Sources/PromptPanel/PromptPanelStyles.swift`、`apps/desktop/Sources/PromptPanel/PromptPanelGrowingTextView.swift`、`apps/desktop/Sources/Coordinator/AppCoordinator.swift`、`apps/desktop/Sources/Coordinator/SettingsLifecycle.swift`、`apps/desktop/Sources/AppServices/AppServicesProductionImpls.swift`
+- 自动化验证：需执行 `bash ./scripts/swiftw test --filter PromptPanel`、`bash ./scripts/swiftw test --filter Settings`、`bash ./scripts/swiftw test --filter Appearance`、`bash ./scripts/swiftw test --filter AppTheme`、`bash ./scripts/swiftw test --filter AppCoordinatorTests`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`、`bash ./scripts/test.sh`。
+- 手工回归步骤：
+  1. 浅色主题打开 PromptPanel：容器、输入 placeholder、附件 chip、action row、trigger pill、server banner 使用 warm canvas/coral 语义，文字对比清晰。
+  2. 深色主题打开 PromptPanel：无固定浅色残留，hover/focus、warning/error、selection error chip、图片附件预览 affordance 均可辨认。
+  3. 空 draft 时 PromptPanel 仍可拖动；输入内容后编辑区占满设置按钮左侧剩余宽度；超过 5 行后滚动。
+  4. 已打开 Settings 时切换外观：Settings 自身立即刷新，PromptPanel 下次或当前显示时使用同一 resolved theme，Electron ThreadWindow 收到同步主题。
+  5. agent-server 不可用或 Action 缺必填参数时，banner 使用 warning/error 语义，草稿不丢失。
+  6. 图片附件 chip 可预览，删除按钮点击区域与视觉边界一致。
+
 ### Swift 前端迁移残留清理
 
 - 完成日期：待实机 QA
