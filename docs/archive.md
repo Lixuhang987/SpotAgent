@@ -1194,3 +1194,11 @@
 - **验证过程**：用 `thread_window.open_history` 打开 visible Electron ThreadWindow，关闭该窗口后检查 agent-server；随后用真实全局快捷键打开 Swift PromptPanel，粘贴 ASCII prompt 并提交，检查新 Electron ThreadWindow、thread 文件与 `/api/activity`。
 - **证据**：关闭前 Electron 有 `HandAgent Activity` + `HandAgent ThreadWindow`，ThreadWindow 尺寸 `920x640`；点击 close button 后只剩 `HandAgent Activity`，node pid `79262` 仍监听 `127.0.0.1:4317`；随后 PromptPanel 为 `640x448`，提交 `ELECTRON_CLOSE_REUSE_CURRENT_QA_20260609 [mock:assistant-ok]` 后 Electron 重新出现 `HandAgent ThreadWindow`；thread 文件 `~/.spotAgent/threads/thread-1780966465948-vh3h1g.json` 持久化 user prompt 与 assistant `Mock assistant response: main chain is reachable.`；`/api/activity` snapshot 为 `activeThreadId:"thread-1780966465948-vh3h1g"`、`status:"idle"`。
 - **结论**：通过。关闭 visible Electron ThreadWindow 不停止 agent-server；后续 PromptPanel submit 仍复用同一后台服务执行。
+
+### Electron UI Shell 全局快捷键不触发 ThreadWindow prepare
+
+- **验证日期**：2026-06-09
+- **验证环境**：Electron flag packaged app，`mock-llm`；标准 `open dist/HandAgentDesktop.app` 启动。
+- **验证过程**：在空闲态连续 3 次注入真实全局快捷键，并检查 Swift / Electron 窗口；随后精确检查 packaged main 与 Swift command encoder 中是否存在 `thread_window.prepare` command。
+- **证据**：3 次快捷键后 `HandAgentDesktop` 均为 PromptPanel 窗口 `640x448`，Electron 始终只有 `HandAgent Activity`，尺寸 `272x76`，未出现 `HandAgent ThreadWindow`；`dist/HandAgentDesktop.app/Contents/Resources/ElectronShell/dist/main/main.js` 不包含精确 `"thread_window.prepare"` command 字符串；Swift `ElectronShellProtocol` 只编码 `open_initial_prompt`、`open_history`、`focus`、`activity_window.show` 和 `shutdown`。
+- **结论**：通过。show/toggle PromptPanel 不展示 ThreadWindow，也不发送 `thread_window.prepare` command；hidden ThreadWindow 预热由 Electron main 自行管理。
