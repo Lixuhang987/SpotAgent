@@ -1162,3 +1162,11 @@
 - **验证过程**：启动后确认 Electron 只有 `HandAgent Activity`，然后向当前 Electron command socket 发送 `thread_window.open_history` command，检查 Electron / Swift 窗口和 Computer Use 可见内容。
 - **证据**：command socket 为 `/tmp/hae-C9B68DF7-F042-46FC-B318-F9284CD0FAD0.sock`；发送 command 后 Electron 窗口为 `HandAgent Activity` + `HandAgent ThreadWindow`，ThreadWindow 尺寸 `920x640`；Computer Use 可见 React 历史侧栏、workspace 分组、搜索框和历史 thread 列表；`HandAgentDesktop` 进程无 Swift 窗口。
 - **结论**：通过。`openHistory` command-path 聚焦 Electron ThreadWindow 并显示历史侧栏，没有创建 Swift WKWebView host。
+
+### Electron UI Shell 标准退出无残留
+
+- **验证日期**：2026-06-09
+- **验证环境**：Electron flag packaged app，`mock-llm`；主仓库 `/Users/mu9/proj/handAgent`，branch `main`；标准 `open dist/HandAgentDesktop.app` 启动。
+- **验证过程**：先清空所有 HandAgent / Electron / agent-server 残留，再启动主仓库 packaged app；确认启动链路后用 bundle id 标准 quit，等待 6 秒后检查进程表和 `127.0.0.1:4317`。
+- **证据**：启动前置进程链路只有 Swift host pid `77532` -> Electron main pid `77534` -> agent-server pid `77556`，`127.0.0.1:4317` 由 node pid `77556` 监听；执行 `osascript -e 'tell application id "com.yourname.HandAgentDesktop" to quit'` 后，`ps` 匹配 HandAgent / Electron / Electron Helper renderer / agent-server 无输出，`lsof -nP -iTCP:4317 -sTCP:LISTEN` 无输出。
+- **结论**：通过。标准 quit 会清理 Electron main、renderer/helper 和 agent-server，不留下 4317 监听。

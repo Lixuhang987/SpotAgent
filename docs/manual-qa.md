@@ -167,6 +167,7 @@
 - Electron flag packaged app startup 已验证：通过 `launchctl setenv HANDAGENT_ELECTRON_SHELL 1`、`launchctl setenv HANDAGENT_ELECTRON_BINARY <electron@42.3.3 binary>` 与标准 `open dist/HandAgentDesktop.app` 启动后，Swift host pid `74172`、Electron main pid `74174`、agent-server pid `74188` 成功运行，`127.0.0.1:4317` 仅由 node pid `74188` 监听，`/api/activity` 首包为 idle `activity.snapshot`。packaged `main.js` 包含 `electron.ready`、`agent-server supervisor` 与 `startSupervisor`，且 `electron.ready` 字符串位于 supervisor log 之前；Computer Use 只看到 Electron `HandAgent Activity`，Swift 无窗口，说明 Electron main 没有因 Swift command bridge / stdin 阻塞并继续拉起 agent-server。
 - Electron flag 启动日志 supervisor description 已验证：短时直接启动 packaged executable 并重定向 stdout/stderr 到 `/tmp/handagent-qa/electron-supervisor-description-current-20260609.log`，日志首行包含 `[electron-shell] agent-server supervisor: {"mode":"node_child","entry":"apps/agent-server/src/server/server.ts","coreRuntimeHost":"agent-server","utilityProcessBlocker":"apps/agent-server/dist/server/server.js 不存在；当前 agent-server 仍依赖 TypeScript 源码入口和 Node --experimental-transform-types"}`；同轮 node pid `75197` 监听 `127.0.0.1:4317`，`/api/activity` 首包为 idle `activity.snapshot`。
 - `openHistory` command-path 已验证：标准 `open dist/HandAgentDesktop.app` 启动 Electron flag packaged app 后，通过当前 Electron command socket `/tmp/hae-C9B68DF7-F042-46FC-B318-F9284CD0FAD0.sock` 发送 `thread_window.open_history`；随后 Electron 窗口从仅 `HandAgent Activity` 变为 `HandAgent Activity` + `HandAgent ThreadWindow`，ThreadWindow 尺寸 `920x640`，Computer Use 可见 React 历史侧栏、workspace 分组、搜索框和历史 thread 列表；`HandAgentDesktop` 进程无 Swift 窗口。
+- 标准退出无残留已验证：清理外部污染后，用标准 `open dist/HandAgentDesktop.app` 启动主仓库 Electron flag packaged app，启动前置进程链路只有 Swift host pid `77532` -> Electron main pid `77534` -> agent-server pid `77556`，`127.0.0.1:4317` 由 node pid `77556` 监听；执行 `osascript -e 'tell application id "com.yourname.HandAgentDesktop" to quit'` 后等待 6 秒，`ps` 匹配 HandAgent / Electron / renderer / agent-server 无输出，`lsof -nP -iTCP:4317 -sTCP:LISTEN` 无输出。
 
 **2026-06-09 待回归修复项**：
 
@@ -184,7 +185,6 @@
 1. 关闭 visible Electron ThreadWindow，确认 agent-server 进程仍存在；再次打开 PromptPanel 并提交，确认仍通过同一后台服务执行。
 1. 关闭 Electron StatusBubble，确认 agent-server 进程仍存在，ThreadWindow 仍可继续对话。
 1. 模拟 agent-server 非零退出，确认 supervisor 按退避重启；超过最大次数后 Swift 显示明确 fatal/diagnostic 文案。
-1. 退出 HandAgent 后确认 Electron、agent-server 和 renderer 进程不残留。
 
 ## ThreadWindow UI 重构完整验收（P2）
 
