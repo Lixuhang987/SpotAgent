@@ -165,6 +165,7 @@
 - Electron ThreadWindow initial prompt 已验证：提交前只有 Electron `HandAgent Activity`；使用真实全局快捷键打开 Swift PromptPanel（`640x448`）并提交 `ELECTRON_UI_SHELL_FINAL_QA_20260608 [mock:assistant-ok]` 后，Electron 出现 `HandAgent ThreadWindow`（`920x640`），Computer Use 可见该 user message 与 `Mock assistant response: main chain is reachable.`；`~/.spotAgent/threads/thread-1780964771699-7dvw8k.json` 持久化同一 user / assistant，`/api/activity` snapshot 指向该 thread 并回到 `status:"idle"`。
 - PromptPanel 连续第二次提交复用 Electron ThreadWindow 已验证：首次提交后 Electron 只有一个 `HandAgent ThreadWindow`，位置/尺寸为 `260,146,920,640`；第二次提交 `ELECTRON_UI_SHELL_FINAL_QA_20260608_B【mock：assistant-ok]` 后仍只有同一个 `HandAgent ThreadWindow` 且位置/尺寸不变，Computer Use 可见 tab 栏新增第二个 tab，当前显示 B prompt；`~/.spotAgent/threads/thread-1780964917550-h99lcu.json` 持久化 B user message。该次 B 的 mock trigger 错误由测试输入法把 `[mock:assistant-ok]` 转为全角 `【mock：assistant-ok]` 导致，不影响本条对“复用同一窗口并创建新 tab/thread”的验证。
 - Electron flag packaged app startup 已验证：通过 `launchctl setenv HANDAGENT_ELECTRON_SHELL 1`、`launchctl setenv HANDAGENT_ELECTRON_BINARY <electron@42.3.3 binary>` 与标准 `open dist/HandAgentDesktop.app` 启动后，Swift host pid `74172`、Electron main pid `74174`、agent-server pid `74188` 成功运行，`127.0.0.1:4317` 仅由 node pid `74188` 监听，`/api/activity` 首包为 idle `activity.snapshot`。packaged `main.js` 包含 `electron.ready`、`agent-server supervisor` 与 `startSupervisor`，且 `electron.ready` 字符串位于 supervisor log 之前；Computer Use 只看到 Electron `HandAgent Activity`，Swift 无窗口，说明 Electron main 没有因 Swift command bridge / stdin 阻塞并继续拉起 agent-server。
+- Electron flag 启动日志 supervisor description 已验证：短时直接启动 packaged executable 并重定向 stdout/stderr 到 `/tmp/handagent-qa/electron-supervisor-description-current-20260609.log`，日志首行包含 `[electron-shell] agent-server supervisor: {"mode":"node_child","entry":"apps/agent-server/src/server/server.ts","coreRuntimeHost":"agent-server","utilityProcessBlocker":"apps/agent-server/dist/server/server.js 不存在；当前 agent-server 仍依赖 TypeScript 源码入口和 Node --experimental-transform-types"}`；同轮 node pid `75197` 监听 `127.0.0.1:4317`，`/api/activity` 首包为 idle `activity.snapshot`。
 
 **2026-06-09 待回归修复项**：
 
@@ -174,7 +175,6 @@
 
 - “关闭 Electron StatusBubble” 暂无稳定产品路径：ActivityWindow 是 frameless 小窗，AX `close window "HandAgent Activity"` 返回 `-1708`（窗口不理解 close 信息），也没有可见关闭按钮；本轮只确认关闭尝试后 agent-server 仍监听 `127.0.0.1:4317`，未把该子项判为通过。
 
-1. 确认启动日志包含 agent-server supervisor description，并明确 `mode`、`coreRuntimeHost: "agent-server"` 与 `utilityProcessBlocker`；如果走 Node child fallback，日志必须说明 utilityProcess 的具体 blocker。
 1. 启动完成前 PromptPanel 不允许提交；收到 `agent_server.health available=true` 与 `thread_window.prepared` 后 PromptPanel 才恢复可提交。
 1. 通过全局快捷键打开或切换 PromptPanel 多次，确认不会显示 ThreadWindow，也不会发送 `thread_window.prepare` command；hidden ThreadWindow 预热只由 Electron main 在 app-server ready 后完成。
 1. 触发 `openHistory`，确认聚焦 Electron ThreadWindow 并显示历史侧栏，不创建 Swift WKWebView host。

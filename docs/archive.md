@@ -1146,3 +1146,11 @@
 - **验证过程**：用 launchd 环境变量启用 Electron flag 并启动 packaged app；检查进程、端口、`/api/activity` 首包、Computer Use 可见窗口，以及 packaged Electron main 入口中的 ready / supervisor 启动顺序。
 - **证据**：Swift host pid `74172`、Electron main pid `74174`、agent-server pid `74188` 成功运行；`lsof -nP -iTCP:4317 -sTCP:LISTEN` 仅显示 node pid `74188` 监听；`/api/activity` 首包为 `activity.snapshot` 且 `status:"idle"`；Computer Use 只看到 Electron `HandAgent Activity`，文本为 `点击开始 / HandAgent 空闲`，Swift 无窗口；`dist/HandAgentDesktop.app/Contents/Resources/ElectronShell/dist/main/main.js` 包含 `electron.ready`、`agent-server supervisor` 与 `startSupervisor`，且 `electron.ready` 位于 supervisor log 之前。
 - **结论**：通过。Electron main 未因 Swift command bridge / stdin 阻塞，ready 路径存在并继续拉起 agent-server。
+
+### Electron UI Shell supervisor description 启动日志
+
+- **验证日期**：2026-06-09
+- **验证环境**：Electron flag packaged app，`mock-llm`；主仓库 `/Users/mu9/proj/handAgent`，branch `main`。
+- **验证过程**：为捕获 stderr，短时直接启动 packaged executable 并重定向 stdout/stderr 到 `/tmp/handagent-qa/electron-supervisor-description-current-20260609.log`；随后检查日志、agent-server 监听与 `/api/activity`。
+- **证据**：日志首行包含 `[electron-shell] agent-server supervisor: {"mode":"node_child","entry":"apps/agent-server/src/server/server.ts","coreRuntimeHost":"agent-server","utilityProcessBlocker":"apps/agent-server/dist/server/server.js 不存在；当前 agent-server 仍依赖 TypeScript 源码入口和 Node --experimental-transform-types"}`；同轮 node pid `75197` 监听 `127.0.0.1:4317`；`/api/activity` 首包为 `activity.snapshot` 且 `status:"idle"`。
+- **结论**：通过。启动日志明确记录 supervisor description、`coreRuntimeHost:"agent-server"` 与 Node child fallback 的具体 `utilityProcessBlocker`。
