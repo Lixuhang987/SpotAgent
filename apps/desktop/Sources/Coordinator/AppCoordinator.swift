@@ -57,6 +57,7 @@ final class AppCoordinator {
     }
 
     func bootstrap() {
+        setupAppearanceTheme()
         setupPromptPanel()
         setupHotkey()
         setupElectronActivityWindow()
@@ -103,7 +104,7 @@ final class AppCoordinator {
     }
 
     func makeAppearanceSettingsViewModel() -> AppearanceSettingsViewModel {
-        AppearanceSettingsViewModel(store: services.settingsStore)
+        AppearanceSettingsViewModel(themeService: services.appearanceThemeService)
     }
 
     func makeToolSettingsViewModel() -> ToolSettingsViewModel {
@@ -127,6 +128,7 @@ final class AppCoordinator {
     }
 
     private func setupPromptPanel() {
+        promptPanelController.updateTheme(services.appearanceThemeService.appTheme)
         refreshActionDefinitions()
         promptPanelController.onSubmit = { [weak self] draft, attachments in
             self?.send(.submitPrompt(draft, attachments: attachments))
@@ -139,12 +141,23 @@ final class AppCoordinator {
         }
     }
 
+    private func setupAppearanceTheme() {
+        services.appearanceThemeService.onThemeChange = { [weak self] theme in
+            guard let self else { return }
+            self.promptPanelController.updateTheme(self.services.appearanceThemeService.appTheme)
+            try? self.services.threadWindowCommandClient.sendThemeChanged(theme)
+        }
+    }
+
     private func setupAgentServerHealth() {
         agentServerHealth.onAvailabilityChange = { [weak self] available, message in
             guard let self else { return }
             self.store.send(.appServerAvailabilityChanged(available))
             self.promptPanelController.setSubmissionEnabled(available, message: message)
             if available {
+                try? self.services.threadWindowCommandClient.sendThemeChanged(
+                    self.services.appearanceThemeService.currentTheme
+                )
                 self.showElectronActivityWindowOrFallback()
             }
         }
@@ -229,6 +242,7 @@ final class AppCoordinator {
             permissionRulesViewModel: makePermissionRulesViewModel(),
             workspaceViewModel: WorkspaceSettingsViewModel(),
             shortcutActions: actions,
+            appTheme: services.appearanceThemeService.appTheme,
             onClosed: { [weak self] in self?.send(.settingsWindowClosed) }
         )
     }

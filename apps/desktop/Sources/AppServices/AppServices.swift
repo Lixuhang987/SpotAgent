@@ -14,6 +14,7 @@ protocol SettingsWindowPresenting {
         permissionRulesViewModel: PermissionRulesViewModel,
         workspaceViewModel: WorkspaceSettingsViewModel,
         shortcutActions: [ActionDefinition],
+        appTheme: AppTheme,
         onClose: @escaping () -> Void
     ) -> NSWindow?
 }
@@ -57,6 +58,7 @@ final class AppServices {
     let threadWindowCommandClient: any ThreadWindowCommanding
     let activityWindowCommandClient: (any ActivityWindowCommanding)?
     let settingsStore: AgentSettingsStore
+    let appearanceThemeService: AppearanceThemeService
     let actionManifestStore: ActionManifestStore
     let platformServerURL: URL
     let hotkeyRegistrar: any HotkeyRegistering
@@ -70,6 +72,7 @@ final class AppServices {
         threadWindowCommandClient: (any ThreadWindowCommanding)? = nil,
         activityWindowCommandClient: (any ActivityWindowCommanding)? = nil,
         settingsStore: AgentSettingsStore = AgentSettingsStore(),
+        appearanceThemeService: AppearanceThemeService? = nil,
         actionManifestStore: ActionManifestStore = ActionManifestStore(),
         platformServerURL: URL = URL(string: "ws://127.0.0.1:4317/api/platform")!,
         hotkeyRegistrar: any HotkeyRegistering = ProductionHotkeyRegistrar(),
@@ -91,6 +94,7 @@ final class AppServices {
         self.threadWindowCommandClient = threadWindowCommandClient ?? runtime?.threadWindowCommandClient ?? NopThreadWindowCommandClient()
         self.activityWindowCommandClient = activityWindowCommandClient ?? runtime?.activityWindowCommandClient
         self.settingsStore = settingsStore
+        self.appearanceThemeService = appearanceThemeService ?? AppearanceThemeService(store: settingsStore)
         self.actionManifestStore = actionManifestStore
         self.platformServerURL = platformServerURL
         self.hotkeyRegistrar = hotkeyRegistrar
@@ -105,6 +109,8 @@ final class AppServices {
         threadWindowCommandClient: any ThreadWindowCommanding = NopThreadWindowCommandClient(),
         activityWindowCommandClient: (any ActivityWindowCommanding)? = nil,
         settingsWindowPresenter: any SettingsWindowPresenting = NopSettingsWindowPresenter(),
+        settingsStore: AgentSettingsStore = AgentSettingsStore(),
+        appearanceThemeService: AppearanceThemeService? = nil,
         actionManifestStore: ActionManifestStore = ActionManifestStore(
             pluginsDirectoryURL: URL(fileURLWithPath: "/dev/null", isDirectory: true)
         )
@@ -113,6 +119,8 @@ final class AppServices {
             appServer: NopAppServer(),
             threadWindowCommandClient: threadWindowCommandClient,
             activityWindowCommandClient: activityWindowCommandClient,
+            settingsStore: settingsStore,
+            appearanceThemeService: appearanceThemeService,
             actionManifestStore: actionManifestStore,
             platformServerURL: URL(string: "ws://127.0.0.1:0/noop-platform")!,
             hotkeyRegistrar: NopHotkeyRegistrar(),
@@ -274,6 +282,10 @@ final class NopThreadWindowCommandClient: ThreadWindowCommanding {
     func focus(threadId: String?) throws -> String {
         "noop-focus"
     }
+
+    func sendThemeChanged(_ theme: HostThemePayload) throws -> String {
+        "noop-theme-changed"
+    }
 }
 
 @MainActor
@@ -288,6 +300,7 @@ final class NopSettingsWindowPresenter: SettingsWindowPresenting {
         permissionRulesViewModel: PermissionRulesViewModel,
         workspaceViewModel: WorkspaceSettingsViewModel,
         shortcutActions: [ActionDefinition],
+        appTheme: AppTheme,
         onClose: @escaping () -> Void
     ) -> NSWindow? {
         nil

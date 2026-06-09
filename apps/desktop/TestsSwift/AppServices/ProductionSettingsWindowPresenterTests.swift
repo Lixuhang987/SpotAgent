@@ -17,6 +17,7 @@ final class ProductionSettingsWindowPresenterTests: XCTestCase {
             permissionRulesViewModel: PermissionRulesViewModel(),
             workspaceViewModel: WorkspaceSettingsViewModel(),
             shortcutActions: [],
+            appTheme: .default,
             onClose: {}
         )
         defer { window?.close() }

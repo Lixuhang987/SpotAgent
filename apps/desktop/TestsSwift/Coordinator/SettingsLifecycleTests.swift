@@ -24,6 +24,7 @@ final class SettingsLifecycleTests: XCTestCase {
             permissionRulesViewModel: PermissionRulesViewModel(),
             workspaceViewModel: WorkspaceSettingsViewModel(),
             shortcutActions: [],
+            appTheme: .default,
             onClosed: {}
         )
 
@@ -51,6 +52,7 @@ final class SettingsLifecycleTests: XCTestCase {
             permissionRulesViewModel: PermissionRulesViewModel(),
             workspaceViewModel: WorkspaceSettingsViewModel(),
             shortcutActions: [],
+            appTheme: .default,
             onClosed: {}
         )
         lifecycle.openOrFocus(
@@ -63,6 +65,7 @@ final class SettingsLifecycleTests: XCTestCase {
             permissionRulesViewModel: PermissionRulesViewModel(),
             workspaceViewModel: WorkspaceSettingsViewModel(),
             shortcutActions: [],
+            appTheme: .default,
             onClosed: {}
         )
 
@@ -88,6 +91,7 @@ final class SettingsLifecycleTests: XCTestCase {
             permissionRulesViewModel: PermissionRulesViewModel(),
             workspaceViewModel: WorkspaceSettingsViewModel(),
             shortcutActions: [],
+            appTheme: .default,
             onClosed: {}
         )
         lifecycle.handleClosed()

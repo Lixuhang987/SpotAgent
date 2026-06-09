@@ -28,6 +28,7 @@ final class SettingsLifecycle {
         permissionRulesViewModel: PermissionRulesViewModel,
         workspaceViewModel: WorkspaceSettingsViewModel,
         shortcutActions: [ActionDefinition],
+        appTheme: AppTheme,
         onClosed: @escaping @MainActor () -> Void
     ) {
         setActivationPolicy(activationPolicy.policyAfterUpdatingSettingsWindow(isOpen: true))
@@ -48,6 +49,7 @@ final class SettingsLifecycle {
             permissionRulesViewModel: permissionRulesViewModel,
             workspaceViewModel: workspaceViewModel,
             shortcutActions: shortcutActions,
+            appTheme: appTheme,
             onClose: { Task { @MainActor in onClosed() } }
         )
     }

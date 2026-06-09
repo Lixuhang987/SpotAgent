@@ -27,6 +27,10 @@ final class AppearanceThemeService {
         AppTheme.resolved(currentTheme.resolved)
     }
 
+    var saveErrorMessage: String? {
+        store.saveErrorMessage
+    }
+
     func updatePreference(_ preference: AppearanceThemePreference) {
         store.updateAppearance { appearance in
             appearance.themePreference = preference

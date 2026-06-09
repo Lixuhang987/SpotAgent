@@ -3,20 +3,20 @@ import Foundation
 @Observable
 @MainActor
 final class AppearanceSettingsViewModel {
-    @ObservationIgnored private let store: AgentSettingsStore
+    @ObservationIgnored private let themeService: AppearanceThemeService
 
     init(store: AgentSettingsStore) {
-        self.store = store
+        self.themeService = AppearanceThemeService(store: store)
+    }
+
+    init(themeService: AppearanceThemeService) {
+        self.themeService = themeService
     }
 
     var themePreference: AppearanceThemePreference {
-        get { store.appearance.themePreference }
-        set {
-            store.updateAppearance { appearance in
-                appearance.themePreference = newValue
-            }
-        }
+        get { themeService.currentTheme.preference }
+        set { themeService.updatePreference(newValue) }
     }
 
-    var saveErrorMessage: String? { store.saveErrorMessage }
+    var saveErrorMessage: String? { themeService.saveErrorMessage }
 }

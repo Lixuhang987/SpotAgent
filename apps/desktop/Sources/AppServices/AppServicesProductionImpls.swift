@@ -48,6 +48,7 @@ final class ProductionSettingsWindowPresenter: SettingsWindowPresenting {
         permissionRulesViewModel: PermissionRulesViewModel,
         workspaceViewModel: WorkspaceSettingsViewModel,
         shortcutActions: [ActionDefinition],
+        appTheme: AppTheme,
         onClose: @escaping () -> Void
     ) -> NSWindow? {
         let hosting = NSHostingController(
@@ -62,6 +63,7 @@ final class ProductionSettingsWindowPresenter: SettingsWindowPresenting {
                 workspaceViewModel: workspaceViewModel,
                 shortcutActions: shortcutActions
             )
+            .environment(\.appTheme, appTheme)
         )
         let window = NSWindow(contentViewController: hosting)
         window.title = "设置"

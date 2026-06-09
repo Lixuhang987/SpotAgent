@@ -56,6 +56,16 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testAppearancePreferenceChangeSendsThemeToElectron() {
+        let client = RecordingThreadWindowCommandClient()
+        let coordinator = AppCoordinator(services: electronServices(commandClient: client))
+
+        coordinator.makeAppearanceSettingsViewModel().themePreference = .dark
+
+        XCTAssertEqual(client.sentThemes.last, HostThemePayload(preference: .dark, resolved: .dark))
+    }
+
+    @MainActor
     func testShowAndTogglePromptPanelDoNotSendThreadWindowCommand() {
         let client = RecordingThreadWindowCommandClient()
         let coordinator = AppCoordinator(services: electronServices(commandClient: client))
@@ -70,11 +80,12 @@ final class AppCoordinatorTests: XCTestCase {
     func testShowsActivityWindowWhenAppServerBecomesAvailable() async throws {
         let appServer = TriggerableAppServer()
         appServer.isAvailable = false
+        let client = RecordingThreadWindowCommandClient()
         let activityClient = RecordingActivityWindowCommandClient()
         let coordinator = AppCoordinator(
             services: electronServices(
                 appServer: appServer,
-                commandClient: RecordingThreadWindowCommandClient(),
+                commandClient: client,
                 activityClient: activityClient
             )
         )
@@ -85,6 +96,7 @@ final class AppCoordinatorTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(10))
 
         XCTAssertEqual(activityClient.showCount, 1)
+        XCTAssertEqual(client.sentThemes, [HostThemePayload(preference: .system, resolved: .light)])
         _ = coordinator
     }
 
@@ -304,10 +316,13 @@ private func electronServices(
     commandClient: RecordingThreadWindowCommandClient,
     activityClient: RecordingActivityWindowCommandClient? = nil
 ) -> AppServices {
-    AppServices(
+    let settingsStore = AgentSettingsStore(homeDirectoryURL: TestFiles.makeTemporaryHomeDirectory())
+    return AppServices(
         appServer: appServer,
         threadWindowCommandClient: commandClient,
         activityWindowCommandClient: activityClient,
+        settingsStore: settingsStore,
+        appearanceThemeService: AppearanceThemeService(store: settingsStore, systemResolver: { .light }),
         platformServerURL: URL(string: "ws://127.0.0.1:0/noop-platform")!,
         hotkeyRegistrar: NopHotkeyRegistrar(),
         settingsWindowPresenter: NopSettingsWindowPresenter(),
@@ -375,6 +390,7 @@ private final class RecordingThreadWindowCommandClient: ThreadWindowCommanding {
     private(set) var openedPrompts: [PromptSubmission] = []
     private(set) var openHistoryCount = 0
     private(set) var focusedThreadIDs: [String?] = []
+    private(set) var sentThemes: [HostThemePayload] = []
     private var commandCounters: [ThreadWindowCommandKind: Int] = [:]
 
     var commandCount: Int {
@@ -394,6 +410,11 @@ private final class RecordingThreadWindowCommandClient: ThreadWindowCommanding {
     func focus(threadId: String?) throws -> String {
         focusedThreadIDs.append(threadId)
         return nextCommandId(for: .focus)
+    }
+
+    func sendThemeChanged(_ theme: HostThemePayload) throws -> String {
+        sentThemes.append(theme)
+        return "theme-\(sentThemes.count)"
     }
 
     func complete(
@@ -446,6 +467,7 @@ final class StubSettingsWindowPresenter: SettingsWindowPresenting {
         permissionRulesViewModel: PermissionRulesViewModel,
         workspaceViewModel: WorkspaceSettingsViewModel,
         shortcutActions: [ActionDefinition],
+        appTheme: AppTheme,
         onClose: @escaping () -> Void
     ) -> NSWindow? {
         lastShortcutActions = shortcutActions
