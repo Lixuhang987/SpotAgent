@@ -58,7 +58,7 @@ flowchart LR
 - 不要在 tool 内部直接 `import "node:fs"` 与平台无关的 IO；platform 类 tool 必须经 `PlatformAdapter`，文件类 tool 必须经 `WorkspaceRegistry`。
 - 工具结果优先返回**可序列化对象**（runtime 自动 JSON.stringify）；返回字符串只用于人类阅读场景。
 - 大段输出工具若需要 Blob/Stub 路径，应在 input schema 中加入必填 `cached: "turn" | "persist"`，并设置 `stubByDefault`；runtime 会负责落 Blob 与渲染 STUB，tool 不直接拼文本。
-- 入参 schema 单一源：写 `zod` schema 即可，`defineTool` 自动派生 JSON Schema、TS 类型，并在 `call(input)` 内执行运行时校验；不要再手写 JSON Schema 字面量，也不要在 builtin tool 里重复做外层入参结构校验。
+- 入参 schema 单一源：写 `zod` schema 即可，`defineTool` 自动派生 JSON Schema、TS 类型，并在 `call(input)` 内执行运行时校验；builtin tool 的外层入参结构由 `defineTool` 统一校验。
 - 运行时入参校验失败时，`call(input)` 以 rejected `Error` 返回统一可读错误，错误信息包含 tool name 与字段路径（例如缺字段、类型错误、strict object 的未知字段），方便 `AgentRuntime` 与审计日志直接展示。
 
 ## meta-tool：懒加载激活入口

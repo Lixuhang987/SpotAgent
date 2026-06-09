@@ -18,7 +18,7 @@
 
 ## 常驻输入队列
 
-`input.submit` 是当前普通用户输入命令；公开 `/api/thread` 路由只在目标 thread 非 running 时把它交给 orchestrator。running 时的普通用户 follow-up 由 React 前端排队展示，后端若收到 running `input.submit` 会返回 `thread.error(code: "thread_running")`。旧输入命令不再属于当前 `ThreadCommand`。
+`input.submit` 是当前普通用户输入命令；公开 `/api/thread` 路由只在目标 thread 非 running 时把它交给 orchestrator。running 时的普通用户 follow-up 由 React 前端排队展示，后端若收到 running `input.submit` 会返回 `thread.error(code: "thread_running")`。当前 `ThreadCommand` 输入入口以 `input.submit` 为准。
 
 ```mermaid
 sequenceDiagram
@@ -97,4 +97,4 @@ sequenceDiagram
 - 新增 thread / turn 命令分支优先落在 `ThreadCommandRouter.ts`。
 - runtime event 到 notification / 审计事件的翻译归 `protocol/MessageTranslator.ts`。
 - 需要 request-response 的能力优先判断是否属于 `/api/thread` 的 `ServerRequest` / `ClientResponse`；不要误挂到 `/api/platform`。
-- 旧输入协议不要继续写回本文件；当前输入入口以 `input.submit` 为准。
+- 本文件只记录当前输入入口 `input.submit` 及其路由语义。

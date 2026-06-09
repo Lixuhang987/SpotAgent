@@ -88,7 +88,7 @@ React `App` 挂载后通过 `installInitialPromptReceiver` 替换正式 receiver
 
 - 样式系统是 Tailwind CSS v4 CSS-first，主题 token 由 `design/tokens.json` 生成到 `src/styles/generated-theme.css`。
 - `tailwind.config.js` 已删除；新增 token 必须先改 `design/tokens.json`，再运行 `pnpm generate:theme-tokens`。
-- React 组件使用 `bg-app-*` / `text-app-*` / `border-app-*` 等生成语义 class，不再使用旧 v3 token class。
+- React 组件使用 `bg-app-*` / `text-app-*` / `border-app-*` 等生成语义 class。
 - `tests/designTokens.test.ts` 会校验生成 CSS，避免手写 CSS 或旧配置回流。
 - 新 UI 应优先复用现有 token 和组件密度，不在组件内散落协议状态字符串或重复色值。
 - ThreadWindow 滚动条统一在 `src/styles/tailwind.css` 的 base layer 定义：标准属性使用 `scrollbar-width` / `scrollbar-color`，Electron/Chromium 兼容使用 `::-webkit-scrollbar*`；track 和 corner 必须保持透明，避免滚动容器出现白色 gutter。不要在组件内重复定义局部滚动条样式。

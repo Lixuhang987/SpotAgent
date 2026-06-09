@@ -26,7 +26,7 @@
 - **Theme token 是视觉主入口**：新增跨模块复用的颜色、字体、间距、圆角或动画参数时，先修改 `design/tokens.json`，再运行 `pnpm generate:theme-tokens`；不要直接编辑生成文件。
 - **局部 layout 数值逐步收敛**：当前 SwiftUI 原生界面仍有窗口尺寸、一次性 padding、定位偏移等局部数值；不要在文档中把现状写成已经完全 token 化。
 - **新增颜色需走 token**：避免在 View 中直接写 `Color.red` / `Color(hex: ...)`。错误色用 `theme.colors.error`；强调色用 `theme.colors.accent` 系列。
-- **不要为旧系统加 fallback**：目标系统 macOS 15+，token 直接用 SwiftUI 原生 API。
+- **系统版本前提**：目标系统 macOS 15+，token 直接用 SwiftUI 原生 API。
 - **Swift 只消费宿主解析主题**：Swift Settings 保存偏好，`AppearanceThemeService` 解析 `system` 并把当前 `AppTheme` 注入原生 UI；React 侧只订阅 Electron 转发的 resolved theme。
 - **不要让 ViewModel 依赖 Theme**：`@Observable` 类不读 SwiftUI Environment；样式只在 View 与 ViewModifier 中消费 token。
 - **测试**：颜色 / 字体不做 RGB 精确比较；测试只断言 spacing 和 DESIGN.md 语义 token 可访问，详见 [AppThemeTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/Theme/AppThemeTests.swift)。

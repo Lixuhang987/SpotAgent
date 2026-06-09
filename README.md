@@ -34,7 +34,7 @@ HandAgent 是一个 macOS 优先的桌面 Agent Runtime MVP。当前桌面壳使
 
 ## 模型配置
 
-当前模型配置不再读取环境变量，而是统一由桌面端设置页写入 `~/.spotAgent/settings.json`。可配置项包括：
+当前模型配置统一由桌面端设置页写入 `~/.spotAgent/settings.json`。可配置项包括：
 
 - `provider`：当前支持 `openai-compatible`、`anthropic`
 - `model`

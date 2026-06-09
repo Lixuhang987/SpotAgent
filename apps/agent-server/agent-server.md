@@ -62,7 +62,7 @@ flowchart TD
   G --> L["thread/ThreadPersistence"]
 ```
 
-`input.submit` 是普通用户输入入口；公开 `/api/thread` 路由只在目标 thread 非 running 时接收并交给 `ThreadRuntimeOrchestrator`。running 时的普通用户 follow-up 由 React ThreadWindow 前端排队展示，暂不发送到后端；若仍收到 running `input.submit`，router 只向发起连接返回 `thread.error(code: "thread_running")`。后端 `ThreadInputQueue` 保留为 session loop 内部机制和后续子 agent / response item 通信预留，不作为当前普通用户 follow-up 的展示队列。旧输入命令不再属于当前 thread command 协议。
+`input.submit` 是普通用户输入入口；公开 `/api/thread` 路由只在目标 thread 非 running 时接收并交给 `ThreadRuntimeOrchestrator`。running 时的普通用户 follow-up 由 React ThreadWindow 前端排队展示，暂不发送到后端；若仍收到 running `input.submit`，router 只向发起连接返回 `thread.error(code: "thread_running")`。后端 `ThreadInputQueue` 保留为 session loop 内部机制和后续子 agent / response item 通信预留，不作为当前普通用户 follow-up 的展示队列。当前 thread command 协议的普通用户输入入口是 `input.submit`。
 
 ## 协议主干
 
