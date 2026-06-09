@@ -17,6 +17,15 @@
 
 ## 开发验证记录
 
+### 全局快捷键只唤起 PromptPanel
+
+- 完成日期：待实机 QA
+- 实现位置：`apps/desktop/Sources/PromptPanel/PromptPanelController.swift`、`apps/desktop/TestsSwift/PromptPanel/PromptPanelControllerTests.swift`、`apps/desktop/Sources/PromptPanel/prompt-panel.md`
+- 链路证明：期望链路是 `KeyboardShortcuts.showPromptPanel -> AppCoordinator.send(.togglePromptPanel) -> PromptPanelController.toggle/show -> 非激活 PromptPanel 前台显示`，Settings 存活状态不应被该链路打开或聚焦。失败边界定位为 `PromptPanelController.show()` 调用 `NSApp.activate(ignoringOtherApps: true)`，在 Settings 窗口存活且宿主为 `.regular` 时会激活整个 HandAgent 应用，把 Settings 一起带到前台。
+- 修复结论：PromptPanel show 只执行 `orderFrontRegardless()`、layout 和 `makeKey()`，不再激活整个 App；Settings 的打开/聚焦仍只由 `.openSettings` 路径负责。
+- 自动化验证：需执行 `bash ./scripts/swiftw test --filter PromptPanelControllerTests/testShowDoesNotActivateWholeApplication`、`bash ./scripts/swiftw test --filter PromptPanelControllerTests`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`。
+- 手工回归步骤：启动桌面 App，打开 Settings 后切到其他前台 App；按真实全局快捷键唤起 PromptPanel；确认只出现 PromptPanel，Settings 不被带到前台。再次按全局快捷键隐藏 PromptPanel，确认焦点回到唤起前的 App；点击 PromptPanel 内设置按钮时 Settings 仍能正常打开/聚焦。
+
 ### Settings 深色主题分段控件文本颜色修复
 
 - 完成日期：待实机 QA

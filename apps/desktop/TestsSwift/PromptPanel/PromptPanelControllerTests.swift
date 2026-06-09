@@ -1,4 +1,5 @@
 import XCTest
+import ObjectiveC
 @testable import HandAgentDesktop
 
 @MainActor
@@ -13,6 +14,22 @@ final class PromptPanelControllerTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(20))
 
         XCTAssertEqual(viewModel.attachments, [])
+    }
+
+    func testShowDoesNotActivateWholeApplication() {
+        guard let activationSpy = NSApplicationActivationSpy() else {
+            XCTFail("Unable to install NSApplication activation spy")
+            return
+        }
+        activationSpy.install()
+        defer { activationSpy.uninstall() }
+        let controller = PromptPanelController(focusRestorer: FakePromptPanelFocusRestorer())
+        controller.configure(viewModel: PromptPanelViewModel(actions: []))
+        defer { controller.hide() }
+
+        controller.show()
+
+        XCTAssertEqual(activationSpy.activationCount, 0)
     }
 
     func testCaptureSelectionCoordinatorStillAppendsSelectionBeforeShowingPanel() async throws {
@@ -122,6 +139,45 @@ final class PromptPanelControllerTests: XCTestCase {
 
         XCTAssertTrue(window.initialFirstResponder === textView)
         XCTAssertTrue(window.firstResponder === textView)
+    }
+}
+
+@MainActor
+private final class NSApplicationActivationSpy {
+    private let original: Method
+    private let replacement: Method
+    private var isInstalled = false
+
+    var activationCount: Int { promptPanelApplicationActivationCount }
+
+    init?() {
+        guard
+            let original = class_getInstanceMethod(NSApplication.self, #selector(NSApplication.activate(ignoringOtherApps:))),
+            let replacement = class_getInstanceMethod(NSApplication.self, #selector(NSApplication.handAgentTest_activate(ignoringOtherApps:)))
+        else { return nil }
+        self.original = original
+        self.replacement = replacement
+    }
+
+    func install() {
+        guard !isInstalled else { return }
+        promptPanelApplicationActivationCount = 0
+        method_exchangeImplementations(original, replacement)
+        isInstalled = true
+    }
+
+    func uninstall() {
+        guard isInstalled else { return }
+        method_exchangeImplementations(original, replacement)
+        isInstalled = false
+    }
+}
+
+nonisolated(unsafe) private var promptPanelApplicationActivationCount = 0
+
+private extension NSApplication {
+    @objc func handAgentTest_activate(ignoringOtherApps flag: Bool) {
+        promptPanelApplicationActivationCount += 1
     }
 }
 
