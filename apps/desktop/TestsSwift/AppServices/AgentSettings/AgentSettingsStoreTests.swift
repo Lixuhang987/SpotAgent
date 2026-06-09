@@ -14,6 +14,16 @@ final class AgentSettingsStoreTests: XCTestCase {
     }
 
     @MainActor
+    func testLoadsDefaultAppearanceWhenSettingsFileDoesNotExist() {
+        let homeURL = TestFiles.makeTemporaryHomeDirectory()
+        defer { try? FileManager.default.removeItem(at: homeURL) }
+
+        let store = AgentSettingsStore(homeDirectoryURL: homeURL)
+
+        XCTAssertEqual(store.appearance.themePreference, .system)
+    }
+
+    @MainActor
     func testPersistsSettingsToDotSpotAgentSettingsJSON() throws {
         let homeURL = TestFiles.makeTemporaryHomeDirectory()
         defer { try? FileManager.default.removeItem(at: homeURL) }
@@ -118,6 +128,44 @@ final class AgentSettingsStoreTests: XCTestCase {
         XCTAssertEqual(llm?["api"] as? String, "chat")
         XCTAssertEqual(tools?["denylist"] as? [String], ["file.write"])
         XCTAssertNil(tools?["allowlist"] as? [String])
+    }
+
+    @MainActor
+    func testUpdatingAppearancePreservesModelAndTools() throws {
+        let homeURL = TestFiles.makeTemporaryHomeDirectory()
+        defer { try? FileManager.default.removeItem(at: homeURL) }
+
+        let fileURL = TestFiles.settingsFileURL(homeURL)
+        try FileManager.default.createDirectory(
+            at: fileURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Data(
+            """
+            {
+              "llm": {
+                "provider": "anthropic",
+                "model": "claude-sonnet",
+                "apiKey": "key",
+                "baseUrl": "https://example.com",
+                "api": "chat"
+              },
+              "tools": {
+                "denylist": ["screen.capture"]
+              }
+            }
+            """.utf8
+        ).write(to: fileURL)
+
+        let store = AgentSettingsStore(homeDirectoryURL: homeURL)
+        store.updateAppearance { appearance in
+            appearance.themePreference = .dark
+        }
+
+        let json = try TestFiles.readJSON(fileURL)
+        XCTAssertEqual((json["appearance"] as? [String: Any])?["themePreference"] as? String, "dark")
+        XCTAssertEqual((json["llm"] as? [String: Any])?["model"] as? String, "claude-sonnet")
+        XCTAssertEqual((json["tools"] as? [String: Any])?["denylist"] as? [String], ["screen.capture"])
     }
 
     @MainActor

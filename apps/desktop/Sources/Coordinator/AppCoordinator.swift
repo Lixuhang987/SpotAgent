@@ -102,6 +102,10 @@ final class AppCoordinator {
         AgentSettingsViewModel(store: services.settingsStore)
     }
 
+    func makeAppearanceSettingsViewModel() -> AppearanceSettingsViewModel {
+        AppearanceSettingsViewModel(store: services.settingsStore)
+    }
+
     func makeToolSettingsViewModel() -> ToolSettingsViewModel {
         ToolSettingsViewModel(store: services.settingsStore)
     }
@@ -217,6 +221,7 @@ final class AppCoordinator {
         registerActionShortcuts(actions)
         settingsLifecycle.openOrFocus(
             settingsViewModel: makeSettingsViewModel(),
+            appearanceViewModel: makeAppearanceSettingsViewModel(),
             toolSettingsViewModel: makeToolSettingsViewModel(),
             pluginSettingsViewModel: makePluginSettingsViewModel(),
             appendPromptSettingsViewModel: makeAppendPromptSettingsViewModel(),

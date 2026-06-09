@@ -438,6 +438,7 @@ final class StubSettingsWindowPresenter: SettingsWindowPresenting {
 
     func present(
         settingsViewModel: AgentSettingsViewModel,
+        appearanceViewModel: AppearanceSettingsViewModel,
         toolSettingsViewModel: ToolSettingsViewModel,
         pluginSettingsViewModel: PluginSettingsViewModel,
         appendPromptSettingsViewModel: AppendPromptSettingsViewModel,

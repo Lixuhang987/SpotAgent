@@ -16,6 +16,7 @@ final class SettingsLifecycleTests: XCTestCase {
 
         lifecycle.openOrFocus(
             settingsViewModel: AgentSettingsViewModel(store: AgentSettingsStore()),
+            appearanceViewModel: AppearanceSettingsViewModel(store: AgentSettingsStore()),
             toolSettingsViewModel: ToolSettingsViewModel(store: AgentSettingsStore()),
             pluginSettingsViewModel: PluginSettingsViewModel(),
             appendPromptSettingsViewModel: AppendPromptSettingsViewModel(),
@@ -42,6 +43,7 @@ final class SettingsLifecycleTests: XCTestCase {
 
         lifecycle.openOrFocus(
             settingsViewModel: AgentSettingsViewModel(store: AgentSettingsStore()),
+            appearanceViewModel: AppearanceSettingsViewModel(store: AgentSettingsStore()),
             toolSettingsViewModel: ToolSettingsViewModel(store: AgentSettingsStore()),
             pluginSettingsViewModel: PluginSettingsViewModel(),
             appendPromptSettingsViewModel: AppendPromptSettingsViewModel(),
@@ -53,6 +55,7 @@ final class SettingsLifecycleTests: XCTestCase {
         )
         lifecycle.openOrFocus(
             settingsViewModel: AgentSettingsViewModel(store: AgentSettingsStore()),
+            appearanceViewModel: AppearanceSettingsViewModel(store: AgentSettingsStore()),
             toolSettingsViewModel: ToolSettingsViewModel(store: AgentSettingsStore()),
             pluginSettingsViewModel: PluginSettingsViewModel(),
             appendPromptSettingsViewModel: AppendPromptSettingsViewModel(),
@@ -77,6 +80,7 @@ final class SettingsLifecycleTests: XCTestCase {
 
         lifecycle.openOrFocus(
             settingsViewModel: AgentSettingsViewModel(store: AgentSettingsStore()),
+            appearanceViewModel: AppearanceSettingsViewModel(store: AgentSettingsStore()),
             toolSettingsViewModel: ToolSettingsViewModel(store: AgentSettingsStore()),
             pluginSettingsViewModel: PluginSettingsViewModel(),
             appendPromptSettingsViewModel: AppendPromptSettingsViewModel(),

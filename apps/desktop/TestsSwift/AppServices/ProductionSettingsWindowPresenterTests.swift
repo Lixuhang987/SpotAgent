@@ -9,6 +9,7 @@ final class ProductionSettingsWindowPresenterTests: XCTestCase {
 
         let window = presenter.present(
             settingsViewModel: AgentSettingsViewModel(store: AgentSettingsStore()),
+            appearanceViewModel: AppearanceSettingsViewModel(store: AgentSettingsStore()),
             toolSettingsViewModel: ToolSettingsViewModel(store: AgentSettingsStore()),
             pluginSettingsViewModel: PluginSettingsViewModel(),
             appendPromptSettingsViewModel: AppendPromptSettingsViewModel(),

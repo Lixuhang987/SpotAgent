@@ -40,6 +40,7 @@ final class ProductionSettingsWindowPresenter: SettingsWindowPresenting {
 
     func present(
         settingsViewModel: AgentSettingsViewModel,
+        appearanceViewModel: AppearanceSettingsViewModel,
         toolSettingsViewModel: ToolSettingsViewModel,
         pluginSettingsViewModel: PluginSettingsViewModel,
         appendPromptSettingsViewModel: AppendPromptSettingsViewModel,
@@ -52,6 +53,7 @@ final class ProductionSettingsWindowPresenter: SettingsWindowPresenting {
         let hosting = NSHostingController(
             rootView: SettingsView(
                 settingsViewModel: settingsViewModel,
+                appearanceViewModel: appearanceViewModel,
                 toolSettingsViewModel: toolSettingsViewModel,
                 pluginSettingsViewModel: pluginSettingsViewModel,
                 appendPromptSettingsViewModel: appendPromptSettingsViewModel,

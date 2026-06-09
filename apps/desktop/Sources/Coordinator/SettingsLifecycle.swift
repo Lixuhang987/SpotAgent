@@ -20,6 +20,7 @@ final class SettingsLifecycle {
 
     func openOrFocus(
         settingsViewModel: AgentSettingsViewModel,
+        appearanceViewModel: AppearanceSettingsViewModel,
         toolSettingsViewModel: ToolSettingsViewModel,
         pluginSettingsViewModel: PluginSettingsViewModel,
         appendPromptSettingsViewModel: AppendPromptSettingsViewModel,
@@ -39,6 +40,7 @@ final class SettingsLifecycle {
 
         window = windowPresenter.present(
             settingsViewModel: settingsViewModel,
+            appearanceViewModel: appearanceViewModel,
             toolSettingsViewModel: toolSettingsViewModel,
             pluginSettingsViewModel: pluginSettingsViewModel,
             appendPromptSettingsViewModel: appendPromptSettingsViewModel,

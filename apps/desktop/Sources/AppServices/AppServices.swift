@@ -6,6 +6,7 @@ import KeyboardShortcuts
 protocol SettingsWindowPresenting {
     func present(
         settingsViewModel: AgentSettingsViewModel,
+        appearanceViewModel: AppearanceSettingsViewModel,
         toolSettingsViewModel: ToolSettingsViewModel,
         pluginSettingsViewModel: PluginSettingsViewModel,
         appendPromptSettingsViewModel: AppendPromptSettingsViewModel,
@@ -279,6 +280,7 @@ final class NopThreadWindowCommandClient: ThreadWindowCommanding {
 final class NopSettingsWindowPresenter: SettingsWindowPresenting {
     func present(
         settingsViewModel: AgentSettingsViewModel,
+        appearanceViewModel: AppearanceSettingsViewModel,
         toolSettingsViewModel: ToolSettingsViewModel,
         pluginSettingsViewModel: PluginSettingsViewModel,
         appendPromptSettingsViewModel: AppendPromptSettingsViewModel,
