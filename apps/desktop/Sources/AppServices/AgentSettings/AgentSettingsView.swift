@@ -55,26 +55,20 @@ struct AgentSettingsView: View {
     }
 
     private var apiSegmented: some View {
-        Picker("接口", selection: $viewModel.api) {
-            ForEach(AgentAPIType.allCases) { api in
-                Text(api.title).tag(api)
-            }
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .controlSize(.small)
+        SettingsSegmentedControl(
+            AgentAPIType.allCases,
+            selection: $viewModel.api,
+            title: \.title
+        )
         .frame(maxWidth: 340)
     }
 
     private var providerSegmented: some View {
-        Picker("Provider", selection: $viewModel.provider) {
-            ForEach(AgentLLMProvider.allCases) { provider in
-                Text(provider.title).tag(provider)
-            }
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .controlSize(.small)
+        SettingsSegmentedControl(
+            AgentLLMProvider.allCases,
+            selection: $viewModel.provider,
+            title: \.title
+        )
         .frame(maxWidth: 340)
     }
 }

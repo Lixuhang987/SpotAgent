@@ -180,6 +180,68 @@ struct SettingsRowDivider: View {
     }
 }
 
+// MARK: - Segmented Control
+
+struct SettingsSegmentedControl<Option: Identifiable & Equatable>: View {
+    let options: [Option]
+    @Binding var selection: Option
+    let title: (Option) -> String
+    @Environment(\.appTheme) private var theme
+
+    init(
+        _ options: [Option],
+        selection: Binding<Option>,
+        title: @escaping (Option) -> String
+    ) {
+        self.options = options
+        self._selection = selection
+        self.title = title
+    }
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(options) { option in
+                segment(option)
+            }
+        }
+        .padding(3)
+        .background(
+            RoundedRectangle(cornerRadius: theme.radius.md)
+                .fill(theme.colors.surfaceSoft)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: theme.radius.md)
+                .strokeBorder(theme.colors.hairline, lineWidth: 0.8)
+        )
+    }
+
+    private func segment(_ option: Option) -> some View {
+        let isSelected = selection == option
+        return Button {
+            selection = option
+        } label: {
+            Text(title(option))
+                .font(theme.typography.captionFont.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+                .foregroundStyle(isSelected ? theme.colors.textPrimary : theme.colors.textSecondary)
+                .frame(maxWidth: .infinity, minHeight: 30)
+                .padding(.horizontal, theme.spacing.sm)
+                .background(
+                    RoundedRectangle(cornerRadius: theme.radius.sm)
+                        .fill(isSelected ? theme.colors.surfaceElevated : Color.clear)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: theme.radius.sm)
+                        .strokeBorder(isSelected ? theme.colors.accentRing : Color.clear, lineWidth: 0.8)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: theme.radius.sm))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title(option))
+    }
+}
+
 // MARK: - Field Style
 
 struct SettingsFieldStyle: TextFieldStyle {
