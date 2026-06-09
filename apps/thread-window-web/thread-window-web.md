@@ -88,6 +88,7 @@ React `App` 挂载后通过 `installInitialPromptReceiver` 替换正式 receiver
 - 样式系统是 Tailwind CSS，主题 token 在 `tailwind.config.js`。
 - `tests/designTokens.test.ts` 会校验关键 token，避免回退到旧的单一 dark-only 配色。
 - 新 UI 应优先复用现有 token 和组件密度，不在组件内散落协议状态字符串或重复色值。
+- ThreadWindow 滚动条统一在 `src/styles/tailwind.css` 的 base layer 定义：标准属性使用 `scrollbar-width` / `scrollbar-color`，Electron/Chromium 兼容使用 `::-webkit-scrollbar*`；track 和 corner 必须保持透明，避免滚动容器出现白色 gutter。不要在组件内重复定义局部滚动条样式。
 
 ## 常用命令
 
