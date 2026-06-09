@@ -1114,3 +1114,11 @@
 - **验证过程**：在 packaged app 运行中检查 Swift host、Electron main、agent-server 进程数，并检查 `127.0.0.1:4317` 监听者。
 - **证据**：计数脚本输出 `{"swiftHost":1,"electronMain":1,"agentServer":1}`；进程链路为 Swift host pid `67148` -> Electron main pid `67149` -> agent-server pid `67163`；`lsof -nP -iTCP:4317 -sTCP:LISTEN` 仅显示 node pid `67163` 监听。
 - **结论**：通过。Electron flag packaged app 没有第二份 Electron shell 或 agent-server 冲突。
+
+### Electron UI Shell production build
+
+- **验证日期**：2026-06-09
+- **验证环境**：主仓库 `/Users/mu9/proj/handAgent`，branch `main`。
+- **验证过程**：执行 `pnpm --filter handagent-electron-shell build`。
+- **证据**：命令通过；构建链路完成 `tsc -p tsconfig.json`、`tsc -p tsconfig.activity-window.json` 与 `vite build -c vite.activity-window.config.ts`；Vite 输出 `31 modules transformed`，生成 `dist/activity-window/index.html`、CSS 与 JS chunk。
+- **结论**：通过。Electron shell production build 当前可完成。

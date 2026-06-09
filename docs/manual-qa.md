@@ -161,6 +161,7 @@
 - packaged app Electron main 产物已验证：`dist/HandAgentDesktop.app/Contents/Resources/ElectronShell/dist/main/main.js` 存在，大小 `6257` bytes，文件内容包含 `electron.ready`；当前 Electron main pid `67149` 正在用该入口运行。
 - mock LLM packaged app 路径已验证：`dist/HandAgentDesktop.app/Contents/Resources/HandAgentRuntimeMode.json` 为 `{"llmMode":"mock"}`；`~/.spotAgent/threads/thread-1780964395791-tvbdeb.json` 持久化 `ELECTRON_ACTIVITY_RECONNECT_QA_20260609 [mock:assistant-ok]` 与 assistant `Mock assistant response: main chain is reachable.`；`/api/activity` snapshot 回到 `status:"idle"`。
 - Electron flag 进程唯一性已验证：当前 packaged app 运行中计数为 `{"swiftHost":1,"electronMain":1,"agentServer":1}`；进程链路为 Swift host pid `67148` -> Electron main pid `67149` -> agent-server pid `67163`，`lsof -nP -iTCP:4317 -sTCP:LISTEN` 仅显示 node pid `67163` 监听 `127.0.0.1:4317`。
+- Electron shell production build 已验证：`pnpm --filter handagent-electron-shell build` 通过，完成 main / activity-window TypeScript 编译与 ActivityWindow Vite production build，Vite 输出 `31 modules transformed`、`dist/activity-window/index.html`、CSS 与 JS chunk。
 
 **2026-06-09 待回归修复项**：
 
@@ -170,7 +171,6 @@
 
 - “关闭 Electron StatusBubble” 暂无稳定产品路径：ActivityWindow 是 frameless 小窗，AX `close window "HandAgent Activity"` 返回 `-1708`（窗口不理解 close 信息），也没有可见关闭按钮；本轮只确认关闭尝试后 agent-server 仍监听 `127.0.0.1:4317`，未把该子项判为通过。
 
-1. 运行 `pnpm --filter handagent-electron-shell build`。
 1. 使用 packaged app + `HANDAGENT_ELECTRON_BINARY` 启动 Electron flag 路径，确认 Electron main 不因 Swift command bridge 阻塞在 stdin，启动后能上报 `electron.ready` 并继续拉起 agent-server。
 1. 确认启动日志包含 agent-server supervisor description，并明确 `mode`、`coreRuntimeHost: "agent-server"` 与 `utilityProcessBlocker`；如果走 Node child fallback，日志必须说明 utilityProcess 的具体 blocker。
 1. 启动完成前 PromptPanel 不允许提交；收到 `agent_server.health available=true` 与 `thread_window.prepared` 后 PromptPanel 才恢复可提交。
