@@ -7,13 +7,30 @@ struct AppTheme: Sendable {
     let radius: ThemeRadius
     let animation: ThemeAnimation
 
-    static let `default` = AppTheme(
-        colors: .default,
-        typography: .default,
-        spacing: .default,
-        radius: .default,
-        animation: .default
+    static let `default` = AppTheme.light
+
+    static let light = AppTheme(
+        colors: ThemeColors(generated: GeneratedThemeTokens.light),
+        typography: .generated,
+        spacing: .generated,
+        radius: .generated,
+        animation: .generated
     )
+
+    static let dark = AppTheme(
+        colors: ThemeColors(generated: GeneratedThemeTokens.dark),
+        typography: .generated,
+        spacing: .generated,
+        radius: .generated,
+        animation: .generated
+    )
+
+    static func resolved(_ resolved: ResolvedAppearanceTheme) -> AppTheme {
+        switch resolved {
+        case .light: return .light
+        case .dark: return .dark
+        }
+    }
 }
 
 struct ThemeColors: Sendable {
@@ -56,46 +73,89 @@ struct ThemeColors: Sendable {
     let textPrimary: Color
     let textSecondary: Color
 
-    static let `default` = ThemeColors(
-        canvas: Color(red: 0.980, green: 0.976, blue: 0.961),
-        surfaceSoft: Color(red: 0.961, green: 0.941, blue: 0.910),
-        surfaceCard: Color(red: 0.937, green: 0.914, blue: 0.871),
-        surfaceCreamStrong: Color(red: 0.910, green: 0.878, blue: 0.824),
-        surfaceDark: Color(red: 0.094, green: 0.090, blue: 0.082),
-        surfaceDarkElevated: Color(red: 0.145, green: 0.137, blue: 0.125),
-        surfaceDarkSoft: Color(red: 0.122, green: 0.118, blue: 0.106),
-        hairline: Color(red: 0.902, green: 0.875, blue: 0.847),
-        hairlineSoft: Color(red: 0.922, green: 0.902, blue: 0.875),
-        ink: Color(red: 0.078, green: 0.078, blue: 0.075),
-        body: Color(red: 0.239, green: 0.239, blue: 0.227),
-        bodyStrong: Color(red: 0.145, green: 0.145, blue: 0.137),
-        muted: Color(red: 0.424, green: 0.416, blue: 0.392),
-        mutedSoft: Color(red: 0.557, green: 0.545, blue: 0.510),
-        onPrimary: Color.white,
-        onDark: Color(red: 0.980, green: 0.976, blue: 0.961),
-        onDarkSoft: Color(red: 0.627, green: 0.616, blue: 0.588),
-        accentTeal: Color(red: 0.365, green: 0.722, blue: 0.651),
-        accentAmber: Color(red: 0.910, green: 0.647, blue: 0.353),
-        success: Color(red: 0.365, green: 0.722, blue: 0.447),
-        warning: Color(red: 0.831, green: 0.627, blue: 0.090),
-        background: Color(red: 0.980, green: 0.976, blue: 0.961),
-        surface: Color(red: 0.937, green: 0.914, blue: 0.871),
-        surfaceHover: Color(red: 0.910, green: 0.878, blue: 0.824),
-        primary: Color(red: 0.078, green: 0.078, blue: 0.075),
-        secondary: Color(red: 0.424, green: 0.416, blue: 0.392),
-        accent: Color(red: 0.800, green: 0.471, blue: 0.361),
-        accentHover: Color(red: 0.663, green: 0.345, blue: 0.243),
-        accentPressed: Color(red: 0.553, green: 0.278, blue: 0.188),
-        accentSubtle: Color(red: 0.800, green: 0.471, blue: 0.361).opacity(0.16),
-        accentRing: Color(red: 0.800, green: 0.471, blue: 0.361).opacity(0.34),
-        error: Color(red: 0.776, green: 0.271, blue: 0.271),
-        userBubble: Color(red: 0.937, green: 0.914, blue: 0.871),
-        assistantBubble: Color.clear,
-        toolBubble: Color(red: 0.122, green: 0.118, blue: 0.106),
-        border: Color(red: 0.902, green: 0.875, blue: 0.847),
-        textPrimary: Color(red: 0.078, green: 0.078, blue: 0.075),
-        textSecondary: Color(red: 0.424, green: 0.416, blue: 0.392)
-    )
+    init(generated: GeneratedThemeTokens.ColorSet) {
+        canvas = Self.color(generated.canvas)
+        surfaceSoft = Self.color(generated.surfaceSoft)
+        surfaceCard = Self.color(generated.surface)
+        surfaceCreamStrong = Self.color(generated.surfaceMuted)
+        surfaceDark = Self.color(generated.canvas)
+        surfaceDarkElevated = Self.color(generated.surfaceElevated)
+        surfaceDarkSoft = Self.color(generated.surface)
+        hairline = Self.color(generated.hairline)
+        hairlineSoft = Self.color(generated.hairlineSoft)
+        ink = Self.color(generated.textPrimary)
+        body = Self.color(generated.textSecondary)
+        bodyStrong = Self.color(generated.textPrimary)
+        muted = Self.color(generated.textSecondary)
+        mutedSoft = Self.color(generated.textMuted)
+        onPrimary = Self.color(generated.onAccent)
+        onDark = Self.color(generated.textPrimary)
+        onDarkSoft = Self.color(generated.textMuted)
+        accentTeal = Self.color(generated.teal)
+        accentAmber = Self.color(generated.amber)
+        success = Self.color(generated.success)
+        warning = Self.color(generated.warning)
+        background = Self.color(generated.canvas)
+        surface = Self.color(generated.surface)
+        surfaceHover = Self.color(generated.surfaceMuted)
+        primary = Self.color(generated.textPrimary)
+        secondary = Self.color(generated.textSecondary)
+        accent = Self.color(generated.accent)
+        accentHover = Self.color(generated.accentHover)
+        accentPressed = Self.color(generated.accentPressed)
+        accentSubtle = Self.color(generated.accentSubtle)
+        accentRing = Self.color(generated.accentRing)
+        error = Self.color(generated.error)
+        userBubble = Self.color(generated.userBubble)
+        assistantBubble = Self.color(generated.assistantBubble)
+        toolBubble = Self.color(generated.toolBubble)
+        border = Self.color(generated.hairline)
+        textPrimary = Self.color(generated.textPrimary)
+        textSecondary = Self.color(generated.textSecondary)
+    }
+
+    private static func color(_ value: String) -> Color {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed == "transparent" {
+            return .clear
+        }
+        if trimmed.hasPrefix("#") {
+            return hexColor(trimmed)
+        }
+        if trimmed.hasPrefix("rgba(") {
+            return rgbaColor(trimmed)
+        }
+        return .clear
+    }
+
+    private static func hexColor(_ value: String) -> Color {
+        let hex = String(value.dropFirst())
+        guard hex.count == 6, let raw = Int(hex, radix: 16) else {
+            return .clear
+        }
+        let red = Double((raw >> 16) & 0xFF) / 255.0
+        let green = Double((raw >> 8) & 0xFF) / 255.0
+        let blue = Double(raw & 0xFF) / 255.0
+        return Color(red: red, green: green, blue: blue)
+    }
+
+    private static func rgbaColor(_ value: String) -> Color {
+        let inner = value
+            .replacingOccurrences(of: "rgba(", with: "")
+            .replacingOccurrences(of: ")", with: "")
+        let parts = inner.split(separator: ",").map {
+            Double($0.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
+        }
+        guard parts.count == 4 else {
+            return .clear
+        }
+        return Color(
+            red: parts[0] / 255.0,
+            green: parts[1] / 255.0,
+            blue: parts[2] / 255.0,
+            opacity: parts[3]
+        )
+    }
 }
 
 struct ThemeTypography: Sendable {
@@ -105,12 +165,14 @@ struct ThemeTypography: Sendable {
     let promptInputFont: Font
     let promptInputFontSize: CGFloat
 
-    static let `default` = ThemeTypography(
-        titleFont: .system(size: 18, weight: .medium),
-        bodyFont: .system(size: 15, weight: .regular),
-        captionFont: .system(size: 13),
-        promptInputFont: .system(size: 16),
-        promptInputFontSize: 16
+    static let `default` = ThemeTypography.generated
+
+    static let generated = ThemeTypography(
+        titleFont: .system(size: GeneratedThemeTokens.typography.titleSize, weight: .medium),
+        bodyFont: .system(size: GeneratedThemeTokens.typography.bodySize, weight: .regular),
+        captionFont: .system(size: GeneratedThemeTokens.typography.captionSize),
+        promptInputFont: .system(size: GeneratedThemeTokens.typography.promptInputSize),
+        promptInputFontSize: GeneratedThemeTokens.typography.promptInputSize
     )
 }
 
@@ -122,8 +184,15 @@ struct ThemeSpacing: Sendable {
     let xl: CGFloat
     let xxl: CGFloat
 
-    static let `default` = ThemeSpacing(
-        xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32
+    static let `default` = ThemeSpacing.generated
+
+    static let generated = ThemeSpacing(
+        xs: GeneratedThemeTokens.spacing.xs,
+        sm: GeneratedThemeTokens.spacing.sm,
+        md: GeneratedThemeTokens.spacing.md,
+        lg: GeneratedThemeTokens.spacing.lg,
+        xl: GeneratedThemeTokens.spacing.xl,
+        xxl: GeneratedThemeTokens.spacing.xxl
     )
 }
 
@@ -134,8 +203,14 @@ struct ThemeRadius: Sendable {
     let pill: CGFloat
     let bubble: CGFloat
 
-    static let `default` = ThemeRadius(
-        sm: 6, md: 8, lg: 12, pill: 24, bubble: 16
+    static let `default` = ThemeRadius.generated
+
+    static let generated = ThemeRadius(
+        sm: GeneratedThemeTokens.radius.sm,
+        md: GeneratedThemeTokens.radius.md,
+        lg: GeneratedThemeTokens.radius.lg,
+        pill: GeneratedThemeTokens.radius.pill,
+        bubble: GeneratedThemeTokens.radius.bubble
     )
 }
 
@@ -144,9 +219,11 @@ struct ThemeAnimation: Sendable {
     let springBounce: Double
     let highlightDuration: Double
 
-    static let `default` = ThemeAnimation(
-        springDuration: 0.35,
-        springBounce: 0.2,
-        highlightDuration: 0.15
+    static let `default` = ThemeAnimation.generated
+
+    static let generated = ThemeAnimation(
+        springDuration: GeneratedThemeTokens.animation.springDuration,
+        springBounce: GeneratedThemeTokens.animation.springBounce,
+        highlightDuration: GeneratedThemeTokens.animation.highlightDuration
     )
 }

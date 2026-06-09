@@ -7,6 +7,7 @@ Swift 宿主的主题偏好模型。`AppearanceThemePreference` 只允许 `syste
 | 文件 | 职责 |
 |------|------|
 | `AppearanceTheme.swift` | 定义用户偏好、解析后的主题枚举、`AppearanceSettings` 和传给 Electron/React 的 `HostThemePayload` |
+| `AppearanceThemeService.swift` | 从 `AgentSettingsStore` 读取偏好，解析 `system`，提供当前 `AppTheme`，并在偏好或系统外观变化时回调跨进程同步 |
 
 ## 边界
 
