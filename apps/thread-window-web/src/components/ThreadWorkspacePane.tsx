@@ -32,7 +32,7 @@ export function ThreadWorkspacePane({
 
   return (
     <section
-      className="grid h-screen min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden bg-app-canvas text-app-text-primary shadow-product-inner"
+      className="grid h-screen min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden bg-app-canvas/80 text-app-text-primary shadow-product-inner"
       aria-label="Thread workspace"
     >
       <div className="min-h-0 min-w-0 overflow-hidden" data-thread-window-error-slot="true">
@@ -69,8 +69,9 @@ export function ThreadWorkspacePane({
         </>
       ) : (
         <div className="flex min-h-0 min-w-0 items-center justify-center overflow-hidden text-sm text-app-text-muted">
-          <div className="rounded-lg border border-app-hairline bg-app-surface-elevated px-lg py-md">
-            准备开始
+          <div className="rounded-xl border border-app-hairline bg-app-surface-elevated/95 px-lg py-md text-center shadow-[var(--thread-window-floating-shadow)]">
+            <div className="font-display text-[30px] leading-none text-app-text-primary">准备开始</div>
+            <div className="mt-xs text-sm text-app-text-secondary">选择历史或创建新对话</div>
           </div>
         </div>
       )}

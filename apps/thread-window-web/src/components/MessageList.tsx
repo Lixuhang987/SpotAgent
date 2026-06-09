@@ -19,11 +19,11 @@ export function MessageList({ messages, errorMessage, isRunning = false }: Messa
   }, -1);
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-col gap-sm overflow-y-auto overflow-x-hidden bg-app-canvas px-lg py-md">
+    <div className="flex min-h-0 min-w-0 flex-col gap-sm overflow-y-auto overflow-x-hidden bg-transparent px-lg py-md">
       {messages.length === 0 ? (
         <div className="flex h-full items-center justify-center text-sm text-app-text-muted">
-          <div className="rounded-lg border border-app-hairline bg-app-surface-elevated px-lg py-md text-center shadow-product-inner">
-            <div className="font-display text-[28px] font-normal tracking-[-0.02em] text-app-text-primary">
+          <div className="rounded-xl border border-app-hairline bg-app-surface-elevated/95 px-lg py-md text-center shadow-[var(--thread-window-floating-shadow)]">
+            <div className="font-display text-[28px] font-normal text-app-text-primary">
               等待输入
             </div>
             <div className="mt-xs text-sm text-app-text-muted">

@@ -67,7 +67,7 @@ describe("ElectronShellRuntime", () => {
     });
   });
 
-  it("routes theme changed commands to the thread window host", async () => {
+  it("routes theme changed commands to thread and activity window hosts", async () => {
     const harness = createHarness();
 
     await harness.runtime.handleCommand({
@@ -78,6 +78,7 @@ describe("ElectronShellRuntime", () => {
     });
 
     expect(harness.prewarmer.updateTheme).toHaveBeenCalledWith({ preference: "system", resolved: "dark" });
+    expect(harness.activityWindow.updateTheme).toHaveBeenCalledWith({ preference: "system", resolved: "dark" });
     expect(harness.events).toContainEqual({
       channel: "electron_shell",
       type: "command.ack",
@@ -287,6 +288,7 @@ function createHarness(options: { focusResult?: boolean; prepareError?: Error } 
   const activityWindow = {
     show: vi.fn(async () => {}),
     releaseNativeFocusForNextClick: vi.fn(),
+    updateTheme: vi.fn(async () => {}),
   };
   const stopSupervisor = vi.fn();
   const quit = vi.fn();

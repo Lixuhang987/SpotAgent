@@ -30,6 +30,19 @@
   5. agent-server 不可用或 Action 缺必填参数时，banner 使用 warning/error 语义，草稿不丢失。
   6. 图片附件 chip 可预览，删除按钮点击区域与视觉边界一致。
 
+### ThreadWindow 与 StatusBubble 主题视觉重构
+
+- 完成日期：待实机 QA
+- 实现位置：`apps/thread-window-web/src/App.tsx`、`apps/thread-window-web/src/components/`、`apps/thread-window-web/src/styles/tailwind.css`、`apps/electron-shell/src/activity-window/`、`apps/electron-shell/src/preload/activityWindowPreload.ts`、`apps/electron-shell/src/main/electronShellRuntime.ts`、`apps/electron-shell/src/main/windows/activityWindowController.ts`
+- 修复结论：ThreadWindow 保留左侧历史、右侧 workspace、消息列表、请求面板和 Composer 的现有布局与交互入口，视觉层改为 theme token 驱动的 surface、shadow、focus 和 reduced-motion 规则；StatusBubble 从固定深色改为接收 Electron host theme，初始创建和 `theme.changed` 都能同步到 ActivityWindow renderer。
+- 自动化验证：需执行 `pnpm --filter handagent-thread-window-web test`、`pnpm --filter handagent-thread-window-web build`、`pnpm --filter handagent-electron-shell test`、`pnpm --filter handagent-electron-shell build`、`bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`。
+- 手工回归步骤：
+  1. 在浅色主题打开 ThreadWindow，确认历史侧栏、workspace 分组、空状态、Composer、删除确认和请求面板没有文本重叠、横向滚动或低对比残留。
+  2. 切到深色主题，确认已打开的 ThreadWindow 实时变更到深色 surface，按钮、边框、滚动条、focus ring 和消息气泡仍可辨认。
+  3. 提交 running mock prompt，确认 assistant streaming、queued composer、停止按钮、permission/workspace 请求面板的布局和交互与改动前一致。
+  4. 打开 StatusBubble，在浅色、深色和系统主题切换时确认 ActivityWindow 气泡同步变更，状态点、标题和详情文字不溢出，点击仍只聚焦已有 ThreadWindow。
+  5. 打开系统 reduced motion 后重复 running/tool/waiting 状态，确认 StatusBubble 状态点不播放脉冲动画，ThreadWindow 交互动效不影响布局。
+
 ### Swift 前端迁移残留清理
 
 - 完成日期：待实机 QA

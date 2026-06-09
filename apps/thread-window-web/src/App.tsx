@@ -111,7 +111,7 @@ export function App() {
 
   return (
     <main
-      className="grid h-screen w-full max-w-full overflow-hidden bg-app-canvas text-app-text-primary font-body"
+      className="grid h-screen w-full max-w-full overflow-hidden bg-app-canvas text-app-text-primary font-body [background-image:radial-gradient(circle_at_78%_-12%,var(--thread-window-glow-warm),transparent_34%),radial-gradient(circle_at_18%_104%,var(--thread-window-glow-cool),transparent_30%)]"
       style={{ gridTemplateColumns: sidebarLayout.gridTemplateColumns }}
     >
       {sidebarLayout.isSidebarVisible ? (
@@ -183,13 +183,19 @@ export function App() {
           }}
         />
         {deleteTargetThreadId ? (
-          <div className="delete-confirmation" role="dialog" aria-modal="true" aria-label="Delete thread">
-            <div className="delete-confirmation-body">
-              <strong>删除这个 thread？</strong>
-              <p>历史记录会从本地持久化中移除。</p>
-              <div className="request-actions">
+          <div
+            className="absolute inset-0 z-20 grid place-items-center bg-app-canvas/55 px-lg backdrop-blur-sm"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Delete thread"
+          >
+            <div className="w-full max-w-[360px] rounded-xl border border-app-hairline bg-app-surface-elevated p-lg text-app-text-primary shadow-[var(--thread-window-floating-shadow)]">
+              <strong className="block text-base font-semibold">删除这个 thread？</strong>
+              <p className="mt-xs text-sm leading-6 text-app-text-secondary">历史记录会从本地持久化中移除。</p>
+              <div className="mt-md flex justify-end gap-xs">
                 <button
                   type="button"
+                  className="h-9 rounded-md bg-app-error px-sm text-sm font-medium text-app-on-accent transition-colors hover:bg-app-error/90 focus:outline-none focus:ring-4 focus:ring-app-accent-ring"
                   onClick={() => {
                     clientRef.current?.sendRaw(encodeThreadDelete({
                       commandId: id("delete"),
@@ -201,7 +207,11 @@ export function App() {
                 >
                   删除
                 </button>
-                <button type="button" onClick={() => setDeleteTargetThreadId(null)}>
+                <button
+                  type="button"
+                  className="h-9 rounded-md border border-app-hairline bg-app-surface px-sm text-sm font-medium text-app-text-primary transition-colors hover:bg-app-surface-soft focus:outline-none focus:ring-4 focus:ring-app-accent-ring"
+                  onClick={() => setDeleteTargetThreadId(null)}
+                >
                   取消
                 </button>
               </div>

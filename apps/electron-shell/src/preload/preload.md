@@ -7,7 +7,7 @@
 | 文件 | 职责 |
 |------|------|
 | `threadWindowPreload.ts` | 向 ThreadWindow main world 注入 `/api/thread` URL、host theme、theme change subscription、pending initial prompt 队列和临时 receiver |
-| `activityWindowPreload.ts` | 向 ActivityWindow main world 注入 `/api/activity` URL，并暴露 `focusThread(threadId)` IPC |
+| `activityWindowPreload.ts` | 向 ActivityWindow main world 注入 `/api/activity` URL 和 host theme，并暴露 theme change subscription 与 `focusThread(threadId)` IPC |
 
 ## ThreadWindow preload
 
@@ -19,7 +19,8 @@
 
 ## ActivityWindow preload
 
-- 通过 `contextBridge.executeInMainWorld()` 写入 `window.handAgentActivityWindowConfig.activityWebSocketURL`。
+- 通过 `contextBridge.executeInMainWorld()` 写入 `window.handAgentActivityWindowConfig.activityWebSocketURL` 和 `window.handAgentTheme`。
+- 通过 `contextBridge.exposeInMainWorld()` 暴露 `handAgentSubscribeThemeChange(handler)`；该函数只订阅已校验的 `HostTheme` payload，不暴露原始 `ipcRenderer`。
 - 通过 `contextBridge.exposeInMainWorld()` 暴露 `handAgentActivityWindow.focusThread(threadId)`。
 - `focusThread` 只发送 `"activity-window:focus-thread"` IPC；main 侧仍要校验 sender 和参数类型。
 

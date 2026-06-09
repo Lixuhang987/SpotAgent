@@ -11,11 +11,12 @@
 | `activityState.ts` | 将 `activity.snapshot` / `activity.changed` 规约成 renderer state 和展示文案 |
 | `main.tsx` | React root 挂载入口 |
 | `index.html` | Vite ActivityWindow HTML entry |
-| `styles.css` | 透明窗口里的 272x76 StatusBubble 样式 |
+| `styles.css` | 透明窗口里的 272x76 StatusBubble 样式，包含 light/dark 成对 surface、边框、文字和 reduced-motion 规则 |
 
 ## 数据边界
 
 - WebSocket URL 来自 preload 注入的 `window.handAgentActivityWindowConfig.activityWebSocketURL`，默认 fallback 是 `ws://127.0.0.1:4317/api/activity`。
+- host theme 来自 preload 注入的 `window.handAgentTheme` 和 `window.handAgentSubscribeThemeChange`；renderer 只把 resolved theme 写入 `documentElement.dataset.theme`，不持久化主题偏好。
 - 本目录只接受 `AgentActivityEvent`，不解析 `ThreadNotification`、`ServerRequest`、`ThreadCommand` 或 `ClientResponse`。
 - `reduceActivityEvent()` 直接用最新 event 覆盖当前 state；activity snapshot 与 changed 使用同一套字段。
 - `ActivitySocketClient` 会忽略 malformed JSON、错误 channel、非法 status/waitingRequest；不要把 parser 放宽到完整 thread 消息。

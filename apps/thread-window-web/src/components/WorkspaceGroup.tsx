@@ -27,7 +27,7 @@ export function WorkspaceGroup({
       <Accordion.Header>
         <Accordion.Trigger
           onClick={onToggle}
-          className="flex w-full items-center justify-between rounded-md px-sm py-xs text-left text-sm text-app-text-primary transition-colors hover:bg-app-surface-soft"
+          className="flex w-full items-center justify-between rounded-lg px-sm py-xs text-left text-sm text-app-text-primary transition-colors duration-200 hover:bg-app-surface-soft focus:outline-none focus:ring-4 focus:ring-app-accent-ring"
         >
           <span className="min-w-0">
             <span className="block truncate font-medium">{workspace.name}</span>
@@ -99,13 +99,13 @@ function ThreadItem({ thread, isActive, onOpen, onDelete }: ThreadItemProps) {
       onClick={onOpen}
       onKeyDown={handleKeyDown}
       className={cn(
-        'grid grid-cols-[1fr_28px] items-stretch gap-xs rounded-md border transition-colors focus:outline-none focus:ring-4 focus:ring-app-accent-ring',
+        'group grid grid-cols-[1fr_32px] items-stretch gap-xs rounded-lg border transition-colors duration-200 focus:outline-none focus:ring-4 focus:ring-app-accent-ring',
         isActive
           ? 'border-app-hairline bg-app-canvas shadow-soft'
-          : 'border-transparent hover:bg-app-surface-soft'
+          : 'border-transparent hover:bg-app-surface-soft/80'
       )}
     >
-      <div className="min-w-0 rounded-md px-sm py-xs text-left">
+      <div className="min-w-0 rounded-lg px-sm py-xs text-left">
         <span className="block truncate text-[13px] font-medium text-app-text-primary">
           {thread.preview || '新对话'}
         </span>
@@ -118,10 +118,10 @@ function ThreadItem({ thread, isActive, onOpen, onDelete }: ThreadItemProps) {
           event.stopPropagation();
           onDelete();
         }}
-        className="my-auto h-[26px] w-[26px] rounded-sm text-app-text-secondary transition-colors hover:bg-app-surface-muted hover:text-app-text-primary"
+        className="my-auto flex h-8 w-8 items-center justify-center rounded-md text-app-text-secondary opacity-70 transition-colors duration-200 hover:bg-app-surface-muted hover:text-app-text-primary hover:opacity-100 focus:outline-none focus:ring-4 focus:ring-app-accent-ring"
         aria-label="删除对话"
       >
-        <svg width="14" height="14" viewBox="0 0 14 14" className="mx-auto">
+        <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
           <path
             d="M3 3L11 11M11 3L3 11"
             stroke="currentColor"
