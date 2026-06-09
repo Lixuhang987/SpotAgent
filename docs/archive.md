@@ -1170,3 +1170,11 @@
 - **验证过程**：先清空所有 HandAgent / Electron / agent-server 残留，再启动主仓库 packaged app；确认启动链路后用 bundle id 标准 quit，等待 6 秒后检查进程表和 `127.0.0.1:4317`。
 - **证据**：启动前置进程链路只有 Swift host pid `77532` -> Electron main pid `77534` -> agent-server pid `77556`，`127.0.0.1:4317` 由 node pid `77556` 监听；执行 `osascript -e 'tell application id "com.yourname.HandAgentDesktop" to quit'` 后，`ps` 匹配 HandAgent / Electron / Electron Helper renderer / agent-server 无输出，`lsof -nP -iTCP:4317 -sTCP:LISTEN` 无输出。
 - **结论**：通过。标准 quit 会清理 Electron main、renderer/helper 和 agent-server，不留下 4317 监听。
+
+### Electron UI Shell platform tool path
+
+- **验证日期**：2026-06-09
+- **验证环境**：Electron flag packaged app，`mock-llm`；标准 `open dist/HandAgentDesktop.app` 启动。
+- **验证过程**：设置系统剪贴板为唯一 marker，随后通过 `/api/thread` 提交 `ELECTRON_PLATFORM_CLIPBOARD_CURRENT_QA_20260609 [mock:clipboard-read]`，检查 thread event、持久化文件和 `/api/activity`。
+- **证据**：启动链路为 Swift host pid `79246` -> Electron main pid `79248` -> agent-server pid `79262`；thread `~/.spotAgent/threads/thread-1780966063987-8vmk63.json` 持久化 user prompt、`clipboard.read` tool call、tool result `{"text":{"text":"HANDAGENT_PLATFORM_CLIPBOARD_QA_20260609_VALUE"}}` 与 assistant `Mock clipboard.read completed.`；实时 `/api/thread` 收到 `tool.started` / `tool.finished(status:"completed")`；`/api/activity` snapshot 回到 `activeThreadId:"thread-1780966063987-8vmk63"`、`status:"idle"`。
+- **结论**：通过。Electron flag 路径下 agent-server 仍可通过 Swift `/api/platform` 执行平台 tool 并回写结果。

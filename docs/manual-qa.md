@@ -168,6 +168,7 @@
 - Electron flag 启动日志 supervisor description 已验证：短时直接启动 packaged executable 并重定向 stdout/stderr 到 `/tmp/handagent-qa/electron-supervisor-description-current-20260609.log`，日志首行包含 `[electron-shell] agent-server supervisor: {"mode":"node_child","entry":"apps/agent-server/src/server/server.ts","coreRuntimeHost":"agent-server","utilityProcessBlocker":"apps/agent-server/dist/server/server.js 不存在；当前 agent-server 仍依赖 TypeScript 源码入口和 Node --experimental-transform-types"}`；同轮 node pid `75197` 监听 `127.0.0.1:4317`，`/api/activity` 首包为 idle `activity.snapshot`。
 - `openHistory` command-path 已验证：标准 `open dist/HandAgentDesktop.app` 启动 Electron flag packaged app 后，通过当前 Electron command socket `/tmp/hae-C9B68DF7-F042-46FC-B318-F9284CD0FAD0.sock` 发送 `thread_window.open_history`；随后 Electron 窗口从仅 `HandAgent Activity` 变为 `HandAgent Activity` + `HandAgent ThreadWindow`，ThreadWindow 尺寸 `920x640`，Computer Use 可见 React 历史侧栏、workspace 分组、搜索框和历史 thread 列表；`HandAgentDesktop` 进程无 Swift 窗口。
 - 标准退出无残留已验证：清理外部污染后，用标准 `open dist/HandAgentDesktop.app` 启动主仓库 Electron flag packaged app，启动前置进程链路只有 Swift host pid `77532` -> Electron main pid `77534` -> agent-server pid `77556`，`127.0.0.1:4317` 由 node pid `77556` 监听；执行 `osascript -e 'tell application id "com.yourname.HandAgentDesktop" to quit'` 后等待 6 秒，`ps` 匹配 HandAgent / Electron / renderer / agent-server 无输出，`lsof -nP -iTCP:4317 -sTCP:LISTEN` 无输出。
+- Electron flag platform tool path 已验证：标准启动 packaged app 后设置剪贴板为 `HANDAGENT_PLATFORM_CLIPBOARD_QA_20260609_VALUE`，通过 `/api/thread` 提交 `ELECTRON_PLATFORM_CLIPBOARD_CURRENT_QA_20260609 [mock:clipboard-read]`；`thread-1780966063987-8vmk63` 收到 `tool.started` / `tool.finished`，tool 名为 `clipboard.read`，输出 `{"text":{"text":"HANDAGENT_PLATFORM_CLIPBOARD_QA_20260609_VALUE"}}`，thread 文件持久化同一 tool result 与 assistant `Mock clipboard.read completed.`；`/api/activity` snapshot 回到 `status:"idle"`，证明 agent-server 经 Swift `/api/platform` 获取剪贴板并回写。
 
 **2026-06-09 待回归修复项**：
 
@@ -179,7 +180,6 @@
 
 1. 启动完成前 PromptPanel 不允许提交；收到 `agent_server.health available=true` 与 `thread_window.prepared` 后 PromptPanel 才恢复可提交。
 1. 通过全局快捷键打开或切换 PromptPanel 多次，确认不会显示 ThreadWindow，也不会发送 `thread_window.prepare` command；hidden ThreadWindow 预热只由 Electron main 在 app-server ready 后完成。
-1. 触发 platform tool，例如 `clipboard.read`、`app.frontmost`、`screen.capture` 或 `accessibility.snapshot`，确认 agent-server 仍通过 `/api/platform` 请求 Swift 回写结果。
 1. 确认不再显示 Swift StatusBubble，右下角显示 Electron React StatusBubble；提交 prompt 后 Electron StatusBubble 能展示 `starting` / `running` / `completed`。
 1. 触发 tool、permission/workspace request、模型配置错误或 provider 错误，确认 Electron StatusBubble 分别展示 tool running、waiting、error 状态，ThreadWindow 内联请求面板和错误气泡仍正常可见。
 1. 关闭 visible Electron ThreadWindow，确认 agent-server 进程仍存在；再次打开 PromptPanel 并提交，确认仍通过同一后台服务执行。
