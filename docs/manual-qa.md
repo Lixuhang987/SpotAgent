@@ -135,7 +135,7 @@
 
 ## Electron UI Shell 最终态验收（P2）
 
-**实施状态**：未通过实机 QA；本节为待验收项，不得归档为已通过。
+**实施状态**：可执行编号项已完成实机 QA；本节保留已验证证据、历史回归说明和一个无稳定产品路径的阻塞观察，不整体归档为已通过。
 
 **2026-06-09 已验证子项**：
 
@@ -176,11 +176,11 @@
 - Electron StatusBubble tool / waiting / error 状态与 ThreadWindow 内联面板已复验：通过当前 Electron command socket 发送 `thread_window.open_initial_prompt` 触发真实 Electron ThreadWindow。`ELECTRON_STATUS_TOOL_CURRENT_QA_20260609 [mock:clipboard-read]` 的 `/api/activity` 序列包含 `tool_running` / `正在使用 clipboard.read`，thread `thread-1780967402708-r1l1e5` 持久化 `clipboard.read` tool result `HANDAGENT_STATUS_TOOL_QA_20260609_CLIPBOARD`。`ELECTRON_STATUS_PERMISSION_CURRENT_QA_20260609 [mock:permission-write]` 进入 `waitingRequest:"permission"`，截图 `/tmp/handagent-qa/electron-status-waiting-current.png` 显示右下 Electron StatusBubble `等待确认 / 等待权限确认` 与 ThreadWindow `file.write` 权限面板；点击 `拒绝` 后 thread `thread-1780967417227-j5h13u` 记录 `permission_request file.write deny` 与 tool error。`ELECTRON_STATUS_WORKSPACE_CURRENT_QA_20260609 [mock:workspace-ask]` 先允许 `workspace.askUser` tool 权限，再进入 `waitingRequest:"workspace"`，截图 `/tmp/handagent-qa/electron-status-workspace-waiting-current.png` 显示 StatusBubble `等待确认 / 等待工作区选择` 与 ThreadWindow `qa-workspace` / `取消` 面板；选择 `qa-workspace` 后 thread `thread-1780967496598-gbrpwx` 记录 tool result `{"workspaceId":"qa-workspace"}`。`ELECTRON_STATUS_ERROR_CURRENT_QA_20260609 [mock:llm-error]` 进入 `error`，截图 `/tmp/handagent-qa/electron-status-error-current.png` 显示 StatusBubble `出现错误 / 运行失败` 与 ThreadWindow 红色错误气泡 `MockLLMClient forced failure for QA.`，thread `thread-1780967476395-a9hh1l` 持久化同一 error event。
 - PromptPanel ready gate 已复验：自动化侧已有 `ElectronBackedAppServerTests/testAvailableOnlyAfterServerHealthAndThreadPrepared` 覆盖 `agent_server.health available=true` 与 `thread_window.prepared` 两者都到达后才 `isAvailable=true`，`PromptPanelViewModelTests/testSubmitIsBlockedWhenAgentServerUnavailableAndKeepsDraft` / `testSubmitWorksAfterAgentServerBecomesAvailableAgain` 覆盖禁用态 submit 不触发、恢复后可提交。live QA 中先设置 `HANDAGENT_THREAD_WINDOW_WEB_URL=http://127.0.0.1:9/thread-window/index.html` 启动 Electron flag packaged app，agent-server pid `90575` 已监听 `127.0.0.1:4317` 但 ThreadWindow 预热失败；真实快捷键打开 PromptPanel 后 AX 与 Computer Use 均显示禁用文案 `thread window failed to load`，按 Return 后仍只有 Swift PromptPanel，无 Electron ThreadWindow。随后 unset 该 URL 并标准重启，agent-server pid `90856` 监听；真实快捷键打开 PromptPanel 时无禁用文案且 Computer Use 可见 text entry area，提交 `ELECTRON_READY_GATE_CURRENT_QA_20260609 [mock:assistant-ok]` 后 Swift PromptPanel 隐藏，Electron 出现 `HandAgent Activity` + `HandAgent ThreadWindow`（`920x640`），`~/.spotAgent/threads/thread-1780967883716-fskb5x.json` 持久化 user prompt 与 assistant `Mock assistant response: main chain is reachable.`，`/api/activity` snapshot 回到 `status:"idle"`。
 
-**2026-06-09 待回归修复项**：
+**2026-06-09 历史回归说明**：
 
 - 关闭可见 Electron ThreadWindow 后，ActivityWindow 仍显示且 agent-server 继续监听 `127.0.0.1:4317` 时，用 CGEvent 点击 ActivityWindow 中心应打开 Swift `PromptPanel`。`09ff7f2` 已通过主仓库 packaged live 回归：visible ThreadWindow close 后销毁并重建 ActivityWindow，关闭后 ActivityWindow 为 `AXMain=false` / `AXFocused=false`，点击中心会打开 Swift PromptPanel。该子项不再阻塞 Electron UI Shell 最终态；保留本条历史说明用于追溯此前 `2af9ba0`、`412e1e9`、`366a706`、`e6901d2`、`a030945`、`b4af5ef` 的失败边界。
 
-**2026-06-09 阻塞子项**：
+**2026-06-09 非可执行阻塞观察**：
 
 - “关闭 Electron StatusBubble” 暂无稳定产品路径：ActivityWindow 是 frameless 小窗。2026-06-09 当前复核中，Electron 仅剩 `HandAgent Activity` 时，AX 查询该 window 没有 button，`close window "HandAgent Activity"` 返回 `-1708`（窗口不理解 close 信息）；关闭尝试后 `HandAgent Activity` 仍可见，agent-server node pid `79262` 仍监听 `127.0.0.1:4317`。该子项没有稳定产品 close path，不能判为通过，先保留为阻塞结论。
 
