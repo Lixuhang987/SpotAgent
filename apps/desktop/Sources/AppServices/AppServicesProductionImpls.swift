@@ -35,43 +35,6 @@ final class ProductionHotkeyRegistrar: HotkeyRegistering {
 }
 
 @MainActor
-final class ProductionThreadWindowPresenter: ThreadWindowPresenting {
-    private var closeObservations: [ObjectIdentifier: WindowCloseObservation] = [:]
-
-    func makeWindow(
-        host: ThreadWindowWebHost,
-        onClose: @escaping () -> Void
-    ) -> NSWindow? {
-        let hosting = NSHostingController(rootView: ThreadWindowWebView(host: host))
-        let window = NSWindow(contentViewController: hosting)
-        window.title = "HandAgent"
-        window.setContentSize(NSSize(width: 920, height: 640))
-        window.styleMask.insert(.fullSizeContentView)
-        window.titleVisibility = .hidden
-        window.titlebarAppearsTransparent = true
-        window.center()
-        window.contentView?.layoutSubtreeIfNeeded()
-
-        let sendableOnClose = SendableClosure(closure: onClose)
-        let windowID = ObjectIdentifier(window)
-        closeObservations[windowID] = WindowCloseObservation(
-            object: window,
-            queue: .main
-        ) { [weak self] in
-            self?.closeObservations[windowID] = nil
-            Task { @MainActor in sendableOnClose.closure() }
-        }
-
-        return window
-    }
-
-    func show(window: NSWindow) {
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-    }
-}
-
-@MainActor
 final class ProductionSettingsWindowPresenter: SettingsWindowPresenting {
     private var closeObservations: [ObjectIdentifier: WindowCloseObservation] = [:]
 

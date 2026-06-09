@@ -36,124 +36,27 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
-    func testSubmitPromptCreatesThreadWindow() {
-        let coordinator = AppCoordinator(services: AppServices.testing())
-
-        coordinator.send(.submitPrompt("hello", attachments: []))
-
-        XCTAssertNotNil(coordinator.threadWindowWebHost)
-        XCTAssertEqual(coordinator.threadWindowWebHost?.pendingInitialPromptCount, 1)
-    }
-
-    @MainActor
-    func testShowPromptPanelDoesNotCreateThreadWindow() {
-        let presenter = StubThreadWindowPresenter()
-        var appliedPolicies: [NSApplication.ActivationPolicy] = []
-        let services = AppServices.testing(
-            setActivationPolicy: { appliedPolicies.append($0) },
-            threadWindowPresenter: presenter
-        )
-        let coordinator = AppCoordinator(services: services)
-
-        coordinator.send(.showPromptPanel)
-
-        XCTAssertNil(coordinator.threadWindowWebHost)
-        XCTAssertEqual(presenter.makeWindowCount, 0)
-        XCTAssertEqual(presenter.showCount, 0)
-        XCTAssertFalse(appliedPolicies.contains(.regular))
-    }
-
-    @MainActor
-    func testDefaultStatusBubbleTapFocusesThreadFromActivityRegistry() {
-        let presenter = StubThreadWindowPresenter()
-        let registry = ThreadRegistry()
-        let services = AppServices(
-            appServer: NopAppServer(),
-            threadRegistry: registry,
-            appServerURL: URL(string: "ws://127.0.0.1:0/noop")!,
-            activityServerURL: URL(string: "ws://127.0.0.1:0/noop-activity")!,
-            platformServerURL: URL(string: "ws://127.0.0.1:0/noop-platform")!,
-            threadWindowWebAppURL: URL(fileURLWithPath: "/tmp/index.html"),
-            hotkeyRegistrar: NopHotkeyRegistrar(),
-            threadWindowPresenter: presenter,
-            settingsWindowPresenter: NopSettingsWindowPresenter(),
-            fatalAlertPresenter: NopFatalAlertPresenter(),
-            setActivationPolicy: { _ in },
-            showsStatusBubble: false
-        )
-        let coordinator = AppCoordinator(services: services)
-        coordinator.send(.openHistory)
-        let showCountAfterOpen = presenter.showCount
-
-        registry.apply(activity: AgentActivityEvent(
-            channel: "activity",
-            type: "activity.snapshot",
-            activeThreadId: "thread-from-activity",
-            status: .running,
-            latestSummary: "正在回复",
-            updatedAt: "2026-06-09T01:02:03.000Z"
-        ))
-        coordinator.send(.statusBubbleTapped(registry.primaryThreadID))
-
-        XCTAssertEqual(registry.primaryThreadID, "thread-from-activity")
-        XCTAssertEqual(presenter.showCount, showCountAfterOpen + 1)
-    }
-
-    @MainActor
-    func testElectronSubmitPromptSendsCommandWithoutCreatingWebHost() {
+    func testSubmitPromptSendsElectronCommand() {
         let client = RecordingThreadWindowCommandClient()
         let coordinator = AppCoordinator(services: electronServices(commandClient: client))
 
         coordinator.send(.submitPrompt("hello", attachments: []))
 
-        XCTAssertNil(coordinator.threadWindowWebHost)
         XCTAssertEqual(client.openedPrompts.map(\.composed), ["hello"])
     }
 
     @MainActor
-    func testElectronOpenHistorySendsCommandWithoutCreatingWebHost() {
+    func testOpenHistorySendsElectronCommand() {
         let client = RecordingThreadWindowCommandClient()
         let coordinator = AppCoordinator(services: electronServices(commandClient: client))
 
         coordinator.send(.openHistory)
 
-        XCTAssertNil(coordinator.threadWindowWebHost)
         XCTAssertEqual(client.openHistoryCount, 1)
     }
 
     @MainActor
-    func testElectronStatusBubbleTapWithoutThreadIDDoesNotFocusOpenThreadWindow() {
-        let client = RecordingThreadWindowCommandClient()
-        let coordinator = AppCoordinator(services: electronServices(commandClient: client))
-
-        coordinator.send(.openHistory)
-        client.complete(commandId: "open-history-1", kind: .openHistory, ok: true)
-        coordinator.send(.statusBubbleTapped(nil))
-
-        XCTAssertTrue(client.focusedThreadIDs.isEmpty)
-    }
-
-    @MainActor
-    func testElectronStatusBubbleFocusFailureAllowsPromptFallback() {
-        let client = RecordingThreadWindowCommandClient()
-        let coordinator = AppCoordinator(services: electronServices(commandClient: client))
-
-        coordinator.send(.openHistory)
-        client.complete(commandId: "open-history-1", kind: .openHistory, ok: true)
-        coordinator.send(.statusBubbleTapped("thread-1"))
-        client.complete(
-            commandId: "focus-1",
-            kind: .focus,
-            ok: false,
-            error: "thread window is not visible"
-        )
-        coordinator.send(.statusBubbleTapped("thread-1"))
-
-        XCTAssertEqual(client.focusedThreadIDs, ["thread-1"])
-    }
-
-    @MainActor
-    func testElectronShowAndToggleDoNotSendThreadWindowCommand() {
+    func testShowAndTogglePromptPanelDoNotSendThreadWindowCommand() {
         let client = RecordingThreadWindowCommandClient()
         let coordinator = AppCoordinator(services: electronServices(commandClient: client))
 
@@ -164,8 +67,7 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
-    func testElectronShowsActivityWindowWhenAppServerBecomesAvailable() async throws {
-        closeStatusBubblePanels()
+    func testShowsActivityWindowWhenAppServerBecomesAvailable() async throws {
         let appServer = TriggerableAppServer()
         appServer.isAvailable = false
         let activityClient = RecordingActivityWindowCommandClient()
@@ -183,12 +85,11 @@ final class AppCoordinatorTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(10))
 
         XCTAssertEqual(activityClient.showCount, 1)
-        XCTAssertEqual(visibleStatusBubblePanelCount(), 0)
         _ = coordinator
     }
 
     @MainActor
-    func testElectronActivityShowThrowFallsBackToSwiftStatusBubble() async throws {
+    func testActivityShowThrowDoesNotCreateSwiftStatusBubbleFallback() async throws {
         closeStatusBubblePanels()
         let appServer = TriggerableAppServer()
         appServer.isAvailable = false
@@ -201,20 +102,18 @@ final class AppCoordinatorTests: XCTestCase {
                 activityClient: activityClient
             )
         )
-        defer {
-            coordinator.shutdown()
-            closeStatusBubblePanels()
-        }
 
         appServer.publishAvailability(true)
         try await Task.sleep(for: .milliseconds(10))
 
         XCTAssertEqual(activityClient.showCount, 1)
-        XCTAssertEqual(visibleStatusBubblePanelCount(), 1)
+        XCTAssertEqual(visibleStatusBubblePanelCount(), 0)
+        coordinator.shutdown()
+        closeStatusBubblePanels()
     }
 
     @MainActor
-    func testElectronActivityShowAckFailureFallsBackToSwiftStatusBubble() async throws {
+    func testActivityShowAckFailureDoesNotCreateSwiftStatusBubbleFallback() async throws {
         closeStatusBubblePanels()
         let appServer = TriggerableAppServer()
         appServer.isAvailable = false
@@ -226,24 +125,20 @@ final class AppCoordinatorTests: XCTestCase {
                 activityClient: activityClient
             )
         )
-        defer {
-            coordinator.shutdown()
-            closeStatusBubblePanels()
-        }
 
         appServer.publishAvailability(true)
         try await Task.sleep(for: .milliseconds(10))
-        XCTAssertEqual(visibleStatusBubblePanelCount(), 0)
-
         activityClient.complete(commandId: "activity-show-1", ok: false, error: "activity window failed")
         try await Task.sleep(for: .milliseconds(10))
 
         XCTAssertEqual(activityClient.showCount, 1)
-        XCTAssertEqual(visibleStatusBubblePanelCount(), 1)
+        XCTAssertEqual(visibleStatusBubblePanelCount(), 0)
+        coordinator.shutdown()
+        closeStatusBubblePanels()
     }
 
     @MainActor
-    func testElectronActivityPromptRequestShowsPromptPanelWithoutFocusingThreadWindow() {
+    func testActivityPromptRequestShowsPromptPanelWithoutFocusingThreadWindow() {
         closePromptPanelWindows()
         let app = NSApplication.shared
         let commandClient = RecordingThreadWindowCommandClient()
@@ -287,104 +182,56 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
-    func testThreadClosedRemovesWindowViewModel() {
-        let coordinator = AppCoordinator(services: AppServices.testing())
-
-        coordinator.send(.submitPrompt("hello", attachments: []))
-
-        coordinator.send(.threadWindowClosed)
-
-        XCTAssertNil(coordinator.threadWindowWebHost)
-    }
-
-    @MainActor
     func testSubmitPromptIgnoresEmptyString() {
-        let coordinator = AppCoordinator(services: AppServices.testing())
+        let client = RecordingThreadWindowCommandClient()
+        let coordinator = AppCoordinator(services: electronServices(commandClient: client))
 
         coordinator.send(.submitPrompt("   ", attachments: []))
 
-        XCTAssertNil(coordinator.threadWindowWebHost)
+        XCTAssertEqual(client.commandCount, 0)
     }
 
     @MainActor
     func testSubmitPromptDoesNotCreateThreadWhileAgentServerUnavailable() async throws {
-        final class StubAppServer: AppServerManaging {
-            var isAvailable = true
-            var startupErrorMessage: String?
-            var onAvailabilityChange: ((Bool) -> Void)?
-            var onFatalError: ((String) -> Void)?
-            func start() {}
-            func stop() {}
-        }
-        let stub = StubAppServer()
-        let services = AppServices(
-            appServer: stub,
-            appServerURL: URL(string: "ws://127.0.0.1:0/noop")!,
-            hotkeyRegistrar: NopHotkeyRegistrar(),
-            threadWindowPresenter: NopThreadWindowPresenter(),
-            settingsWindowPresenter: NopSettingsWindowPresenter(),
-            fatalAlertPresenter: NopFatalAlertPresenter(),
-            setActivationPolicy: { _ in },
-            showsStatusBubble: false
-        )
+        let stub = TriggerableAppServer()
+        let client = RecordingThreadWindowCommandClient()
+        let services = electronServices(appServer: stub, commandClient: client)
         let coordinator = AppCoordinator(services: services)
 
-        stub.onAvailabilityChange?(false)
+        stub.publishAvailability(false)
         try await Task.sleep(for: .milliseconds(10))
         coordinator.send(.submitPrompt("hello", attachments: []))
 
-        XCTAssertNil(coordinator.threadWindowWebHost)
+        XCTAssertEqual(client.commandCount, 0)
         XCTAssertEqual(coordinator.agentServerError, "agent-server 已断开，正在尝试重连…")
     }
 
     @MainActor
-    func testHistoryActionOpensSingleThreadWindowWithoutQueuingPrompt() {
-        let coordinator = AppCoordinator(services: AppServices.testing())
+    func testHistoryActionSendsCommandEveryTime() {
+        let client = RecordingThreadWindowCommandClient()
+        let coordinator = AppCoordinator(services: electronServices(commandClient: client))
 
         coordinator.send(.openHistory)
-        let firstHost = coordinator.threadWindowWebHost
-
         coordinator.send(.openHistory)
 
-        XCTAssertTrue(coordinator.threadWindowWebHost === firstHost)
-        XCTAssertEqual(coordinator.threadWindowWebHost?.pendingInitialPromptCount, 0)
+        XCTAssertEqual(client.openHistoryCount, 2)
     }
 
     @MainActor
-    func testMultiplePromptsReuseSingleWindow() {
-        let coordinator = AppCoordinator(services: AppServices.testing())
+    func testMultiplePromptsSendMultipleElectronCommands() {
+        let client = RecordingThreadWindowCommandClient()
+        let coordinator = AppCoordinator(services: electronServices(commandClient: client))
 
         coordinator.send(.submitPrompt("first", attachments: []))
-        let firstHost = coordinator.threadWindowWebHost
         coordinator.send(.submitPrompt("second", attachments: []))
 
-        XCTAssertTrue(coordinator.threadWindowWebHost === firstHost)
-        XCTAssertEqual(coordinator.threadWindowWebHost?.pendingInitialPromptCount, 2)
+        XCTAssertEqual(client.openedPrompts.map(\.composed), ["first", "second"])
     }
 
     @MainActor
     func testInjectedAgentServerStartIsCalledOnBootstrap() throws {
-        final class StubAppServer: AppServerManaging {
-            var isAvailable = false
-            var startupErrorMessage: String?
-            var onAvailabilityChange: ((Bool) -> Void)?
-            var onFatalError: ((String) -> Void)?
-            var startCount = 0
-            func start() { startCount += 1 }
-            func stop() {}
-        }
-        let stub = StubAppServer()
-        let services = AppServices(
-            appServer: stub,
-            appServerURL: URL(string: "ws://127.0.0.1:0/noop")!,
-            hotkeyRegistrar: NopHotkeyRegistrar(),
-            threadWindowPresenter: NopThreadWindowPresenter(),
-            settingsWindowPresenter: NopSettingsWindowPresenter(),
-            fatalAlertPresenter: NopFatalAlertPresenter(),
-            setActivationPolicy: { _ in },
-            showsStatusBubble: false
-        )
-        _ = AppCoordinator(services: services)
+        let stub = TriggerableAppServer()
+        _ = AppCoordinator(services: electronServices(appServer: stub, commandClient: RecordingThreadWindowCommandClient()))
 
         XCTAssertEqual(stub.startCount, 1)
     }
@@ -431,6 +278,13 @@ final class AppCoordinatorTests: XCTestCase {
 }
 
 @MainActor
+private func closePromptPanelWindows() {
+    for window in NSApplication.shared.windows where window is PromptPanelWindow {
+        window.close()
+    }
+}
+
+@MainActor
 private func visibleStatusBubblePanelCount() -> Int {
     NSApplication.shared.windows.filter {
         String(describing: type(of: $0)).contains("StatusBubblePanel") && $0.isVisible
@@ -445,13 +299,6 @@ private func closeStatusBubblePanels() {
 }
 
 @MainActor
-private func closePromptPanelWindows() {
-    for window in NSApplication.shared.windows where window is PromptPanelWindow {
-        window.close()
-    }
-}
-
-@MainActor
 private func electronServices(
     appServer: any AppServerManaging = NopAppServer(),
     commandClient: RecordingThreadWindowCommandClient,
@@ -461,15 +308,11 @@ private func electronServices(
         appServer: appServer,
         threadWindowCommandClient: commandClient,
         activityWindowCommandClient: activityClient,
-        appServerURL: URL(string: "ws://127.0.0.1:0/noop")!,
         platformServerURL: URL(string: "ws://127.0.0.1:0/noop-platform")!,
-        threadWindowWebAppURL: URL(fileURLWithPath: "/tmp/index.html"),
         hotkeyRegistrar: NopHotkeyRegistrar(),
-        threadWindowPresenter: NopThreadWindowPresenter(),
         settingsWindowPresenter: NopSettingsWindowPresenter(),
         fatalAlertPresenter: NopFatalAlertPresenter(),
-        setActivationPolicy: { _ in },
-        showsStatusBubble: false
+        setActivationPolicy: { _ in }
     )
 }
 
@@ -514,8 +357,9 @@ private final class TriggerableAppServer: AppServerManaging {
     var startupErrorMessage: String?
     var onAvailabilityChange: ((Bool) -> Void)?
     var onFatalError: ((String) -> Void)?
+    private(set) var startCount = 0
 
-    func start() {}
+    func start() { startCount += 1 }
     func stop() {}
 
     func publishAvailability(_ available: Bool) {
@@ -608,20 +452,5 @@ final class StubSettingsWindowPresenter: SettingsWindowPresenting {
         let window = NSWindow()
         presentedWindow = window
         return window
-    }
-}
-
-@MainActor
-final class StubThreadWindowPresenter: ThreadWindowPresenting {
-    private(set) var makeWindowCount = 0
-    private(set) var showCount = 0
-
-    func makeWindow(host: ThreadWindowWebHost, onClose: @escaping () -> Void) -> NSWindow? {
-        makeWindowCount += 1
-        return NSWindow()
-    }
-
-    func show(window: NSWindow) {
-        showCount += 1
     }
 }

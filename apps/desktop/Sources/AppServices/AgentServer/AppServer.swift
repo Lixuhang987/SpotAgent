@@ -12,54 +12,6 @@ protocol AppServerManaging: AnyObject {
 }
 
 @MainActor
-final class AppServer: AppServerManaging {
-    private let agentServer: any AgentServerStarting
-    private let platformClient: PlatformBridgeConnectionClient?
-    private let activityClient: AgentActivityConnectionClient?
-    private(set) var startupErrorMessage: String?
-
-    var isAvailable: Bool {
-        agentServer.isAvailable && startupErrorMessage == nil
-    }
-
-    var onAvailabilityChange: ((Bool) -> Void)? {
-        didSet { agentServer.onAvailabilityChange = onAvailabilityChange }
-    }
-
-    var onFatalError: ((String) -> Void)? {
-        didSet { agentServer.onFatalError = onFatalError }
-    }
-
-    init(
-        agentServer: any AgentServerStarting,
-        platformClient: PlatformBridgeConnectionClient? = nil,
-        activityClient: AgentActivityConnectionClient? = nil
-    ) {
-        self.agentServer = agentServer
-        self.platformClient = platformClient
-        self.activityClient = activityClient
-    }
-
-    func start() {
-        do {
-            try agentServer.start()
-            startupErrorMessage = nil
-            platformClient?.connect()
-            activityClient?.connect()
-        } catch {
-            startupErrorMessage = agentServer.lastStartupError ?? error.localizedDescription
-            onAvailabilityChange?(false)
-        }
-    }
-
-    func stop() {
-        activityClient?.disconnect()
-        platformClient?.disconnect()
-        agentServer.stop()
-    }
-}
-
-@MainActor
 final class PlatformBridgeConnectionClient {
     private let connection: AppServerConnection
     private let platformBridge: PlatformBridgeService

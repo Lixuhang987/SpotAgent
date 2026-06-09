@@ -17,6 +17,20 @@
 
 ## 开发验证记录
 
+### Electron-only UI shell 迁移验收
+
+- 完成日期：待实机 QA
+- 实现位置：`apps/desktop/Sources/AppServices/AppServices.swift`、`apps/desktop/Sources/Coordinator/AppCoordinator.swift`、`apps/desktop/Sources/AppServices/ElectronShell/`、`apps/electron-shell/`
+- 自动化前提：已执行 `bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`。
+- 手工回归步骤：
+  1. 执行 `pnpm --filter handagent-electron-shell build` 与 `bash ./scripts/package-app.sh --mock-llm`。
+  2. 不设置 `HANDAGENT_ELECTRON_SHELL` 启动 packaged mock app；允许 `HANDAGENT_ELECTRON_BINARY` 只作为 Electron binary 覆盖。
+  3. 确认启动后 Swift host、Electron main 和 agent-server 各一份，`127.0.0.1:4317` 只由 Electron 监督的 agent-server 监听，Electron ActivityWindow 可见且 `/api/activity` 首包为 `activity.snapshot`。
+  4. 用真实全局快捷键打开 Swift PromptPanel，提交 `ELECTRON_ONLY_UI_SHELL_QA_20260609 [mock:assistant-ok]`；确认 Swift PromptPanel 隐藏，Electron `HandAgent ThreadWindow` 出现并显示 user prompt 与 mock assistant。
+  5. 点击 Electron ActivityWindow；有 visible ThreadWindow 时应聚焦 ThreadWindow，关闭 visible ThreadWindow 后点击 ActivityWindow 应通过 `prompt_panel.show_requested` 打开 Swift PromptPanel。
+  6. 退出 app 后确认无 Electron main、Electron Helper、agent-server 残留，`127.0.0.1:4317` 无监听。
+- 边界确认：Swift 不创建 WKWebView ThreadWindow，不显示 Swift StatusBubble，不订阅 `/api/activity`，不直接启动 agent-server。
+
 ### ThreadWindow workspace 分组标题展开修复
 
 - 完成日期：2026-06-09
@@ -99,17 +113,9 @@
 - 完成日期：2026-06-09
 - 实现位置：`apps/desktop/Sources/AppServices/AgentServer/AppServer.swift`、`apps/desktop/Sources/AppServices/ElectronShell/ElectronBackedAppServer.swift`、`apps/agent-server/src/server/server.ts`
 - 自动化验证：`bash ./scripts/swiftw test --filter PlatformBridgeConnectionClientTests` 覆盖 `/api/platform` 连接后立即 hello 与短延迟 hello 重试；`bash ./scripts/swiftw test --filter ElectronBackedAppServerTests` 覆盖 Electron flag runtime 在 `agent_server.health available=true` 后启动 platform bridge client；`pnpm --filter handagent-agent-server exec vitest run tests/server/server.test.ts` 覆盖同一 `/api/platform` socket 重复 hello 幂等，不替换已绑定 bridge。
-- 手工回归步骤：使用 mock LLM packaged app + `HANDAGENT_ELECTRON_SHELL=1` + `HANDAGENT_ELECTRON_BINARY` 启动 Electron flag 路径；允许 `clipboard.read {}` 后提交 `ELECTRON_PLATFORM_TOOL_ALLOW_QA_20260609 [mock:clipboard-read]`；确认 `~/.spotAgent/threads/<threadId>.json` 中 `clipboard.read` tool result 不再是 `Platform bridge is not connected (method: clipboard.read)`，而是 Swift `/api/platform` 回写的剪贴板结果。
+- 手工回归步骤：使用 mock LLM packaged app + Electron binary 覆盖启动 Electron packaged 路径；允许 `clipboard.read {}` 后提交 `ELECTRON_PLATFORM_TOOL_ALLOW_QA_20260609 [mock:clipboard-read]`；确认 `~/.spotAgent/threads/<threadId>.json` 中 `clipboard.read` tool result 不再是 `Platform bridge is not connected (method: clipboard.read)`，而是 Swift `/api/platform` 回写的剪贴板结果。
 - 手工回归结果：2026-06-09 重新执行 `bash ./scripts/package-app.sh --mock-llm` 后启动 Electron flag packaged app，提交 `ELECTRON_PLATFORM_BRIDGE_FIXED_QA_20260609 [mock:clipboard-read]`；`~/.spotAgent/threads/thread-1780946481700-4m0hzp.json` 中 `clipboard.read` tool result 为 `{"text":{"text":"ELECTRON_PLATFORM_BRIDGE_FIXED_QA_20260609 [mock:clipboard-read]"}}`，确认 platform bridge 已由 Swift 回写。
-- 边界确认：修复只覆盖 Electron flag 路径下 Swift `/api/platform` hello 可靠发送与 agent-server 同 socket hello 幂等；不改变 Electron ThreadWindow、ActivityWindow、权限策略或 platform tool 业务实现。
-
-### 默认路径 Swift StatusBubble activity 回归修复
-
-- 完成日期：2026-06-09
-- 实现位置：`apps/desktop/Sources/AppServices/AgentServer/AgentActivityConnectionClient.swift`、`apps/desktop/Sources/AppServices/AgentServer/AppServer.swift`、`apps/desktop/Sources/AppServices/Thread/ThreadRegistry.swift`、`apps/desktop/Sources/AppServices/AppServices.swift`
-- 自动化验证：`bash ./scripts/swiftw test` 覆盖 `/api/activity` snapshot 更新 `ThreadRegistry`、默认 StatusBubble tap 使用 activity threadId 聚焦 ThreadWindow、默认 `AppServer` 同时启动 `/api/platform` 与 `/api/activity` 连接。
-- 手工回归步骤：使用 `bash ./scripts/package-app.sh --mock-llm` 打包默认 WKWebView 路径，提交 `THREAD_HISTORY_STATUS_QA_20260609_MINIMIZE [mock:slow-focus]` 并保持 ThreadWindow 打开；运行中观察 Swift StatusBubble 应显示 running 与 `正在回复`，点击气泡应聚焦当前 ThreadWindow，不应打开 PromptPanel。
-- 边界确认：默认 Swift 只消费 `/api/activity` 的轻量 `AgentActivityEvent` 更新 `ThreadRegistry`；不解析 `/api/thread`，不同步完整 React ThreadWindow 状态。Electron flag 路径仍由 Electron ActivityWindow 承载 React StatusBubble。
+- 边界确认：修复只覆盖 Electron packaged 路径下 Swift `/api/platform` hello 可靠发送与 agent-server 同 socket hello 幂等；不改变 Electron ThreadWindow、ActivityWindow、权限策略或 platform tool 业务实现。
 
 ### Thread 输入队列与 input.submit 破坏性迁移
 
@@ -137,11 +143,13 @@
 
 **实施状态**：可执行编号项已完成实机 QA；本节保留已验证证据、历史回归说明和一个无稳定产品路径的阻塞观察，不整体归档为已通过。
 
+**Phase 4 后适用性**：本节中 `Electron flag` / `HANDAGENT_ELECTRON_SHELL=1` 表述只保留为 Phase 4 前历史实机证据；当前 Electron-only UI shell 不再要求或支持 Swift 默认 UI shell 与 Electron flag 双路径。当前待验收项以本文顶部“Electron-only UI shell 迁移验收”为准。
+
 **2026-06-09 已验证子项**：
 
 - Electron flag packaged app 在 mock LLM 下可启动为 Swift / Electron main / agent-server 各一份进程，`127.0.0.1:4317` 由 Electron 监督的 agent-server 监听；启动后只显示 Electron `HandAgent Activity`，PromptPanel show/toggle 不展示 ThreadWindow。
 - `open_history` command 聚焦 Electron `HandAgent ThreadWindow` 并显示历史侧栏；`HandAgentDesktop` 无 Swift WKWebView 标准窗口。
-- `ELECTRON_PLATFORM_BRIDGE_FIXED_QA_20260609 [mock:clipboard-read]` 已证明 Electron flag 路径下 platform tool 通过 Swift `/api/platform` 回写，thread 文件为 `~/.spotAgent/threads/thread-1780946481700-4m0hzp.json`。
+- `ELECTRON_PLATFORM_BRIDGE_FIXED_QA_20260609 [mock:clipboard-read]` 已证明 Electron packaged 路径下 platform tool 通过 Swift `/api/platform` 回写，thread 文件为 `~/.spotAgent/threads/thread-1780946481700-4m0hzp.json`。
 - Electron ActivityWindow 状态截图：idle `/tmp/handagent-qa/electron-status-idle-after-waiting.png`；running `/tmp/handagent-qa/status-bubble-activity-fixed.png`；completed `/var/folders/m7/6b3swwk92mb0zthbzy5pfjvc0000gn/T/codex-shot-2026-06-09_03-11-19.png`；error `/tmp/handagent-qa/electron-error-activity.png`。
 - `ELECTRON_ERROR_STATUS_QA_20260609 [mock:llm-error]` 已验证 `/api/activity` 返回 `status: "error"` / `latestSummary: "运行失败"`，ThreadWindow 显示红色错误气泡，截图 `/tmp/handagent-qa/electron-error-threadwindow.png`，thread 文件 `~/.spotAgent/threads/thread-1780946934566-sz2ewd.json`。
 - `ELECTRON_WORKSPACE_WAITING_QA_20260609 [mock:workspace-ask]` 已验证 permission waiting 与 workspace waiting：ActivityWindow 截图 `/tmp/handagent-qa/electron-permission-waiting-activity.png`、`/tmp/handagent-qa/electron-workspace-waiting-activity.png`，ThreadWindow 内联面板截图 `/tmp/handagent-qa/electron-permission-waiting-threadwindow.png`、`/tmp/handagent-qa/electron-workspace-waiting-threadwindow.png`。
@@ -151,7 +159,7 @@
 - `ELECTRON_STARTING_SEQUENCE_QA_20260609_C [mock:assistant-ok]` 已验证 Electron ActivityWindow activity 流包含 `starting` / `running` / `completed` / `idle` 序列，thread 文件 `~/.spotAgent/threads/thread-1780947483869-t8ou50.json` 包含同一 user prompt 与 mock assistant。
 - 点击 Electron StatusBubble 的可见 ThreadWindow 分支已验证：先激活 Finder，再用 CGEvent 点击 ActivityWindow 中心，前台切到 Electron，`HandAgent ThreadWindow` 的 `AXMain=true`，`HandAgent Activity` 的 `AXMain=false`。
 - Electron ActivityWindow 非 key 行为曾在 `focusable:false` 版本验证：点击气泡后 `HandAgent Activity` 的 `AXMain=false` / `AXFocused=false`，CoreGraphics 只显示 owner 为 `Electron` 的 `HandAgent Activity` 小窗，layer 为 3，bounds 为 `{X: 1144, Y: 832, Width: 272, Height: 76}`。二次修复改为 `focusable:true` 后，2026-06-09 packaged 回归中 ActivityWindow 为 `AXMain=true` / `AXFocused=false`，最终非 key 行为需随下一次 StatusBubble 修复重新确认。
-- Electron ActivityWindow `focusable:true` 后非激活展示与无可聚焦 ThreadWindow fallback 已复验：2026-06-09 重新执行 `bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`、`pnpm --filter handagent-electron-shell build` 与 `bash ./scripts/package-app.sh --mock-llm`，通过 `launchctl setenv HANDAGENT_ELECTRON_SHELL 1`、`launchctl setenv HANDAGENT_ELECTRON_BINARY <electron@42.3.3 binary>`、`open dist/HandAgentDesktop.app` 标准启动 Electron flag packaged app。启动后只有 Swift host pid `62011`、Electron main pid `62015`、agent-server pid `62029` 各一份，`127.0.0.1:4317` 由 node 监听，runtime marker 为 `{"llmMode":"mock"}`。Computer Use 观察 Electron `HandAgent Activity` 只显示 `点击开始 / HandAgent 空闲`；AX 读取为 `Electron frontmost=false`、`HandAgent Activity AXMain=false / AXFocused=false`。用 CGEvent 点击 `{1280,870}` 后，Swift `PromptPanel` 打开为 `640x448`，Swift host `frontmost=true`，Electron ActivityWindow 为 `AXMain=true / AXFocused=false`，`/api/activity` 新连接仍立即收到 idle `activity.snapshot`。结论：初始展示不抢前台；无可聚焦 ThreadWindow 时点击 StatusBubble 会回退打开 Swift PromptPanel。
+- Electron ActivityWindow `focusable:true` 后非激活展示与无可聚焦 ThreadWindow fallback 已复验：2026-06-09 重新执行 `bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`、`pnpm --filter handagent-electron-shell build` 与 `bash ./scripts/package-app.sh --mock-llm`，通过 Electron binary 覆盖和 `open dist/HandAgentDesktop.app` 标准启动 Electron packaged app。启动后只有 Swift host pid `62011`、Electron main pid `62015`、agent-server pid `62029` 各一份，`127.0.0.1:4317` 由 node 监听，runtime marker 为 `{"llmMode":"mock"}`。Computer Use 观察 Electron `HandAgent Activity` 只显示 `点击开始 / HandAgent 空闲`；AX 读取为 `Electron frontmost=false`、`HandAgent Activity AXMain=false / AXFocused=false`。用 CGEvent 点击 `{1280,870}` 后，Swift `PromptPanel` 打开为 `640x448`，Swift host `frontmost=true`，Electron ActivityWindow 为 `AXMain=true / AXFocused=false`，`/api/activity` 新连接仍立即收到 idle `activity.snapshot`。结论：初始展示不抢前台；无可聚焦 ThreadWindow 时点击 StatusBubble 会回退打开 Swift PromptPanel。
 - supervisor 最大重启诊断已验证：先退出 QA app，用 Python 端口占用器监听 `127.0.0.1:4317`，再启动 Electron flag packaged app；超过 5 次 restart attempt 后，agent-server 不再残留，PromptPanel 可见错误文案 `agent-server stopped after 5 restart attempts: agent-server exited with code 1`，截图 `/tmp/handagent-qa/electron-supervisor-max-prompt.png`。清理后无 HandAgent / Electron / agent-server 残留，`127.0.0.1:4317` 无监听。
 - packaged app 产物与 mock LLM 路径已验证：`dist/HandAgentDesktop.app/Contents/Resources/ElectronShell/dist/main/main.js` 存在；`HANDAGENT_ELECTRON_BINARY` 指向的 Electron binary 可执行且版本为 `v42.3.3`；`~/.spotAgent/threads/thread-1780947483869-t8ou50.json` 中 assistant 内容为 `Mock assistant response: main chain is reachable.`，确认 mock packaged app 未访问真实 LLM。
 - PromptPanel 连续提交已验证复用同一个 Electron ThreadWindow 并创建不同 thread/tab：第一次提交 `ELECTRON_MULTI_PROMPT_QA_20260609_A [mock:assistant-ok]` 生成 `~/.spotAgent/threads/thread-1780948156864-2ttk2d.json`；第二次提交 `ELECTRON_MULTI_PROMPT_QA_20260609_B [mock:assistant-ok]` 生成 `~/.spotAgent/threads/thread-1780948177419-qwq8of.json`；两次提交后 `HandAgent ThreadWindow` 的 CoreGraphics window number 均为 `43975`，截图 `/tmp/handagent-qa/electron-two-prompt-tabs.png` 显示同一 Electron ThreadWindow 内有两个 tab，当前内容为 B prompt。
@@ -164,7 +172,7 @@
 - Electron shell production build 已验证：`pnpm --filter handagent-electron-shell build` 通过，完成 main / activity-window TypeScript 编译与 ActivityWindow Vite production build，Vite 输出 `31 modules transformed`、`dist/activity-window/index.html`、CSS 与 JS chunk。
 - Electron ThreadWindow initial prompt 已验证：提交前只有 Electron `HandAgent Activity`；使用真实全局快捷键打开 Swift PromptPanel（`640x448`）并提交 `ELECTRON_UI_SHELL_FINAL_QA_20260608 [mock:assistant-ok]` 后，Electron 出现 `HandAgent ThreadWindow`（`920x640`），Computer Use 可见该 user message 与 `Mock assistant response: main chain is reachable.`；`~/.spotAgent/threads/thread-1780964771699-7dvw8k.json` 持久化同一 user / assistant，`/api/activity` snapshot 指向该 thread 并回到 `status:"idle"`。
 - PromptPanel 连续第二次提交复用 Electron ThreadWindow 已验证：首次提交后 Electron 只有一个 `HandAgent ThreadWindow`，位置/尺寸为 `260,146,920,640`；第二次提交 `ELECTRON_UI_SHELL_FINAL_QA_20260608_B【mock：assistant-ok]` 后仍只有同一个 `HandAgent ThreadWindow` 且位置/尺寸不变，Computer Use 可见 tab 栏新增第二个 tab，当前显示 B prompt；`~/.spotAgent/threads/thread-1780964917550-h99lcu.json` 持久化 B user message。该次 B 的 mock trigger 错误由测试输入法把 `[mock:assistant-ok]` 转为全角 `【mock：assistant-ok]` 导致，不影响本条对“复用同一窗口并创建新 tab/thread”的验证。
-- Electron flag packaged app startup 已验证：通过 `launchctl setenv HANDAGENT_ELECTRON_SHELL 1`、`launchctl setenv HANDAGENT_ELECTRON_BINARY <electron@42.3.3 binary>` 与标准 `open dist/HandAgentDesktop.app` 启动后，Swift host pid `74172`、Electron main pid `74174`、agent-server pid `74188` 成功运行，`127.0.0.1:4317` 仅由 node pid `74188` 监听，`/api/activity` 首包为 idle `activity.snapshot`。packaged `main.js` 包含 `electron.ready`、`agent-server supervisor` 与 `startSupervisor`，且 `electron.ready` 字符串位于 supervisor log 之前；Computer Use 只看到 Electron `HandAgent Activity`，Swift 无窗口，说明 Electron main 没有因 Swift command bridge / stdin 阻塞并继续拉起 agent-server。
+- Electron packaged app startup 已验证：通过 Electron binary 覆盖与标准 `open dist/HandAgentDesktop.app` 启动后，Swift host pid `74172`、Electron main pid `74174`、agent-server pid `74188` 成功运行，`127.0.0.1:4317` 仅由 node pid `74188` 监听，`/api/activity` 首包为 idle `activity.snapshot`。packaged `main.js` 包含 `electron.ready`、`agent-server supervisor` 与 `startSupervisor`，且 `electron.ready` 字符串位于 supervisor log 之前；Computer Use 只看到 Electron `HandAgent Activity`，Swift 无窗口，说明 Electron main 没有因 Swift command bridge / stdin 阻塞并继续拉起 agent-server。
 - Electron flag 启动日志 supervisor description 已验证：短时直接启动 packaged executable 并重定向 stdout/stderr 到 `/tmp/handagent-qa/electron-supervisor-description-current-20260609.log`，日志首行包含 `[electron-shell] agent-server supervisor: {"mode":"node_child","entry":"apps/agent-server/src/server/server.ts","coreRuntimeHost":"agent-server","utilityProcessBlocker":"apps/agent-server/dist/server/server.js 不存在；当前 agent-server 仍依赖 TypeScript 源码入口和 Node --experimental-transform-types"}`；同轮 node pid `75197` 监听 `127.0.0.1:4317`，`/api/activity` 首包为 idle `activity.snapshot`。
 - `openHistory` command-path 已验证：标准 `open dist/HandAgentDesktop.app` 启动 Electron flag packaged app 后，通过当前 Electron command socket `/tmp/hae-C9B68DF7-F042-46FC-B318-F9284CD0FAD0.sock` 发送 `thread_window.open_history`；随后 Electron 窗口从仅 `HandAgent Activity` 变为 `HandAgent Activity` + `HandAgent ThreadWindow`，ThreadWindow 尺寸 `920x640`，Computer Use 可见 React 历史侧栏、workspace 分组、搜索框和历史 thread 列表；`HandAgentDesktop` 进程无 Swift 窗口。
 - 标准退出无残留已验证：清理外部污染后，用标准 `open dist/HandAgentDesktop.app` 启动主仓库 Electron flag packaged app，启动前置进程链路只有 Swift host pid `77532` -> Electron main pid `77534` -> agent-server pid `77556`，`127.0.0.1:4317` 由 node pid `77556` 监听；执行 `osascript -e 'tell application id "com.yourname.HandAgentDesktop" to quit'` 后等待 6 秒，`ps` 匹配 HandAgent / Electron / renderer / agent-server 无输出，`lsof -nP -iTCP:4317 -sTCP:LISTEN` 无输出。

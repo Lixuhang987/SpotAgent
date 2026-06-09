@@ -6,23 +6,21 @@
 
 当前包含三个可执行单元和一个 Web 前端包：
 
-- [desktop/desktop.md](/Users/mu9/proj/handAgent/apps/desktop/desktop.md) —— macOS 宿主壳（Swift / SwiftUI）。
-- [thread-window-web/thread-window-web.md](/Users/mu9/proj/handAgent/apps/thread-window-web/thread-window-web.md) —— React ThreadWindow 前端；默认由 WKWebView 承载，Electron flag 路径由 Electron `BrowserWindow` 承载同一 bundle。
-- [agent-server/agent-server.md](/Users/mu9/proj/handAgent/apps/agent-server/agent-server.md) —— 本地 WebSocket thread 桥（Node / TypeScript）；默认路径由 desktop 派生为子进程，Electron flag 路径由 electron-shell 监督。
-- [electron-shell/electron-shell.md](/Users/mu9/proj/handAgent/apps/electron-shell/electron-shell.md) —— Phase 3 Electron UI shell；feature flag 路径下监督 agent-server，承载 Electron ThreadWindow 和 React StatusBubble。
+- [desktop/desktop.md](/Users/mu9/proj/handAgent/apps/desktop/desktop.md) —— macOS 原生入口（Swift / SwiftUI），负责 PromptPanel、Settings、热键、焦点恢复、平台能力 IPC 和 Electron 生命周期。
+- [electron-shell/electron-shell.md](/Users/mu9/proj/handAgent/apps/electron-shell/electron-shell.md) —— Electron UI shell，监督 agent-server，承载 Electron ThreadWindow 和 React StatusBubble。
+- [thread-window-web/thread-window-web.md](/Users/mu9/proj/handAgent/apps/thread-window-web/thread-window-web.md) —— React ThreadWindow 前端，由 Electron `BrowserWindow` 承载。
+- [agent-server/agent-server.md](/Users/mu9/proj/handAgent/apps/agent-server/agent-server.md) —— 本地 WebSocket thread 桥（Node / TypeScript），由 electron-shell 监督。
 
 ## 在整体架构中的位置
 
 ```mermaid
 flowchart LR
-  A[apps/desktop<br/>macOS 宿主] -->|default WKWebView load| W[apps/thread-window-web<br/>React ThreadWindow]
-  A -. HANDAGENT_ELECTRON_SHELL=1 .-> E[apps/electron-shell<br/>Electron shell]
-  E -. BrowserWindow host .-> W
-  E -. BrowserWindow host .-> S[React StatusBubble]
-  E -. supervise .-> B
-  W -->|/api/thread WebSocket| B[apps/agent-server<br/>本地 thread 桥]
+  A[apps/desktop<br/>macOS 原生入口] -->|Swift command bridge| E[apps/electron-shell<br/>Electron shell]
+  E -->|BrowserWindow host| W[apps/thread-window-web<br/>React ThreadWindow]
+  E -->|BrowserWindow host| S[React StatusBubble]
+  E -->|supervise| B[apps/agent-server<br/>本地 thread 桥]
+  W -->|/api/thread WebSocket| B
   S -->|/api/activity WebSocket| B
-  A -->|/api/activity WebSocket<br/>default StatusBubble only| B
   A -->|/api/platform WebSocket| B
   B --> C[packages/core<br/>runtime / tool / LLM]
 ```
@@ -36,10 +34,9 @@ flowchart LR
 
 ### 2. Thread 交互
 
-- 用户提交 prompt 后，`AppCoordinator` 通过 `ThreadWindowManaging` 创建或聚焦 `ThreadWindow`。
-- 默认路径下 Swift `ThreadWindowLifecycle` 创建 `WKWebView`，加载 `apps/thread-window-web` bundle，并注入 `/api/thread` URL 与初始 prompt 队列。
-- 当 `HANDAGENT_ELECTRON_SHELL=1` 时，Swift 不创建 `WKWebView` ThreadWindow；Electron main 在 agent-server ready 后主动预热隐藏 `BrowserWindow`，PromptPanel show/toggle 不触发预热，PromptPanel submit、openHistory 和 focus 会通过 Electron command bridge 展示或聚焦同一个 React ThreadWindow。
-- React ThreadWindow 接收初始 prompt 后，通过 `/api/thread` 发送 `thread.start`，收到 `thread.started` 后发送首轮 `input.submit` 和 attachments；后续 composer 追问在 idle 时直接发送 `input.submit`，running 时先在 React 本地 FIFO 排队，等 thread 离开 running 后逐条发送，避免 user message 连在当前 assistant 回复前面。
+- Electron main 在 agent-server ready 后主动预热隐藏 `BrowserWindow`；PromptPanel show/toggle 不触发 ThreadWindow 预热。
+- 用户提交 prompt 后，Swift 通过 command bridge 发送 `thread_window.open_initial_prompt`；打开历史和聚焦分别发送 `thread_window.open_history` / `thread_window.focus`。
+- React ThreadWindow 接收初始 prompt 后，通过 `/api/thread` 发送 `thread.start`，收到 `thread.started` 后发送首轮 `input.submit` 和 attachments；后续 composer 追问在 idle 时直接发送 `input.submit`，running 时先在 React 本地 FIFO 排队，等 thread 离开 running 后逐条发送。
 - React ThreadWindow 负责 `ThreadCommand` / `ClientResponse` 编码、`ThreadNotification` / `ServerRequest` 接收，以及 tabs、消息、请求面板和 composer 状态。
 - ThreadWindow 左侧历史列表通过 thread 协议读取 `~/.spotAgent/threads/`，用于搜索、预览、恢复和删除持久化 thread。
 
@@ -50,15 +47,14 @@ flowchart LR
 
 ### 4. 状态反馈
 
-- 默认路径显示 Swift `StatusBubbleController`，AppServer 订阅 `/api/activity` 的轻量 `AgentActivityEvent` 并更新 Swift 侧 `ThreadRegistry`；ViewModel 再从 `ThreadRegistry` 派生 `isRunning` / `latestSummary` / `primaryThreadID`。
-- `HANDAGENT_ELECTRON_SHELL=1` 时 Swift StatusBubble 默认关闭，由 Electron ActivityWindow 承载 React StatusBubble；renderer 订阅 `/api/activity`，接收 agent-server 派生的 `AgentActivityEvent`。
-- 默认路径 Swift 只消费 `/api/activity` 的轻量状态，不解析 `/api/thread`，也不把完整 ThreadWindow tabs、消息或历史同步到 `ThreadRegistry`。
-- 默认路径气泡点击时，若 `ThreadRegistry.primaryThreadID` 存在且全局 ThreadWindow 已打开，则聚焦该窗口；否则回到 PromptPanel。Electron 气泡点击时先请求 Electron main 聚焦 ThreadWindow；无法聚焦时 Electron 回告 Swift 打开 PromptPanel。
+- Electron ActivityWindow 承载 React StatusBubble；renderer 订阅 `/api/activity`，接收 agent-server 派生的 `AgentActivityEvent`。
+- Electron 气泡点击时先请求 Electron main 聚焦 ThreadWindow；无法聚焦时 Electron 回告 Swift 打开 PromptPanel。
+- Swift 不订阅 `/api/activity`，也不把完整 ThreadWindow tabs、消息或历史同步到 Swift 状态。
 
 ## 本层关键 DTO
 
 - `PromptAttachmentResult`（5 case：textSelection / selectionError / textToken / imageRegion / noAttachment）
-- `ThreadSummary`
+- `UserMessageAttachmentPayload`
 - `ThreadCommand` / `ThreadNotification` / `ServerRequest` / `ClientResponse`
 - `AgentActivityEvent`
 - `PlatformBridgeMessage`（含 platform_bridge_hello / platform_request / platform_response）
