@@ -1,10 +1,11 @@
 import AppKit
+import SwiftUI
 import XCTest
 @testable import HandAgentDesktop
 
 @MainActor
 final class ProductionSettingsWindowPresenterTests: XCTestCase {
-    func testPresentedWindowUsesAquaAppearance() {
+    func testPresentedWindowKeepsAquaForAppKitControlStabilization() {
         let presenter = ProductionSettingsWindowPresenter()
 
         let window = presenter.present(
@@ -17,7 +18,7 @@ final class ProductionSettingsWindowPresenterTests: XCTestCase {
             permissionRulesViewModel: PermissionRulesViewModel(),
             workspaceViewModel: WorkspaceSettingsViewModel(),
             shortcutActions: [],
-            appTheme: .default,
+            appTheme: .dark,
             onClose: {}
         )
         defer { window?.close() }
@@ -26,5 +27,30 @@ final class ProductionSettingsWindowPresenterTests: XCTestCase {
             window?.appearance?.bestMatch(from: [.aqua, .darkAqua]),
             .aqua
         )
+        XCTAssertTrue(window?.contentViewController is NSHostingController<AnyView>)
+    }
+
+    func testUpdateThemeRefreshesPresentedSettingsRootView() {
+        let presenter = ProductionSettingsWindowPresenter()
+
+        let window = presenter.present(
+            settingsViewModel: AgentSettingsViewModel(store: AgentSettingsStore()),
+            appearanceViewModel: AppearanceSettingsViewModel(store: AgentSettingsStore()),
+            toolSettingsViewModel: ToolSettingsViewModel(store: AgentSettingsStore()),
+            pluginSettingsViewModel: PluginSettingsViewModel(),
+            appendPromptSettingsViewModel: AppendPromptSettingsViewModel(),
+            mcpSettingsViewModel: MCPSettingsViewModel(),
+            permissionRulesViewModel: PermissionRulesViewModel(),
+            workspaceViewModel: WorkspaceSettingsViewModel(),
+            shortcutActions: [],
+            appTheme: .light,
+            onClose: {}
+        )
+        defer { window?.close() }
+
+        presenter.updateTheme(.dark, for: window)
+
+        let hosting = window?.contentViewController as? NSHostingController<AnyView>
+        XCTAssertNotNil(hosting)
     }
 }

@@ -139,7 +139,9 @@ final class AppCoordinator {
     private func setupAppearanceTheme() {
         services.appearanceThemeService.onThemeChange = { [weak self] theme in
             guard let self else { return }
-            self.promptPanelController.updateTheme(self.services.appearanceThemeService.appTheme)
+            let appTheme = self.services.appearanceThemeService.appTheme
+            self.promptPanelController.updateTheme(appTheme)
+            self.settingsLifecycle.updateTheme(appTheme)
             try? self.services.threadWindowCommandClient.sendThemeChanged(theme)
         }
         services.appearanceChangeObserver.onSystemAppearanceChange = { [weak self] in

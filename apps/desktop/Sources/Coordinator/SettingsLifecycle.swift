@@ -59,6 +59,11 @@ final class SettingsLifecycle {
         setActivationPolicy(activationPolicy.policyAfterUpdatingSettingsWindow(isOpen: false))
     }
 
+    func updateTheme(_ appTheme: AppTheme) {
+        guard let window else { return }
+        windowPresenter.updateTheme(appTheme, for: window)
+    }
+
     func close() {
         window?.close()
         window = nil

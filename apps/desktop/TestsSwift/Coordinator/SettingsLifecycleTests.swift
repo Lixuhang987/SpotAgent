@@ -98,4 +98,58 @@ final class SettingsLifecycleTests: XCTestCase {
 
         XCTAssertEqual(policies.suffix(2), [.regular, .accessory])
     }
+
+    @MainActor
+    func testUpdateThemeRefreshesOpenWindow() {
+        let presenter = ThemeRefreshingSettingsWindowPresenter()
+        let lifecycle = SettingsLifecycle(
+            windowPresenter: presenter,
+            activationPolicy: AppActivationPolicyCoordinator(),
+            setActivationPolicy: { _ in }
+        )
+
+        lifecycle.openOrFocus(
+            settingsViewModel: AgentSettingsViewModel(store: AgentSettingsStore()),
+            appearanceViewModel: AppearanceSettingsViewModel(store: AgentSettingsStore()),
+            toolSettingsViewModel: ToolSettingsViewModel(store: AgentSettingsStore()),
+            pluginSettingsViewModel: PluginSettingsViewModel(),
+            appendPromptSettingsViewModel: AppendPromptSettingsViewModel(),
+            mcpSettingsViewModel: MCPSettingsViewModel(),
+            permissionRulesViewModel: PermissionRulesViewModel(),
+            workspaceViewModel: WorkspaceSettingsViewModel(),
+            shortcutActions: [],
+            appTheme: .light,
+            onClosed: {}
+        )
+
+        lifecycle.updateTheme(.dark)
+
+        XCTAssertEqual(presenter.refreshedThemes.count, 1)
+    }
+}
+
+@MainActor
+private final class ThemeRefreshingSettingsWindowPresenter: SettingsWindowPresenting {
+    private(set) var refreshedThemes: [AppTheme] = []
+    private let window = NSWindow()
+
+    func present(
+        settingsViewModel: AgentSettingsViewModel,
+        appearanceViewModel: AppearanceSettingsViewModel,
+        toolSettingsViewModel: ToolSettingsViewModel,
+        pluginSettingsViewModel: PluginSettingsViewModel,
+        appendPromptSettingsViewModel: AppendPromptSettingsViewModel,
+        mcpSettingsViewModel: MCPSettingsViewModel,
+        permissionRulesViewModel: PermissionRulesViewModel,
+        workspaceViewModel: WorkspaceSettingsViewModel,
+        shortcutActions: [ActionDefinition],
+        appTheme: AppTheme,
+        onClose: @escaping () -> Void
+    ) -> NSWindow? {
+        window
+    }
+
+    func updateTheme(_ appTheme: AppTheme, for window: NSWindow?) {
+        refreshedThemes.append(appTheme)
+    }
 }

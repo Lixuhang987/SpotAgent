@@ -500,6 +500,7 @@ final class StubSettingsWindowPresenter: SettingsWindowPresenting {
     private let onPresent: () -> Void
     private(set) var lastShortcutActions: [ActionDefinition] = []
     private(set) var presentedWindow: NSWindow?
+    private(set) var refreshedThemes: [AppTheme] = []
 
     init(onPresent: @escaping () -> Void = {}) {
         self.onPresent = onPresent
@@ -523,5 +524,9 @@ final class StubSettingsWindowPresenter: SettingsWindowPresenting {
         let window = NSWindow()
         presentedWindow = window
         return window
+    }
+
+    func updateTheme(_ appTheme: AppTheme, for window: NSWindow?) {
+        refreshedThemes.append(appTheme)
     }
 }

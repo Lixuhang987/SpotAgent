@@ -17,6 +17,8 @@ protocol SettingsWindowPresenting {
         appTheme: AppTheme,
         onClose: @escaping () -> Void
     ) -> NSWindow?
+
+    func updateTheme(_ appTheme: AppTheme, for window: NSWindow?)
 }
 
 @MainActor
@@ -308,6 +310,8 @@ final class NopSettingsWindowPresenter: SettingsWindowPresenting {
     ) -> NSWindow? {
         nil
     }
+
+    func updateTheme(_ appTheme: AppTheme, for window: NSWindow?) {}
 }
 
 @MainActor
