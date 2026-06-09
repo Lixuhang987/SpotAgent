@@ -11,7 +11,7 @@ import {
   type ThreadNotification,
 } from "../protocol/threadProtocol.ts";
 
-export type ConnectionState = "disconnected" | "connecting" | "connected" | "reconnecting";
+export type ConnectionState = "disconnected" | "connecting" | "connected";
 
 type WebSocketLike = {
   readyState: number;
@@ -29,7 +29,6 @@ const WS_OPEN = 1;
 
 export class ThreadSocketClient {
   private socket: WebSocketLike | null = null;
-  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private manuallyClosed = false;
   private outboundQueue: string[] = [];
   private readonly pendingInitialPrompts = new Map<string, InitialPromptPayload>();
@@ -39,11 +38,9 @@ export class ThreadSocketClient {
     WebSocketImpl?: WebSocketConstructor;
     now?: () => string;
     id?: () => string;
-    reconnectDelayMs?: number;
     onConnectionState: (state: ConnectionState) => void;
     onNotification: (notification: ThreadNotification) => void;
     onRequest: (request: ServerRequest) => void;
-    getOpenThreadIds: () => string[];
   }) {}
 
   connect(): void {
@@ -51,15 +48,11 @@ export class ThreadSocketClient {
     if (this.hasActiveSocket()) {
       return;
     }
-    this.openSocket(this.socket ? "reconnecting" : "connecting");
+    this.openSocket();
   }
 
   disconnect(): void {
     this.manuallyClosed = true;
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-    }
-    this.reconnectTimer = null;
     this.outboundQueue = [];
     this.socket?.close();
     this.socket = null;
@@ -116,13 +109,9 @@ export class ThreadSocketClient {
     }));
   }
 
-  private openSocket(state: ConnectionState): void {
+  private openSocket(): void {
     const WebSocketImpl = this.options.WebSocketImpl ?? (WebSocket as unknown as WebSocketConstructor);
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-    }
-    this.reconnectTimer = null;
-    this.options.onConnectionState(state);
+    this.options.onConnectionState("connecting");
     const socket = new WebSocketImpl(this.options.url);
     this.socket = socket;
 
@@ -137,22 +126,14 @@ export class ThreadSocketClient {
         timestamp: this.now(),
       }));
       this.listThreads();
-      for (const threadId of this.options.getOpenThreadIds()) {
-        this.resumeThread(threadId);
-      }
     };
 
     socket.onclose = () => {
       if (socket !== this.socket || this.manuallyClosed) {
         return;
       }
-      if (this.reconnectTimer) {
-        return;
-      }
-      this.options.onConnectionState("reconnecting");
-      this.reconnectTimer = setTimeout(() => {
-        this.openSocket("reconnecting");
-      }, this.options.reconnectDelayMs ?? 1_000);
+      this.socket = null;
+      this.options.onConnectionState("disconnected");
     };
 
     socket.onmessage = (event: { data: string }) => {

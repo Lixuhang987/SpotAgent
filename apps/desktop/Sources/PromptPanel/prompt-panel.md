@@ -54,7 +54,7 @@ Action prompt 的参数与提交流程：
 1. `ActionInvocation.parse` 用 trigger 匹配 `ActionDefinition`，参数只接受 `[name: value]` 命名块，例如 `r [code: let x = 1] [focus: risk]`。
 2. 参数值可以为空，例如 `r [code: ]`；没有参数的 action 可只输入 trigger，例如 `weather`。
 3. Desktop 本地渲染 `template`。skill action 只提交渲染后的 prompt；plugin action 同时发送 `{ pluginId, promptName }` 作为 `actionBinding`。
-4. Coordinator 通过 `thread.start` 强制创建新 thread；Action prompt 不会写入当前 active tab。
+4. Coordinator 通过 `thread.start` 强制创建新 thread；Action prompt 不会写入右侧当前展示的既有 thread。
 5. agent-server 重新读取同一 plugin manifest 校验绑定，并把 manifest 中的 `mcpServerIds` 持久化到 thread metadata。
 
 ## 编辑此目录的约束
@@ -76,6 +76,6 @@ Action prompt 的参数与提交流程：
 ## 与其他模块的关系
 
 - 由 [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 持有并注入 actions。
-- 提交 prompt 后由 Coordinator 通过 [ElectronThreadWindowLifecycle](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/ElectronThreadWindowLifecycle.swift) 发送 `thread_window.open_initial_prompt`；Electron main 展示 React ThreadWindow 并注入 initial prompt，React 通过 `/api/thread` 创建新 thread 并提交首轮 `input.submit`。当前 active tab 不会接收 PromptPanel 的初始提交。
+- 提交 prompt 后由 Coordinator 通过 [ElectronThreadWindowLifecycle](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/ElectronThreadWindowLifecycle.swift) 发送 `thread_window.open_initial_prompt`；Electron main 展示 React ThreadWindow 并注入 initial prompt，React 通过 `/api/thread` 创建新 thread 并提交首轮 `input.submit`。右侧当前展示的既有 thread 不会接收 PromptPanel 的初始提交。
 - [AgentServer](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/AgentServer/agent-server.md) 可用性变化会同步到 `setSubmissionEnabled`，避免重启期间提交新 prompt。
 - 全局热键来自 [AppServices/Hotkey](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Hotkey/hotkey.md)。

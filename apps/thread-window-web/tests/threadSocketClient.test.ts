@@ -37,7 +37,7 @@ describe("ThreadSocketClient", () => {
     FakeWebSocket.instances = [];
   });
 
-  it("connects, lists threads, resumes open threads, and dispatches inbound notifications", () => {
+  it("connects, lists workspaces and threads, and dispatches inbound notifications without recovery requests", () => {
     const events: string[] = [];
     const client = new ThreadSocketClient({
       url: "ws://127.0.0.1:4317/api/thread",
@@ -46,12 +46,10 @@ describe("ThreadSocketClient", () => {
       id: vi.fn()
         .mockReturnValueOnce("workspace-list-1")
         .mockReturnValueOnce("list-1")
-        .mockReturnValueOnce("resume-1"),
-      reconnectDelayMs: 0,
+        .mockReturnValueOnce("unused-id"),
       onConnectionState: (state) => events.push(`state:${state}`),
       onNotification: (notification) => events.push(notification.type),
       onRequest: (request) => events.push(request.type),
-      getOpenThreadIds: () => ["thread-1"],
     });
 
     client.connect();
@@ -70,8 +68,8 @@ describe("ThreadSocketClient", () => {
     expect(socket.sent.map((raw) => JSON.parse(raw))).toMatchObject([
       { type: "workspace.list", commandId: "workspace-list-1" },
       { type: "thread.list", commandId: "list-1" },
-      { type: "thread.resume", threadId: "thread-1", commandId: "resume-1" },
     ]);
+    expect(socket.sent.map((raw) => JSON.parse(raw)).some((command) => command.type === "thread.resume")).toBe(false);
   });
 
   it("sends initial prompt as thread.start then resumes and starts the turn after thread.started", () => {
@@ -84,11 +82,9 @@ describe("ThreadSocketClient", () => {
         .mockReturnValueOnce("list-1")
         .mockReturnValueOnce("resume-1")
         .mockReturnValueOnce("input-1"),
-      reconnectDelayMs: 0,
       onConnectionState: () => {},
       onNotification: () => {},
       onRequest: () => {},
-      getOpenThreadIds: () => [],
     });
 
     client.connect();
@@ -120,7 +116,7 @@ describe("ThreadSocketClient", () => {
     ]);
   });
 
-  it("reconnects after an unexpected close", () => {
+  it("marks unexpected close as disconnected without opening another socket or sending recovery commands", () => {
     vi.useFakeTimers();
     try {
       const events: string[] = [];
@@ -129,20 +125,21 @@ describe("ThreadSocketClient", () => {
         WebSocketImpl: FakeWebSocket as never,
         now: () => "2026-06-06T00:00:00.000Z",
         id: () => "cmd-1",
-        reconnectDelayMs: 25,
         onConnectionState: (state) => events.push(state),
         onNotification: () => {},
         onRequest: () => {},
-        getOpenThreadIds: () => [],
       });
 
       client.connect();
-      FakeWebSocket.instances[0].open();
-      FakeWebSocket.instances[0].onclose?.();
-      vi.advanceTimersByTime(25);
+      const socket = FakeWebSocket.instances[0];
+      socket.open();
+      socket.sent = [];
+      socket.onclose?.();
+      vi.advanceTimersByTime(5_000);
 
-      expect(events).toEqual(["connecting", "connected", "reconnecting", "reconnecting"]);
-      expect(FakeWebSocket.instances).toHaveLength(2);
+      expect(events).toEqual(["connecting", "connected", "disconnected"]);
+      expect(FakeWebSocket.instances).toHaveLength(1);
+      expect(socket.sent).toEqual([]);
     } finally {
       vi.useRealTimers();
     }
@@ -157,7 +154,6 @@ describe("ThreadSocketClient", () => {
       onConnectionState: () => {},
       onNotification,
       onRequest,
-      getOpenThreadIds: () => [],
     });
 
     client.connect();
@@ -179,13 +175,10 @@ describe("ThreadSocketClient", () => {
       now: () => "2026-06-06T00:00:00.000Z",
       id: vi.fn()
         .mockReturnValueOnce("workspace-list-1")
-        .mockReturnValueOnce("list-1")
-        .mockReturnValueOnce("resume-1"),
-      reconnectDelayMs: 0,
+        .mockReturnValueOnce("list-1"),
       onConnectionState: () => {},
       onNotification: () => {},
       onRequest: () => {},
-      getOpenThreadIds: () => ["thread-1"],
     });
 
     client.connect();
@@ -200,80 +193,7 @@ describe("ThreadSocketClient", () => {
     expect(socket.sent.map((raw) => JSON.parse(raw))).toMatchObject([
       { type: "workspace.list", commandId: "workspace-list-1" },
       { type: "thread.list", commandId: "list-1" },
-      { type: "thread.resume", threadId: "thread-1", commandId: "resume-1" },
     ]);
-  });
-
-  it("ignores stale socket messages and closes after a reconnect starts", () => {
-    vi.useFakeTimers();
-    try {
-      const onNotification = vi.fn();
-      const client = new ThreadSocketClient({
-        url: "ws://127.0.0.1:4317/api/thread",
-        WebSocketImpl: FakeWebSocket as never,
-        now: () => "2026-06-06T00:00:00.000Z",
-        id: () => "cmd-1",
-        reconnectDelayMs: 25,
-        onConnectionState: () => {},
-        onNotification,
-        onRequest: () => {},
-        getOpenThreadIds: () => [],
-      });
-
-      client.connect();
-      const staleSocket = FakeWebSocket.instances[0];
-      staleSocket.open();
-      staleSocket.onclose?.();
-      vi.advanceTimersByTime(25);
-      const activeSocket = FakeWebSocket.instances[1];
-      activeSocket.open();
-
-      staleSocket.onmessage?.({
-        data: JSON.stringify({
-          type: "thread.listed",
-          notificationId: "n-stale",
-          timestamp: "2026-06-06T00:00:00.000Z",
-          payload: { threads: [] },
-        }),
-      });
-      staleSocket.onclose?.();
-      vi.advanceTimersByTime(25);
-
-      expect(onNotification).not.toHaveBeenCalled();
-      expect(FakeWebSocket.instances).toHaveLength(2);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it("clears a scheduled reconnect timer when connect starts a replacement socket", () => {
-    vi.useFakeTimers();
-    try {
-      const client = new ThreadSocketClient({
-        url: "ws://127.0.0.1:4317/api/thread",
-        WebSocketImpl: FakeWebSocket as never,
-        now: () => "2026-06-06T00:00:00.000Z",
-        id: () => "cmd-1",
-        reconnectDelayMs: 25,
-        onConnectionState: () => {},
-        onNotification: () => {},
-        onRequest: () => {},
-        getOpenThreadIds: () => [],
-      });
-
-      client.connect();
-      const staleSocket = FakeWebSocket.instances[0];
-      staleSocket.open();
-      staleSocket.readyState = FakeWebSocket.CLOSED;
-      staleSocket.onclose?.();
-
-      client.connect();
-      vi.advanceTimersByTime(25);
-
-      expect(FakeWebSocket.instances).toHaveLength(2);
-    } finally {
-      vi.useRealTimers();
-    }
   });
 
   it("queues initial prompt commands before open and flushes them on open", () => {
@@ -286,11 +206,9 @@ describe("ThreadSocketClient", () => {
         .mockReturnValueOnce("list-1")
         .mockReturnValueOnce("resume-1")
         .mockReturnValueOnce("input-1"),
-      reconnectDelayMs: 0,
       onConnectionState: () => {},
       onNotification: () => {},
       onRequest: () => {},
-      getOpenThreadIds: () => [],
     });
 
     client.connect();
@@ -325,7 +243,7 @@ describe("ThreadSocketClient", () => {
     ]);
   });
 
-  it("clears reconnect timers and queued messages on disconnect without reconnecting", () => {
+  it("clears queued messages on manual disconnect without reconnecting", () => {
     vi.useFakeTimers();
     try {
       const events: string[] = [];
@@ -334,11 +252,9 @@ describe("ThreadSocketClient", () => {
         WebSocketImpl: FakeWebSocket as never,
         now: () => "2026-06-06T00:00:00.000Z",
         id: () => "cmd-1",
-        reconnectDelayMs: 25,
         onConnectionState: (state) => events.push(state),
         onNotification: () => {},
         onRequest: () => {},
-        getOpenThreadIds: () => [],
       });
 
       client.connect();
@@ -366,11 +282,9 @@ describe("ThreadSocketClient", () => {
         .mockReturnValueOnce("list-1")
         .mockReturnValueOnce("resume-1")
         .mockReturnValueOnce("input-1"),
-      reconnectDelayMs: 0,
       onConnectionState: () => {},
       onNotification: () => {},
       onRequest: () => {},
-      getOpenThreadIds: () => [],
     });
 
     client.connect();
@@ -442,11 +356,9 @@ describe("ThreadSocketClient", () => {
         .mockReturnValueOnce("list-1")
         .mockReturnValueOnce("resume-1")
         .mockReturnValueOnce("input-1"),
-      reconnectDelayMs: 0,
       onConnectionState: () => {},
       onNotification: () => {},
       onRequest: () => {},
-      getOpenThreadIds: () => [],
     });
 
     client.connect();

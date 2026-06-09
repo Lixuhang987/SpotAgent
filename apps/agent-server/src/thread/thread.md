@@ -58,9 +58,9 @@ sequenceDiagram
 - `workspace.listed` 对应 `workspace.list` 命令，不带 `threadId`，只发给发起命令的连接。
 - payload 当前包含 `id`、`name`、`rootPath`，用于 ThreadWindow 展示和选择用户已注册 workspace。
 
-### `thread.snapshot` 是恢复入口
+### `thread.snapshot` 是打开入口
 
-- thread 打开、重连或恢复时，React 统一发送 `thread.resume(threadId)`。
+- 用户打开历史 thread，或初始 prompt 建立 thread 后需要拉取初始状态时，React 发送 `thread.resume(threadId)`。
 - `thread.resume` 的结果是 `thread.snapshot`，携带当前 `messages` 与 `status`。
 - 如果 thread 当前未运行，router 会在返回 snapshot 前尝试恢复重启前的半截 turn，避免历史只停在 user message。
 
@@ -70,7 +70,7 @@ sequenceDiagram
 - Phase 2 起，`ThreadNotificationPublisher` 可接收一个 observer，把每个 `ThreadNotification` 旁路交给 `AgentActivityPublisher`；`ThreadPermissionBridge` / `ThreadWorkspaceAskBridge` 发出的 `ServerRequest` 也会走同一 observer 派生活动状态。observer 发送失败会在 activity 层被隔离，不改变 `/api/thread` 的订阅分发。
 - 同一条 React `/api/thread` socket 可以同时接收多个 thread 的通知。
 - 带 `threadId` 的 notification / server request 按 thread 定向；不带 `threadId` 的全局 notification 广播给所有连接。
-- 当前协议不承诺显式 unsubscribe；tab 关闭是 React 本地订阅状态，不会单独通知 server。
+- 当前协议不承诺显式 unsubscribe；右侧当前展示哪个 thread 是 React 本地页面编排状态，不会单独通知 server。
 
 ### active turn 与 append-only 写回
 

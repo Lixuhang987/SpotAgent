@@ -17,6 +17,16 @@
 
 ## 开发验证记录
 
+### ThreadWindow 无 tab 后台 thread 状态
+
+- 完成日期：待实机 QA
+- 实现位置：`apps/thread-window-web/src/App.tsx`、`apps/thread-window-web/src/store/threadWindowStore.ts`、`apps/thread-window-web/src/thread/threadSocketClient.ts`、`apps/thread-window-web/src/components/ThreadWorkspacePane.tsx`
+- 自动化验证：需执行 `pnpm --filter handagent-thread-window-web test`、`pnpm --filter handagent-thread-window-web build`、`bash ./scripts/test.sh`。
+- 手工回归步骤：
+  1. 启动一个会持续流式输出的 thread，切到历史中的另一个 thread，再切回原 thread；右侧应直接显示原 thread 当前已缓存的 assistant delta，不出现 tab 条，也不清空消息。
+  2. 在后台 thread 触发 permission 或 workspace 请求后，切回该 thread；对应请求面板仍可见并可回答。
+  3. 人为让 `/api/thread` WebSocket 非主动断开时，前端连接状态可变为 `disconnected`，但不得做任何断线恢复：不得自动创建新 WebSocket，不得恢复订阅，不得拉取 snapshot，不得发送任何恢复命令；已有 thread state 保留在最后收到的位置。
+
 ### 仅有 Electron ThreadWindow 时 HandAgent 出现在 Cmd+Tab
 
 - 完成日期：待实机 QA
@@ -31,7 +41,7 @@
 - 实现位置：`apps/thread-window-web/src/styles/tailwind.css`、`apps/thread-window-web/tests/scrollContainers.test.ts`、`apps/thread-window-web/thread-window-web.md`
 - 修复结论：ThreadWindow 全局滚动条样式集中在 Tailwind base layer；标准 CSS 使用 `scrollbar-width` / `scrollbar-color`，Electron/Chromium 通过 `::-webkit-scrollbar*` 覆盖 track、corner 和 thumb。track 与 corner 均为透明，滚动条 thumb 使用 `currentColor` 混合色，在浅色历史侧栏和深色消息区都直接浮在背景上，不再出现白色 gutter。
 - 自动化验证：需执行 `pnpm --filter handagent-thread-window-web exec vitest run tests/scrollContainers.test.ts`、`pnpm --filter handagent-thread-window-web build`、`bash ./scripts/test.sh`。
-- 手工回归步骤：启动 ThreadWindow，制造左侧历史列表纵向滚动、右侧消息区纵向滚动、TabBar 横向滚动、Composer textarea 纵向滚动和请求面板 `pre` 滚动；确认所有滚动条只有半透明 thumb，没有白色 track、白边或页面级横向滚动。
+- 手工回归步骤：启动 ThreadWindow，制造左侧历史列表纵向滚动、右侧消息区纵向滚动、Composer textarea 纵向滚动和请求面板 `pre` 滚动；确认所有滚动条只有半透明 thumb，没有白色 track、白边或页面级横向滚动，并确认右侧不再有 TabBar 横向滚动容器。
 
 ### Electron StatusBubble 空闲点击不再唤起 PromptPanel
 

@@ -60,7 +60,7 @@ function persistExpandedWorkspaceIds(workspaceIds: Set<string>): void {
   }
 }
 
-export type ConnectionState = "disconnected" | "connecting" | "connected" | "reconnecting";
+export type ConnectionState = "disconnected" | "connecting" | "connected";
 
 export type ThreadMessage = {
   id: string;
@@ -90,7 +90,7 @@ export type WorkspaceRequestState = {
   candidates: WorkspaceAskCandidate[];
 };
 
-export type ThreadTabState = {
+export type ThreadState = {
   threadId: string;
   title: string | null;
   status: RunStatus;
@@ -107,8 +107,7 @@ export type ThreadWindowState = {
   connectionState: ConnectionState;
   windowErrorMessage: string | null;
   history: ThreadListEntry[];
-  tabs: Record<string, ThreadTabState>;
-  activeTabId: string | null;
+  threadsById: Record<string, ThreadState>;
   pendingInitialPrompts: Record<string, InitialPromptPayload>;
   processedNotificationIds: Record<string, true>;
   workspaces: Array<{ id: string; name: string; rootPath: string }>;
@@ -116,8 +115,7 @@ export type ThreadWindowState = {
   searchQuery: string;
   setConnectionState(state: ConnectionState): void;
   enqueueInitialPrompt(prompt: InitialPromptPayload): void;
-  openHistoryThread(threadId: string): void;
-  closeTab(threadId: string): void;
+  ensureThreadState(threadId: string): void;
   resolvePermissionRequest(requestId: string): void;
   resolveWorkspaceRequest(requestId: string): void;
   setWorkspaces(workspaces: Array<{ id: string; name: string; rootPath: string }>): void;
@@ -131,7 +129,7 @@ export type ThreadWindowState = {
   handleRequest(request: ServerRequest): void;
 };
 
-function emptyTab(threadId: string, title: string | null = null): ThreadTabState {
+function emptyThreadState(threadId: string, title: string | null = null): ThreadState {
   return {
     threadId,
     title,
@@ -150,8 +148,7 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
   connectionState: "disconnected",
   windowErrorMessage: null,
   history: [],
-  tabs: {},
-  activeTabId: null,
+  threadsById: {},
   pendingInitialPrompts: {},
   processedNotificationIds: {},
   workspaces: [],
@@ -187,47 +184,47 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
 
   queueComposerInput(threadId, text, attachments = []) {
     set(produce<ThreadWindowState>((draft) => {
-      const tab = draft.tabs[threadId] ??= emptyTab(threadId);
-      tab.queuedComposerInputs.push({ text, attachments });
+      const thread = draft.threadsById[threadId] ??= emptyThreadState(threadId);
+      thread.queuedComposerInputs.push({ text, attachments });
     }));
   },
 
   removeQueuedComposerInput(threadId, index) {
     set(produce<ThreadWindowState>((draft) => {
-      const tab = draft.tabs[threadId];
-      if (!tab || index < 0 || index >= tab.queuedComposerInputs.length) {
+      const thread = draft.threadsById[threadId];
+      if (!thread || index < 0 || index >= thread.queuedComposerInputs.length) {
         return;
       }
-      tab.queuedComposerInputs.splice(index, 1);
+      thread.queuedComposerInputs.splice(index, 1);
     }));
   },
 
   markComposerInputDispatchPending(threadId) {
     set(produce<ThreadWindowState>((draft) => {
-      const tab = draft.tabs[threadId] ??= emptyTab(threadId);
-      tab.queuedInputDispatchPending = true;
+      const thread = draft.threadsById[threadId] ??= emptyThreadState(threadId);
+      thread.queuedInputDispatchPending = true;
     }));
   },
 
   takeNextQueuedInputForDispatch(threadId) {
     let nextInput: QueuedComposerInput | null = null;
     set(produce<ThreadWindowState>((draft) => {
-      const tab = draft.tabs[threadId];
+      const thread = draft.threadsById[threadId];
       if (
-        !tab
-        || tab.status === "running"
-        || tab.queuedInputDispatchPending
-        || tab.queuedComposerInputs.length === 0
+        !thread
+        || thread.status === "running"
+        || thread.queuedInputDispatchPending
+        || thread.queuedComposerInputs.length === 0
       ) {
         return;
       }
-      const queuedInput = tab.queuedComposerInputs.shift() ?? null;
+      const queuedInput = thread.queuedComposerInputs.shift() ?? null;
       if (queuedInput) {
         nextInput = {
           text: queuedInput.text,
           attachments: [...queuedInput.attachments],
         };
-        tab.queuedInputDispatchPending = true;
+        thread.queuedInputDispatchPending = true;
       }
     }));
     return nextInput;
@@ -239,34 +236,24 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
     }));
   },
 
-  openHistoryThread(threadId) {
+  ensureThreadState(threadId) {
     set(produce<ThreadWindowState>((draft) => {
-      draft.tabs[threadId] ??= emptyTab(threadId);
-      draft.activeTabId = threadId;
-    }));
-  },
-
-  closeTab(threadId) {
-    set(produce<ThreadWindowState>((draft) => {
-      delete draft.tabs[threadId];
-      if (draft.activeTabId === threadId) {
-        draft.activeTabId = Object.keys(draft.tabs)[0] ?? null;
-      }
+      draft.threadsById[threadId] ??= emptyThreadState(threadId);
     }));
   },
 
   resolvePermissionRequest(requestId) {
     set(produce<ThreadWindowState>((draft) => {
-      for (const tab of Object.values(draft.tabs)) {
-        tab.permissionRequests = tab.permissionRequests.filter((request) => request.id !== requestId);
+      for (const thread of Object.values(draft.threadsById)) {
+        thread.permissionRequests = thread.permissionRequests.filter((request) => request.id !== requestId);
       }
     }));
   },
 
   resolveWorkspaceRequest(requestId) {
     set(produce<ThreadWindowState>((draft) => {
-      for (const tab of Object.values(draft.tabs)) {
-        tab.workspaceRequests = tab.workspaceRequests.filter((request) => request.id !== requestId);
+      for (const thread of Object.values(draft.threadsById)) {
+        thread.workspaceRequests = thread.workspaceRequests.filter((request) => request.id !== requestId);
       }
     }));
   },
@@ -282,17 +269,19 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
           if (notification.commandId) {
             delete draft.pendingInitialPrompts[notification.commandId];
           }
-          draft.tabs[notification.threadId] = emptyTab(notification.threadId, notification.payload.preview);
-          draft.tabs[notification.threadId].pendingInitialPrompt = prompt ?? null;
-          draft.activeTabId = notification.threadId;
+          draft.threadsById[notification.threadId] = emptyThreadState(
+            notification.threadId,
+            notification.payload.preview,
+          );
+          draft.threadsById[notification.threadId].pendingInitialPrompt = prompt ?? null;
           break;
         }
 
         case "thread.snapshot": {
           draft.processedNotificationIds[notification.notificationId] = true;
-          const tab = draft.tabs[notification.threadId] ??= emptyTab(notification.threadId);
-          tab.status = notification.payload.status;
-          tab.messages = notification.payload.messages.map((message) => ({
+          const thread = draft.threadsById[notification.threadId] ??= emptyThreadState(notification.threadId);
+          thread.status = notification.payload.status;
+          thread.messages = notification.payload.messages.map((message) => ({
             id: message.id,
             role: message.role,
             text: message.text,
@@ -300,17 +289,17 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
             toolName: message.toolCall?.name,
           }));
           if (
-            tab.pendingInitialPrompt
-            && !tab.messages.some(
-              (message) => message.role === "user" && message.text === tab.pendingInitialPrompt?.text,
+            thread.pendingInitialPrompt
+            && !thread.messages.some(
+              (message) => message.role === "user" && message.text === thread.pendingInitialPrompt?.text,
             )
           ) {
-            tab.messages.unshift({
-              id: `pending-${tab.pendingInitialPrompt.clientRequestId}`,
+            thread.messages.unshift({
+              id: `pending-${thread.pendingInitialPrompt.clientRequestId}`,
               role: "user",
-              text: tab.pendingInitialPrompt.text,
+              text: thread.pendingInitialPrompt.text,
               pending: true,
-              attachments: tab.pendingInitialPrompt.attachments,
+              attachments: thread.pendingInitialPrompt.attachments,
             });
           }
           break;
@@ -318,9 +307,9 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
 
         case "user.message.recorded": {
           draft.processedNotificationIds[notification.notificationId] = true;
-          const tab = draft.tabs[notification.threadId] ??= emptyTab(notification.threadId);
-          tab.messages = tab.messages.filter((message) => !message.pending);
-          tab.messages.push({
+          const thread = draft.threadsById[notification.threadId] ??= emptyThreadState(notification.threadId);
+          thread.messages = thread.messages.filter((message) => !message.pending);
+          thread.messages.push({
             id: notification.payload.messageId,
             role: "user",
             text: notification.payload.text,
@@ -330,9 +319,9 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
 
         case "turn.started": {
           draft.processedNotificationIds[notification.notificationId] = true;
-          const tab = draft.tabs[notification.threadId] ??= emptyTab(notification.threadId);
-          tab.status = "running";
-          tab.queuedInputDispatchPending = false;
+          const thread = draft.threadsById[notification.threadId] ??= emptyThreadState(notification.threadId);
+          thread.status = "running";
+          thread.queuedInputDispatchPending = false;
           break;
         }
 
@@ -341,12 +330,12 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
             break;
           }
           draft.processedNotificationIds[notification.notificationId] = true;
-          const tab = draft.tabs[notification.threadId] ??= emptyTab(notification.threadId);
-          const existing = tab.messages.find((message) => message.id === notification.itemId);
+          const thread = draft.threadsById[notification.threadId] ??= emptyThreadState(notification.threadId);
+          const existing = thread.messages.find((message) => message.id === notification.itemId);
           if (existing) {
             existing.text += notification.payload.text;
           } else {
-            tab.messages.push({
+            thread.messages.push({
               id: notification.itemId,
               role: "assistant",
               text: notification.payload.text,
@@ -357,8 +346,8 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
 
         case "tool.started": {
           draft.processedNotificationIds[notification.notificationId] = true;
-          const tab = draft.tabs[notification.threadId] ??= emptyTab(notification.threadId);
-          tab.messages.push({
+          const thread = draft.threadsById[notification.threadId] ??= emptyThreadState(notification.threadId);
+          thread.messages.push({
             id: notification.itemId,
             role: "tool",
             text: JSON.stringify(notification.payload.input),
@@ -370,14 +359,14 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
 
         case "tool.finished": {
           draft.processedNotificationIds[notification.notificationId] = true;
-          const tab = draft.tabs[notification.threadId] ??= emptyTab(notification.threadId);
-          const existing = tab.messages.find((message) => message.id === notification.itemId);
+          const thread = draft.threadsById[notification.threadId] ??= emptyThreadState(notification.threadId);
+          const existing = thread.messages.find((message) => message.id === notification.itemId);
           if (existing) {
             existing.text = notification.payload.output;
             existing.status = notification.payload.status;
             existing.toolName = notification.payload.name;
           } else {
-            tab.messages.push({
+            thread.messages.push({
               id: notification.itemId,
               role: "tool",
               text: notification.payload.output,
@@ -390,16 +379,16 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
 
         case "turn.completed": {
           draft.processedNotificationIds[notification.notificationId] = true;
-          const tab = draft.tabs[notification.threadId] ??= emptyTab(notification.threadId);
-          tab.status = notification.payload.status === "completed" ? "idle" : notification.payload.status;
-          tab.pendingInitialPrompt = null;
+          const thread = draft.threadsById[notification.threadId] ??= emptyThreadState(notification.threadId);
+          thread.status = notification.payload.status === "completed" ? "idle" : notification.payload.status;
+          thread.pendingInitialPrompt = null;
           break;
         }
 
         case "thread.status.changed": {
           draft.processedNotificationIds[notification.notificationId] = true;
-          const tab = draft.tabs[notification.threadId] ??= emptyTab(notification.threadId);
-          tab.status = notification.payload.value;
+          const thread = draft.threadsById[notification.threadId] ??= emptyThreadState(notification.threadId);
+          thread.status = notification.payload.value;
           break;
         }
 
@@ -419,10 +408,7 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
             break;
           }
           draft.history = draft.history.filter((item) => item.id !== notification.payload.targetThreadId);
-          delete draft.tabs[notification.payload.targetThreadId];
-          if (draft.activeTabId === notification.payload.targetThreadId) {
-            draft.activeTabId = Object.keys(draft.tabs)[0] ?? null;
-          }
+          delete draft.threadsById[notification.payload.targetThreadId];
           break;
 
         case "thread.error": {
@@ -431,10 +417,10 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
             delete draft.pendingInitialPrompts[notification.commandId];
           }
           if (notification.threadId) {
-            const tab = draft.tabs[notification.threadId] ??= emptyTab(notification.threadId);
-            tab.errorMessage = notification.payload.message;
-            tab.status = "failed";
-            tab.queuedInputDispatchPending = false;
+            const thread = draft.threadsById[notification.threadId] ??= emptyThreadState(notification.threadId);
+            thread.errorMessage = notification.payload.message;
+            thread.status = "failed";
+            thread.queuedInputDispatchPending = false;
           } else {
             draft.windowErrorMessage = notification.payload.message;
           }
@@ -446,16 +432,16 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
 
   handleRequest(request) {
     set(produce<ThreadWindowState>((draft) => {
-      const tab = draft.tabs[request.threadId] ??= emptyTab(request.threadId);
+      const thread = draft.threadsById[request.threadId] ??= emptyThreadState(request.threadId);
       if (request.type === "permission.requested") {
-        tab.permissionRequests.push({
+        thread.permissionRequests.push({
           id: request.requestId,
           toolName: request.payload.toolName,
           toolCallId: request.payload.toolCallId,
           argumentsJSON: JSON.stringify(request.payload.arguments),
         });
       } else {
-        tab.workspaceRequests.push({
+        thread.workspaceRequests.push({
           id: request.requestId,
           prompt: request.payload.prompt,
           candidates: request.payload.candidates,

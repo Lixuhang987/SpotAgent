@@ -64,9 +64,9 @@ if (message.type === "input.submit") {
 }
 ```
 
-`input.submit` 是 permission / workspace 回流的初始绑定时机。当前连接在收到带 `threadId` 的命令后会建立该 thread 的通知路由；`thread.resume` 会在 snapshot 返回后补建 permission 绑定，使 running thread 重连后能收到当前 pending `permission.requested` replay。socket close 时会按 token 解绑，旧 socket 只能取消仍归自己 token 持有的 pending 请求；如果 pending permission ask 已被新 socket 接管，旧 socket close 不会拒绝该 ask，也不会清掉新绑定。
+`input.submit` 是 permission / workspace 回流的初始绑定时机。当前连接在收到带 `threadId` 的命令后会建立该 thread 的通知路由；`thread.resume` 会在 snapshot 返回后补建 permission 绑定，使用户打开历史 running thread 时能收到当前 pending `permission.requested` replay。React ThreadWindow 当前不把 `thread.resume` 用作断线恢复。socket close 时会按 token 解绑，旧 socket 只能取消仍归自己 token 持有的 pending 请求；如果 pending permission ask 已被新 socket 接管，旧 socket close 不会拒绝该 ask，也不会清掉新绑定。
 
-`ThreadNotificationPublisher` 负责 `connectionId -> subscribed threadIds` 映射，所以一条 React `/api/thread` 连接可以同时接收多个 thread 的通知，并靠 `thread.snapshot` 恢复各自状态。若关闭的 socket 仍持有某个 thread 的 permission binding，server 会异步触发 `commandRouter.interruptThread(threadId)` 并清理该 thread 的临时权限规则；若 binding 已被新 socket 接管，旧 socket close 不会中断新连接。
+`ThreadNotificationPublisher` 负责 `connectionId -> subscribed threadIds` 映射，所以一条 React `/api/thread` 连接可以同时接收多个 thread 的通知；`thread.snapshot` 只作为用户打开历史 thread 或初始 prompt 建立 thread 后的状态入口。React ThreadWindow 非主动断开后不自动重连、不恢复订阅、不拉取 snapshot、不发送恢复命令。若关闭的 socket 仍持有某个 thread 的 permission binding，server 会异步触发 `commandRouter.interruptThread(threadId)` 并清理该 thread 的临时权限规则；若 binding 已被新 socket 接管，旧 socket close 不会中断新连接。
 
 `workspace.list` 不需要 thread 绑定；它读取 workspace registry 后只向发起连接返回 `workspace.listed`。
 

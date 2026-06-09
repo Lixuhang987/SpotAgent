@@ -49,7 +49,7 @@ describe("HistorySidebar", () => {
     const html = renderToStaticMarkup(
       React.createElement(HistorySidebar, {
         history: [],
-        activeTabId: null,
+        activeThreadId: null,
         onOpenThread: vi.fn(),
         onDeleteThread: vi.fn(),
         onNewThread: vi.fn(),
@@ -82,7 +82,7 @@ describe("HistorySidebar", () => {
     const html = renderToStaticMarkup(
       React.createElement(HistorySidebar, {
         history,
-        activeTabId: null,
+        activeThreadId: null,
         onOpenThread: vi.fn(),
         onDeleteThread: vi.fn(),
         onNewThread: vi.fn(),

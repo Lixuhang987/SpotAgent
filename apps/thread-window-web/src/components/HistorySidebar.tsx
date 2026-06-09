@@ -8,7 +8,7 @@ import { WorkspaceGroup } from './WorkspaceGroup.tsx';
 
 interface HistorySidebarProps {
   history: ThreadListEntry[];
-  activeTabId: string | null;
+  activeThreadId: string | null;
   onOpenThread: (threadId: string) => void;
   onDeleteThread: (threadId: string) => void;
   onNewThread: () => void;
@@ -16,7 +16,7 @@ interface HistorySidebarProps {
 
 export function HistorySidebar({
   history,
-  activeTabId,
+  activeThreadId,
   onOpenThread,
   onDeleteThread,
   onNewThread,
@@ -74,7 +74,7 @@ export function HistorySidebar({
             key={group.workspace.id}
             workspace={group.workspace}
             threads={group.threads}
-            activeTabId={activeTabId}
+            activeThreadId={activeThreadId}
             isExpanded={expandedWorkspaceIds.has(group.workspace.id)}
             onToggle={() => toggleWorkspaceExpanded(group.workspace.id)}
             onOpenThread={onOpenThread}
@@ -93,7 +93,7 @@ export function HistorySidebar({
                 <ThreadItem
                   key={thread.id}
                   thread={thread}
-                  isActive={thread.id === activeTabId}
+                  isActive={thread.id === activeThreadId}
                   onOpen={() => onOpenThread(thread.id)}
                   onDelete={() => onDeleteThread(thread.id)}
                 />

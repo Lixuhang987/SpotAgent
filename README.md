@@ -10,7 +10,7 @@ HandAgent 是一个 macOS 优先的桌面 Agent Runtime MVP。当前桌面壳使
 - PromptPanel 会读取 `~/.spotAgent/plugins/*/plugin.json` 中的 prompts，构建 `ActionDefinition`，按 trigger 渲染 template 并创建新 thread
 - 文本选区与区域截图可作为 PromptPanel attachment chip 附加到用户输入
 - 提交 prompt 后由 Swift 发送 Electron command 创建或聚焦 `ThreadWindow`，Electron preload 负责 initial prompt 与宿主主题注入
-- React `ThreadWindow` 通过 `/api/thread` 发送 `ThreadCommand`，展示 user / assistant / tool 消息、历史侧栏、连接状态、权限审批气泡和 workspace 选择气泡，并具备断线自动重连基础逻辑
+- React `ThreadWindow` 通过 `/api/thread` 发送 `ThreadCommand`，展示 user / assistant / tool 消息、历史侧栏、连接状态、权限审批气泡和 workspace 选择气泡，并维护后台 thread 状态缓存；React 和 app-server 之间不做断线恢复，非主动断开后不自动重连
 - 主题 token 以 `design/tokens.json` 为源，启动和 Web build 前生成 Swift / Tailwind v4 适配层；主题偏好由 Swift Settings 保存为 `light` / `dark` / `system` 并同步到 Electron/React
 - `agent-server` 驱动 `AgentRuntime`、builtin tool 注册、workspace 沙箱文件工具、权限策略、thread 持久化和 Action thread 的 MCP tool 绑定
 - React StatusBubble 订阅 `/api/activity` 并提供当前 thread 回跳入口；没有可聚焦 ThreadWindow 时不会唤起 PromptPanel
@@ -20,7 +20,7 @@ HandAgent 是一个 macOS 优先的桌面 Agent Runtime MVP。当前桌面壳使
 - `apps/desktop/HandAgentApp.swift`：macOS 宿主、PromptPanel、Settings 与 Swift <-> Electron command bridge 入口
 - `apps/desktop/Sources/Settings`：模型、外观主题、快捷键与 workspace 设置页
 - `apps/electron-shell`：Electron main、ThreadWindow BrowserWindow、ActivityWindow StatusBubble 与 agent-server supervisor
-- `apps/thread-window-web`：React ThreadWindow 前端
+- `apps/thread-window-web`：Electron `BrowserWindow` 承载的 React ThreadWindow 前端
 - `packages/core`：跨平台 Agent Core、工具与 thread 逻辑
 - `apps/agent-server`：本地 thread server、平台反向 IPC、activity stream 与权限桥
 
