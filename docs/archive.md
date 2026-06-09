@@ -1090,3 +1090,11 @@
 - **验证过程**：读取 launchd 环境变量 `HANDAGENT_ELECTRON_BINARY`，确认其指向 pnpm 安装的 Electron binary；执行该 binary 的 `--version`；同时检查当前 Electron main 进程命令。
 - **证据**：`HANDAGENT_ELECTRON_BINARY=/Users/mu9/proj/handAgent/node_modules/.pnpm/electron@42.3.3/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron`；`--version` 返回 `v42.3.3`；当前 Electron main pid `67149` 使用该 binary 启动 `dist/HandAgentDesktop.app/Contents/Resources/ElectronShell/dist/main/main.js`。
 - **结论**：通过。Electron flag packaged app 可通过 `HANDAGENT_ELECTRON_BINARY` 使用可执行 Electron binary，不依赖 PATH 中存在全局 `electron`。
+
+### Electron UI Shell packaged main 产物
+
+- **验证日期**：2026-06-09
+- **验证环境**：Electron flag packaged app，`mock-llm`；主仓库 `/Users/mu9/proj/handAgent`，branch `main`。
+- **验证过程**：检查 `dist/HandAgentDesktop.app` bundle 内的 Electron shell main 入口，并核对当前 Electron main 进程命令是否使用该入口。
+- **证据**：`dist/HandAgentDesktop.app/Contents/Resources/ElectronShell/dist/main/main.js` 存在，大小 `6257` bytes，内容包含 `electron.ready`；当前 Electron main pid `67149` 使用同一路径启动。
+- **结论**：通过。mock packaged app bundle 已包含 Electron shell main 入口。
