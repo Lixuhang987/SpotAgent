@@ -6,7 +6,7 @@ import { cn } from '../utils/cn.ts';
 interface WorkspaceGroupProps {
   workspace: { id: string; name: string; rootPath: string };
   threads: ThreadListEntry[];
-  activeTabId: string | null;
+  activeThreadId: string | null;
   isExpanded: boolean;
   onToggle: () => void;
   onOpenThread: (threadId: string) => void;
@@ -16,7 +16,7 @@ interface WorkspaceGroupProps {
 export function WorkspaceGroup({
   workspace,
   threads,
-  activeTabId,
+  activeThreadId,
   isExpanded,
   onToggle,
   onOpenThread,
@@ -64,7 +64,7 @@ export function WorkspaceGroup({
               <ThreadItem
                 key={thread.id}
                 thread={thread}
-                isActive={thread.id === activeTabId}
+                isActive={thread.id === activeThreadId}
                 onOpen={() => onOpenThread(thread.id)}
                 onDelete={() => onDeleteThread(thread.id)}
               />

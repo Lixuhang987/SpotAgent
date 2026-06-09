@@ -1,9 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Composer } from "./components/Composer.tsx";
 import { HistorySidebar } from "./components/HistorySidebar.tsx";
-import { MessageList } from "./components/MessageList.tsx";
-import { RequestPanels } from "./components/RequestPanels.tsx";
-import { TabBar } from "./components/TabBar.tsx";
+import { ThreadWorkspacePane } from "./components/ThreadWorkspacePane.tsx";
 import { getThreadWebSocketURL, installInitialPromptReceiver } from "./native/nativeConfig.ts";
 import { applyThemeToDocument, getInitialTheme, installThemeSubscription } from "./native/themeConfig.ts";
 import {
@@ -14,7 +11,7 @@ import {
   encodeWorkspaceAnswer,
 } from "./protocol/threadProtocol.ts";
 import { createThreadWindowStore } from "./store/threadWindowStore.ts";
-import { ThreadSocketClient, type ConnectionState } from "./thread/threadSocketClient.ts";
+import { ThreadSocketClient } from "./thread/threadSocketClient.ts";
 import { getThreadWindowSidebarLayout } from "./utils/sidebarLayout.ts";
 
 function now() {
@@ -27,18 +24,18 @@ function id(prefix: string) {
 
 export function App() {
   const state = createThreadWindowStore();
-  const tabs = Object.values(state.tabs);
-  const activeTab = state.activeTabId ? state.tabs[state.activeTabId] : null;
+  const threads = Object.values(state.threadsById);
   const clientRef = useRef<ThreadSocketClient | null>(null);
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [deleteTargetThreadId, setDeleteTargetThreadId] = useState<string | null>(null);
   const [windowWidth, setWindowWidth] = useState(() => window.innerWidth);
   const sidebarLayout = getThreadWindowSidebarLayout(windowWidth);
-  const queuedDispatchKey = tabs
-    .map((tab) => [
-      tab.threadId,
-      tab.status,
-      tab.queuedComposerInputs.length,
-      tab.queuedInputDispatchPending ? "pending" : "ready",
+  const queuedDispatchKey = threads
+    .map((thread) => [
+      thread.threadId,
+      thread.status,
+      thread.queuedComposerInputs.length,
+      thread.queuedInputDispatchPending ? "pending" : "ready",
     ].join(":"))
     .join("|");
 
@@ -53,9 +50,13 @@ export function App() {
     const socket = new ThreadSocketClient({
       url: getThreadWebSocketURL(),
       onConnectionState: (connectionState) => createThreadWindowStore.getState().setConnectionState(connectionState),
-      onNotification: (notification) => createThreadWindowStore.getState().handleNotification(notification),
+      onNotification: (notification) => {
+        createThreadWindowStore.getState().handleNotification(notification);
+        if (notification.type === "thread.started") {
+          setActiveThreadId(notification.threadId);
+        }
+      },
       onRequest: (request) => createThreadWindowStore.getState().handleRequest(request),
-      getOpenThreadIds: () => Object.keys(createThreadWindowStore.getState().tabs),
     });
     clientRef.current = socket;
     socket.connect();
@@ -85,10 +86,10 @@ export function App() {
       return;
     }
     const store = createThreadWindowStore.getState();
-    for (const tab of Object.values(store.tabs)) {
-      const nextInput = store.takeNextQueuedInputForDispatch(tab.threadId);
+    for (const thread of Object.values(store.threadsById)) {
+      const nextInput = store.takeNextQueuedInputForDispatch(thread.threadId);
       if (nextInput) {
-        clientRef.current?.submitInput(tab.threadId, nextInput.text, nextInput.attachments);
+        clientRef.current?.submitInput(thread.threadId, nextInput.text, nextInput.attachments);
       }
     }
   }, [state.connectionState, queuedDispatchKey]);
@@ -116,9 +117,10 @@ export function App() {
       {sidebarLayout.isSidebarVisible ? (
         <HistorySidebar
           history={state.history}
-          activeTabId={state.activeTabId}
+          activeThreadId={activeThreadId}
           onOpenThread={(threadId) => {
-            createThreadWindowStore.getState().openHistoryThread(threadId);
+            createThreadWindowStore.getState().ensureThreadState(threadId);
+            setActiveThreadId(threadId);
             clientRef.current?.resumeThread(threadId);
           }}
           onDeleteThread={(threadId) => {
@@ -127,96 +129,59 @@ export function App() {
           onNewThread={handleNewThread}
         />
       ) : null}
-      <section className="grid h-screen min-h-0 min-w-0 grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-hidden bg-app-canvas text-app-text-primary shadow-product-inner" aria-label="Thread workspace">
-        <header className="flex min-h-[52px] min-w-0 items-center gap-3 overflow-hidden border-b border-app-hairline bg-app-surface px-sm py-xs">
-          <TabBar
-            tabs={tabs}
-            activeTabId={state.activeTabId}
-            onActivate={(threadId) => createThreadWindowStore.setState({ activeTabId: threadId })}
-            onClose={(threadId) => createThreadWindowStore.getState().closeTab(threadId)}
-          />
-        </header>
-
-        <div className="min-h-0 min-w-0 overflow-hidden" data-thread-window-error-slot="true">
-          {state.windowErrorMessage ? (
-            <div className="mx-sm mt-xs rounded-md border border-app-error/30 bg-app-error/10 px-sm py-xs text-sm text-app-error">
-              {state.windowErrorMessage}
-            </div>
-          ) : null}
-        </div>
-
-        {activeTab ? (
-          <>
-            <div className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] overflow-hidden">
-              <MessageList
-                messages={activeTab.messages}
-                errorMessage={activeTab.errorMessage}
-                isRunning={activeTab.status === 'running'}
-              />
-              <RequestPanels
-                permissionRequests={activeTab.permissionRequests}
-                workspaceRequests={activeTab.workspaceRequests}
-                onAnswerPermission={(requestId, decision) => {
-                  clientRef.current?.sendRaw(encodePermissionAnswer({
-                    requestId,
-                    timestamp: now(),
-                    decision,
-                    scope: "thread",
-                  }));
-                  createThreadWindowStore.getState().resolvePermissionRequest(requestId);
-                }}
-                onAnswerWorkspace={(requestId, workspaceId) => {
-                  clientRef.current?.sendRaw(encodeWorkspaceAnswer({
-                    requestId,
-                    timestamp: now(),
-                    ...(workspaceId ? { workspaceId } : { cancelled: true }),
-                  }));
-                  createThreadWindowStore.getState().resolveWorkspaceRequest(requestId);
-                }}
-              />
-            </div>
-            <Composer
-              disabled={state.connectionState !== "connected"}
-              stopDisabled={state.connectionState !== "connected" || activeTab.status !== "running"}
-              queuedInputs={activeTab.queuedComposerInputs}
-              onSubmit={(text) => {
-                const latestTab = createThreadWindowStore.getState().tabs[activeTab.threadId];
-                if (!latestTab) {
-                  return;
-                }
-                const shouldQueue =
-                  latestTab.status === "running"
-                  || latestTab.queuedInputDispatchPending
-                  || latestTab.queuedComposerInputs.length > 0;
-                if (shouldQueue) {
-                  createThreadWindowStore.getState().queueComposerInput(activeTab.threadId, text);
-                  return;
-                }
-                createThreadWindowStore.getState().markComposerInputDispatchPending(activeTab.threadId);
-                clientRef.current?.submitInput(activeTab.threadId, text);
-              }}
-              onRemoveQueuedInput={(index) => {
-                createThreadWindowStore.getState().removeQueuedComposerInput(activeTab.threadId, index);
-              }}
-              onStop={() => {
-                if (state.connectionState !== "connected" || activeTab.status !== "running") {
-                  return;
-                }
-                clientRef.current?.sendRaw(encodeTurnInterrupt({
-                  threadId: activeTab.threadId,
-                  commandId: id("interrupt"),
-                  timestamp: now(),
-                }));
-              }}
-            />
-          </>
-        ) : (
-          <div className="flex min-h-0 min-w-0 items-center justify-center overflow-hidden text-sm text-app-text-muted">
-            <div className="rounded-lg border border-app-hairline bg-app-surface-elevated px-lg py-md">
-              准备开始
-            </div>
-          </div>
-        )}
+      <section className="relative min-h-0 min-w-0 overflow-hidden">
+        <ThreadWorkspacePane
+          threadId={activeThreadId}
+          connectionState={state.connectionState}
+          windowErrorMessage={state.windowErrorMessage}
+          onSubmit={(threadId, text) => {
+            const latestThread = createThreadWindowStore.getState().threadsById[threadId];
+            if (!latestThread) {
+              return;
+            }
+            const shouldQueue =
+              latestThread.status === "running"
+              || latestThread.queuedInputDispatchPending
+              || latestThread.queuedComposerInputs.length > 0;
+            if (shouldQueue) {
+              createThreadWindowStore.getState().queueComposerInput(threadId, text);
+              return;
+            }
+            createThreadWindowStore.getState().markComposerInputDispatchPending(threadId);
+            clientRef.current?.submitInput(threadId, text);
+          }}
+          onRemoveQueuedInput={(threadId, index) => {
+            createThreadWindowStore.getState().removeQueuedComposerInput(threadId, index);
+          }}
+          onStop={(threadId) => {
+            const latestThread = createThreadWindowStore.getState().threadsById[threadId];
+            if (state.connectionState !== "connected" || latestThread?.status !== "running") {
+              return;
+            }
+            clientRef.current?.sendRaw(encodeTurnInterrupt({
+              threadId,
+              commandId: id("interrupt"),
+              timestamp: now(),
+            }));
+          }}
+          onAnswerPermission={(requestId, decision) => {
+            clientRef.current?.sendRaw(encodePermissionAnswer({
+              requestId,
+              timestamp: now(),
+              decision,
+              scope: "thread",
+            }));
+            createThreadWindowStore.getState().resolvePermissionRequest(requestId);
+          }}
+          onAnswerWorkspace={(requestId, workspaceId) => {
+            clientRef.current?.sendRaw(encodeWorkspaceAnswer({
+              requestId,
+              timestamp: now(),
+              ...(workspaceId ? { workspaceId } : { cancelled: true }),
+            }));
+            createThreadWindowStore.getState().resolveWorkspaceRequest(requestId);
+          }}
+        />
         {deleteTargetThreadId ? (
           <div className="delete-confirmation" role="dialog" aria-modal="true" aria-label="Delete thread">
             <div className="delete-confirmation-body">

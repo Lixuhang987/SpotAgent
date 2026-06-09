@@ -7,10 +7,10 @@ import { App } from "../src/App.tsx";
 import { Composer } from "../src/components/Composer.tsx";
 import { HistorySidebar } from "../src/components/HistorySidebar.tsx";
 import { MessageList } from "../src/components/MessageList.tsx";
-import { TabBar } from "../src/components/TabBar.tsx";
-import { createThreadWindowStore, type ThreadTabState } from "../src/store/threadWindowStore.ts";
+import { ThreadWorkspacePane } from "../src/components/ThreadWorkspacePane.tsx";
+import { createThreadWindowStore, type ThreadState } from "../src/store/threadWindowStore.ts";
 
-function tabState(threadId: string): ThreadTabState {
+function threadState(threadId: string): ThreadState {
   return {
     threadId,
     title: threadId,
@@ -46,8 +46,7 @@ beforeEach(() => {
     connectionState: "connected",
     windowErrorMessage: null,
     history: [],
-    tabs: {},
-    activeTabId: null,
+    threadsById: {},
     pendingInitialPrompts: {},
     processedNotificationIds: {},
     workspaces: [],
@@ -59,8 +58,7 @@ beforeEach(() => {
 describe("ThreadWindow scroll containers", () => {
   it("locks the app shell to the viewport without using viewport-width sizing", () => {
     createThreadWindowStore.setState({
-      tabs: { "thread-1": tabState("thread-1") },
-      activeTabId: "thread-1",
+      threadsById: { "thread-1": threadState("thread-1") },
     });
 
     const html = render(React.createElement(App));
@@ -75,7 +73,7 @@ describe("ThreadWindow scroll containers", () => {
     const html = render(
       React.createElement(HistorySidebar, {
         history: [],
-        activeTabId: null,
+        activeThreadId: null,
         onOpenThread: vi.fn(),
         onDeleteThread: vi.fn(),
         onNewThread: vi.fn(),
@@ -125,20 +123,33 @@ describe("ThreadWindow scroll containers", () => {
     expect(html).toContain('aria-label="移除排队输入 1"');
   });
 
-  it("lets only the tab strip scroll horizontally", () => {
-    const tabs = Array.from({ length: 8 }, (_, index) => tabState(`thread-${index + 1}`));
+  it("renders the fixed workspace pane from a thread id without a tab strip", () => {
+    createThreadWindowStore.setState({
+      connectionState: "connected",
+      threadsById: {
+        "thread-1": {
+          ...threadState("thread-1"),
+          messages: [{ id: "m1", role: "assistant", text: "cached delta" }],
+        },
+      },
+    });
 
     const html = render(
-      React.createElement(TabBar, {
-        tabs,
-        activeTabId: "thread-1",
-        onActivate: vi.fn(),
-        onClose: vi.fn(),
+      React.createElement(ThreadWorkspacePane, {
+        threadId: "thread-1",
+        connectionState: "connected",
+        windowErrorMessage: null,
+        onSubmit: vi.fn(),
+        onStop: vi.fn(),
+        onRemoveQueuedInput: vi.fn(),
+        onAnswerPermission: vi.fn(),
+        onAnswerWorkspace: vi.fn(),
       }),
     );
 
-    expect(html).toContain("w-full max-w-full");
-    expect(html).toContain("overflow-x-auto overflow-y-hidden");
+    expect(html).toContain("cached delta");
+    expect(html).toContain('aria-label="Thread workspace"');
+    expect(html).not.toContain("overflow-x-auto overflow-y-hidden");
   });
 
   it("uses transparent global scrollbar tracks instead of a white gutter", () => {
