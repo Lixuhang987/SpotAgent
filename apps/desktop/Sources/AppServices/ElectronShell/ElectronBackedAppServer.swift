@@ -22,7 +22,6 @@ final class ElectronBackedAppServer: AppServerManaging, ThreadWindowCommanding, 
     var onThreadWindowClosed: (() -> Void)?
     var onCommandResult: ((ThreadWindowCommandResult) -> Void)?
     var onActivityWindowCommandResult: ((ActivityWindowCommandResult) -> Void)?
-    var onPromptPanelShowRequested: (() -> Void)?
 
     var isAvailable: Bool {
         hasAgentServerHealth && hasPreparedThreadWindow && startupErrorMessage == nil
@@ -65,7 +64,6 @@ final class ElectronBackedAppServer: AppServerManaging, ThreadWindowCommanding, 
         onThreadWindowClosed = nil
         onCommandResult = nil
         onActivityWindowCommandResult = nil
-        onPromptPanelShowRequested = nil
         pendingCommandKinds.removeAll()
         pendingActivityCommandKinds.removeAll()
         platformClient?.disconnect()
@@ -156,9 +154,6 @@ final class ElectronBackedAppServer: AppServerManaging, ThreadWindowCommanding, 
 
         case .commandAck(let commandId, let ok, let error):
             handleCommandAck(commandId: commandId, ok: ok, error: error)
-
-        case .promptPanelShowRequested:
-            onPromptPanelShowRequested?()
 
         case .electronReady:
             break

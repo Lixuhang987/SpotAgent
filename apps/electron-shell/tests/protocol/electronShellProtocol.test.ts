@@ -74,14 +74,6 @@ describe("electronShellProtocol", () => {
     })).toBe("{\"channel\":\"electron_shell\",\"type\":\"thread_window.closed\",\"timestamp\":\"2026-06-08T00:00:00.000Z\",\"wasVisible\":true}");
   });
 
-  it("encodes prompt panel request events", () => {
-    expect(encodeEvent({
-      channel: "electron_shell",
-      type: "prompt_panel.show_requested",
-      reason: "activity_window.clicked_without_thread",
-    })).toBe("{\"channel\":\"electron_shell\",\"type\":\"prompt_panel.show_requested\",\"reason\":\"activity_window.clicked_without_thread\"}");
-  });
-
   it("rejects malformed initial prompt attachments", () => {
     expect(() => parseCommand(JSON.stringify({
       channel: "electron_shell",

@@ -159,16 +159,12 @@ final class AppCoordinator {
     }
 
     private func setupElectronActivityWindow() {
-        activityWindowCommandClient?.onPromptPanelShowRequested = { [weak self] in
-            self?.promptPanelController.show()
-        }
         activityWindowCommandClient?.onActivityWindowCommandResult = { result in
             guard result.kind == .show, !result.ok else { return }
         }
     }
 
     private func clearElectronActivityWindowCallbacks() {
-        activityWindowCommandClient?.onPromptPanelShowRequested = nil
         activityWindowCommandClient?.onActivityWindowCommandResult = nil
     }
 

@@ -14,7 +14,6 @@ struct ActivityWindowCommandResult: Equatable {
 @MainActor
 protocol ActivityWindowCommanding: AnyObject {
     var onActivityWindowCommandResult: ((ActivityWindowCommandResult) -> Void)? { get set }
-    var onPromptPanelShowRequested: (() -> Void)? { get set }
 
     @discardableResult
     func showActivityWindow() throws -> String

@@ -20,7 +20,7 @@
 - Electron -> Swift event 只通过 `encodeEvent()` 输出 JSON line；字段名必须与 Swift `ElectronShellEvent` decoder 对齐。
 - `thread_window.prepared` 和 `thread_window.prepare_failed` 是事件，不是 command ack。
 - `command.ack` 只确认某个 Swift command 是否执行；它不代表 `/api/thread` 或 `/api/activity` 内部状态变化。
-- `prompt_panel.show_requested` 只允许 `reason: "activity_window.clicked_without_thread"`，由 Swift 决定如何打开 PromptPanel。
+- Electron StatusBubble 点击不再产生 PromptPanel 相关 event；Swift 只通过全局热键、选区/截图入口或显式失败处理打开 PromptPanel。
 
 ## 修改约束
 
