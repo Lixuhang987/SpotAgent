@@ -10,7 +10,7 @@
 | `PromptPanelGrowingTextView.swift` | `NSViewRepresentable` 输入控件：封装 `NSTextView + NSScrollView`，支持自动增高、5 行高度上限和超出后垂直滚动 |
 | `PromptPanelInputLayout.swift` | 输入区布局辅助：根据 `draft` 是否有可见内容决定文字编辑区域宽度，空态只覆盖 placeholder 附近，有内容后占满首行剩余空间 |
 | `PromptPanelViewModel.swift` | `@Observable` 状态：`draft` / `focusSeed` / `filteredActions` / `attachments` / `submissionDisabledMessage`；支持 `updateActions(_:)` 刷新 action；`onSubmit` / `onSubmitAction` / `onHide` / `onOpenSettings` / `onPreviewImage` 回调出口 |
-| `PromptPanelController.swift` | `NSPanel` 生命周期、ESC 局部监听、ViewModel 注入、持有 `QuickLookPreviewController` |
+| `PromptPanelController.swift` | `NSPanel` 生命周期、ESC 局部监听、ViewModel 注入、测试隐藏展示模式、持有 `QuickLookPreviewController` |
 | `PromptPanelFocusRestorer.swift` | 记录 PromptPanel 唤起前的前台应用，并在面板因失焦或 ESC 收起后恢复应用焦点 |
 | `PromptPanelInputFocusRetrier.swift` | 输入框 AppKit 焦点重试器；等待 `NSTextView.window` 可用后设置 `initialFirstResponder` 与当前 first responder |
 | `PromptPanelWindow.swift` | `NSPanel` 子类，处理失焦自动隐藏 |
@@ -62,6 +62,7 @@ Action prompt 的参数与提交流程：
 - **View 只读 ViewModel**：不要让 View 直接调 `NSEvent` / `NSPanel` / `KeyboardShortcuts.*` API，键盘与窗口副作用全部在 Controller。
 - **ViewModel 不持有 SwiftUI 类型**：不要让 `@Observable` class 引入 `View` / `Color` / `Font`；只暴露 plain Swift 状态与回调。
 - **Controller 是窗口管理 + 事件监听层**：不直接写消息循环或 thread/turn 逻辑，所有跨模块意图通过 `onSubmit` / `onSubmitAction` / `onOpenSettings` 闭包出口给 Coordinator。全局快捷键注册由 [Hotkey](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Hotkey/hotkey.md) 承接，不在 PromptPanel 内直接绑定 `KeyboardShortcuts`。
+- **测试不展示真实面板**：`PromptPanelPresentationMode.visible` 是生产默认值；`AppServices.testing()` 和直接测试可使用 `.hiddenForTesting`，仍创建 `NSPanel` / `NSHostingView` 并触发 `focusSeed`，但不执行 `orderFrontRegardless()`、`NSApp.activate(...)`、`makeKey()` 或 ESC local monitor，避免 `swift test` 时弹出 PromptPanel 干扰桌面。
 - **Action 全局快捷键**：每个 `ActionDefinition` 通过 `shortcutName = "action.<id>"` 获得可配置全局快捷键名；plugin manifest 可通过 prompt 级 `globalShortcut` 声明默认值，用户改过后不覆盖。
 - **动态 action 刷新**：Controller 可多次 `register(actions:)`；首次创建 ViewModel，后续只刷新 ViewModel action 列表。Coordinator 同步刷新 Action 全局快捷键注册。新增动态 action 不要覆盖已有用户自定义快捷键。
 - **Styles 抽取阈值**：跨 View 复用的样式才放 `PromptPanelStyles.swift`；一次性样式写在 View 里，避免 ViewModifier 爆炸。

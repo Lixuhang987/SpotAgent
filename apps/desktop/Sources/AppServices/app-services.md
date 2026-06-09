@@ -19,7 +19,7 @@
 
 | 文件 | 职责 |
 |------|------|
-| `AppServices.swift` | DI 容器：持有 `appServer` / `threadWindowCommandClient` / `activityWindowCommandClient` / `settingsStore` / `appearanceThemeService` / `appearanceChangeObserver` / `actionManifestStore` / `platformServerURL` / `hotkeyRegistrar` / `settingsWindowPresenter` / `fatalAlertPresenter` / `setActivationPolicy` / `terminateApplication` / `showsFatalAlert`。生产 `defaultRuntime` 始终选择 `ElectronBackedAppServer` 作为 app-server health source、ThreadWindow command client 和 ActivityWindow command client；`AppearanceThemeService` 负责宿主主题解析和同步 payload，`SystemAppearanceChangeObserver` 负责监听 macOS 外观变化。测试用 `AppServices.testing()` 注入 nop 替身 |
+| `AppServices.swift` | DI 容器：持有 `appServer` / `threadWindowCommandClient` / `activityWindowCommandClient` / `settingsStore` / `appearanceThemeService` / `appearanceChangeObserver` / `actionManifestStore` / `platformServerURL` / `hotkeyRegistrar` / `settingsWindowPresenter` / `fatalAlertPresenter` / `setActivationPolicy` / `terminateApplication` / `showsFatalAlert` / `promptPanelPresentationMode`。生产 `defaultRuntime` 始终选择 `ElectronBackedAppServer` 作为 app-server health source、ThreadWindow command client 和 ActivityWindow command client；`AppearanceThemeService` 负责宿主主题解析和同步 payload，`SystemAppearanceChangeObserver` 负责监听 macOS 外观变化。测试用 `AppServices.testing()` 注入 nop 替身，并让 PromptPanel controller 创建 panel 但不把窗口展示到屏幕 |
 | `AppServicesProductionImpls.swift` | 生产实现：`ProductionHotkeyRegistrar` / `ProductionSettingsWindowPresenter` / `ProductionFatalAlertPresenter`；Settings window presenter 通过 `WindowCloseObservation` 持有和释放关闭通知 token |
 
 ## DI 协议

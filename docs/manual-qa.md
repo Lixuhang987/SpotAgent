@@ -17,6 +17,14 @@
 
 ## 开发验证记录
 
+### PromptPanel 测试隐藏展示模式
+
+- 完成日期：待实机 QA
+- 实现位置：`apps/desktop/Sources/PromptPanel/PromptPanelController.swift`、`apps/desktop/Sources/AppServices/AppServices.swift`、`apps/desktop/Sources/Coordinator/AppCoordinator.swift`、`apps/desktop/TestsSwift/PromptPanel/PromptPanelControllerTests.swift`、`apps/desktop/TestsSwift/PromptPanel/PromptPanelAppearanceTests.swift`、`apps/desktop/TestsSwift/Coordinator/AppCoordinatorTests.swift`
+- 修复结论：Swift 测试可以让 PromptPanel controller 创建 `NSPanel` 和 root view 以验证配置、主题刷新和焦点恢复计数，但测试展示模式不再执行 `orderFrontRegardless()`、`NSApp.activate(...)`、`makeKey()` 或 ESC local monitor，避免 `swift test` / `test.sh` 期间弹出 PromptPanel。
+- 自动化验证：需执行 `bash ./scripts/swiftw test --filter PromptPanelControllerTests`、`bash ./scripts/swiftw test --filter PromptPanelAppearanceTests`、`bash ./scripts/swiftw test --filter AppCoordinatorTests`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`、`bash ./scripts/test.sh`。
+- 手工回归步骤：运行上述 Swift 测试和 `bash ./scripts/test.sh` 时观察桌面，确认没有 Swift PromptPanel 因自动化测试被拉到前台；正常启动桌面 App 后用全局快捷键仍能打开 PromptPanel。
+
 ### Settings 深色主题分段控件文本颜色修复
 
 - 完成日期：待实机 QA

@@ -392,7 +392,8 @@ private func electronServices(
         settingsWindowPresenter: NopSettingsWindowPresenter(),
         fatalAlertPresenter: NopFatalAlertPresenter(),
         setActivationPolicy: setActivationPolicy,
-        terminateApplication: terminateApplication
+        terminateApplication: terminateApplication,
+        promptPanelPresentationMode: .hiddenForTesting
     )
 }
 
