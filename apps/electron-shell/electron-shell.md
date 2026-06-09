@@ -8,10 +8,11 @@
 - 作为唯一的 agent-server supervisor。
 - 在 agent-server 可用后创建隐藏 ThreadWindow `BrowserWindow` 并加载现有 React bundle。
 - 处理 `thread_window.open_initial_prompt`、`thread_window.open_history` 和 `thread_window.focus`；`thread_window.prepare` 不是 Swift command。
+- 处理 Swift 宿主发送的 `theme.changed`，保存当前 host theme，并广播给已准备好的 ThreadWindow renderer。
 - 处理 `activity_window.show`，创建并展示 React StatusBubble ActivityWindow。
 - visible ThreadWindow 关闭后回报 `thread_window.closed wasVisible=true`，并在 agent-server 仍可用时重新预热隐藏窗口。
 - 向 Swift 回报 `electron.ready`、`agent_server.health`、`thread_window.prepared`、`thread_window.prepare_failed`、`thread_window.closed`、`prompt_panel.show_requested`、`renderer.crashed` 和 `command.ack`。
-- 使用 `contextIsolation: true` 与 preload，把 React 需要的 `handAgentThreadWindowConfig` 和初始 prompt receiver 安装到 renderer main world。
+- 使用 `contextIsolation: true` 与 preload，把 React 需要的 `handAgentThreadWindowConfig`、`handAgentTheme`、theme change subscription 和初始 prompt receiver 安装到 renderer main world。
 - macOS 下 Electron main 以 accessory activation policy 运行并隐藏 Dock 图标；Electron 只作为后台 UI shell 预热，不应在 Dock / app switcher 中作为独立前台 app 出现。
 
 ## Supervisor
@@ -22,6 +23,7 @@
 - agent-server 是唯一承载 `packages/core` thread/runtime/tool 循环的后台进程。
 - 关闭 ThreadWindow 或 ActivityWindow 不停止 agent-server；只有 Electron shutdown 会停止后台服务。
 - hidden ThreadWindow 预热由 Electron main 在 agent-server ready 后主动执行。
+- ThreadWindow 创建时通过 preload `additionalArguments` 获得当前 host theme；后续 `theme.changed` 通过 `handagent:theme-changed` IPC 推送给同一个 renderer。
 
 ## StatusBubble
 

@@ -19,7 +19,7 @@
 
 | 文件 | 职责 |
 |------|------|
-| `AppServices.swift` | DI 容器：持有 `appServer` / `threadWindowCommandClient` / `activityWindowCommandClient` / `settingsStore` / `actionManifestStore` / `platformServerURL` / `hotkeyRegistrar` / `settingsWindowPresenter` / `fatalAlertPresenter` / `setActivationPolicy` / `showsFatalAlert`。生产 `defaultRuntime` 始终选择 `ElectronBackedAppServer` 作为 app-server health source、ThreadWindow command client 和 ActivityWindow command client。测试用 `AppServices.testing()` 注入 nop 替身 |
+| `AppServices.swift` | DI 容器：持有 `appServer` / `threadWindowCommandClient` / `activityWindowCommandClient` / `settingsStore` / `appearanceThemeService` / `appearanceChangeObserver` / `actionManifestStore` / `platformServerURL` / `hotkeyRegistrar` / `settingsWindowPresenter` / `fatalAlertPresenter` / `setActivationPolicy` / `showsFatalAlert`。生产 `defaultRuntime` 始终选择 `ElectronBackedAppServer` 作为 app-server health source、ThreadWindow command client 和 ActivityWindow command client；`AppearanceThemeService` 负责宿主主题解析和同步 payload，`SystemAppearanceChangeObserver` 负责监听 macOS 外观变化。测试用 `AppServices.testing()` 注入 nop 替身 |
 | `AppServicesProductionImpls.swift` | 生产实现：`ProductionHotkeyRegistrar` / `ProductionSettingsWindowPresenter` / `ProductionFatalAlertPresenter`；Settings window presenter 通过 `WindowCloseObservation` 持有和释放关闭通知 token |
 
 ## DI 协议
@@ -30,6 +30,7 @@
 | `ElectronShellProcessing`（在 `ElectronShell/ElectronShellProcess.swift`）| `ElectronShellProcess` | 测试内 recording shell |
 | `ThreadWindowCommanding`（在 `ElectronShell/ThreadWindowCommanding.swift`）| `ElectronBackedAppServer` | `NopThreadWindowCommandClient` / 测试内 recording command client |
 | `ActivityWindowCommanding`（在 `ElectronShell/ActivityWindowCommanding.swift`）| `ElectronBackedAppServer` | 测试内 recording command client |
+| `AppearanceChangeObserving`（在 `Appearance/AppearanceChangeObserver.swift`）| `SystemAppearanceChangeObserver` | `NopAppearanceChangeObserver` / 测试内 recording observer |
 | `HotkeyRegistering` | `ProductionHotkeyRegistrar` | `NopHotkeyRegistrar` |
 | `SettingsWindowPresenting` | `ProductionSettingsWindowPresenter` | `NopSettingsWindowPresenter` |
 | `FatalAlertPresenting` | `ProductionFatalAlertPresenter` | `NopFatalAlertPresenter` |

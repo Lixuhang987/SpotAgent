@@ -15,7 +15,7 @@
 Swift 原生 UI 只保留 PromptPanel 和 Settings：
 
 - **PromptPanel**：全局热键唤起、输入、用户主动附件采集、提交。
-- **Settings**：模型、工具、Plugin、MCP、权限、workspace 和快捷键配置。
+- **Settings**：模型、外观主题、工具、Plugin、MCP、权限、workspace 和快捷键配置。
 
 不要新增 Swift ThreadWindow、Swift StatusBubble 或 Swift 侧 thread 状态 mirror。复杂常驻 UI 走 Electron/React。
 
@@ -30,7 +30,7 @@ Swift 原生 UI 只保留 PromptPanel 和 Settings：
 
 - 只有用户主动输入和用户主动选区可以作为 thread 初始上下文；屏幕 / 窗口 / 文件 / 剪贴板 / App 状态一律通过 tool 按需读取。
 - 宿主层不组装 LLM 消息、不读取 runtime 内部状态、不直接执行 tool 编排。ThreadWindow 的 thread 协议由 React 前端通过 `/api/thread` 处理；Swift 宿主只通过 `/api/platform` 处理平台能力 RPC。
-- 快捷键配置只保存在宿主层本地（UserDefaults，由 `KeyboardShortcuts` 库管理），不下沉到 runtime。
+- 快捷键配置只保存在宿主层本地（UserDefaults，由 `KeyboardShortcuts` 库管理），不下沉到 runtime。外观主题偏好由 Swift 宿主持久化到 `~/.spotAgent/settings.json`，并把解析后的主题通过 Electron command bridge 传给 React。
 
 ### 5. 测试与验证
 
@@ -103,7 +103,7 @@ sequenceDiagram
 
 ### `~/.spotAgent/settings.json`
 
-desktop 与 agent-server 共享的模型和 builtin tool 配置文件。desktop 侧由 [AgentSettings](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/AgentSettings/agent-settings.md) 读写；agent-server 在下一次 LLM 请求或 tool registry 刷新时按文件戳读取，无需重启。
+desktop 与 agent-server 共享的模型、builtin tool 和外观主题配置文件。desktop 侧由 [AgentSettings](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/AgentSettings/agent-settings.md) 读写；agent-server 在下一次 LLM 请求或 tool registry 刷新时按文件戳读取 LLM/tool 配置，无需重启。外观主题只由 Swift 读取和写入，并经 `theme.changed` 同步给 Electron/React。
 
 ### `PromptAttachmentResult` / `ActionDefinition`
 

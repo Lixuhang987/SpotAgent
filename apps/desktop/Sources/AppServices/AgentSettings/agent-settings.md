@@ -1,12 +1,12 @@
 # AgentSettings 模块
 
-LLM 模型配置与 tool allowlist / denylist 的读写。
+LLM 模型配置、tool allowlist / denylist 与 Swift 宿主外观主题偏好的读写。
 
 ## 文件
 
 | 文件 | 职责 |
 |------|------|
-| `AgentSettingsStore.swift` | `@Observable` + `@MainActor`，从 `~/.spotAgent/settings.json` 读写 LLM 配置与 tool allowlist / denylist，500ms 轮询热加载 |
+| `AgentSettingsStore.swift` | `@Observable` + `@MainActor`，从 `~/.spotAgent/settings.json` 读写外观主题、LLM 配置与 tool allowlist / denylist，500ms 轮询热加载 |
 | `AgentSettingsView.swift` | 模型设置的 SwiftUI 表单（provider / model / api / baseURL / apiKey），使用系统 segmented `Picker`、`SecureField` 与 `SettingsFieldStyle`，由 [Settings/SettingsView](/Users/mu9/proj/handAgent/apps/desktop/Sources/Settings/settings.md) 嵌入 |
 
 ## 数据模型
@@ -14,6 +14,9 @@ LLM 模型配置与 tool allowlist / denylist 的读写。
 ```jsonc
 // ~/.spotAgent/settings.json
 {
+  "appearance": {
+    "themePreference": "system" // system | light | dark；只由 Swift 宿主写入和解析
+  },
   "llm": {
     "provider": "openai-compatible", // openai-compatible | anthropic；缺失时默认 openai-compatible
     "model": "gpt-5-mini",
@@ -34,11 +37,11 @@ LLM 模型配置与 tool allowlist / denylist 的读写。
 - `AgentLLMProvider` 与 core 的 `ModelSettings.provider` 字符串保持一致；新增 provider 时需要同步 core factory、agent-server 设置读取与桌面 settings UI。
 - 写入用 `JSONEncoder([.prettyPrinted, .sortedKeys])` + `Data.write(.atomic)`，避免半截文件。
 - 500ms 轮询比较 raw `Data` 字节，避免相同内容触发无意义刷新。
-- `update(_:)` 是唯一写入入口，写后立即 persist 并刷新 `lastLoadedData`。
+- `updateAppearance(_:)` / `update(_:)` / `updateToolSettings(_:)` 是写入入口，写后立即 persist 并刷新 `lastLoadedData`；任一入口都必须保留另外两个顶层字段。
 
 ## 编辑此目录的约束
 
-- **写入路径只一条**：`update { ... }` → `persist()`；不要绕过 `update` 直接改 `settings`。
+- **写入路径只走 Store update 方法**：`updateAppearance { ... }` / `update { ... }` / `updateToolSettings { ... }` → `persist()`；不要绕过这些入口直接改状态。
 - **轮询间隔修改需配套测试**：当前 500ms 是 UX/IO 折中值，改动须更新 `AgentSettingsStoreTests`。
 - **AgentSettingsView 不直接持有 Store**：通过 [AgentSettingsViewModel](/Users/mu9/proj/handAgent/apps/desktop/Sources/Settings/settings.md) 代理；Store 只作为 ViewModel 的依赖。
 - **不要在 Store 里加 LLM 调用 / runtime 状态**：Store 只是 settings.json 的配置镜像；agent-server 侧自行 `readFileSync` 读同一个文件。tool allowlist/denylist 现在已由桌面 Settings UI 接入，tool 热加载在 agent-server 侧按文件戳刷新。

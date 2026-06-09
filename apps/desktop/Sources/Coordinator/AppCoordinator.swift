@@ -66,6 +66,7 @@ final class AppCoordinator {
     }
 
     func shutdown() {
+        services.appearanceChangeObserver.stop()
         unregisterActionShortcuts()
         clearElectronActivityWindowCallbacks()
         agentServerHealth.stop()
@@ -147,6 +148,10 @@ final class AppCoordinator {
             self.promptPanelController.updateTheme(self.services.appearanceThemeService.appTheme)
             try? self.services.threadWindowCommandClient.sendThemeChanged(theme)
         }
+        services.appearanceChangeObserver.onSystemAppearanceChange = { [weak self] in
+            self?.services.appearanceThemeService.systemAppearanceDidChange()
+        }
+        services.appearanceChangeObserver.start()
     }
 
     private func setupAgentServerHealth() {

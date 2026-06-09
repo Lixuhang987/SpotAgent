@@ -59,6 +59,7 @@ final class AppServices {
     let activityWindowCommandClient: (any ActivityWindowCommanding)?
     let settingsStore: AgentSettingsStore
     let appearanceThemeService: AppearanceThemeService
+    let appearanceChangeObserver: any AppearanceChangeObserving
     let actionManifestStore: ActionManifestStore
     let platformServerURL: URL
     let hotkeyRegistrar: any HotkeyRegistering
@@ -73,6 +74,7 @@ final class AppServices {
         activityWindowCommandClient: (any ActivityWindowCommanding)? = nil,
         settingsStore: AgentSettingsStore = AgentSettingsStore(),
         appearanceThemeService: AppearanceThemeService? = nil,
+        appearanceChangeObserver: (any AppearanceChangeObserving)? = nil,
         actionManifestStore: ActionManifestStore = ActionManifestStore(),
         platformServerURL: URL = URL(string: "ws://127.0.0.1:4317/api/platform")!,
         hotkeyRegistrar: any HotkeyRegistering = ProductionHotkeyRegistrar(),
@@ -95,6 +97,7 @@ final class AppServices {
         self.activityWindowCommandClient = activityWindowCommandClient ?? runtime?.activityWindowCommandClient
         self.settingsStore = settingsStore
         self.appearanceThemeService = appearanceThemeService ?? AppearanceThemeService(store: settingsStore)
+        self.appearanceChangeObserver = appearanceChangeObserver ?? SystemAppearanceChangeObserver()
         self.actionManifestStore = actionManifestStore
         self.platformServerURL = platformServerURL
         self.hotkeyRegistrar = hotkeyRegistrar
@@ -111,6 +114,7 @@ final class AppServices {
         settingsWindowPresenter: any SettingsWindowPresenting = NopSettingsWindowPresenter(),
         settingsStore: AgentSettingsStore = AgentSettingsStore(),
         appearanceThemeService: AppearanceThemeService? = nil,
+        appearanceChangeObserver: (any AppearanceChangeObserving)? = nil,
         actionManifestStore: ActionManifestStore = ActionManifestStore(
             pluginsDirectoryURL: URL(fileURLWithPath: "/dev/null", isDirectory: true)
         )
@@ -121,6 +125,7 @@ final class AppServices {
             activityWindowCommandClient: activityWindowCommandClient,
             settingsStore: settingsStore,
             appearanceThemeService: appearanceThemeService,
+            appearanceChangeObserver: appearanceChangeObserver ?? NopAppearanceChangeObserver(),
             actionManifestStore: actionManifestStore,
             platformServerURL: URL(string: "ws://127.0.0.1:0/noop-platform")!,
             hotkeyRegistrar: NopHotkeyRegistrar(),
@@ -286,6 +291,14 @@ final class NopThreadWindowCommandClient: ThreadWindowCommanding {
     func sendThemeChanged(_ theme: HostThemePayload) throws -> String {
         "noop-theme-changed"
     }
+}
+
+@MainActor
+final class NopAppearanceChangeObserver: AppearanceChangeObserving {
+    var onSystemAppearanceChange: (() -> Void)?
+
+    func start() {}
+    func stop() {}
 }
 
 @MainActor

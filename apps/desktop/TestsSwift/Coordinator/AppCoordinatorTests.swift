@@ -66,6 +66,44 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testSystemAppearanceChangeSendsResolvedThemeToElectron() {
+        let client = RecordingThreadWindowCommandClient()
+        let observer = RecordingAppearanceChangeObserver()
+        let homeURL = TestFiles.makeTemporaryHomeDirectory()
+        defer { try? FileManager.default.removeItem(at: homeURL) }
+        let settingsStore = AgentSettingsStore(homeDirectoryURL: homeURL)
+        var resolvedTheme: ResolvedAppearanceTheme = .light
+        let appearanceThemeService = AppearanceThemeService(
+            store: settingsStore,
+            systemResolver: { resolvedTheme }
+        )
+        let coordinator = AppCoordinator(
+            services: AppServices(
+                appServer: NopAppServer(),
+                threadWindowCommandClient: client,
+                settingsStore: settingsStore,
+                appearanceThemeService: appearanceThemeService,
+                appearanceChangeObserver: observer,
+                platformServerURL: URL(string: "ws://127.0.0.1:0/noop-platform")!,
+                hotkeyRegistrar: NopHotkeyRegistrar(),
+                settingsWindowPresenter: NopSettingsWindowPresenter(),
+                fatalAlertPresenter: NopFatalAlertPresenter(),
+                setActivationPolicy: { _ in }
+            )
+        )
+
+        XCTAssertEqual(observer.startCount, 1)
+
+        resolvedTheme = .dark
+        observer.publishSystemAppearanceChange()
+
+        XCTAssertEqual(client.sentThemes.last, HostThemePayload(preference: .system, resolved: .dark))
+
+        coordinator.shutdown()
+        XCTAssertEqual(observer.stopCount, 1)
+    }
+
+    @MainActor
     func testShowAndTogglePromptPanelDoNotSendThreadWindowCommand() {
         let client = RecordingThreadWindowCommandClient()
         let coordinator = AppCoordinator(services: electronServices(commandClient: client))
@@ -333,6 +371,25 @@ private func electronServices(
 
 private enum RecordingActivityWindowCommandError: Error {
     case showFailed
+}
+
+@MainActor
+private final class RecordingAppearanceChangeObserver: AppearanceChangeObserving {
+    var onSystemAppearanceChange: (() -> Void)?
+    private(set) var startCount = 0
+    private(set) var stopCount = 0
+
+    func start() {
+        startCount += 1
+    }
+
+    func stop() {
+        stopCount += 1
+    }
+
+    func publishSystemAppearanceChange() {
+        onSystemAppearanceChange?()
+    }
 }
 
 @MainActor
