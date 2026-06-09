@@ -1178,3 +1178,11 @@
 - **验证过程**：设置系统剪贴板为唯一 marker，随后通过 `/api/thread` 提交 `ELECTRON_PLATFORM_CLIPBOARD_CURRENT_QA_20260609 [mock:clipboard-read]`，检查 thread event、持久化文件和 `/api/activity`。
 - **证据**：启动链路为 Swift host pid `79246` -> Electron main pid `79248` -> agent-server pid `79262`；thread `~/.spotAgent/threads/thread-1780966063987-8vmk63.json` 持久化 user prompt、`clipboard.read` tool call、tool result `{"text":{"text":"HANDAGENT_PLATFORM_CLIPBOARD_QA_20260609_VALUE"}}` 与 assistant `Mock clipboard.read completed.`；实时 `/api/thread` 收到 `tool.started` / `tool.finished(status:"completed")`；`/api/activity` snapshot 回到 `activeThreadId:"thread-1780966063987-8vmk63"`、`status:"idle"`。
 - **结论**：通过。Electron flag 路径下 agent-server 仍可通过 Swift `/api/platform` 执行平台 tool 并回写结果。
+
+### Electron React StatusBubble starting / running / completed
+
+- **验证日期**：2026-06-09
+- **验证环境**：Electron flag packaged app，`mock-llm`；标准 `open dist/HandAgentDesktop.app` 启动。
+- **验证过程**：先确认 Swift 无窗口且只有 Electron `HandAgent Activity`。提交 long-running `[mock:slow-focus]` 观察 running UI，再中断 long turn；随后提交短 `[mock:slow]` 并采集 `/api/activity` 状态序列、thread 文件和最终 ActivityWindow。
+- **证据**：Computer Use 在 long-running `thread-1780966195611-ii4g6x` 运行中看到 Electron ActivityWindow 文本 `正在回复 / 正在回复`；短 prompt `ELECTRON_STATUSBUBBLE_SEQUENCE_CURRENT_QA_20260609 [mock:slow]` 的 `/api/activity` 序列为 `starting:正在开始` -> `starting:<prompt>` -> `running:正在回复` -> `completed:已完成` -> `idle:点击开始`；thread 文件 `~/.spotAgent/threads/thread-1780966255243-1kysuw.json` 持久化 assistant `Mock slow response completed.`；最终 Computer Use 看到 Electron ActivityWindow 回到 `点击开始 / 点击开始`。
+- **结论**：通过。Electron flag 路径下不显示 Swift StatusBubble；右下角 Electron React StatusBubble 消费 `/api/activity` 并覆盖 starting / running / completed / idle 状态。
