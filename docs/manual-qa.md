@@ -17,6 +17,14 @@
 
 ## 开发验证记录
 
+### 仅有 Electron ThreadWindow 时 HandAgent 出现在 Cmd+Tab
+
+- 完成日期：待实机 QA
+- 实现位置：`apps/desktop/Sources/Coordinator/AppCoordinator.swift`、`apps/desktop/TestsSwift/Coordinator/AppCoordinatorTests.swift`、`apps/desktop/Sources/Coordinator/coordinator.md`、`apps/desktop/Sources/AppServices/Lifecycle/lifecycle.md`
+- 修复结论：失败边界定位为 `Electron command.ack ok -> AppCoordinator onOpened` 后只更新 TCA `openThreadWindowCount`，没有调用 `AppActivationPolicyCoordinator` 或 `NSApp.setActivationPolicy`；因此仅有 Electron ThreadWindow 时，Swift 宿主仍保持 `.accessory`，不会出现在 Dock / Cmd+Tab。修复后首次 visible Electron ThreadWindow 打开会把 Swift 宿主切到 `.regular`，重复 open/history ack 不重复计数，最后一个 visible ThreadWindow 关闭后按 Settings 状态回落。
+- 自动化验证：需执行 `bash ./scripts/swiftw test --filter AppCoordinatorTests/testThreadWindow`、`bash ./scripts/swiftw test --filter AppCoordinatorTests`、`bash ./scripts/swiftw build`。全量 `bash ./scripts/swiftw test` 若仍命中 `PlatformBridgeConnectionClientTests.testConnectPlatformBridgeRetriesHelloAfterInitialConnect` 的既有基线失败，应单独记录。
+- 手工回归步骤：打包 mock app 后启动 HandAgent；不要打开 Settings，只通过 PromptPanel 提交 `THREADWINDOW_COMMAND_TAB_QA_20260609 [mock:assistant-ok]` 打开 Electron ThreadWindow；确认 Cmd+Tab 中出现 HandAgent/Swift 宿主入口，切换到该入口后能回到 visible ThreadWindow。关闭 ThreadWindow 后，在 Settings 也关闭的情况下确认 Cmd+Tab 不再显示 HandAgent；再打开 Settings 时确认 Cmd+Tab 仍显示 HandAgent。
+
 ### ThreadWindow 透明滚动条视觉回归
 
 - 完成日期：待实机 QA

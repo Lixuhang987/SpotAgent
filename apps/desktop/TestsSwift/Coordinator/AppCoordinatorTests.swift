@@ -46,6 +46,61 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testThreadWindowOpenAckPromotesRegularPolicy() {
+        var appliedPolicies: [NSApplication.ActivationPolicy] = []
+        let client = RecordingThreadWindowCommandClient()
+        let coordinator = AppCoordinator(
+            services: electronServices(
+                commandClient: client,
+                setActivationPolicy: { appliedPolicies.append($0) }
+            )
+        )
+
+        coordinator.send(.submitPrompt("hello", attachments: []))
+        client.complete(commandId: "open-initial-prompt-1", kind: .openInitialPrompt, ok: true)
+
+        XCTAssertEqual(appliedPolicies.last, .regular)
+    }
+
+    @MainActor
+    func testThreadWindowClosedDemotesAccessoryPolicyWhenSettingsIsClosed() {
+        var appliedPolicies: [NSApplication.ActivationPolicy] = []
+        let client = RecordingThreadWindowCommandClient()
+        let coordinator = AppCoordinator(
+            services: electronServices(
+                commandClient: client,
+                setActivationPolicy: { appliedPolicies.append($0) }
+            )
+        )
+
+        coordinator.send(.submitPrompt("hello", attachments: []))
+        client.complete(commandId: "open-initial-prompt-1", kind: .openInitialPrompt, ok: true)
+        coordinator.send(.threadWindowClosed)
+
+        XCTAssertEqual(appliedPolicies, [.regular, .accessory])
+    }
+
+    @MainActor
+    func testRepeatedThreadWindowOpenAcksDoNotOvercountActivationPolicy() {
+        var appliedPolicies: [NSApplication.ActivationPolicy] = []
+        let client = RecordingThreadWindowCommandClient()
+        let coordinator = AppCoordinator(
+            services: electronServices(
+                commandClient: client,
+                setActivationPolicy: { appliedPolicies.append($0) }
+            )
+        )
+
+        coordinator.send(.submitPrompt("hello", attachments: []))
+        client.complete(commandId: "open-initial-prompt-1", kind: .openInitialPrompt, ok: true)
+        coordinator.send(.openHistory)
+        client.complete(commandId: "open-history-1", kind: .openHistory, ok: true)
+        coordinator.send(.threadWindowClosed)
+
+        XCTAssertEqual(appliedPolicies, [.regular, .accessory])
+    }
+
+    @MainActor
     func testOpenHistorySendsElectronCommand() {
         let client = RecordingThreadWindowCommandClient()
         let coordinator = AppCoordinator(services: electronServices(commandClient: client))
@@ -279,7 +334,8 @@ private func closeStatusBubblePanels() {
 private func electronServices(
     appServer: any AppServerManaging = NopAppServer(),
     commandClient: RecordingThreadWindowCommandClient,
-    activityClient: RecordingActivityWindowCommandClient? = nil
+    activityClient: RecordingActivityWindowCommandClient? = nil,
+    setActivationPolicy: @escaping @MainActor (NSApplication.ActivationPolicy) -> Void = { _ in }
 ) -> AppServices {
     AppServices(
         appServer: appServer,
@@ -289,7 +345,7 @@ private func electronServices(
         hotkeyRegistrar: NopHotkeyRegistrar(),
         settingsWindowPresenter: NopSettingsWindowPresenter(),
         fatalAlertPresenter: NopFatalAlertPresenter(),
-        setActivationPolicy: { _ in }
+        setActivationPolicy: setActivationPolicy
     )
 }
 
