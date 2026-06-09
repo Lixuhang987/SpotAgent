@@ -208,14 +208,6 @@
 
 ### 验收场景
 
-### 场景 0：并发 thread 工具激活隔离
-
-1. 使用真实 LLM 模式启动桌面 App，打开两个不同 thread。
-1. 在 thread A 中提交需要工具的 prompt（例如"看一下我屏幕"），等待出现 `use_tools` 或真实工具调用。
-1. 在 thread B 中提交普通聊天 prompt，确认 thread B 不出现 thread A 的真实工具列表或 tool call 气泡。
-1. 继续回到 thread A 发送需要工具的第二轮 prompt，确认 thread A 仍可继续使用真实工具，不会退回只暴露 `use_tools`。
-1. 打开 `~/.spotAgent/log/<YYYY-MM-DD>/network-NNN.jsonl`，对比两条 thread 的请求体：thread A 激活后应包含完整工具集，thread B 未激活时仍只包含 `use_tools`。
-
 ### 对于每个可交互的点，都验证一遍，看是否符合预期，这里不当做硬性bug，而是记录下可能不符合的行为，事无巨细
 
 - 2026-06-09 观察：在历史侧栏搜索出 `HANDAGENT_REAL_PERMISSION_REPLAY_OCR5...` 后，Computer Use 直接触发该 AX row button 会打开删除确认；用鼠标点击 row 左侧正文区域可以正常打开 thread。该现象先记录为可访问性 / hit area 待观察点，不影响普通指针路径。
