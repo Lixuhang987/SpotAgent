@@ -13,10 +13,11 @@
 | `main.ts` | 无独立文档 | Electron process 入口，组装 bridge、runtime、supervisor、window controllers 和 IPC |
 | `electronShellRuntime.ts` | 无独立文档 | 可测试的 command / health / prewarm 状态机 |
 | `activityWindowIpc.ts` | 无独立文档 | 只接收 ActivityWindow renderer 发出的 `focusThread` IPC |
+| `macosBackgroundApp.ts` | 无独立文档 | macOS accessory activation policy 与 Dock 隐藏 |
 
 ## 运行时分层
 
-- `main.ts` 是组合根：读取 env、创建 `JsonLineBridge`、`AgentServerSupervisor`、`ThreadWindowPrewarmer`、`ActivityWindowController`，再把它们交给 `ElectronShellRuntime`。
+- `main.ts` 是组合根：读取 env、创建 `JsonLineBridge`、`AgentServerSupervisor`、`ThreadWindowPrewarmer`、`ActivityWindowController`，在 `app.whenReady()` 后应用 macOS 后台 activation policy，再把进程和窗口对象交给 `ElectronShellRuntime`。
 - `ElectronShellRuntime` 不直接 import Electron API；它只依赖 `prewarmer`、`activityWindow`、`send`、`stopSupervisor`、`quit` 这组接口，便于测试 command ack、health gate、ActivityWindow native focus 释放 / 点击兜底和预热重入。
 - `activityWindowIpc.ts` 必须校验 IPC sender 等于当前 ActivityWindow `webContents`，并只接受 `string | null` thread id；不要让其他 renderer 能通过该 IPC 操作 main。
 

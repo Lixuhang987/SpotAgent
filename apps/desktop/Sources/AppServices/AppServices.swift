@@ -164,13 +164,6 @@ final class AppServices {
         bundleURL: URL? = Bundle.main.bundleURL,
         fileExists: @escaping (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
     ) -> ElectronShellLaunchConfiguration {
-        let bundledElectronMain = bundleResourceURL?
-            .appendingPathComponent("ElectronShell/dist/main/main.js")
-        let explicitElectronMain = environment["HANDAGENT_ELECTRON_MAIN"].flatMap { $0.isEmpty ? nil : $0 }
-        let bundledElectronMainPath = bundledElectronMain.flatMap { fileExists($0.path) ? $0.path : nil }
-        let electronMain = explicitElectronMain
-            ?? bundledElectronMainPath
-            ?? "apps/electron-shell/dist/main/main.js"
         let repoRoot = AgentServerRepositoryRootLocator(
             agentServerRelativePath: "apps/electron-shell/package.json",
             fileExists: fileExists
@@ -180,6 +173,19 @@ final class AppServices {
             bundleURL: bundleURL,
             currentDirectoryURL: currentDirectoryURL
         )
+        let bundledElectronMain = bundleResourceURL?
+            .appendingPathComponent("ElectronShell/dist/main/main.js")
+        let explicitElectronMain = environment["HANDAGENT_ELECTRON_MAIN"]
+            .flatMap { $0.isEmpty ? nil : $0 }
+            .map { resolveElectronMainPath($0, repoRoot: repoRoot) }
+        let bundledElectronMainPath = bundledElectronMain.flatMap { fileExists($0.path) ? $0.path : nil }
+        let defaultElectronMain = repoRoot?
+            .appendingPathComponent("apps/electron-shell/dist/main/main.js")
+            .path
+            ?? "apps/electron-shell/dist/main/main.js"
+        let electronMain = explicitElectronMain
+            ?? bundledElectronMainPath
+            ?? defaultElectronMain
         var launchEnvironment = environment
         if let repoRoot {
             launchEnvironment["HANDAGENT_REPO_ROOT"] = repoRoot.path
@@ -217,6 +223,13 @@ final class AppServices {
             environment: launchEnvironment,
             currentDirectoryURL: repoRoot
         )
+    }
+
+    private static func resolveElectronMainPath(_ path: String, repoRoot: URL?) -> String {
+        guard !path.hasPrefix("/"), let repoRoot else {
+            return path
+        }
+        return repoRoot.appendingPathComponent(path).path
     }
 }
 

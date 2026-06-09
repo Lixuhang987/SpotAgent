@@ -8,6 +8,7 @@
 |------|------|
 | `electronShellRuntime.test.ts` | `src/main/electronShellRuntime.ts` 的 command ack、health gate、startup prewarm、window close 和 shutdown |
 | `activityWindowIpc.test.ts` | `src/main/activityWindowIpc.ts` 的 sender 校验与 `string | null` thread id 限制 |
+| `macosBackgroundApp.test.ts` | `src/main/macosBackgroundApp.ts` 的 macOS accessory activation policy 与 Dock 隐藏 |
 
 ## 测试前提
 

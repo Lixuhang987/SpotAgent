@@ -17,6 +17,16 @@
 
 ## 开发验证记录
 
+### Electron 开发态启动、热键与后台预热回归
+
+- 完成日期：待实机 QA
+- 实现位置：`scripts/swiftw`、`apps/desktop/Sources/AppServices/AppServices.swift`、`apps/electron-shell/src/main/main.ts`、`apps/electron-shell/src/main/macosBackgroundApp.ts`、`apps/agent-server/src/activity/AgentActivityPublisher.ts`
+- 链路证明：期望链路是 `bash ./scripts/swiftw run HandAgentDesktop -> swiftw 构建 thread-window-web 与 electron-shell -> Swift ElectronShellProcess 启动 Electron main -> Electron app.whenReady 后隐藏 Dock / accessory activation policy -> agent-server ready -> hidden ThreadWindow prewarm -> KeyboardShortcuts showPromptPanel -> AppCoordinator.togglePromptPanel -> Swift PromptPanel`。本轮失败边界先定位在 Electron main entry：用户截图显示 Electron 在 package cwd 下查找 `apps/electron-shell/apps/electron-shell/dist/main/main.js`，证明 Swift 传入相对 main entry 且 pnpm filter 改变了 Electron cwd；同时开发态 `swiftw run` 只构建 thread-window-web，不保证 `apps/electron-shell/dist/main/main.js` 存在。Electron Dock 暴露的失败边界定位在 Electron main 没有设置 app 级 accessory activation policy，ActivityWindow 的 `skipTaskbar` 只隐藏窗口，不隐藏 Electron app。
+- 修复结论：开发态默认和相对 `HANDAGENT_ELECTRON_MAIN` 都按 repo root 解析为绝对 main entry；`swiftw run HandAgentDesktop` 会先构建 `handagent-electron-shell`；Electron main 在 ready 后调用 macOS accessory activation policy 并隐藏 Dock icon。`AgentActivityPublisher` 保留同一 thread 先前的详细 `thread.error`，后续 `turn.completed failed` / `thread.status.changed failed` 不再覆盖成泛化“运行失败”。
+- 自动化验证：需执行 `bash ./scripts/swiftw test --filter AppServicesTests`、`pnpm --filter handagent-electron-shell exec vitest run tests/main/macosBackgroundApp.test.ts`、`bash scripts/swiftw.test.sh`、`bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`。
+- 手工回归步骤：在干净 worktree 执行 `bash ./scripts/swiftw run HandAgentDesktop`，确认不再出现 Electron main 找不到模块弹窗；启动后 Electron 不出现在 Dock / app switcher；按全局快捷键确认 Swift PromptPanel 出现；提交 mock prompt 后确认 Electron ThreadWindow 出现且 ActivityWindow 仍可见。
+- 当前 packaged mock 回归结果：2026-06-09 重新执行 `bash ./scripts/package-app.sh --mock-llm`，通过 `launchctl setenv HANDAGENT_ELECTRON_BINARY <worktree>/node_modules/.pnpm/electron@42.3.3/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron` 后 `open -n dist/HandAgentDesktop.app` 启动。进程链为 Swift host、Electron main、agent-server 和两个 Electron renderer；Electron main 使用 `dist/HandAgentDesktop.app/Contents/Resources/ElectronShell/dist/main/main.js`，`127.0.0.1:4317` 由 agent-server 监听；AX 状态为 Electron `visible=false / background only=true / windows={HandAgent Activity}`，证明 Electron 没有作为前台 app 暴露。通过 command socket 发送 `PACKAGED_ERROR_DETAIL_QA_20260609` 后，`~/.spotAgent/threads/thread-1781004859785-dyly4i.json` 记录 `MockLLMClient could not find a mock trigger...`，Activity snapshot 为 `status:"error"` 且 `latestSummary/error` 保留该错误摘要，Electron AX 仍有 `HandAgent Activity` 与 `HandAgent ThreadWindow`，证明 runtime error 不会自动关闭 ThreadWindow。继续发送 `PACKAGED_SUCCESS_QA_20260609 [mock:assistant-ok]` 后，`~/.spotAgent/threads/thread-1781004895592-43k32p.json` 包含 user prompt 与 assistant `Mock assistant response: main chain is reachable.`，Activity snapshot 回到 `status:"idle" / latestSummary:"点击开始" / error:null`，ThreadWindow 仍存在。退出后无 HandAgent / Electron / agent-server 残留，`127.0.0.1:4317` 无监听。
+
 ### Electron-only UI shell 迁移验收
 
 - 完成日期：待实机 QA

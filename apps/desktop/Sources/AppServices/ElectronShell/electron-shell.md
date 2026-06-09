@@ -4,7 +4,7 @@
 
 ## 职责
 
-- 启动 Electron 子进程；`HANDAGENT_ELECTRON_BINARY` 可覆盖 Electron binary，`HANDAGENT_ELECTRON_MAIN` 可覆盖 main entry。未显式覆盖 main entry 时，packaged app 优先使用 `Contents/Resources/ElectronShell/dist/main/main.js`，并通过 `HANDAGENT_ELECTRON_BINARY` 或 PATH 中的 `electron` 启动；开发态回退为 `pnpm --filter handagent-electron-shell exec electron apps/electron-shell/dist/main/main.js`。
+- 启动 Electron 子进程；`HANDAGENT_ELECTRON_BINARY` 可覆盖 Electron binary，`HANDAGENT_ELECTRON_MAIN` 可覆盖 main entry。未显式覆盖 main entry 时，packaged app 优先使用 `Contents/Resources/ElectronShell/dist/main/main.js`；开发态回退为 `pnpm --filter handagent-electron-shell exec electron <repo-root>/apps/electron-shell/dist/main/main.js`。相对 `HANDAGENT_ELECTRON_MAIN` 会先按 repo root 解析为绝对路径，避免 pnpm filter 把 Electron 工作目录切到 package 后重复拼接 `apps/electron-shell`。
 - Swift 启动 Electron 时把子进程 stdin 指向 `/dev/null`，避免 Electron CLI 在 pipe stdin 未 EOF 时阻塞加载 main entry；`ElectronShellCommand` 通过 `HANDAGENT_ELECTRON_COMMAND_SOCKET` 指向的本地 Unix domain socket 发送。
 - Electron -> Swift 的 `ElectronShellEvent` 通过 stdout newline-delimited JSON 回传。
 - 主动停机时先通过 command socket 发送 `shutdown` command；Electron 未在 2 秒内退出时才兜底 `terminate()`，主动停机不作为 fatal termination 上报。
@@ -14,6 +14,7 @@
 - 连接 `/api/platform`，继续由 Swift `PlatformBridgeService` 执行 macOS 原生能力。
 - visible Electron ThreadWindow 关闭时，通过 `onThreadWindowClosed` 通知 Coordinator 清理打开状态；隐藏预热窗口关闭只影响可提交 gate。
 - Electron StatusBubble 点击且无法聚焦 ThreadWindow 时，通过 `prompt_panel.show_requested` 让 Coordinator 打开 Swift PromptPanel。
+- `bash ./scripts/swiftw run HandAgentDesktop` 会先构建 `handagent-electron-shell`，确保开发态 `dist/main/main.js` 存在；不要依赖旧 worktree 残留产物。
 
 ## 文件
 
