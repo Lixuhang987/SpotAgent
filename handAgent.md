@@ -1,22 +1,5 @@
 # handAgent
 
-## 文档目标
-
-本文档是仓库级总览，描述 HandAgent 的分层架构、核心调用链路、跨层合约，以及各子目录文档之间的关系。
-
-下级文档入口：
-
-- [apps/apps.md](/Users/mu9/proj/handAgent/apps/apps.md)
-- [packages/packages.md](/Users/mu9/proj/handAgent/packages/packages.md)
-- [examples/examples.md](/Users/mu9/proj/handAgent/examples/examples.md)
-
-## 产品边界
-
-- 当前产品是一个可由全局热键随时唤起的桌面 Agent。
-- 第一版以 macOS 为优先，但核心 runtime 和 tool 协议按跨平台方式设计。
-- 只有用户主动提供的输入或附件可以作为 thread 初始上下文，例如 prompt、文本选区、主动圈选截图。
-- 屏幕、窗口、文件、剪贴板、App 状态等信息不能默认注入模型，只能通过 tool 按需读取。
-
 ## 分层架构
 
 ```mermaid

@@ -34,27 +34,15 @@
 - 跨模块约定（协议字段、设置文件路径等）必须在双方文档相互引用，避免单边漂移。
 - 当代码与文档冲突时，优先以代码为真相并立即修文档；不要在 PR 描述里只写"待补文档"。
 
-## 当前产品边界
-
-- 产品目标是一个可由全局快捷键随时唤起的桌面 Agent。
-- 第一版平台以 macOS 为优先，但架构设计需要为后续多平台扩展预留抽象。
-- 当前桌面端最低支持版本固定为 `macOS 15+`，本仓库内新增桌面能力默认不为 `macOS 15` 以下系统提供 fallback。
-- 只有用户主动提供的输入可以作为初始上下文提交给 LLM，例如用户 prompt、用户主动选区。
-- 屏幕、窗口、文件、剪贴板、App 状态等上下文信息不应默认注入模型，必须由 LLM 通过 tool 按需读取。
-- 热键、输入框、用户选区属于用户触发入口，不属于 tool。
-- 读取 App 信息、操作 App、编辑文件、保存内容等能力统一抽象为 tool，由 LLM 决定是否调用。
-
 ## 架构事实入口
 
 主调用链路、分层职责和跨进程 DTO 以 [handAgent.md](/Users/mu9/proj/handAgent/handAgent.md) 为准。本文件只保留协作、文档维护和开发流程约束，避免和架构文档双写。
-
 
 ## 开发规范
 ### Since the project hasn’t gone live yet, there’s no need to consider compatibility.
 
 ### 常用命令
 
-- 安装依赖：`pnpm install`
 - TypeScript 测试（agent-server + core，vitest）：`bash ./scripts/test.sh`
 - Swift 测试与构建（桌面 App）：`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`
 - 运行桌面 App：`bash ./scripts/swiftw run HandAgentDesktop`
@@ -67,7 +55,6 @@
 
 说明：
 - Swift 相关命令默认通过 `bash ./scripts/swiftw` 执行。SwiftPM 依赖缓存默认写到主 checkout 的 `.cache/swiftpm/`，可跨 `.worktrees/` 复用；Swift/Clang module cache 默认仍写到当前 worktree 的 `.cache/swift/`。如需跨 worktree 共享 module cache，可设置 `HANDAGENT_SWIFT_MODULE_CACHE_DIR=/path/to/cache`；如需自定义 SwiftPM 依赖缓存，可设置 `HANDAGENT_SWIFTPM_CACHE_DIR=/path/to/cache`。
-- Codex 的 `Stop` hook 当前只执行 TypeScript 侧 `vitest` 校验，不执行 Swift 校验；
 
 ### Development Workflow
 
