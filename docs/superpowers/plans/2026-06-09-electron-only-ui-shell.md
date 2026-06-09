@@ -117,7 +117,7 @@ Update docs so Electron shell is the default and only production UI shell. Remov
 
 - [ ] **Step 2: Record manual QA needs**
 
-Add a manual QA entry for Electron-only packaged mock app: launch app, wait for Electron ready/prewarmed ThreadWindow, submit prompt, verify Electron ThreadWindow, verify Electron ActivityWindow `/api/activity`, verify PromptPanel fallback when no visible ThreadWindow, verify shutdown cleans Electron and agent-server.
+Add a manual QA entry for Electron-only packaged mock app: launch app, wait for Electron ready/prewarmed ThreadWindow, submit prompt, verify Electron ThreadWindow, verify Electron ActivityWindow `/api/activity`, verify StatusBubble click only focuses an existing visible ThreadWindow and does not open Swift PromptPanel when no ThreadWindow is focusable, verify shutdown cleans Electron and agent-server.
 
 ### Task 5: Full verification and commit
 

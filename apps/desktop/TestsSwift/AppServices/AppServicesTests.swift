@@ -3,18 +3,6 @@ import XCTest
 
 final class AppServicesTests: XCTestCase {
     @MainActor
-    func testDefaultAppServerUsesElectronBackedAppServerWithoutFeatureFlag() throws {
-        let appServer = AppServices.defaultAppServer(
-            environment: [
-                "HANDAGENT_ELECTRON_MAIN": "apps/electron-shell/dist/main/main.js",
-            ],
-            platformServerURL: URL(string: "ws://127.0.0.1:4317/api/platform")!
-        )
-
-        XCTAssertTrue(appServer is ElectronBackedAppServer)
-    }
-
-    @MainActor
     func testDefaultRuntimeProvidesElectronWindowCommandClientsWithoutFeatureFlag() throws {
         let runtime = AppServices.defaultRuntime(
             environment: [

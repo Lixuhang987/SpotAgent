@@ -7,7 +7,6 @@
 | 文件 | 职责 |
 |------|------|
 | `AppCoordinator.swift` | 单向事件流、Action 路由；不持有 `NSWindow`、不 `import AppKit` |
-| `AppFeature.swift` | TCA reducer：维护 agent-server 可用性、thread 连接状态与打开的 ThreadWindow 计数 |
 | `ThreadWindowManaging.swift` | Coordinator 使用的 ThreadWindow 抽象，当前实现是 Electron command lifecycle |
 | `ElectronThreadWindowLifecycle.swift` | 通过 `ThreadWindowCommanding` 向 Electron main 发送 open/focus command，不持有 Swift window 或 thread UI 状态 |
 | `SettingsLifecycle.swift` | 持有设置窗口；提供 `openOrFocus / handleClosed / close` |
@@ -50,6 +49,7 @@ openHistory / threadWindowClosed
 - 通过 `ActivityWindowCommanding` 显示 Electron ActivityWindow；该 command client 只承载 ActivityWindow show 命令回执，不承载 activity 数据。
 - 通过 `AppearanceChangeObserving` 接收 macOS 外观变化，并交给 `AppearanceThemeService` 生成宿主主题 payload。
 - `AppActivationPolicyCoordinator` 实例由 Coordinator 创建；SettingsWindow 由 `SettingsLifecycle` 推送激活策略，Electron ThreadWindow 由 Coordinator 在 open/close ack 回调中推送激活策略。
+- Coordinator 不再保留 TCA `Store` 或 Swift 侧 thread 状态；Electron ThreadWindow 的消息、历史和运行态都由 React / agent-server 持有。
 
 ## 编辑此目录的约束
 
