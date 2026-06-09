@@ -45,7 +45,6 @@ Swift 原生 UI 只保留 PromptPanel 和 Settings：
 - `HandAgentApp.swift` — SwiftUI `@main` 入口。
 - `Sources/` — Swift 源码目录；由 [Sources/sources.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/sources.md) 继续索引直接子模块。
 - `TestsSwift/` — Swift 测试目录。
-- `Web/` — desktop 侧 Web 资源目录。
 - `desktop.md` — 本文件。
 
 ## 入口与启动流程
@@ -65,7 +64,7 @@ sequenceDiagram
   participant Shell as apps/electron-shell
 
   App->>Coord: @State 初始化 → 自动 bootstrap()
-  Coord->>Coord: setupPromptPanel + setupHotkey + setupElectronActivityWindow
+  Coord->>Coord: setupPromptPanel + setupHotkey + setupAgentServerHealth
   Coord->>Electron: start()
   Electron->>Shell: launch Electron
   Shell->>Shell: supervise agent-server + prewarm hidden ThreadWindow

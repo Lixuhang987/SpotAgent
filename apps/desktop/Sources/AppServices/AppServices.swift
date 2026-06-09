@@ -136,16 +136,6 @@ final class AppServices {
         )
     }
 
-    static func defaultAppServer(
-        environment: [String: String] = ProcessInfo.processInfo.environment,
-        platformServerURL: URL
-    ) -> any AppServerManaging {
-        defaultRuntime(
-            environment: environment,
-            platformServerURL: platformServerURL
-        ).appServer
-    }
-
     static func defaultRuntime(
         environment: [String: String] = ProcessInfo.processInfo.environment,
         platformServerURL: URL

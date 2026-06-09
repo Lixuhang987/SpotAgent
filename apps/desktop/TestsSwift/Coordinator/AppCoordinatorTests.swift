@@ -218,32 +218,7 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
-    func testActivityShowAckFailureDoesNotCreateSwiftStatusBubbleFallback() async throws {
-        closeStatusBubblePanels()
-        let appServer = TriggerableAppServer()
-        appServer.isAvailable = false
-        let activityClient = RecordingActivityWindowCommandClient()
-        let coordinator = AppCoordinator(
-            services: electronServices(
-                appServer: appServer,
-                commandClient: RecordingThreadWindowCommandClient(),
-                activityClient: activityClient
-            )
-        )
-
-        appServer.publishAvailability(true)
-        try await Task.sleep(for: .milliseconds(10))
-        activityClient.complete(commandId: "activity-show-1", ok: false, error: "activity window failed")
-        try await Task.sleep(for: .milliseconds(10))
-
-        XCTAssertEqual(activityClient.showCount, 1)
-        XCTAssertEqual(visibleStatusBubblePanelCount(), 0)
-        coordinator.shutdown()
-        closeStatusBubblePanels()
-    }
-
-    @MainActor
-    func testShutdownClearsElectronActivityWindowCommandCallback() async throws {
+    func testShutdownClosesPromptPanelWindows() async throws {
         closePromptPanelWindows()
         let app = NSApplication.shared
         let commandClient = RecordingThreadWindowCommandClient()
@@ -256,7 +231,6 @@ final class AppCoordinatorTests: XCTestCase {
         )
 
         coordinator.shutdown()
-        XCTAssertNil(activityClient.onActivityWindowCommandResult)
         try await Task.sleep(for: .milliseconds(10))
 
         XCTAssertFalse(app.windows.contains { $0 is PromptPanelWindow && $0.isVisible })
@@ -437,17 +411,6 @@ private final class RecordingActivityWindowCommandClient: ActivityWindowCommandi
             throw showError
         }
         return "activity-show-\(showCount)"
-    }
-
-    func complete(commandId: String, ok: Bool, error: String? = nil) {
-        onActivityWindowCommandResult?(
-            ActivityWindowCommandResult(
-                commandId: commandId,
-                kind: .show,
-                ok: ok,
-                error: error
-            )
-        )
     }
 }
 

@@ -100,11 +100,12 @@ final class PlatformBridgeConnectionClientTests: XCTestCase {
         )
         let client = PlatformBridgeConnectionClient(
             connection: connection,
-            platformBridge: PlatformBridgeService(provider: RecordingAppServerClientPlatformProvider())
+            platformBridge: PlatformBridgeService(provider: RecordingAppServerClientPlatformProvider()),
+            retryHelloDelayNanoseconds: 1_000_000
         )
 
         client.connect()
-        try await Task.sleep(nanoseconds: 350_000_000)
+        try await waitForPlatformHelloCount(2, task: transport.tasks[0])
 
         let helloCount = transport.tasks[0].sentObjects.filter { object in
             object["channel"] as? String == "platform" &&
@@ -150,6 +151,23 @@ final class PlatformBridgeConnectionClientTests: XCTestCase {
         XCTAssertEqual(response["type"] as? String, "platform_response")
     }
 
+}
+
+private func waitForPlatformHelloCount(
+    _ expectedCount: Int,
+    task: RecordingAppServerConnectionTask,
+    attempts: Int = 20
+) async throws {
+    for _ in 0..<attempts {
+        let helloCount = task.sentObjects.filter { object in
+            object["channel"] as? String == "platform" &&
+                object["type"] as? String == "platform_bridge_hello"
+        }.count
+        if helloCount >= expectedCount {
+            return
+        }
+        try await Task.sleep(nanoseconds: 10_000_000)
+    }
 }
 
 private final class RecordingAppServerConnectionTransport: AppServerConnectionTransport {

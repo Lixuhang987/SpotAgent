@@ -167,7 +167,7 @@ StatusBubble renderer：
 
 - 订阅 `/api/activity`。
 - 展示当前 activity：idle、running、waiting permission/workspace、tool running、error、completed。
-- 点击后通过 Electron main 聚焦 ThreadWindow；若没有活跃 thread，则让 Swift 显示 PromptPanel 或让 Electron 打开空 ThreadWindow，具体由 command bridge 决定。
+- 点击后通过 Electron main 聚焦已有 visible ThreadWindow；没有可聚焦 ThreadWindow 时不唤起 Swift PromptPanel。
 
 ### agent-server 职责
 
@@ -485,7 +485,7 @@ Swift Host starts Electron
 
 - Electron 创建小型 frameless/transparent window。
 - 默认右下角定位，浮动在普通窗口上方。
-- 点击时通过 Electron main 聚焦 ThreadWindow；如果 Electron main 判定没有 ThreadWindow，则回告 Swift 显示 PromptPanel。
+- 点击时通过 Electron main 聚焦已有 visible ThreadWindow；如果没有可聚焦 ThreadWindow，则保持空闲状态，不回告 Swift 打开 PromptPanel。
 - 不再从 Swift `ThreadRegistry` 派生状态。
 
 ## 平台能力边界

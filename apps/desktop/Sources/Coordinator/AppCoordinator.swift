@@ -1,4 +1,3 @@
-import ComposableArchitecture
 import Foundation
 import KeyboardShortcuts
 import SwiftUI
@@ -21,9 +20,6 @@ final class AppCoordinator {
     var agentServerError: String? { agentServerHealth.errorMessage }
 
     @ObservationIgnored private let services: AppServices
-    @ObservationIgnored private let store = Store(initialState: AppFeature.State()) {
-        AppFeature()
-    }
     @ObservationIgnored private let agentServerHealth: AgentServerHealth
     @ObservationIgnored private let threadWindowLifecycle: any ThreadWindowManaging
     @ObservationIgnored private let activityWindowCommandClient: (any ActivityWindowCommanding)?
@@ -61,7 +57,6 @@ final class AppCoordinator {
         setupAppearanceTheme()
         setupPromptPanel()
         setupHotkey()
-        setupElectronActivityWindow()
         setupAgentServerHealth()
         agentServerHealth.start()
     }
@@ -69,7 +64,6 @@ final class AppCoordinator {
     func shutdown() {
         services.appearanceChangeObserver.stop()
         unregisterActionShortcuts()
-        clearElectronActivityWindowCallbacks()
         agentServerHealth.stop()
         settingsLifecycle.close()
         threadWindowLifecycle.close()
@@ -157,13 +151,12 @@ final class AppCoordinator {
     private func setupAgentServerHealth() {
         agentServerHealth.onAvailabilityChange = { [weak self] available, message in
             guard let self else { return }
-            self.store.send(.appServerAvailabilityChanged(available))
             self.promptPanelController.setSubmissionEnabled(available, message: message)
             if available {
                 try? self.services.threadWindowCommandClient.sendThemeChanged(
                     self.services.appearanceThemeService.currentTheme
                 )
-                self.showElectronActivityWindowOrFallback()
+                self.showElectronActivityWindow()
             }
         }
     }
@@ -180,17 +173,7 @@ final class AppCoordinator {
         }
     }
 
-    private func setupElectronActivityWindow() {
-        activityWindowCommandClient?.onActivityWindowCommandResult = { result in
-            guard result.kind == .show, !result.ok else { return }
-        }
-    }
-
-    private func clearElectronActivityWindowCallbacks() {
-        activityWindowCommandClient?.onActivityWindowCommandResult = nil
-    }
-
-    private func showElectronActivityWindowOrFallback() {
+    private func showElectronActivityWindow() {
         guard let activityWindowCommandClient else { return }
         do {
             _ = try activityWindowCommandClient.showActivityWindow()
@@ -263,13 +246,11 @@ final class AppCoordinator {
     }
 
     private func handleThreadWindowOpenFailure(_ message: String) {
-        store.send(.threadWindowClosed)
         promptPanelController.setSubmissionEnabled(false, message: message)
         promptPanelController.show()
     }
 
     private func handleThreadWindowOpened() {
-        store.send(.threadWindowOpened)
         guard !isThreadWindowCountedInActivationPolicy else { return }
         isThreadWindowCountedInActivationPolicy = true
         services.setActivationPolicy(activationPolicy.policyAfterUpdatingOpenThreadWindows(by: 1))
@@ -277,7 +258,6 @@ final class AppCoordinator {
 
     private func handleThreadWindowClosed() {
         threadWindowLifecycle.close()
-        store.send(.threadWindowClosed)
         guard isThreadWindowCountedInActivationPolicy else { return }
         isThreadWindowCountedInActivationPolicy = false
         services.setActivationPolicy(activationPolicy.policyAfterUpdatingOpenThreadWindows(by: -1))
