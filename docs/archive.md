@@ -1154,3 +1154,11 @@
 - **验证过程**：为捕获 stderr，短时直接启动 packaged executable 并重定向 stdout/stderr 到 `/tmp/handagent-qa/electron-supervisor-description-current-20260609.log`；随后检查日志、agent-server 监听与 `/api/activity`。
 - **证据**：日志首行包含 `[electron-shell] agent-server supervisor: {"mode":"node_child","entry":"apps/agent-server/src/server/server.ts","coreRuntimeHost":"agent-server","utilityProcessBlocker":"apps/agent-server/dist/server/server.js 不存在；当前 agent-server 仍依赖 TypeScript 源码入口和 Node --experimental-transform-types"}`；同轮 node pid `75197` 监听 `127.0.0.1:4317`；`/api/activity` 首包为 `activity.snapshot` 且 `status:"idle"`。
 - **结论**：通过。启动日志明确记录 supervisor description、`coreRuntimeHost:"agent-server"` 与 Node child fallback 的具体 `utilityProcessBlocker`。
+
+### Electron UI Shell openHistory command-path
+
+- **验证日期**：2026-06-09
+- **验证环境**：Electron flag packaged app，`mock-llm`；标准 `open dist/HandAgentDesktop.app` 启动。
+- **验证过程**：启动后确认 Electron 只有 `HandAgent Activity`，然后向当前 Electron command socket 发送 `thread_window.open_history` command，检查 Electron / Swift 窗口和 Computer Use 可见内容。
+- **证据**：command socket 为 `/tmp/hae-C9B68DF7-F042-46FC-B318-F9284CD0FAD0.sock`；发送 command 后 Electron 窗口为 `HandAgent Activity` + `HandAgent ThreadWindow`，ThreadWindow 尺寸 `920x640`；Computer Use 可见 React 历史侧栏、workspace 分组、搜索框和历史 thread 列表；`HandAgentDesktop` 进程无 Swift 窗口。
+- **结论**：通过。`openHistory` command-path 聚焦 Electron ThreadWindow 并显示历史侧栏，没有创建 Swift WKWebView host。
