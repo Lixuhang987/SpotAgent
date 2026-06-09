@@ -6,7 +6,7 @@ Swift 宿主的主题偏好模型。`AppearanceThemePreference` 只允许 `syste
 
 | 文件 | 职责 |
 |------|------|
-| `AppearanceChangeObserver.swift` | `AppearanceChangeObserving` 协议与生产 `SystemAppearanceChangeObserver`；生产实现监听 `NSApp.effectiveAppearance` 变化，并把系统外观变化回调给 Coordinator |
+| `AppearanceChangeObserver.swift` | `AppearanceChangeObserving` 协议与生产 `SystemAppearanceChangeObserver`；生产实现监听 `NSApplication.effectiveAppearance` 变化，并把系统外观变化回调给 Coordinator；启动早期如果 `NSApplication` 尚不可用，`start()` 必须安全返回并允许后续再次启动 |
 | `AppearanceTheme.swift` | 定义用户偏好、解析后的主题枚举、`AppearanceSettings` 和传给 Electron/React 的 `HostThemePayload` |
 | `AppearanceThemeService.swift` | 从 `AgentSettingsStore` 读取偏好，解析 `system`，提供当前 `AppTheme`，并在偏好变化时回调跨进程同步；`systemAppearanceDidChange()` 由 Coordinator 的系统外观监听回调触发，用于重新下发 resolved theme |
 

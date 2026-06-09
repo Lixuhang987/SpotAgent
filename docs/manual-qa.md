@@ -54,6 +54,14 @@
   5. 切换回 `跟随系统` 后修改 macOS 系统外观，确认 Swift 重新解析并下发 `light` / `dark`，已打开的 ThreadWindow 跟随变化。
 - 边界确认：React 不写主题偏好，不使用 `localStorage` 持久化主题；`tailwind.config.js` 不存在；Swift Theme 不再维护手写 color literal token 源。
 
+### SwiftUI 启动阶段外观监听不崩溃
+
+- 完成日期：待实机 QA
+- 实现位置：`apps/desktop/Sources/AppServices/Appearance/AppearanceChangeObserver.swift`、`apps/desktop/TestsSwift/AppServices/Appearance/AppearanceChangeObserverTests.swift`
+- 链路证明：失败链路是 `SwiftUI App.main -> AppCoordinator.init -> bootstrap -> setupAppearanceTheme -> SystemAppearanceChangeObserver.start -> NSApp.observe`；崩溃边界定位为启动早期 `NSApp` 这个 AppKit 隐式解包全局可能仍为 nil。修复后 `SystemAppearanceChangeObserver` 通过可注入的 `NSApplication` provider 启动监听，provider 暂时返回 nil 时安全返回，后续 `start()` 会重新尝试。
+- 自动化验证：需执行 `bash ./scripts/swiftw test --filter AppearanceChangeObserverTests`、`bash ./scripts/swiftw test --filter AppCoordinatorTests/testSystemAppearanceChangeSendsResolvedThemeToElectron`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`、`bash ./scripts/test.sh`。
+- 手工回归步骤：执行 `bash ./scripts/swiftw run HandAgentDesktop`，确认 App 启动阶段不再出现 `AppearanceChangeObserver.swift` 或 `AppCoordinator.setupAppearanceTheme()` 的 fatal error；打开 Settings → 外观选择 `跟随系统` 后切换 macOS 系统外观，确认已打开 Electron ThreadWindow 仍随 resolved theme 更新。
+
 ### Electron 开发态启动、热键与后台预热回归
 
 - 完成日期：待实机 QA
