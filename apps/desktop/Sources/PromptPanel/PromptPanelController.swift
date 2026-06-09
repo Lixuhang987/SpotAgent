@@ -97,11 +97,16 @@ final class PromptPanelController {
         }
     }
 
-    func hide() {
+    func hide(restoringFocus: Bool = true) {
+        if !restoringFocus {
+            previousFocusOwner = nil
+        }
         quickLookController.dismiss()
         panel?.orderOut(nil)
         removeEventMonitor()
-        restorePreviousFocusOwner()
+        if restoringFocus {
+            restorePreviousFocusOwner()
+        }
     }
 
     private func presentQuickLook(for attachment: PromptAttachmentResult) {

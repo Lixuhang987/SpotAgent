@@ -24,7 +24,7 @@
 - 窗口生命周期由 lifecycle 控制器闭环：Electron ThreadWindow 由 `ElectronThreadWindowLifecycle` 通过 `ThreadWindowCommanding` 管理，`SettingsLifecycle` 管 Settings；Coordinator 不持有 AppKit 对象。
 - 历史入口语义：`openHistory` 聚焦全局 Electron ThreadWindow 并刷新左侧历史，不打开独立窗口，不改变 active tab。
 - PromptPanel show/toggle 只负责显示原生输入面板和刷新 action 定义，不触发 ThreadWindow prepare。ThreadWindow 预热由 Electron main 在 agent-server ready 后主动完成。
-- PromptPanel 提交语义：发送 `thread_window.open_initial_prompt` 给 Electron main。React 收到后通过 `/api/thread` 发送 `thread.start`，再在 `thread.started` 后发送首轮 `input.submit` 和 attachments。
+- PromptPanel 提交语义：先用 `hide(restoringFocus: false)` 隐藏 PromptPanel，不恢复唤起前的前台应用；再发送 `thread_window.open_initial_prompt` 给 Electron main。React 收到后通过 `/api/thread` 发送 `thread.start`，再在 `thread.started` 后发送首轮 `input.submit` 和 attachments。这样 Electron `BrowserWindow.show()/focus()` 后不会被 PromptPanel 的焦点恢复逻辑推到后台。
 - Settings 打开时会创建模型、builtin tool、Plugin、Append Prompt、MCP、权限和 workspace 的 ViewModel。Coordinator 只负责注入，不直接读写 `~/.spotAgent/plugins` 或 `~/.spotAgent/mcp.json`。
 - agent-server 健康状态独立：server 不可用时拒绝 `submitPrompt` 并保留面板草稿。
 - `AppCoordinator` 在 app-server available 后调用 `ActivityWindowCommanding.showActivityWindow()`；show 失败不回退到 Swift StatusBubble。Electron StatusBubble 点击无法聚焦 ThreadWindow 时，Coordinator 只打开 PromptPanel，不解析 `/api/activity` 状态。

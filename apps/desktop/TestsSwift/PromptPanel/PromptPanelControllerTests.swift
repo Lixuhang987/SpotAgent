@@ -85,6 +85,20 @@ final class PromptPanelControllerTests: XCTestCase {
         XCTAssertEqual(focusRestorer.restoredTokens, [1])
     }
 
+    func testHideCanSkipRestoringFocusWhenHandingOffToThreadWindow() async throws {
+        let focusRestorer = FakePromptPanelFocusRestorer()
+        let controller = PromptPanelController(focusRestorer: focusRestorer)
+        let viewModel = PromptPanelViewModel(actions: [])
+        controller.configure(viewModel: viewModel)
+
+        controller.show()
+        controller.hide(restoringFocus: false)
+
+        XCTAssertEqual(focusRestorer.captureCount, 1)
+        XCTAssertEqual(focusRestorer.restoreCount, 0)
+        XCTAssertEqual(focusRestorer.restoredTokens, [])
+    }
+
     func testInputFocusRetrierWaitsForTextViewWindowBeforeFocusing() {
         var scheduled: [@MainActor () -> Void] = []
         let retrier = PromptPanelInputFocusRetrier(maxAttempts: 2) { work in

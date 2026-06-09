@@ -196,11 +196,11 @@ final class AppCoordinator {
             attachments: attachments,
             actionBinding: actionBinding
         ) else { return }
+        promptPanelController.hide(restoringFocus: false)
         threadWindowLifecycle.createTabWithInitialPrompt(
             prompt,
             onOpened: { [weak self] in
                 guard let self else { return }
-                self.promptPanelController.hide()
                 self.store.send(.threadWindowOpened)
             },
             onFailed: { [weak self] message in

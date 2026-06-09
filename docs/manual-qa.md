@@ -27,6 +27,15 @@
 - 手工回归步骤：在干净 worktree 执行 `bash ./scripts/swiftw run HandAgentDesktop`，确认不再出现 Electron main 找不到模块弹窗；启动后 Electron 不出现在 Dock / app switcher；按全局快捷键确认 Swift PromptPanel 出现；提交 mock prompt 后确认 Electron ThreadWindow 出现且 ActivityWindow 仍可见。
 - 当前 packaged mock 回归结果：2026-06-09 重新执行 `bash ./scripts/package-app.sh --mock-llm`，通过 `launchctl setenv HANDAGENT_ELECTRON_BINARY <worktree>/node_modules/.pnpm/electron@42.3.3/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron` 后 `open -n dist/HandAgentDesktop.app` 启动。进程链为 Swift host、Electron main、agent-server 和两个 Electron renderer；Electron main 使用 `dist/HandAgentDesktop.app/Contents/Resources/ElectronShell/dist/main/main.js`，`127.0.0.1:4317` 由 agent-server 监听；AX 状态为 Electron `visible=false / background only=true / windows={HandAgent Activity}`，证明 Electron 没有作为前台 app 暴露。通过 command socket 发送 `PACKAGED_ERROR_DETAIL_QA_20260609` 后，`~/.spotAgent/threads/thread-1781004859785-dyly4i.json` 记录 `MockLLMClient could not find a mock trigger...`，Activity snapshot 为 `status:"error"` 且 `latestSummary/error` 保留该错误摘要，Electron AX 仍有 `HandAgent Activity` 与 `HandAgent ThreadWindow`，证明 runtime error 不会自动关闭 ThreadWindow。继续发送 `PACKAGED_SUCCESS_QA_20260609 [mock:assistant-ok]` 后，`~/.spotAgent/threads/thread-1781004895592-43k32p.json` 包含 user prompt 与 assistant `Mock assistant response: main chain is reachable.`，Activity snapshot 回到 `status:"idle" / latestSummary:"点击开始" / error:null`，ThreadWindow 仍存在。退出后无 HandAgent / Electron / agent-server 残留，`127.0.0.1:4317` 无监听。
 
+### PromptPanel submit 后 Electron ThreadWindow 前台保持回归
+
+- 完成日期：待实机 QA
+- 实现位置：`apps/desktop/Sources/Coordinator/AppCoordinator.swift`、`apps/desktop/Sources/PromptPanel/PromptPanelController.swift`
+- 链路证明：期望链路是 `PromptPanel submit -> AppCoordinator.compose -> PromptPanel hide without focus restore -> Swift command bridge thread_window.open_initial_prompt -> Electron ThreadWindow show/focus -> React /api/thread input.submit -> StatusBubble 更新`。失败边界定位为 PromptPanel submit 原先等 Electron open ack 后调用 `hide()`，而 `hide()` 固定恢复唤起前的前台应用；同时 Electron `show()/focus()` 还可能先触发 PromptPanel `onDidResignKey -> hide()`，导致旧前台 App 被重新激活，ThreadWindow 看起来只闪现一瞬间但仍可被 StatusBubble 点击聚焦。
+- 修复结论：`PromptPanelController.hide(restoringFocus:)` 默认保持旧焦点恢复语义；`AppCoordinator` 在发送 `thread_window.open_initial_prompt` 前调用 `hide(restoringFocus: false)`，并且 `hide(restoringFocus: false)` 在 `orderOut` 前清空焦点 token，覆盖 `onDidResignKey` 重入。
+- 自动化验证：需执行 `bash ./scripts/swiftw test --filter PromptPanelControllerTests`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`。
+- 手工回归步骤：打包 mock app 后用真实全局快捷键打开 Swift PromptPanel，提交 `PROMPT_HANDOFF_QA_20260609 [mock:assistant-ok]`；确认 PromptPanel 消失后 Electron `HandAgent ThreadWindow` 保持前台可见，不被提交前的 App 盖住；StatusBubble 正常从 starting/running 回到 idle，点击 StatusBubble 仍能聚焦同一个 ThreadWindow。
+
 ### Electron-only UI shell 迁移验收
 
 - 完成日期：待实机 QA
