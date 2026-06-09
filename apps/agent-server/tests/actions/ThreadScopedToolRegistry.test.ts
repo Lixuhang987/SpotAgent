@@ -26,7 +26,6 @@ describe("ThreadScopedToolRegistry", () => {
       mcpServerIds: ["github"],
     });
     expect(scoped.registryForThread("action").list().map((tool) => tool.name)).toEqual([
-      "use_tools",
       "clipboard.read",
       "mcp.github.create_issue",
     ]);
@@ -47,10 +46,9 @@ describe("ThreadScopedToolRegistry", () => {
       "use_tools",
     ]);
 
-    // after explicit activation: meta + builtin + global MCP
+    // after explicit activation: builtin + global MCP without the meta-tool
     await scoped.activate("plain");
     expect(scoped.registryForThread("plain").list().map((tool) => tool.name)).toEqual([
-      "use_tools",
       "clipboard.read",
       "mcp.github.create_issue",
     ]);
@@ -71,7 +69,6 @@ describe("ThreadScopedToolRegistry", () => {
       mcpServerIds: ["github"],
     });
     expect(scoped.registryForThread("action").list().map((tool) => tool.name)).toEqual([
-      "use_tools",
       "clipboard.read",
       "mcp.github.create_issue",
     ]);
@@ -95,7 +92,6 @@ describe("ThreadScopedToolRegistry", () => {
     await scoped.activate("action");
 
     expect(scoped.registryForThread("action").list().map((tool) => tool.name)).toEqual([
-      "use_tools",
       "clipboard.read",
     ]);
     expect(logs[0]).toContain("skipped MCP server missing");

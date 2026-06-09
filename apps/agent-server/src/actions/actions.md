@@ -23,7 +23,7 @@ flowchart TD
   D --> E{"thread activated?"}
   E -- "否" --> F["只暴露 use_tools"]
   E -- "mock 模式" --> G["use_tools + builtin tools"]
-  E -- "是" --> H["use_tools + builtin + MCP tools"]
+  E -- "是" --> H["builtin + MCP tools，不再暴露 use_tools"]
   H --> I["core AgentRuntime registryForThread(threadId)"]
 ```
 
@@ -71,7 +71,7 @@ if (this.activated.has(threadId)) {
 registry.replaceAll([this.metaTool]);
 ```
 
-未激活 thread 默认只暴露 `use_tools`，减少普通聊天请求里的工具噪音。模型调用 meta-tool 后，core runtime 触发 `activate(threadId)`，下一轮工具表扩展为 builtin + MCP。
+未激活 thread 默认只暴露 `use_tools`，减少普通聊天请求里的工具噪音。模型调用 meta-tool 后，core runtime 触发 `activate(threadId)`，下一轮工具表扩展为 builtin + MCP，并移除 `use_tools`，避免已激活 thread 重复调用 meta-tool。
 
 ### Computer Use 兼容层
 

@@ -71,7 +71,7 @@ export class ThreadScopedToolRegistry {
     registry: ToolRegistry,
   ): Promise<void> {
     void threadId;
-    const tools: AgentTool[] = [this.metaTool, ...this.options.builtinRegistry.all()];
+    const tools: AgentTool[] = [...this.options.builtinRegistry.all()];
 
     const serverIds = new Set([
       ...this.options.globalMcpServerIds,

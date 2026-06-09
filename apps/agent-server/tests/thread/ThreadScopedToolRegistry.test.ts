@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { MockLLMClient } from "@handagent/core/llm/MockLLMClient.ts";
 import { AgentRuntime } from "@handagent/core/runtime/AgentRuntime.ts";
+import type { AgentMessage } from "@handagent/core/runtime/AgentMessage.ts";
 import type { AgentTool } from "@handagent/core/tools/AgentTool.ts";
 import { ToolRegistry } from "@handagent/core/tools/ToolRegistry.ts";
+import { META_TOOL_NAME } from "@handagent/core/tools/MetaToolUseTool.ts";
 import { ThreadScopedToolRegistry } from "../../src/actions/ThreadScopedToolRegistry.ts";
 
 function fakeTool(name: string): AgentTool {
@@ -36,7 +38,7 @@ describe("ThreadScopedToolRegistry lazy activation", () => {
     expect(scoped.isActivated("s1")).toBe(false);
   });
 
-  it("activate switches the registry to meta + builtin + mcp tools", async () => {
+  it("activate switches the registry to builtin + mcp tools without the meta-tool", async () => {
     const scoped = buildScoped({
       builtin: [fakeTool("frontmost.app"), fakeTool("clipboard.read")],
       mcp: { srv: [fakeTool("mcp.srv.echo")] },
@@ -46,12 +48,57 @@ describe("ThreadScopedToolRegistry lazy activation", () => {
     await scoped.activate("s1");
 
     expect(scoped.registryForThread("s1").list().map((t) => t.name)).toEqual([
-      "use_tools",
       "frontmost.app",
       "clipboard.read",
       "mcp.srv.echo",
     ]);
     expect(scoped.isActivated("s1")).toBe(true);
+  });
+
+  it("removes the meta-tool from the next LLM request after activation", async () => {
+    const toolNamesPerRequest: string[][] = [];
+    const scoped = buildScoped({
+      builtin: [fakeTool("frontmost.app")],
+    });
+    await scoped.refreshForThread("s1", undefined);
+
+    const client = {
+      async *stream(_messages: AgentMessage[], tools: AgentTool[]) {
+        toolNamesPerRequest.push(tools.map((tool) => tool.name));
+        if (toolNamesPerRequest.length === 1) {
+          yield {
+            type: "tool_call" as const,
+            toolCall: { id: "meta-1", name: META_TOOL_NAME, arguments: {} },
+          };
+          yield {
+            type: "message_end" as const,
+            message: { role: "assistant" as const, content: "" },
+            toolCalls: [{ id: "meta-1", name: META_TOOL_NAME, arguments: {} }],
+          };
+          return;
+        }
+        yield { type: "text_delta" as const, text: "done" };
+        yield {
+          type: "message_end" as const,
+          message: { role: "assistant" as const, content: "done" },
+          toolCalls: [],
+        };
+      },
+    };
+
+    const runtime = new AgentRuntime(client, scoped.registryForThread("s1"), {
+      onMetaToolActivate: (threadId) => scoped.activate(threadId),
+      isThreadActivated: (threadId) => scoped.isActivated(threadId),
+    });
+
+    await runtime.runWithMessages([{ role: "user", content: "inspect screen" }], () => {}, {
+      threadId: "s1",
+    });
+
+    expect(toolNamesPerRequest).toEqual([
+      ["use_tools"],
+      ["frontmost.app"],
+    ]);
   });
 
   it("isolates activation state per Thread", async () => {
@@ -63,7 +110,6 @@ describe("ThreadScopedToolRegistry lazy activation", () => {
     expect(scoped.isActivated("s2")).toBe(false);
     expect(scoped.registryForThread("s2").list().map((t) => t.name)).toEqual(["use_tools"]);
     expect(scoped.registryForThread("s1").list().map((t) => t.name)).toEqual([
-      "use_tools",
       "frontmost.app",
     ]);
   });
@@ -78,7 +124,6 @@ describe("ThreadScopedToolRegistry lazy activation", () => {
     await scoped.refreshForThread("s1", { mcpServerIds: ["srv"] });
 
     expect(scoped.registryForThread("s1").list().map((t) => t.name)).toEqual([
-      "use_tools",
       "frontmost.app",
       "mcp.srv.echo",
     ]);
@@ -106,7 +151,6 @@ describe("ThreadScopedToolRegistry lazy activation", () => {
 
     expect(scoped.registryForThread("s2").list().map((t) => t.name)).toEqual(["use_tools"]);
     expect(s1Registry.list().map((t) => t.name)).toEqual([
-      "use_tools",
       "frontmost.app",
       "clipboard.read",
     ]);
