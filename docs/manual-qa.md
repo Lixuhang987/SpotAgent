@@ -124,6 +124,14 @@
 - 实现位置：`apps/thread-window-web/src/utils/groupThreads.ts`、`apps/thread-window-web/tests/groupThreads.test.ts`、`apps/thread-window-web/tests/historySidebar.test.ts`、`apps/thread-window-web/tests/threadWindowStore.test.ts`
 - 验收结果：`workspace.listed` 仍按后端 registry 原序写入 store；ThreadWindow 历史侧栏在 `groupThreadsByWorkspace` 层按 workspace 名称排序，名为 `default` 的 workspace 参与正常字母序，`workspaceId: null` 的"默认对话"仍独立固定在最下方。已通过 `pnpm --filter handagent-thread-window-web exec vitest run tests/groupThreads.test.ts tests/threadWindowStore.test.ts tests/historySidebar.test.ts`。
 
+### 已激活 thread 重复暴露 `use_tools` 修复
+
+- 完成日期：2026-06-09
+- 实现位置：`apps/agent-server/src/actions/ThreadScopedToolRegistry.ts`、`apps/agent-server/tests/thread/ThreadScopedToolRegistry.test.ts`、`apps/agent-server/tests/actions/ThreadScopedToolRegistry.test.ts`
+- 链路证明：子 agent `019ea9b4-ed96-7e03-800e-e446f60cbc51` 按 `$trace-and-verify-call-chain` 验证 `ThreadRuntimeOrchestrator.beforeRun -> ThreadScopedToolRegistry.refreshForThread() -> AgentRuntime.completeAssistantResponse() -> toolRegistry.list() -> LLMClient.stream(..., tools)`。RED 阶段证明首次 `use_tools` 激活后第二轮 LLM request 的工具表仍是 `["use_tools", "frontmost.app"]`；失败 hop 定位为 `ThreadScopedToolRegistry.refreshActivated()` 在已激活 thread 中仍把 meta-tool 放入 provider 可见工具表。
+- 修复结论：已激活 thread 的工具表改为 builtin + MCP tools，不再暴露 `use_tools`；mock 模式仍保留既有特例，未激活 thread 仍只暴露 `use_tools`。该修复直接覆盖 `docs/bugs.md` 中 `AI SDK stream finished without assistant content or tool calls` 的根因边界，避免真实 provider 在已激活 thread 的 retry / 后续轮次重复调用 no-op meta-tool。
+- 自动化验证：`pnpm exec vitest run apps/agent-server/tests/thread/ThreadScopedToolRegistry.test.ts apps/agent-server/tests/actions/ThreadScopedToolRegistry.test.ts packages/core/tests/runtime/agent-runtime.test.ts packages/core/tests/runtime/system-prompt.test.ts` 通过，当前仓库目标测试与 `.worktrees` 副本共 74 files / 599 tests passed；`bash ./scripts/test.sh` 通过，Electron shell 16 files / 89 tests passed，agent-server + core 54 files passed / 329 tests passed / 1 skipped。修复提交为 `c165031`。
+
 
 ## Electron UI Shell 最终态验收（P2）
 
