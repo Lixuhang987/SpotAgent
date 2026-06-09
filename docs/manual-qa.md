@@ -172,6 +172,7 @@
 - Electron React StatusBubble starting / running / completed 已验证：标准启动 Electron flag packaged app 后，`HandAgentDesktop` 无 Swift 窗口，Computer Use 只观察到 Electron `HandAgent Activity`。提交 long-running `ELECTRON_STATUSBUBBLE_RUNNING_CURRENT_QA_20260609 [mock:slow-focus]` 时，Electron ActivityWindow 可见 `正在回复 / 正在回复`；随后中断该 long turn。再提交短 `ELECTRON_STATUSBUBBLE_SEQUENCE_CURRENT_QA_20260609 [mock:slow]`，`/api/activity` 实时序列为 `starting:正在开始` -> `starting:<prompt>` -> `running:正在回复` -> `completed:已完成` -> `idle:点击开始`；`thread-1780966255243-1kysuw.json` 持久化 user prompt 与 assistant `Mock slow response completed.`，最终 Computer Use 可见 Electron ActivityWindow 回到 `点击开始 / 点击开始`。
 - visible Electron ThreadWindow close/reuse 已验证：先用 `thread_window.open_history` 打开 visible `HandAgent ThreadWindow`（`920x640`），点击该窗口 close button 后 Electron 只剩 `HandAgent Activity`，agent-server node pid `79262` 仍监听 `127.0.0.1:4317`。随后通过真实全局快捷键打开 Swift PromptPanel（`640x448`），粘贴并提交 `ELECTRON_CLOSE_REUSE_CURRENT_QA_20260609 [mock:assistant-ok]`，Electron 重新出现 `HandAgent ThreadWindow`，`~/.spotAgent/threads/thread-1780966465948-vh3h1g.json` 持久化同一 user prompt 与 assistant `Mock assistant response: main chain is reachable.`；`/api/activity` snapshot 指向该 thread 并回到 `status:"idle"`。
 - 全局快捷键 show/toggle 不触发 Electron ThreadWindow 已验证：Electron flag packaged app 空闲时只有 `HandAgent Activity`，连续 3 次注入真实快捷键 `osascript -e 'tell application "System Events" to key code 49 using {command down, shift down}'` 后，`HandAgentDesktop` 均为 PromptPanel 窗口 `640x448`，Electron 始终只有 `HandAgent Activity`（`272x76`），未出现 `HandAgent ThreadWindow`。精确检查 packaged `main.js` 不包含 `"thread_window.prepare"` command 字符串，Swift `ElectronShellProtocol` 只编码 `open_initial_prompt`、`open_history`、`focus`、`activity_window.show` 和 `shutdown`；hidden ThreadWindow 预热由 Electron main 在 app-server ready 后自行完成。
+- Electron supervisor 非零退出与最大失败诊断已复验：本轮先通过 `bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build` 基线。正常启动后 agent-server pid `87847` 监听 `127.0.0.1:4317`，`kill -9 87847` 后 Electron supervisor 拉起新 node pid `87996`，`/api/activity` 新连接首包为 idle `activity.snapshot`。再用 Python 端口占用器监听 `127.0.0.1:4317` 后启动 Electron flag packaged app，超过 5 次 restart attempt 后无 agent-server 残留；真实快捷键打开 Swift PromptPanel 后，AX 与 Computer Use 均可见错误文案 `agent-server stopped after 5 restart attempts: agent-server exited with code 1`。
 
 **2026-06-09 待回归修复项**：
 
@@ -183,7 +184,6 @@
 
 1. 启动完成前 PromptPanel 不允许提交；收到 `agent_server.health available=true` 与 `thread_window.prepared` 后 PromptPanel 才恢复可提交。
 1. 触发 tool、permission/workspace request、模型配置错误或 provider 错误，确认 Electron StatusBubble 分别展示 tool running、waiting、error 状态，ThreadWindow 内联请求面板和错误气泡仍正常可见。
-1. 模拟 agent-server 非零退出，确认 supervisor 按退避重启；超过最大次数后 Swift 显示明确 fatal/diagnostic 文案。
 
 ## ThreadWindow UI 重构完整验收（P2）
 

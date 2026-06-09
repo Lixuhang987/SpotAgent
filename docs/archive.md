@@ -1202,3 +1202,11 @@
 - **验证过程**：在空闲态连续 3 次注入真实全局快捷键，并检查 Swift / Electron 窗口；随后精确检查 packaged main 与 Swift command encoder 中是否存在 `thread_window.prepare` command。
 - **证据**：3 次快捷键后 `HandAgentDesktop` 均为 PromptPanel 窗口 `640x448`，Electron 始终只有 `HandAgent Activity`，尺寸 `272x76`，未出现 `HandAgent ThreadWindow`；`dist/HandAgentDesktop.app/Contents/Resources/ElectronShell/dist/main/main.js` 不包含精确 `"thread_window.prepare"` command 字符串；Swift `ElectronShellProtocol` 只编码 `open_initial_prompt`、`open_history`、`focus`、`activity_window.show` 和 `shutdown`。
 - **结论**：通过。show/toggle PromptPanel 不展示 ThreadWindow，也不发送 `thread_window.prepare` command；hidden ThreadWindow 预热由 Electron main 自行管理。
+
+### Electron UI Shell agent-server supervisor 重启与最大失败诊断
+
+- **验证日期**：2026-06-09
+- **验证环境**：Electron flag packaged app，`mock-llm`；标准 `open dist/HandAgentDesktop.app` 启动。
+- **验证过程**：先跑 `bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build` 基线；正常启动后 kill 当前 agent-server，再检查 supervisor 是否拉起新进程与 `/api/activity`；随后用 Python 端口占用器监听 `127.0.0.1:4317`，重启 packaged app 等待超过 5 次 restart attempt，并通过真实全局快捷键打开 PromptPanel 读取 fatal 文案。
+- **证据**：正常启动时 agent-server pid `87847` 监听 `127.0.0.1:4317`；`kill -9 87847` 后新 node pid `87996` 接管监听，`/api/activity` 首包为 `activity.snapshot` 且 `status:"idle"`。端口占用场景中 `127.0.0.1:4317` 只由 Python 端口占用器监听，超过最大重启次数后无 agent-server 残留；Swift PromptPanel 的 AX 与 Computer Use 均显示 `agent-server stopped after 5 restart attempts: agent-server exited with code 1`。
+- **结论**：通过。Electron supervisor 会在 agent-server 非零退出后退避重启；超过最大次数后停止重启并把明确 fatal/diagnostic 文案传回 Swift PromptPanel。
