@@ -1106,3 +1106,11 @@
 - **验证过程**：读取 packaged app runtime marker，随后通过 `/api/thread` 提交 mock prompt 并检查持久化 thread 与 `/api/activity`。
 - **证据**：`dist/HandAgentDesktop.app/Contents/Resources/HandAgentRuntimeMode.json` 为 `{"llmMode":"mock"}`；thread 文件 `~/.spotAgent/threads/thread-1780964395791-tvbdeb.json` 包含 user `ELECTRON_ACTIVITY_RECONNECT_QA_20260609 [mock:assistant-ok]` 与 assistant `Mock assistant response: main chain is reachable.`；`/api/activity` snapshot 回到 `activeThreadId:"thread-1780964395791-tvbdeb"`、`status:"idle"`。
 - **结论**：通过。Electron flag packaged app 在 mock LLM 模式下返回 mock assistant，不访问真实 LLM。
+
+### Electron UI Shell 进程唯一性
+
+- **验证日期**：2026-06-09
+- **验证环境**：Electron flag packaged app，`mock-llm`；主仓库 `/Users/mu9/proj/handAgent`，branch `main`。
+- **验证过程**：在 packaged app 运行中检查 Swift host、Electron main、agent-server 进程数，并检查 `127.0.0.1:4317` 监听者。
+- **证据**：计数脚本输出 `{"swiftHost":1,"electronMain":1,"agentServer":1}`；进程链路为 Swift host pid `67148` -> Electron main pid `67149` -> agent-server pid `67163`；`lsof -nP -iTCP:4317 -sTCP:LISTEN` 仅显示 node pid `67163` 监听。
+- **结论**：通过。Electron flag packaged app 没有第二份 Electron shell 或 agent-server 冲突。
