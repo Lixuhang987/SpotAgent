@@ -126,7 +126,8 @@ struct PromptPanelView: View {
             isFocused: isQueryFocused,
             isDisabled: viewModel.isSubmissionInputDisabled,
             maxVisibleLines: 5,
-            onSubmit: { viewModel.submit() }
+            onMoveSelection: { viewModel.moveSelectedAction($0) },
+            onSubmitSelectedAction: { viewModel.submitSelectedAction() }
         )
         .frame(height: inputHeight)
         .frame(width: PromptPanelInputLayout.inputWidth(for: viewModel.draft))
@@ -211,12 +212,14 @@ struct PromptPanelView: View {
 
     private func actionRow(_ action: ActionDefinition) -> some View {
         let isHovered = hoveredActionId == action.id
+        let isSelected = viewModel.selectedActionId == action.id
+        let isHighlighted = isHovered || isSelected
         return Button { viewModel.selectAction(action) } label: {
             HStack(alignment: .center, spacing: theme.spacing.md) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(action.title)
                         .font(theme.typography.bodyFont)
-                        .foregroundStyle(isHovered ? theme.colors.textPrimary : theme.colors.bodyStrong)
+                        .foregroundStyle(isHighlighted ? theme.colors.textPrimary : theme.colors.bodyStrong)
                         .lineLimit(1)
                     if let description = action.description, !description.isEmpty {
                         Text(description)
@@ -227,9 +230,9 @@ struct PromptPanelView: View {
                 }
                 Spacer(minLength: theme.spacing.md)
                 Text(action.trigger)
-                    .promptPanelTriggerPill(isHighlighted: isHovered)
+                    .promptPanelTriggerPill(isHighlighted: isHighlighted)
             }
-            .actionRow(isHighlighted: isHovered)
+            .actionRow(isHighlighted: isHighlighted)
         }
         .buttonStyle(.plain)
         .onHover { hovering in

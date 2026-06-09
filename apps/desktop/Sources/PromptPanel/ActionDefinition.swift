@@ -356,7 +356,9 @@ struct ActionDefinition: Equatable, Identifiable {
 
         let normalizedQuery = trimmedQuery.lowercased()
         return actions.filter { action in
-            action.trigger.lowercased().hasPrefix(normalizedQuery)
+            let normalizedTrigger = action.trigger.lowercased()
+            return normalizedTrigger.hasPrefix(normalizedQuery)
+                || normalizedQuery.hasPrefix("\(normalizedTrigger) ")
                 || action.title.lowercased().contains(normalizedQuery)
                 || (action.description?.lowercased().contains(normalizedQuery) ?? false)
         }

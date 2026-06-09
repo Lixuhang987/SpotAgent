@@ -11,7 +11,8 @@ struct PromptPanelGrowingTextView: NSViewRepresentable {
     let isFocused: Bool
     let isDisabled: Bool
     let maxVisibleLines: Int
-    let onSubmit: () -> Void
+    let onMoveSelection: (PromptPanelActionSelectionDirection) -> Void
+    let onSubmitSelectedAction: () -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
@@ -98,16 +99,27 @@ struct PromptPanelGrowingTextView: NSViewRepresentable {
 
         func textView(_ textView: NSTextView,
                       doCommandBy commandSelector: Selector) -> Bool {
-            if commandSelector == #selector(NSResponder.insertNewline(_:)) {
-                let modifierFlags = NSApp.currentEvent?.modifierFlags ?? []
-                if modifierFlags.intersection([.shift, .option]).isEmpty {
-                    parent.onSubmit()
-                } else {
-                    textView.insertNewlineIgnoringFieldEditor(nil)
-                }
-                return true
+            let modifierFlags = NSApp.currentEvent?.modifierFlags ?? []
+            guard
+                let command = PromptPanelInputCommand.resolve(
+                    commandSelector: commandSelector,
+                    modifierFlags: modifierFlags
+                )
+            else {
+                return false
             }
-            return false
+
+            switch command {
+            case .insertNewline:
+                textView.insertNewlineIgnoringFieldEditor(nil)
+            case .selectPreviousAction:
+                parent.onMoveSelection(.previous)
+            case .selectNextAction:
+                parent.onMoveSelection(.next)
+            case .submitSelectedAction:
+                parent.onSubmitSelectedAction()
+            }
+            return true
         }
 
         func focusIfNeeded() {
