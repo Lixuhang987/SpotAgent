@@ -1,4 +1,6 @@
 import React from "react";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/App.tsx";
@@ -26,6 +28,11 @@ function tabState(threadId: string): ThreadTabState {
 function render(element: React.ReactElement) {
   return renderToStaticMarkup(element);
 }
+
+const globalCss = readFileSync(
+  fileURLToPath(new URL("../src/styles/tailwind.css", import.meta.url)),
+  "utf8",
+);
 
 beforeEach(() => {
   vi.stubGlobal("window", {
@@ -132,5 +139,15 @@ describe("ThreadWindow scroll containers", () => {
 
     expect(html).toContain("w-full max-w-full");
     expect(html).toContain("overflow-x-auto overflow-y-hidden");
+  });
+
+  it("uses transparent global scrollbar tracks instead of a white gutter", () => {
+    expect(globalCss).toContain("scrollbar-color: var(--thread-scrollbar-thumb) transparent");
+    expect(globalCss).toContain("*::-webkit-scrollbar-track");
+    expect(globalCss).toContain("*::-webkit-scrollbar-corner");
+    expect(globalCss).toContain("background: transparent");
+    expect(globalCss).toContain("background-clip: content-box");
+    expect(globalCss).toContain("border: 3px solid transparent");
+    expect(globalCss).toContain("color-mix(in srgb, currentColor");
   });
 });
