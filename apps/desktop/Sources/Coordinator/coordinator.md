@@ -23,7 +23,7 @@
 - 测试模式走 `AppServices.testing()` 注入 nop 替身，跳过窗口/进程/激活策略副作用。
 - 窗口生命周期由 lifecycle 控制器闭环：Electron ThreadWindow 由 `ElectronThreadWindowLifecycle` 通过 `ThreadWindowCommanding` 管理，`SettingsLifecycle` 管 Settings；Coordinator 不持有 AppKit 对象。
 - Electron ThreadWindow 打开成功以 `command.ack ok` 为准；首次 visible ThreadWindow 打开后，Coordinator 通过 `AppActivationPolicyCoordinator` 把 Swift 宿主切到 `.regular`，让 HandAgent 出现在 Dock / Cmd+Tab。重复 open/focus ack 不重复增加窗口计数，最后一个 visible ThreadWindow 关闭后再按 Settings 状态回落到 `.accessory`。
-- 历史入口语义：`openHistory` 聚焦全局 Electron ThreadWindow 并刷新左侧历史，不打开独立窗口，不改变 active tab。
+- 历史入口语义：`openHistory` 聚焦全局 Electron ThreadWindow 并刷新左侧历史，不打开独立窗口；右侧当前展示哪个 thread 由 React `App` 本地 state 编排。
 - PromptPanel show/toggle 只负责显示原生输入面板和刷新 action 定义，不触发 ThreadWindow prepare。ThreadWindow 预热由 Electron main 在 agent-server ready 后主动完成。
 - PromptPanel 提交语义：先用 `hide(restoringFocus: false)` 隐藏 PromptPanel，不恢复唤起前的前台应用；再发送 `thread_window.open_initial_prompt` 给 Electron main。React 收到后通过 `/api/thread` 发送 `thread.start`，再在 `thread.started` 后发送首轮 `input.submit` 和 attachments。这样 Electron `BrowserWindow.show()/focus()` 后不会被 PromptPanel 的焦点恢复逻辑推到后台。
 - Settings 打开时会创建模型、builtin tool、Plugin、Append Prompt、MCP、权限和 workspace 的 ViewModel。Coordinator 只负责注入，不直接读写 `~/.spotAgent/plugins` 或 `~/.spotAgent/mcp.json`。

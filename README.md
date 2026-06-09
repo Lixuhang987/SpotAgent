@@ -1,6 +1,6 @@
 # HandAgent
 
-HandAgent 是一个 macOS 优先的桌面 Agent Runtime MVP。当前桌面壳使用 `AppKit + SwiftUI`，ThreadWindow UI 由 `WKWebView` 承载的 React 前端实现，Agent Core 负责 thread 与工具编排，LLM 按需调用 builtin tools；PromptPanel 会把本地 manifest prompts 构建为 `ActionDefinition`，其中 plugin action 可把 prompt 模板绑定到 thread-scoped MCP tools。
+HandAgent 是一个 macOS 优先的桌面 Agent Runtime MVP。当前桌面壳使用 `AppKit + SwiftUI`，ThreadWindow UI 由 Electron `BrowserWindow` 承载的 React 前端实现，Agent Core 负责 thread 与工具编排，LLM 按需调用 builtin tools；PromptPanel 会把本地 manifest prompts 构建为 `ActionDefinition`，其中 plugin action 可把 prompt 模板绑定到 thread-scoped MCP tools。
 
 ## 当前能力
 
@@ -9,16 +9,16 @@ HandAgent 是一个 macOS 优先的桌面 Agent Runtime MVP。当前桌面壳使
 - 设置页支持配置模型、builtin tools、Plugin、Append Prompt、MCP server、权限规则、快捷键和 workspace
 - PromptPanel 会读取 `~/.spotAgent/plugins/*/plugin.json` 中的 prompts，构建 `ActionDefinition`，按 trigger 渲染 template 并创建新 thread
 - 文本选区与区域截图可作为 PromptPanel attachment chip 附加到用户输入
-- 提交 prompt 后创建或聚焦 `ThreadWindow`，Swift 负责 WKWebView 宿主与 initial prompt 注入
-- React `ThreadWindow` 通过 `/api/thread` 发送 `ThreadCommand`，展示 user / assistant / tool 消息、历史侧栏、连接状态、权限审批气泡和 workspace 选择气泡，并具备断线自动重连基础逻辑
+- 提交 prompt 后创建或聚焦 `ThreadWindow`，Electron 负责 `BrowserWindow` 宿主与 initial prompt 注入
+- React `ThreadWindow` 通过 `/api/thread` 发送 `ThreadCommand`，展示 user / assistant / tool 消息、历史侧栏、连接状态、权限审批气泡和 workspace 选择气泡，并维护后台 thread 状态缓存；React 和 app-server 之间不做断线恢复，非主动断开后不自动重连
 - `agent-server` 驱动 `AgentRuntime`、builtin tool 注册、workspace 沙箱文件工具、权限策略、thread 持久化和 Action thread 的 MCP tool 绑定
 - 状态气泡提供当前 thread 回跳入口
 
 ## 目录
 
-- `apps/desktop/HandAgentApp.swift`：macOS 宿主、PromptPanel、ThreadWindow 与状态气泡入口
+- `apps/desktop/HandAgentApp.swift`：macOS 宿主、PromptPanel、Settings、Swift 到 Electron command bridge 与平台能力入口
 - `apps/desktop/Sources/Settings`：模型、快捷键与 workspace 设置页
-- `apps/thread-window-web`：WKWebView 承载的 React ThreadWindow 前端
+- `apps/thread-window-web`：Electron `BrowserWindow` 承载的 React ThreadWindow 前端
 - `packages/core`：跨平台 Agent Core、工具与 thread 逻辑
 - `apps/agent-server`：本地 thread server、平台反向 IPC 与权限桥
 

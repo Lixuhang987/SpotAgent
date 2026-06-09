@@ -38,7 +38,7 @@ flowchart LR
 - 用户提交 prompt 后，Swift 通过 command bridge 发送 `thread_window.open_initial_prompt`；打开历史和聚焦分别发送 `thread_window.open_history` / `thread_window.focus`。
 - 用户在 Swift Settings 修改主题后，Swift 通过 command bridge 发送 `theme.changed`，Electron 保存当前 host theme 并广播给 ThreadWindow renderer。
 - React ThreadWindow 接收初始 prompt 后，通过 `/api/thread` 发送 `thread.start`，收到 `thread.started` 后发送首轮 `input.submit` 和 attachments；后续 composer 追问在 idle 时直接发送 `input.submit`，running 时先在 React 本地 FIFO 排队，等 thread 离开 running 后逐条发送。
-- React ThreadWindow 负责 `ThreadCommand` / `ClientResponse` 编码、`ThreadNotification` / `ServerRequest` 接收，以及 tabs、消息、请求面板和 composer 状态。
+- React ThreadWindow 负责 `ThreadCommand` / `ClientResponse` 编码、`ThreadNotification` / `ServerRequest` 接收，以及历史、后台 thread 状态缓存、当前右侧展示 thread、消息、请求面板和 composer 状态。
 - ThreadWindow 左侧历史列表通过 thread 协议读取 `~/.spotAgent/threads/`，用于搜索、预览、恢复和删除持久化 thread。
 
 ### 3. 平台能力反向 IPC
@@ -50,7 +50,7 @@ flowchart LR
 
 - Electron ActivityWindow 承载 React StatusBubble；renderer 订阅 `/api/activity`，接收 agent-server 派生的 `AgentActivityEvent`。
 - Electron 气泡点击时只请求 Electron main 聚焦已有 ThreadWindow；无法聚焦时不回告 Swift，也不打开 PromptPanel。
-- Swift 不订阅 `/api/activity`，也不把完整 ThreadWindow tabs、消息或历史同步到 Swift 状态。
+- Swift 不订阅 `/api/activity`，也不把完整 ThreadWindow thread 缓存、消息或历史同步到 Swift 状态。
 
 ## 本层关键 DTO
 

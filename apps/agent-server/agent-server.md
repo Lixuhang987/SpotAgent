@@ -69,12 +69,12 @@ flowchart TD
 - `/api/thread` 顶层只接收 `ThreadCommand`、`ClientResponse`。
 - `/api/activity` 顶层只发送 `AgentActivityEvent`，新连接立即收到 `activity.snapshot`，后续状态变化收到 `activity.changed`。
 - `/api/platform` 顶层只接收 `PlatformBridgeMessage`。
-- thread 通知主干统一走 `ThreadNotification`；`thread.snapshot` 是恢复入口。
+- thread 通知主干统一走 `ThreadNotification`；`thread.snapshot` 是用户打开历史 thread 或初始 prompt 建立 thread 后的状态入口，不是 React 断线恢复入口。
 - activity 状态由 `AgentActivityPublisher` 从 `ThreadNotification` / `ServerRequest` 派生；activity subscriber 发送失败只影响该 subscriber，不影响 `/api/thread` 分发。
 - permission / workspace 的交互式回流统一由 server 发 `ServerRequest`，React 回 `ClientResponse`。
 - `workspace.listed` 是 `workspace.list` 的连接级响应，不带 `threadId`，只发给发起命令的 `/api/thread` 连接。
 - permission / workspace request-response 都绑定到 thread 当前连接；断线或旧 token 回包不能影响新连接。
-- 单条 React thread socket 可以同时恢复多个 thread；当前协议不承诺显式 unsubscribe。
+- 单条 React thread socket 可以同时接收多个已订阅 thread 的通知；当前协议不承诺显式 unsubscribe。
 
 ## 与文件系统约定
 
@@ -104,7 +104,7 @@ open dist/HandAgentDesktop.app
 
 - 不在 `agent-server` 内定义跨进程 DTO；thread 命令走 `@handagent/core/protocol/ThreadCommand.ts`，thread 通知走 `@handagent/core/protocol/ThreadNotification.ts`，请求回流走 `ServerRequest` / `ClientResponse`，平台帧走 `@handagent/core/protocol/PlatformBridgeMessage.ts`。
 - 不 import macOS、Swift、AppKit、SwiftUI 或 browser-only 模块；平台能力一律经 `PlatformAdapter` / `PlatformBridge`。
-- 不在这里实现 UI 状态；ThreadWindow tabs、composer、请求面板和消息展示属于 React 前端。
+- 不在这里实现 UI 状态；ThreadWindow 后台 thread 状态缓存、当前展示 thread、composer、请求面板和消息展示属于 React 前端。
 - 不在这里实现平台原生能力；`/api/platform` 只把 core `RemotePlatformAdapter` 的请求转给 desktop。
 - 新增源码子目录时，更新 [src/src.md](/Users/mu9/proj/handAgent/apps/agent-server/src/src.md)；新增测试子目录时，更新 [tests/tests.md](/Users/mu9/proj/handAgent/apps/agent-server/tests/tests.md)。
 - 修改 TypeScript 后必须重启 desktop app 才能生效，无 hot reload。

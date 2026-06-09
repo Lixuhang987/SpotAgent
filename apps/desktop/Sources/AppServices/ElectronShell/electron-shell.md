@@ -37,7 +37,7 @@
 
 ## 边界
 
-- 不持有 ThreadWindow tabs/messages/history 状态。
+- 不持有 ThreadWindow thread 缓存、消息或历史状态。
 - 不解析 `/api/thread` 的 `ThreadNotification`。
 - 不订阅 `/api/activity`，不 mirror Electron StatusBubble 状态。
 - 不执行 ScreenCaptureKit、Accessibility、NSWorkspace、NSPasteboard 以外的新平台能力迁移。
