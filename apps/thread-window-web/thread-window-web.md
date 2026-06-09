@@ -1,6 +1,6 @@
 # thread-window-web
 
-`apps/thread-window-web` 是 React ThreadWindow 前端。默认路径由 Swift `WKWebView` 承载；Electron flag 路径由 Electron `BrowserWindow` 承载同一 bundle，并接收 PromptPanel submit、openHistory 和 focus。本文只记录修改本目录代码前必须知道的包内前提；整体调用链和 apps 层职责见上级文档。
+`apps/thread-window-web` 是 React ThreadWindow 前端。生产路径只由 Electron `BrowserWindow` 承载，并接收 PromptPanel submit、openHistory 和 focus。本文只记录修改本目录代码前必须知道的包内前提；整体调用链和 apps 层职责见上级文档。
 
 ## 目录职责
 
@@ -10,7 +10,7 @@
 | `src/protocol/threadProtocol.ts` | Web 侧协议编码、类型导出和入站类型守卫；类型来源是 `@handagent/core/protocol/*`。 |
 | `src/thread/threadSocketClient.ts` | `/api/thread` WebSocket client，负责连接、重连、发送队列、初始 prompt 首轮流程和入站消息分派。 |
 | `src/store/threadWindowStore.ts` | `zustand + immer` store，是 tabs、历史、消息、请求、workspace 列表和窗口错误的状态源。 |
-| `src/native/nativeConfig.ts` | 读取 Swift 注入的 thread WebSocket URL，安装 `window.handAgentReceiveInitialPrompt`。 |
+| `src/native/nativeConfig.ts` | 读取 host 注入的 thread WebSocket URL，安装 `window.handAgentReceiveInitialPrompt`。 |
 | `src/components/` | ThreadWindow UI 组件：历史侧栏、tabs、消息列表、composer、权限与 workspace 请求面板。 |
 | `src/utils/` | 纯函数工具：workspace 分组、侧栏响应式布局、className 合并。 |
 | `tests/` | Vitest 测试，覆盖协议守卫、socket client、store、native config、侧栏布局、滚动容器和设计 token。 |
@@ -20,10 +20,10 @@
 ## 运行边界
 
 - React 直接持有 `/api/thread` WebSocket；Swift 不解析 `ThreadNotification`，也不发送 `ThreadCommand`。
-- 默认路径下 Swift 负责加载 Web bundle、注入配置和初始 prompt；Electron flag 路径下 Electron preload 注入同名 `window.handAgentThreadWindowConfig` 和 `window.handAgentReceiveInitialPrompt`。React 不区分 host 来源，仍直接连接 `/api/thread`。平台 tool 走独立 `/api/platform`。
+- Electron preload 注入 `window.handAgentThreadWindowConfig` 和 `window.handAgentReceiveInitialPrompt`。React 不持有 host 差异，仍直接连接 `/api/thread`。平台 tool 走独立 `/api/platform`。
 - `ThreadSocketClient` 只处理收发、重连、发送队列和通知副作用，不直接写 UI；UI 状态由 store action 更新。
 - 组件只通过明确 props、store action 或根组件 callback 触发行为，不应绕过根组件直接操作 WebSocket。
-- 当前不把 ThreadWindow tabs、消息或历史同步给 Swift `ThreadRegistry` / StatusBubble。
+- 当前不把 ThreadWindow tabs、消息或历史同步给 Swift；StatusBubble 状态由 Electron ActivityWindow renderer 订阅 `/api/activity`。
 
 ## Thread 协议前提
 
@@ -40,7 +40,7 @@ Web 侧命令和通知类型以 `packages/core/src/protocol/` 为真相，`src/p
 
 ## 初始 Prompt 流程
 
-Swift WKWebView 默认路径和 Electron preload 路径都会在 renderer 启动早期注入：
+Electron preload 会在 renderer 启动早期注入：
 
 - `window.handAgentThreadWindowConfig.threadWebSocketURL`
 - 临时 `window.handAgentReceiveInitialPrompt`
@@ -104,6 +104,6 @@ bash ./scripts/test.sh
 
 ## 相关文档
 
-- Swift WebView host：[ThreadWindow](/Users/mu9/proj/handAgent/apps/desktop/Sources/ThreadWindow/thread-window.md)
+- Electron UI shell：[electron-shell](/Users/mu9/proj/handAgent/apps/electron-shell/electron-shell.md)
 - agent-server socket：[server](/Users/mu9/proj/handAgent/apps/agent-server/src/server/server.md)
 - protocol DTO：[protocol](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md)

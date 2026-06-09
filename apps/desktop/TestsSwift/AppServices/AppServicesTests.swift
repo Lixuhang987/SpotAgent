@@ -3,32 +3,9 @@ import XCTest
 
 final class AppServicesTests: XCTestCase {
     @MainActor
-    func testDefaultThreadWindowWebAppURLUsesLocalHTTPRouteByDefault() throws {
-        let url = AppServices.defaultThreadWindowWebAppURL(
-            environment: [:],
-            bundle: .main,
-            currentDirectoryURL: URL(fileURLWithPath: "/repo", isDirectory: true)
-        )
-
-        XCTAssertEqual(url.absoluteString, "http://127.0.0.1:4317/thread-window/index.html")
-    }
-
-    @MainActor
-    func testDefaultThreadWindowWebAppURLRespectsExplicitEnvironmentURL() throws {
-        let url = AppServices.defaultThreadWindowWebAppURL(
-            environment: ["HANDAGENT_THREAD_WINDOW_WEB_URL": "http://127.0.0.1:9999/custom/index.html"],
-            bundle: .main,
-            currentDirectoryURL: URL(fileURLWithPath: "/repo", isDirectory: true)
-        )
-
-        XCTAssertEqual(url.absoluteString, "http://127.0.0.1:9999/custom/index.html")
-    }
-
-    @MainActor
-    func testElectronShellFlagSelectsElectronBackedAppServer() throws {
+    func testDefaultAppServerUsesElectronBackedAppServerWithoutFeatureFlag() throws {
         let appServer = AppServices.defaultAppServer(
             environment: [
-                "HANDAGENT_ELECTRON_SHELL": "1",
                 "HANDAGENT_ELECTRON_MAIN": "apps/electron-shell/dist/main/main.js",
             ],
             platformServerURL: URL(string: "ws://127.0.0.1:4317/api/platform")!
@@ -38,10 +15,9 @@ final class AppServicesTests: XCTestCase {
     }
 
     @MainActor
-    func testElectronRuntimeProvidesThreadWindowCommandClient() throws {
+    func testDefaultRuntimeProvidesElectronWindowCommandClientsWithoutFeatureFlag() throws {
         let runtime = AppServices.defaultRuntime(
             environment: [
-                "HANDAGENT_ELECTRON_SHELL": "1",
                 "HANDAGENT_ELECTRON_MAIN": "apps/electron-shell/dist/main/main.js",
             ],
             platformServerURL: URL(string: "ws://127.0.0.1:4317/api/platform")!
@@ -55,29 +31,15 @@ final class AppServicesTests: XCTestCase {
     }
 
     @MainActor
-    func testDefaultRuntimeDoesNotProvideThreadWindowCommandClientWithoutElectronFlag() throws {
-        let runtime = AppServices.defaultRuntime(
-            environment: [:],
-            platformServerURL: URL(string: "ws://127.0.0.1:4317/api/platform")!
-        )
-
-        XCTAssertTrue(runtime.appServer is AppServer)
-        XCTAssertNil(runtime.threadWindowCommandClient)
-        XCTAssertNil(runtime.activityWindowCommandClient)
-    }
-
-    @MainActor
-    func testElectronRuntimeProvidesActivityWindowClientAndDisablesSwiftStatusBubble() {
+    func testDefaultServicesProvideElectronActivityWindowClient() {
         let services = AppServices(
             environment: [
-                "HANDAGENT_ELECTRON_SHELL": "1",
                 "HANDAGENT_ELECTRON_MAIN": "apps/electron-shell/dist/main/main.js",
             ]
         )
 
         XCTAssertNotNil(services.threadWindowCommandClient)
         XCTAssertNotNil(services.activityWindowCommandClient)
-        XCTAssertFalse(services.showsStatusBubble)
         XCTAssertTrue(services.showsFatalAlert)
     }
 
@@ -85,7 +47,7 @@ final class AppServicesTests: XCTestCase {
     func testDefaultElectronShellLaunchUsesPnpmWorkspaceElectron() throws {
         let repoRoot = URL(fileURLWithPath: "/repo/worktree", isDirectory: true)
         let configuration = AppServices.defaultElectronShellLaunchConfiguration(
-            environment: ["HANDAGENT_ELECTRON_SHELL": "1"],
+            environment: [:],
             currentDirectoryURL: repoRoot,
             bundleExecutableURL: nil,
             bundleResourceURL: nil,
@@ -114,7 +76,7 @@ final class AppServicesTests: XCTestCase {
         let resourcesURL = URL(fileURLWithPath: "/Applications/HandAgentDesktop.app/Contents/Resources", isDirectory: true)
         let bundledMain = resourcesURL.appendingPathComponent("ElectronShell/dist/main/main.js")
         let configuration = AppServices.defaultElectronShellLaunchConfiguration(
-            environment: ["HANDAGENT_ELECTRON_SHELL": "1"],
+            environment: [:],
             currentDirectoryURL: URL(fileURLWithPath: "/tmp", isDirectory: true),
             bundleExecutableURL: URL(fileURLWithPath: "/Applications/HandAgentDesktop.app/Contents/MacOS/HandAgentDesktop"),
             bundleResourceURL: resourcesURL,
@@ -136,7 +98,6 @@ final class AppServicesTests: XCTestCase {
     func testExplicitElectronBinaryPreservesOverride() throws {
         let configuration = AppServices.defaultElectronShellLaunchConfiguration(
             environment: [
-                "HANDAGENT_ELECTRON_SHELL": "1",
                 "HANDAGENT_ELECTRON_BINARY": "/custom/electron",
                 "HANDAGENT_ELECTRON_MAIN": "/custom/main.js",
             ],
@@ -149,15 +110,5 @@ final class AppServicesTests: XCTestCase {
 
         XCTAssertEqual(configuration.launchPath, "/custom/electron")
         XCTAssertEqual(configuration.arguments, ["/custom/main.js"])
-    }
-
-    @MainActor
-    func testDefaultAppServerUsesSwiftAppServerWithoutElectronFlag() throws {
-        let appServer = AppServices.defaultAppServer(
-            environment: [:],
-            platformServerURL: URL(string: "ws://127.0.0.1:4317/api/platform")!
-        )
-
-        XCTAssertTrue(appServer is AppServer)
     }
 }

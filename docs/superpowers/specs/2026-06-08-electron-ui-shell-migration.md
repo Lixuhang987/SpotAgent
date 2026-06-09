@@ -4,7 +4,7 @@
 
 - 日期：2026-06-08
 - 范围：桌面端复杂 UI 从 Swift/WKWebView 逐步迁移到 Electron/React
-- 状态：迁移 spec；Phase 0-3 已进入实施，Phase 3 已覆盖 prepare command 移除、启动预热和 supervisor 加固
+- 状态：迁移 spec；Phase 0-4 已进入实施，Phase 4 已删除 Swift 默认 WKWebView ThreadWindow、Swift StatusBubble、Swift agent-server 默认启动路径和 Swift `/api/activity` mirror
 - 目标读者：后续实现者、架构评审者、QA 维护者
 
 ## 背景
@@ -617,6 +617,25 @@ apps/thread-window-web/
 - 关闭 ThreadWindow 和 StatusBubble 后，agent-server 仍保持运行；core runtime 后续 turn 仍通过同一个后台服务执行。
 - `utilityProcess` 可用时使用构建后的 agent-server 入口；不可用时文档记录具体阻塞原因，并保留等价 Node child process supervisor。
 - fatal error 仍能在 Swift 显示原生 alert 或在 Electron UI 显示等效提示。
+
+### Phase 4：Electron-only UI shell，删除 Swift 旧路径
+
+目标：
+
+- Electron shell 成为桌面端唯一 UI shell，不再依赖 `HANDAGENT_ELECTRON_SHELL` feature flag。
+- Swift 只保留 PromptPanel、Settings、Hotkey、焦点恢复、平台能力 IPC 和 Swift <-> Electron command bridge。
+- 删除 Swift 默认 `AgentServerService` 子进程启动路径；agent-server 只由 Electron main 监督。
+- 删除 Swift `NSWindow/WKWebView` ThreadWindow host；ThreadWindow 只由 Electron `BrowserWindow` 承载。
+- 删除 Swift StatusBubble、Swift `ThreadRegistry` 和 Swift `/api/activity` subscriber；StatusBubble 只由 Electron ActivityWindow renderer 订阅 `/api/activity`。
+- ActivityWindow show 失败不再回退到 Swift StatusBubble；失败只保留 Electron/日志诊断和后续重试入口。
+
+验证：
+
+- `AppServices.defaultRuntime(environment: [:])` 返回同一个 `ElectronBackedAppServer`，同时作为 app-server health source、ThreadWindow command client 和 ActivityWindow command client。
+- `AppCoordinator` submit/openHistory/focus 只发送 Electron command，不暴露 Swift WebHost。
+- Swift build 中不存在 `ThreadWindowWebHost`、`ThreadWindowWebView`、`ThreadWindowLifecycle`、`StatusBubbleController`、`AgentActivityConnectionClient`、Swift `AppServer` wrapper 或 `ThreadRegistry`。
+- `bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build` 通过。
+- packaged mock app 启动后无需 feature flag 即出现 Electron ActivityWindow，提交 prompt 后出现 Electron ThreadWindow，退出后 Electron 与 agent-server 无残留。
 
 ## 测试策略
 

@@ -9,7 +9,7 @@
 | `ws://127.0.0.1:4317/api/thread` | React ThreadWindow | 接收 `ThreadCommand` / `ClientResponse`，发送 `ThreadNotification` / `ServerRequest` |
 | `ws://127.0.0.1:4317/api/activity` | Electron StatusBubble；后续桌宠 | 只发送 `AgentActivityEvent`，连接后先发 `activity.snapshot`，状态变化时发 `activity.changed` |
 | `ws://127.0.0.1:4317/api/platform` | Swift desktop | 只承载 `PlatformBridgeMessage`，用于 core platform tool 反向请求 desktop |
-| `http://127.0.0.1:4317/thread-window/*` | `WKWebView`；Electron ThreadWindow `BrowserWindow` | 返回 React 静态资源，不参与 thread 协议 |
+| `http://127.0.0.1:4317/thread-window/*` | Electron ThreadWindow `BrowserWindow` | 返回 React 静态资源，不参与 thread 协议 |
 
 ## 直接子节点
 
@@ -22,7 +22,7 @@
 
 ## 启动与组合
 
-desktop 侧 `AgentServerService` 会定位仓库根目录并启动：
+Electron main 作为唯一 supervisor，会在桌面 App 启动时定位仓库根目录并启动：
 
 ```bash
 node --experimental-transform-types --experimental-specifier-resolution=node apps/agent-server/src/server/server.ts
@@ -81,7 +81,7 @@ flowchart TD
 | 路径 | 写入方 | 读取方 | 说明 |
 |------|--------|--------|------|
 | `~/.spotAgent/settings.json` | desktop settings | `settings/` | LLM provider/model/API 与 builtin tool 开关；按文件 stamp 热加载 |
-| `~/.spotAgent/threads/<id>.json` | `thread/ThreadPersistence` | agent-server / desktop 历史列表 | `PersistedThread`，包含 messages 与 events |
+| `~/.spotAgent/threads/<id>.json` | `thread/ThreadPersistence` | agent-server / React ThreadWindow 历史列表 | `PersistedThread`，包含 messages 与 events |
 | `~/.spotAgent/blobs/` | `protocol/composeUserContent`、core runtime summary | LLM adapter / 后续 tool | 图片附件、大段 tool 输出与 summary 元数据 |
 | `~/.spotAgent/log/` | `FileNetworkLogger` | 人工排查 | LLM 请求/响应 JSONL |
 | `~/.spotAgent/workspaces.json` | desktop settings + core registry | agent-server / desktop | workspace 注册表 |

@@ -16,10 +16,8 @@ final class AppCoordinator {
         case openHistory
         case settingsWindowClosed
         case threadWindowClosed
-        case statusBubbleTapped(String?)
     }
 
-    var threadWindowWebHost: ThreadWindowWebHost? { threadWindowLifecycle.webHost }
     var agentServerError: String? { agentServerHealth.errorMessage }
 
     @ObservationIgnored private let services: AppServices
@@ -33,9 +31,6 @@ final class AppCoordinator {
     @ObservationIgnored private let activationPolicy = AppActivationPolicyCoordinator()
     @ObservationIgnored private var registeredActionShortcutNames: Set<KeyboardShortcuts.Name> = []
     @ObservationIgnored private lazy var promptPanelController = PromptPanelController()
-    @ObservationIgnored private lazy var statusBubbleController: StatusBubbleController = {
-        StatusBubbleController(registry: services.threadRegistry)
-    }()
     @ObservationIgnored private lazy var captureCoordinator = PromptCaptureCoordinator(
         controller: promptPanelController,
         selectionProvider: MacSelectionCaptureProvider(),
@@ -52,17 +47,7 @@ final class AppCoordinator {
             showsFatalAlert: services.showsFatalAlert
         )
         self.activityWindowCommandClient = services.activityWindowCommandClient
-        if let threadWindowCommandClient = services.threadWindowCommandClient {
-            self.threadWindowLifecycle = ElectronThreadWindowLifecycle(client: threadWindowCommandClient)
-        } else {
-            self.threadWindowLifecycle = ThreadWindowLifecycle(
-                threadWebSocketURL: services.appServerURL,
-                webAppURL: services.threadWindowWebAppURL,
-                windowPresenter: services.threadWindowPresenter,
-                activationPolicy: activationPolicy,
-                setActivationPolicy: services.setActivationPolicy
-            )
-        }
+        self.threadWindowLifecycle = ElectronThreadWindowLifecycle(client: services.threadWindowCommandClient)
         self.settingsLifecycle = SettingsLifecycle(
             windowPresenter: services.settingsWindowPresenter,
             activationPolicy: activationPolicy,
@@ -74,11 +59,9 @@ final class AppCoordinator {
     func bootstrap() {
         setupPromptPanel()
         setupHotkey()
-        setupStatusBubble()
         setupElectronActivityWindow()
         setupAgentServerHealth()
         agentServerHealth.start()
-        if services.showsStatusBubble { statusBubbleController.show() }
     }
 
     func shutdown() {
@@ -112,8 +95,6 @@ final class AppCoordinator {
         case .threadWindowClosed:
             threadWindowLifecycle.close()
             store.send(.threadWindowClosed)
-        case .statusBubbleTapped(let threadID):
-            handleStatusBubbleTap(threadID)
         }
     }
 
@@ -177,19 +158,12 @@ final class AppCoordinator {
         }
     }
 
-    private func setupStatusBubble() {
-        statusBubbleController.onTap = { [weak self] threadID in
-            self?.send(.statusBubbleTapped(threadID))
-        }
-    }
-
     private func setupElectronActivityWindow() {
         activityWindowCommandClient?.onPromptPanelShowRequested = { [weak self] in
             self?.promptPanelController.show()
         }
-        activityWindowCommandClient?.onActivityWindowCommandResult = { [weak self] result in
+        activityWindowCommandClient?.onActivityWindowCommandResult = { result in
             guard result.kind == .show, !result.ok else { return }
-            self?.statusBubbleController.show()
         }
     }
 
@@ -203,7 +177,6 @@ final class AppCoordinator {
         do {
             _ = try activityWindowCommandClient.showActivityWindow()
         } catch {
-            statusBubbleController.show()
         }
     }
 
@@ -267,13 +240,6 @@ final class AppCoordinator {
                 self?.send(.threadWindowClosed)
             }
         )
-    }
-
-    private func handleStatusBubbleTap(_ threadID: String?) {
-        if threadID != nil, threadWindowLifecycle.focus(threadID: threadID, onFailure: { [weak self] in
-            self?.promptPanelController.show()
-        }) { return }
-        promptPanelController.show()
     }
 
     private func handleThreadWindowOpenFailure(_ message: String) {

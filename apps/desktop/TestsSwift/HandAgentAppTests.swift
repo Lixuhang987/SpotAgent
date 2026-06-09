@@ -9,16 +9,12 @@ final class HandAgentAppTests: XCTestCase {
         let coordinator = AppCoordinator(
             services: AppServices(
                 appServer: appServer,
-                appServerURL: URL(string: "ws://127.0.0.1:0/noop")!,
-                activityServerURL: URL(string: "ws://127.0.0.1:0/noop-activity")!,
+                threadWindowCommandClient: NopThreadWindowCommandClient(),
                 platformServerURL: URL(string: "ws://127.0.0.1:0/noop-platform")!,
-                threadWindowWebAppURL: URL(fileURLWithPath: "/tmp/index.html"),
                 hotkeyRegistrar: NopHotkeyRegistrar(),
-                threadWindowPresenter: NopThreadWindowPresenter(),
                 settingsWindowPresenter: NopSettingsWindowPresenter(),
                 fatalAlertPresenter: NopFatalAlertPresenter(),
                 setActivationPolicy: { _ in },
-                showsStatusBubble: false,
                 showsFatalAlert: false
             )
         )

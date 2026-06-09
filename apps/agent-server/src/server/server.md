@@ -14,7 +14,7 @@
 
 ## 运行入口
 
-desktop 的 `AgentServerService` 会定位仓库根目录，然后执行：
+Electron main 会定位仓库根目录，然后执行：
 
 ```bash
 node --experimental-transform-types --experimental-specifier-resolution=node apps/agent-server/src/server/server.ts
@@ -43,7 +43,7 @@ if (path === "/api/thread") {
 socket.close();
 ```
 
-`/api/thread`、`/api/activity` 和 `/api/platform` 是三条独立 WebSocket，不共享消息 union。`/thread-window/*` 由同一个 HTTP server 直接返回 React 静态资源，供桌面端 `WKWebView` 和 Electron ThreadWindow `BrowserWindow` 使用。未知 path 或缺失 path 会被关闭或返回 404，不默认为 thread socket。
+`/api/thread`、`/api/activity` 和 `/api/platform` 是三条独立 WebSocket，不共享消息 union。`/thread-window/*` 由同一个 HTTP server 直接返回 React 静态资源，供 Electron ThreadWindow `BrowserWindow` 使用。未知 path 或缺失 path 会被关闭或返回 404，不默认为 thread socket。
 
 按当前协议约束：
 

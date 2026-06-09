@@ -3,8 +3,6 @@ import Foundation
 @Observable
 @MainActor
 final class ElectronThreadWindowLifecycle: ThreadWindowManaging {
-    var webHost: ThreadWindowWebHost? { nil }
-
     @ObservationIgnored private let client: any ThreadWindowCommanding
     @ObservationIgnored private var isOpen = false
     @ObservationIgnored private var onClosed: (@MainActor () -> Void)?

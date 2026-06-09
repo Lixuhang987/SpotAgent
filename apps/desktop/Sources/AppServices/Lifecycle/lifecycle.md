@@ -11,7 +11,7 @@
 ## 行为
 
 - 有 ThreadWindow 或 SettingsWindow 打开 → `.regular`（出现在 Dock 与 Cmd+Tab）。
-- 都关闭 → `.accessory`（纯后台 app，仅 StatusBubble 可见）。
+- 都关闭 → `.accessory`（纯后台 app，Electron ActivityWindow 可继续显示）。
 
 ## 设计备注
 
@@ -27,4 +27,4 @@
 
 ## 与其他模块的关系
 
-- 由 [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 创建并注入 `ThreadWindowLifecycle` / `SettingsLifecycle`；thread 窗口开关通过 `ThreadWindowLifecycle` 更新，设置窗口开关通过 `SettingsLifecycle.openOrFocus / handleClosed` 更新。
+- 由 [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 创建并注入 `ElectronThreadWindowLifecycle` / `SettingsLifecycle`；thread 窗口开关通过 `ElectronThreadWindowLifecycle` 更新，设置窗口开关通过 `SettingsLifecycle.openOrFocus / handleClosed` 更新。

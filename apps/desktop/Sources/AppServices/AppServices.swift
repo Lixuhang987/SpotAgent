@@ -1,16 +1,6 @@
 import AppKit
 import Foundation
 import KeyboardShortcuts
-import SwiftUI
-
-@MainActor
-protocol ThreadWindowPresenting {
-    func makeWindow(
-        host: ThreadWindowWebHost,
-        onClose: @escaping () -> Void
-    ) -> NSWindow?
-    func show(window: NSWindow)
-}
 
 @MainActor
 protocol SettingsWindowPresenting {
@@ -56,86 +46,63 @@ struct ElectronShellLaunchConfiguration: Equatable {
 @MainActor
 struct AppServicesRuntime {
     let appServer: any AppServerManaging
-    let threadWindowCommandClient: (any ThreadWindowCommanding)?
+    let threadWindowCommandClient: any ThreadWindowCommanding
     let activityWindowCommandClient: (any ActivityWindowCommanding)?
 }
 
 @MainActor
 final class AppServices {
     let appServer: any AppServerManaging
-    let threadWindowCommandClient: (any ThreadWindowCommanding)?
+    let threadWindowCommandClient: any ThreadWindowCommanding
     let activityWindowCommandClient: (any ActivityWindowCommanding)?
-    let threadRegistry: ThreadRegistry
     let settingsStore: AgentSettingsStore
-    let threadHistoryStore: ThreadHistoryStore
     let actionManifestStore: ActionManifestStore
-    let appServerURL: URL
-    let activityServerURL: URL
     let platformServerURL: URL
-    let threadWindowWebAppURL: URL
     let hotkeyRegistrar: any HotkeyRegistering
-    let threadWindowPresenter: any ThreadWindowPresenting
     let settingsWindowPresenter: any SettingsWindowPresenting
     let fatalAlertPresenter: any FatalAlertPresenting
     let setActivationPolicy: @MainActor (NSApplication.ActivationPolicy) -> Void
-    let showsStatusBubble: Bool
     let showsFatalAlert: Bool
 
     init(
         appServer: (any AppServerManaging)? = nil,
         threadWindowCommandClient: (any ThreadWindowCommanding)? = nil,
         activityWindowCommandClient: (any ActivityWindowCommanding)? = nil,
-        threadRegistry: ThreadRegistry = ThreadRegistry(),
         settingsStore: AgentSettingsStore = AgentSettingsStore(),
-        threadHistoryStore: ThreadHistoryStore = ThreadHistoryStore(),
         actionManifestStore: ActionManifestStore = ActionManifestStore(),
-        appServerURL: URL = URL(string: "ws://127.0.0.1:4317/api/thread")!,
-        activityServerURL: URL = URL(string: "ws://127.0.0.1:4317/api/activity")!,
         platformServerURL: URL = URL(string: "ws://127.0.0.1:4317/api/platform")!,
-        threadWindowWebAppURL: URL = AppServices.defaultThreadWindowWebAppURL(),
         hotkeyRegistrar: any HotkeyRegistering = ProductionHotkeyRegistrar(),
-        threadWindowPresenter: any ThreadWindowPresenting = ProductionThreadWindowPresenter(),
         settingsWindowPresenter: any SettingsWindowPresenting = ProductionSettingsWindowPresenter(),
         fatalAlertPresenter: any FatalAlertPresenting = ProductionFatalAlertPresenter(),
         setActivationPolicy: @escaping @MainActor (NSApplication.ActivationPolicy) -> Void = {
             NSApplication.shared.setActivationPolicy($0)
         },
-        showsStatusBubble: Bool = true,
         environment: [String: String] = ProcessInfo.processInfo.environment,
         showsFatalAlert: Bool = true
     ) {
-        let resolvedThreadRegistry = threadRegistry
         let runtime = appServer == nil
             ? AppServices.defaultRuntime(
                 environment: environment,
-                platformServerURL: platformServerURL,
-                activityServerURL: activityServerURL,
-                threadRegistry: resolvedThreadRegistry
+                platformServerURL: platformServerURL
             )
             : nil
         self.appServer = appServer ?? runtime!.appServer
-        self.threadWindowCommandClient = threadWindowCommandClient ?? runtime?.threadWindowCommandClient
+        self.threadWindowCommandClient = threadWindowCommandClient ?? runtime?.threadWindowCommandClient ?? NopThreadWindowCommandClient()
         self.activityWindowCommandClient = activityWindowCommandClient ?? runtime?.activityWindowCommandClient
-        self.threadRegistry = resolvedThreadRegistry
         self.settingsStore = settingsStore
-        self.threadHistoryStore = threadHistoryStore
         self.actionManifestStore = actionManifestStore
-        self.appServerURL = appServerURL
-        self.activityServerURL = activityServerURL
         self.platformServerURL = platformServerURL
-        self.threadWindowWebAppURL = threadWindowWebAppURL
         self.hotkeyRegistrar = hotkeyRegistrar
-        self.threadWindowPresenter = threadWindowPresenter
         self.settingsWindowPresenter = settingsWindowPresenter
         self.fatalAlertPresenter = fatalAlertPresenter
         self.setActivationPolicy = setActivationPolicy
-        self.showsStatusBubble = showsStatusBubble && self.activityWindowCommandClient == nil
         self.showsFatalAlert = showsFatalAlert
     }
 
     static func testing(
         setActivationPolicy: @escaping @MainActor (NSApplication.ActivationPolicy) -> Void = { _ in },
-        threadWindowPresenter: any ThreadWindowPresenting = NopThreadWindowPresenter(),
+        threadWindowCommandClient: any ThreadWindowCommanding = NopThreadWindowCommandClient(),
+        activityWindowCommandClient: (any ActivityWindowCommanding)? = nil,
         settingsWindowPresenter: any SettingsWindowPresenting = NopSettingsWindowPresenter(),
         actionManifestStore: ActionManifestStore = ActionManifestStore(
             pluginsDirectoryURL: URL(fileURLWithPath: "/dev/null", isDirectory: true)
@@ -143,73 +110,49 @@ final class AppServices {
     ) -> AppServices {
         AppServices(
             appServer: NopAppServer(),
+            threadWindowCommandClient: threadWindowCommandClient,
+            activityWindowCommandClient: activityWindowCommandClient,
             actionManifestStore: actionManifestStore,
-            appServerURL: URL(string: "ws://127.0.0.1:0/noop")!,
-            activityServerURL: URL(string: "ws://127.0.0.1:0/noop-activity")!,
             platformServerURL: URL(string: "ws://127.0.0.1:0/noop-platform")!,
-            threadWindowWebAppURL: URL(fileURLWithPath: "/tmp/index.html"),
             hotkeyRegistrar: NopHotkeyRegistrar(),
-            threadWindowPresenter: threadWindowPresenter,
             settingsWindowPresenter: settingsWindowPresenter,
             fatalAlertPresenter: NopFatalAlertPresenter(),
             setActivationPolicy: setActivationPolicy,
-            showsStatusBubble: false,
             showsFatalAlert: false
         )
     }
 
     static func defaultAppServer(
         environment: [String: String] = ProcessInfo.processInfo.environment,
-        platformServerURL: URL,
-        activityServerURL: URL = URL(string: "ws://127.0.0.1:4317/api/activity")!,
-        threadRegistry: ThreadRegistry = ThreadRegistry()
+        platformServerURL: URL
     ) -> any AppServerManaging {
         defaultRuntime(
             environment: environment,
-            platformServerURL: platformServerURL,
-            activityServerURL: activityServerURL,
-            threadRegistry: threadRegistry
+            platformServerURL: platformServerURL
         ).appServer
     }
 
     static func defaultRuntime(
         environment: [String: String] = ProcessInfo.processInfo.environment,
-        platformServerURL: URL,
-        activityServerURL: URL = URL(string: "ws://127.0.0.1:4317/api/activity")!,
-        threadRegistry: ThreadRegistry = ThreadRegistry()
+        platformServerURL: URL
     ) -> AppServicesRuntime {
         let platformClient = PlatformBridgeConnectionClient(
             connection: AppServerConnection(serverURL: platformServerURL),
             platformBridge: PlatformBridgeService()
         )
 
-        if environment["HANDAGENT_ELECTRON_SHELL"] == "1" {
-            let configuration = defaultElectronShellLaunchConfiguration(environment: environment)
-            let shell = ElectronShellProcess(
-                launchPath: configuration.launchPath,
-                arguments: configuration.arguments,
-                environment: configuration.environment,
-                currentDirectoryURL: configuration.currentDirectoryURL
-            )
-            let appServer = ElectronBackedAppServer(shell: shell, platformClient: platformClient)
-            return AppServicesRuntime(
-                appServer: appServer,
-                threadWindowCommandClient: appServer,
-                activityWindowCommandClient: appServer
-            )
-        }
-
+        let configuration = defaultElectronShellLaunchConfiguration(environment: environment)
+        let shell = ElectronShellProcess(
+            launchPath: configuration.launchPath,
+            arguments: configuration.arguments,
+            environment: configuration.environment,
+            currentDirectoryURL: configuration.currentDirectoryURL
+        )
+        let appServer = ElectronBackedAppServer(shell: shell, platformClient: platformClient)
         return AppServicesRuntime(
-            appServer: AppServer(
-                agentServer: AgentServerService(),
-                platformClient: platformClient,
-                activityClient: AgentActivityConnectionClient(
-                    connection: AppServerConnection(serverURL: activityServerURL),
-                    registry: threadRegistry
-                )
-            ),
-            threadWindowCommandClient: nil,
-            activityWindowCommandClient: nil
+            appServer: appServer,
+            threadWindowCommandClient: appServer,
+            activityWindowCommandClient: appServer
         )
     }
 
@@ -275,21 +218,6 @@ final class AppServices {
             currentDirectoryURL: repoRoot
         )
     }
-
-    static func defaultThreadWindowWebAppURL(
-        environment: [String: String] = ProcessInfo.processInfo.environment,
-        bundle: Bundle = .main,
-        currentDirectoryURL: URL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
-    ) -> URL {
-        if let rawURL = environment["HANDAGENT_THREAD_WINDOW_WEB_URL"], !rawURL.isEmpty {
-            if let parsed = URL(string: rawURL), parsed.scheme != nil {
-                return parsed
-            }
-            return URL(fileURLWithPath: rawURL)
-        }
-
-        return URL(string: "http://127.0.0.1:4317/thread-window/index.html")!
-    }
 }
 
 @MainActor
@@ -317,15 +245,21 @@ final class NopHotkeyRegistrar: HotkeyRegistering {
 }
 
 @MainActor
-final class NopThreadWindowPresenter: ThreadWindowPresenting {
-    private(set) var presentedHost: ThreadWindowWebHost?
+final class NopThreadWindowCommandClient: ThreadWindowCommanding {
+    var onThreadWindowClosed: (() -> Void)?
+    var onCommandResult: ((ThreadWindowCommandResult) -> Void)?
 
-    func makeWindow(host: ThreadWindowWebHost, onClose: @escaping () -> Void) -> NSWindow? {
-        presentedHost = host
-        return NSWindow()
+    func openInitialPrompt(_ prompt: PromptSubmission) throws -> String {
+        "noop-open-initial-prompt"
     }
 
-    func show(window: NSWindow) {}
+    func openHistory() throws -> String {
+        "noop-open-history"
+    }
+
+    func focus(threadId: String?) throws -> String {
+        "noop-focus"
+    }
 }
 
 @MainActor

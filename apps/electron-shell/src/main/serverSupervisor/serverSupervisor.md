@@ -1,6 +1,6 @@
 # serverSupervisor
 
-`serverSupervisor/` 负责在 Electron flag 路径下监督唯一的 agent-server 后台服务。agent-server 是唯一承载 core runtime、tool、LLM 循环的进程；Electron main 和 renderer 都不能直接承载这些运行时对象。
+`serverSupervisor/` 负责监督唯一的 agent-server 后台服务。agent-server 是唯一承载 core runtime、tool、LLM 循环的进程；Electron main 和 renderer 都不能直接承载这些运行时对象。
 
 ## 文件
 
