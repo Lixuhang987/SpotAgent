@@ -46,6 +46,7 @@ final class AppServicesTests: XCTestCase {
     @MainActor
     func testDefaultElectronShellLaunchUsesPnpmWorkspaceElectron() throws {
         let repoRoot = URL(fileURLWithPath: "/repo/worktree", isDirectory: true)
+        let electronMain = repoRoot.appendingPathComponent("apps/electron-shell/dist/main/main.js").path
         let configuration = AppServices.defaultElectronShellLaunchConfiguration(
             environment: [:],
             currentDirectoryURL: repoRoot,
@@ -60,15 +61,45 @@ final class AppServicesTests: XCTestCase {
 
         XCTAssertEqual(configuration.launchPath, "/usr/bin/env")
         XCTAssertEqual(configuration.arguments, [
-            "pnpm",
-            "--filter",
-            "handagent-electron-shell",
-            "exec",
-            "electron",
-            "apps/electron-shell/dist/main/main.js",
-        ])
+                "pnpm",
+                "--filter",
+                "handagent-electron-shell",
+                "exec",
+                "electron",
+                electronMain,
+            ])
         XCTAssertEqual(configuration.currentDirectoryURL?.path, repoRoot.path)
         XCTAssertEqual(configuration.environment["HANDAGENT_REPO_ROOT"], repoRoot.path)
+    }
+
+    @MainActor
+    func testRelativeElectronMainOverrideResolvesAgainstRepositoryRoot() throws {
+        let repoRoot = URL(fileURLWithPath: "/repo/worktree", isDirectory: true)
+        let configuration = AppServices.defaultElectronShellLaunchConfiguration(
+            environment: [
+                "HANDAGENT_ELECTRON_MAIN": "apps/electron-shell/dist/main/main.js",
+            ],
+            currentDirectoryURL: repoRoot,
+            bundleExecutableURL: nil,
+            bundleResourceURL: nil,
+            bundleURL: nil,
+            fileExists: { path in
+                path == repoRoot.appendingPathComponent("Package.swift").path ||
+                    path == repoRoot.appendingPathComponent("apps/electron-shell/package.json").path
+            }
+        )
+
+        XCTAssertEqual(
+            configuration.arguments,
+            [
+                "pnpm",
+                "--filter",
+                "handagent-electron-shell",
+                "exec",
+                "electron",
+                repoRoot.appendingPathComponent("apps/electron-shell/dist/main/main.js").path,
+            ]
+        )
     }
 
     @MainActor

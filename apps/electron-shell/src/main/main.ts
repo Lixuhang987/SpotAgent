@@ -13,6 +13,7 @@ import { JsonLineBridge } from "./swiftBridge/jsonLineBridge.js";
 import { CommandSocketServer } from "./swiftBridge/commandSocketServer.js";
 import { ActivityWindowController } from "./windows/activityWindowController.js";
 import { ThreadWindowPrewarmer } from "./windows/threadWindowPrewarmer.js";
+import { configureMacOSBackgroundApp } from "./macosBackgroundApp.js";
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = process.env.HANDAGENT_REPO_ROOT ?? resolve(currentDir, "../../../..");
@@ -192,6 +193,7 @@ void bootElectronShell();
 async function bootElectronShell(): Promise<void> {
   try {
     await app.whenReady();
+    configureMacOSBackgroundApp(app);
     if (commandSocketPath) {
       commandSocketServer = new CommandSocketServer(commandSocketPath);
       commandSocketServer.onLine((line) => {

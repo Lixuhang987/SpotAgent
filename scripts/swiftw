@@ -25,6 +25,7 @@ CACHE_DIR="${HANDAGENT_SWIFT_MODULE_CACHE_DIR:-${HANDAGENT_SWIFT_CACHE_DIR:-$ROO
 SWIFTPM_CACHE_DIR="${HANDAGENT_SWIFTPM_CACHE_DIR:-$SHARED_CACHE_ROOT/.cache/swiftpm}"
 CLANG_CACHE_DIR="$CACHE_DIR/clang-module-cache"
 SWIFT_CACHE_DIR="$CACHE_DIR/swift-module-cache"
+WORKSPACE_DEPENDENCIES_READY=0
 
 mkdir -p "$CLANG_CACHE_DIR" "$SWIFT_CACHE_DIR" "$SWIFTPM_CACHE_DIR"
 
@@ -43,7 +44,12 @@ swift_with_cache() {
 }
 
 ensure_workspace_dependencies() {
+  if [[ "$WORKSPACE_DEPENDENCIES_READY" == "1" ]]; then
+    return
+  fi
+
   if [[ -d "$ROOT_DIR/node_modules" ]]; then
+    WORKSPACE_DEPENDENCIES_READY=1
     return
   fi
 
@@ -52,6 +58,7 @@ ensure_workspace_dependencies() {
     cd "$ROOT_DIR"
     pnpm install
   )
+  WORKSPACE_DEPENDENCIES_READY=1
 }
 
 ensure_thread_window_web_build() {
@@ -63,6 +70,14 @@ ensure_thread_window_web_build() {
   (
     cd "$ROOT_DIR"
     pnpm --filter handagent-thread-window-web build
+  )
+}
+
+ensure_electron_shell_build() {
+  ensure_workspace_dependencies
+  (
+    cd "$ROOT_DIR"
+    pnpm --filter handagent-electron-shell build
   )
 }
 
@@ -87,6 +102,7 @@ fi
 
 if [[ "${1:-}" == "run" && "${2:-}" == "HandAgentDesktop" ]]; then
   ensure_thread_window_web_build
+  ensure_electron_shell_build
 fi
 
 swift_with_cache "$@"

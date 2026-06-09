@@ -291,6 +291,44 @@ describe("AgentActivityPublisher", () => {
     });
   });
 
+  it("preserves detailed thread error through later failed terminal events", () => {
+    const events: AgentActivityEvent[] = [];
+    const publisher = new AgentActivityPublisher(() => "2026-06-08T00:00:00.000Z");
+    publisher.attachConnection("activity-1", (event) => events.push(event));
+
+    publisher.observe({
+      type: "thread.error",
+      threadId: "thread-1",
+      notificationId: "n-error",
+      timestamp: "2026-06-08T00:00:01.000Z",
+      payload: { message: "provider failed with a useful reason" },
+    });
+    publisher.observe({
+      type: "turn.completed",
+      threadId: "thread-1",
+      notificationId: "n-turn-failed",
+      turnId: "turn-1",
+      timestamp: "2026-06-08T00:00:02.000Z",
+      payload: { status: "failed" },
+    });
+    publisher.observe({
+      type: "thread.status.changed",
+      threadId: "thread-1",
+      notificationId: "n-thread-failed",
+      timestamp: "2026-06-08T00:00:03.000Z",
+      payload: { value: "failed" },
+    });
+
+    expect(events.at(-1)).toMatchObject({
+      type: "activity.changed",
+      activeThreadId: "thread-1",
+      status: "error",
+      latestSummary: "provider failed with a useful reason",
+      waitingRequest: null,
+      error: "provider failed with a useful reason",
+    });
+  });
+
   it("derives terminal states from thread status changes", () => {
     const events: AgentActivityEvent[] = [];
     const publisher = new AgentActivityPublisher(() => "2026-06-08T00:00:00.000Z");

@@ -86,7 +86,7 @@ export class AgentActivityPublisher {
         return this.nextState(event.threadId, "waiting", "等待工作区选择", "workspace");
       case "turn.completed":
         if (event.payload.status === "failed") {
-          return this.nextState(event.threadId, "error", "运行失败", null, "运行失败");
+          return this.failedState(event.threadId);
         }
         if (event.payload.status === "interrupted") {
           return this.nextState(event.threadId, "completed", "已中断");
@@ -97,7 +97,7 @@ export class AgentActivityPublisher {
           return this.nextState(event.threadId, "idle", "点击开始");
         }
         if (event.payload.value === "failed") {
-          return this.nextState(event.threadId, "error", "运行失败", null, "运行失败");
+          return this.failedState(event.threadId);
         }
         if (event.payload.value === "interrupted") {
           return this.nextState(event.threadId, "completed", "已中断");
@@ -131,6 +131,17 @@ export class AgentActivityPublisher {
       error,
       updatedAt: this.now(),
     };
+  }
+
+  private failedState(threadId: string): ActivityState {
+    if (
+      this.state.activeThreadId === threadId &&
+      this.state.status === "error" &&
+      this.state.error
+    ) {
+      return this.nextState(threadId, "error", this.state.latestSummary, null, this.state.error);
+    }
+    return this.nextState(threadId, "error", "运行失败", null, "运行失败");
   }
 
   private broadcast(event: AgentActivityEvent): void {
