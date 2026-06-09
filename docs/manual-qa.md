@@ -178,12 +178,11 @@
 
 **2026-06-09 阻塞子项**：
 
-- “关闭 Electron StatusBubble” 暂无稳定产品路径：ActivityWindow 是 frameless 小窗，AX `close window "HandAgent Activity"` 返回 `-1708`（窗口不理解 close 信息），也没有可见关闭按钮；本轮只确认关闭尝试后 agent-server 仍监听 `127.0.0.1:4317`，未把该子项判为通过。
+- “关闭 Electron StatusBubble” 暂无稳定产品路径：ActivityWindow 是 frameless 小窗。2026-06-09 当前复核中，Electron 仅剩 `HandAgent Activity` 时，AX 查询该 window 没有 button，`close window "HandAgent Activity"` 返回 `-1708`（窗口不理解 close 信息）；关闭尝试后 `HandAgent Activity` 仍可见，agent-server node pid `79262` 仍监听 `127.0.0.1:4317`。该子项没有稳定产品 close path，不能判为通过，先保留为阻塞结论。
 
 1. 启动完成前 PromptPanel 不允许提交；收到 `agent_server.health available=true` 与 `thread_window.prepared` 后 PromptPanel 才恢复可提交。
 1. 通过全局快捷键打开或切换 PromptPanel 多次，确认不会显示 ThreadWindow，也不会发送 `thread_window.prepare` command；hidden ThreadWindow 预热只由 Electron main 在 app-server ready 后完成。
 1. 触发 tool、permission/workspace request、模型配置错误或 provider 错误，确认 Electron StatusBubble 分别展示 tool running、waiting、error 状态，ThreadWindow 内联请求面板和错误气泡仍正常可见。
-1. 关闭 Electron StatusBubble，确认 agent-server 进程仍存在，ThreadWindow 仍可继续对话。
 1. 模拟 agent-server 非零退出，确认 supervisor 按退避重启；超过最大次数后 Swift 显示明确 fatal/diagnostic 文案。
 
 ## ThreadWindow UI 重构完整验收（P2）
