@@ -42,7 +42,10 @@ Coordinator.send(.openSettings)
             ├─ PermissionRulesView(viewModel:)      // → 写 ~/.spotAgent/permissions.json；FilePermissionPolicy 下次 check 自动重读
             ├─ ShortcutSettingsView(actions:)       // 全局快捷键 / Action 快捷键两栏；均用 KeyboardShortcuts.Recorder 写 UserDefaults
             └─ WorkspaceSettingsView(viewModel:)    // → 写 ~/.spotAgent/workspaces.json；FileWorkspaceRegistry 下次访问自动重读
-  └─ 生产 presenter 通过 WindowCloseObservation 持有关闭通知 token，收到 NSWindow.willCloseNotification 后释放 token → Coordinator.send(.settingsWindowClosed)
+AppearanceThemeService.onThemeChange
+  └─ Coordinator 同步刷新 PromptPanel、已打开的 Settings root view，并通过 theme.changed 下发 Electron/React
+  └─ SettingsLifecycle.updateTheme(_:) → SettingsWindowPresenting.updateTheme(_:for:) → 重新注入 AppTheme
+生产 presenter 通过 WindowCloseObservation 持有关闭通知 token，收到 NSWindow.willCloseNotification 后释放 token → Coordinator.send(.settingsWindowClosed)
 ```
 
 `~/.spotAgent/workspaces.json` 是 desktop（写）与 agent-server（读）共享的注册表文件；`FileWorkspaceRegistry` 每次访问前按文件状态戳自动重读，无需重启 agent-server。
@@ -57,8 +60,9 @@ Coordinator.send(.openSettings)
 - **写入时统一 trim**：所有字符串字段在 setter 里 `trimmingCharacters(in: .whitespacesAndNewlines)`，避免空白污染 settings.json。
 - **不要把 store 直接传给 View**：始终经过 ViewModel；测试也是 `AgentSettingsViewModel(store:)`。
 - **Tab 增加规则**：新建 Tab 先在 `SettingsTab` enum 增 case、标题和图标，再在 `SettingsView.tabContent` 接入内容；Tab 内如果有副作用则配套加 ViewModel；纯展示可直接写 View。
-- **视觉风格**：设置页面使用 `SettingsTabBar`、`SettingsFieldStyle`、`SettingsRow`、`SettingsListSection` 等共享样式，与 PromptPanel 等 SwiftUI 原生界面保持统一 `DESIGN.md` warm-canvas / coral 视觉。不要使用系统 `Form` / `GroupBox` / `.grouped` 样式。窗口标题栏设为透明 + fullSizeContentView，并固定 `NSAppearance(.aqua)`，避免系统暗色模式把 segmented picker / field 文本渲染成浅色；React ThreadWindow 和 React StatusBubble 的视觉风格由 Electron/React 侧独立约束。
-- **不要在 Settings 里读 LLM/tool 运行态**：宿主层不组装 LLM 消息，`api`/`baseURL`/`apiKey`、工具开关、plugin manifest 和 MCP server 配置都只是写入本地文件；agent-server 侧自己按既有时机读取。外观主题是宿主 UI 配置，只由 Swift 解析并通过 `theme.changed` 下发给 Electron/React。
+- **视觉风格**：设置页面使用 `SettingsTabBar`、`SettingsFieldStyle`、`SettingsRow`、`SettingsListSection` 等共享样式，与 PromptPanel 等 SwiftUI 原生界面保持统一 `DESIGN.md` warm-canvas / coral / dark product surface 视觉。不要使用系统 `Form` / `GroupBox` / `.grouped` 样式。窗口标题栏设为透明 + fullSizeContentView；窗口可保留 `NSAppearance(.aqua)` 作为 AppKit segmented picker / field 的渲染稳定手段，但视觉正确性以注入的 `AppTheme.light/dark` 为准，不能把 `.aqua` 当成固定浅色主题。
+- **外观主题刷新**：外观 Tab 写入 `AppearanceThemeService`，该服务解析 `system` 为当前 `light` / `dark` 后更新 Swift 原生 UI，并通过 `theme.changed` 同步 Electron/React。已打开的 Settings 窗口必须通过 `SettingsLifecycle.updateTheme(_:)` 和 `SettingsWindowPresenting.updateTheme(_:for:)` 重新注入 `AppTheme`，避免用户切换主题后 Settings 自身停留在旧 token。
+- **不要在 Settings 里读 LLM/tool 运行态**：宿主层不组装 LLM 消息，`api`/`baseURL`/`apiKey`、工具开关、plugin manifest 和 MCP server 配置都只是写入本地文件；agent-server 侧自己按既有时机读取。
 - **快捷键只有两类模型**：固定系统入口全局快捷键仅包含“唤起面板 / 捕获文本选区 / 圈选区域截图”；manifest prompt 派生的 `ActionDefinition` 归为 Action 快捷键，由 `ActionDefinition.shortcutName` 生成 `KeyboardShortcuts.Name("action.<id>")` 并注册为系统级全局快捷键。不要再新增 PromptPanel 局部快捷键模型。
 - **测试**：[AgentSettingsViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/Settings/AgentSettingsViewModelTests.swift) 用临时 home 目录验证读写串通；[AgentSettingsStoreTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/AppServices/AgentSettings/AgentSettingsStoreTests.swift) 覆盖磁盘 IO + 轮询；[PluginSettingsViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/Settings/PluginSettingsViewModelTests.swift)、[AppendPromptSettingsViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/Settings/AppendPromptSettingsViewModelTests.swift)、[MCPSettingsViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/Settings/MCPSettingsViewModelTests.swift) 覆盖 manifest / mcp.json 读写；[PermissionRulesViewModelTests](/Users/mu9/proj/handAgent/apps/desktop/TestsSwift/Settings/PermissionRulesViewModelTests.swift) 覆盖权限规则读取、参数摘要和撤销写回。
 

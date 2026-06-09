@@ -37,6 +37,7 @@ final class ProductionHotkeyRegistrar: HotkeyRegistering {
 @MainActor
 final class ProductionSettingsWindowPresenter: SettingsWindowPresenting {
     private var closeObservations: [ObjectIdentifier: WindowCloseObservation] = [:]
+    private var presentations: [ObjectIdentifier: SettingsPresentation] = [:]
 
     func present(
         settingsViewModel: AgentSettingsViewModel,
@@ -51,19 +52,22 @@ final class ProductionSettingsWindowPresenter: SettingsWindowPresenting {
         appTheme: AppTheme,
         onClose: @escaping () -> Void
     ) -> NSWindow? {
+        let presentation = SettingsPresentation(
+            settingsViewModel: settingsViewModel,
+            appearanceViewModel: appearanceViewModel,
+            toolSettingsViewModel: toolSettingsViewModel,
+            pluginSettingsViewModel: pluginSettingsViewModel,
+            appendPromptSettingsViewModel: appendPromptSettingsViewModel,
+            mcpSettingsViewModel: mcpSettingsViewModel,
+            permissionRulesViewModel: permissionRulesViewModel,
+            workspaceViewModel: workspaceViewModel,
+            shortcutActions: shortcutActions
+        )
         let hosting = NSHostingController(
-            rootView: SettingsView(
-                settingsViewModel: settingsViewModel,
-                appearanceViewModel: appearanceViewModel,
-                toolSettingsViewModel: toolSettingsViewModel,
-                pluginSettingsViewModel: pluginSettingsViewModel,
-                appendPromptSettingsViewModel: appendPromptSettingsViewModel,
-                mcpSettingsViewModel: mcpSettingsViewModel,
-                permissionRulesViewModel: permissionRulesViewModel,
-                workspaceViewModel: workspaceViewModel,
-                shortcutActions: shortcutActions
+            rootView: makeRootView(
+                presentation: presentation,
+                appTheme: appTheme
             )
-            .environment(\.appTheme, appTheme)
         )
         let window = NSWindow(contentViewController: hosting)
         window.title = "设置"
@@ -78,11 +82,13 @@ final class ProductionSettingsWindowPresenter: SettingsWindowPresenting {
 
         let sendableOnClose = SendableClosure(closure: onClose)
         let windowID = ObjectIdentifier(window)
+        presentations[windowID] = presentation
         closeObservations[windowID] = WindowCloseObservation(
             object: window,
             queue: .main
         ) { [weak self] in
             self?.closeObservations[windowID] = nil
+            self?.presentations[windowID] = nil
             Task { @MainActor in sendableOnClose.closure() }
         }
 
@@ -90,6 +96,36 @@ final class ProductionSettingsWindowPresenter: SettingsWindowPresenting {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         return window
+    }
+
+    func updateTheme(_ appTheme: AppTheme, for window: NSWindow?) {
+        guard
+            let window,
+            let presentation = presentations[ObjectIdentifier(window)],
+            let hosting = window.contentViewController as? NSHostingController<AnyView>
+        else { return }
+
+        hosting.rootView = makeRootView(presentation: presentation, appTheme: appTheme)
+    }
+
+    private func makeRootView(
+        presentation: SettingsPresentation,
+        appTheme: AppTheme
+    ) -> AnyView {
+        AnyView(
+            SettingsView(
+                settingsViewModel: presentation.settingsViewModel,
+                appearanceViewModel: presentation.appearanceViewModel,
+                toolSettingsViewModel: presentation.toolSettingsViewModel,
+                pluginSettingsViewModel: presentation.pluginSettingsViewModel,
+                appendPromptSettingsViewModel: presentation.appendPromptSettingsViewModel,
+                mcpSettingsViewModel: presentation.mcpSettingsViewModel,
+                permissionRulesViewModel: presentation.permissionRulesViewModel,
+                workspaceViewModel: presentation.workspaceViewModel,
+                shortcutActions: presentation.shortcutActions
+            )
+            .environment(\.appTheme, appTheme)
+        )
     }
 }
 
@@ -119,6 +155,18 @@ final class ProductionFatalAlertPresenter: FatalAlertPresenting {
 
 private struct SendableClosure: @unchecked Sendable {
     let closure: () -> Void
+}
+
+private struct SettingsPresentation {
+    let settingsViewModel: AgentSettingsViewModel
+    let appearanceViewModel: AppearanceSettingsViewModel
+    let toolSettingsViewModel: ToolSettingsViewModel
+    let pluginSettingsViewModel: PluginSettingsViewModel
+    let appendPromptSettingsViewModel: AppendPromptSettingsViewModel
+    let mcpSettingsViewModel: MCPSettingsViewModel
+    let permissionRulesViewModel: PermissionRulesViewModel
+    let workspaceViewModel: WorkspaceSettingsViewModel
+    let shortcutActions: [ActionDefinition]
 }
 
 @MainActor

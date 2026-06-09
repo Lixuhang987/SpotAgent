@@ -1,12 +1,13 @@
 import AppKit
+import SwiftUI
 import XCTest
 @testable import HandAgentDesktop
 
 @MainActor
 final class PromptPanelAppearanceTests: XCTestCase {
-    func testShowCreatesAquaAppearancePanel() {
-        let controller = PromptPanelController()
-        controller.register(actions: [])
+    func testShowKeepsAquaForAppKitControlStabilization() {
+        let controller = PromptPanelController(focusRestorer: FakePromptPanelAppearanceFocusRestorer())
+        controller.configure(viewModel: PromptPanelViewModel(actions: []))
         defer { controller.hide() }
 
         controller.show()
@@ -17,4 +18,28 @@ final class PromptPanelAppearanceTests: XCTestCase {
             .aqua
         )
     }
+
+    func testUpdateThemeRefreshesExistingRootViewWithoutReplacingViewModel() {
+        let controller = PromptPanelController(focusRestorer: FakePromptPanelAppearanceFocusRestorer())
+        let viewModel = PromptPanelViewModel(actions: [])
+        viewModel.draft = "keep me"
+        controller.configure(viewModel: viewModel)
+        defer { controller.hide() }
+
+        controller.show()
+        controller.updateTheme(.dark)
+
+        let panel = Mirror(reflecting: controller).descendant("panel") as? NSPanel
+        let hosting = panel?.contentView as? NSHostingView<AnyView>
+        XCTAssertNotNil(hosting)
+        XCTAssertEqual(viewModel.draft, "keep me")
+    }
+}
+
+@MainActor
+private final class FakePromptPanelAppearanceFocusRestorer: PromptPanelFocusRestoring {
+    typealias Token = Int
+
+    func captureCurrentFocusOwner() -> Int? { nil }
+    func restoreFocus(to token: Int) {}
 }

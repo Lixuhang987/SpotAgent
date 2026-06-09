@@ -28,9 +28,9 @@ struct PromptPanelGrowingTextView: NSViewRepresentable {
         let textView = PlaceholderTextView()
         textView.delegate = context.coordinator
         textView.font = nsFont
-        textView.textColor = NSColor(theme.colors.textPrimary)
+        textView.textColor = NSColor(isDisabled ? theme.colors.textSecondary : theme.colors.textPrimary)
         textView.placeholder = placeholder
-        textView.placeholderColor = NSColor(theme.colors.textSecondary)
+        textView.placeholderColor = NSColor(isDisabled ? theme.colors.mutedSoft : theme.colors.textSecondary)
         textView.backgroundColor = .clear
         textView.drawsBackground = false
         textView.isRichText = false
@@ -65,9 +65,9 @@ struct PromptPanelGrowingTextView: NSViewRepresentable {
             textView.string = text
         }
         textView.font = nsFont
-        textView.textColor = NSColor(theme.colors.textPrimary)
+        textView.textColor = NSColor(isDisabled ? theme.colors.textSecondary : theme.colors.textPrimary)
         textView.placeholder = placeholder
-        textView.placeholderColor = NSColor(theme.colors.textSecondary)
+        textView.placeholderColor = NSColor(isDisabled ? theme.colors.mutedSoft : theme.colors.textSecondary)
         textView.isEditable = !isDisabled
         textView.isSelectable = !isDisabled
         textView.needsDisplay = true

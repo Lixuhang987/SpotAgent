@@ -14,7 +14,7 @@
 | `PromptPanelFocusRestorer.swift` | 记录 PromptPanel 唤起前的前台应用，并在面板因失焦或 ESC 收起后恢复应用焦点 |
 | `PromptPanelInputFocusRetrier.swift` | 输入框 AppKit 焦点重试器；等待 `NSTextView.window` 可用后设置 `initialFirstResponder` 与当前 first responder |
 | `PromptPanelWindow.swift` | `NSPanel` 子类，处理失焦自动隐藏 |
-| `PromptPanelStyles.swift` | `PromptPanelContainerModifier` / `ActionRowModifier` |
+| `PromptPanelStyles.swift` | `PromptPanelContainerModifier` / `ActionRowModifier` / icon button hit area / trigger pill 等 Warm Command Sheet 共享样式 |
 | `PromptAttachmentResult.swift` | `PromptAttachmentResult` 枚举；描述 PromptPanel 提交时附带的用户主动输入附件 |
 | `ActionDefinition.swift` | PromptPanel item 统一定义：trigger、参数、全局快捷键、提交行为、plugin binding、manifest 校验与 trigger 冲突处理 |
 | `ActionManifestStore.swift` | 从 `~/.spotAgent/plugins/*/plugin.json` 读取 Action manifests |
@@ -65,9 +65,10 @@ Action prompt 的参数与提交流程：
 - **Action 全局快捷键**：每个 `ActionDefinition` 通过 `shortcutName = "action.<id>"` 获得可配置全局快捷键名；plugin manifest 可通过 prompt 级 `globalShortcut` 声明默认值，用户改过后不覆盖。
 - **动态 action 刷新**：Controller 可多次 `register(actions:)`；首次创建 ViewModel，后续只刷新 ViewModel action 列表。Coordinator 同步刷新 Action 全局快捷键注册。新增动态 action 不要覆盖已有用户自定义快捷键。
 - **Styles 抽取阈值**：跨 View 复用的样式才放 `PromptPanelStyles.swift`；一次性样式写在 View 里，避免 ViewModifier 爆炸。
-- **窗口与拖动区域**：`NSPanel` 自身设为 `isOpaque = false` + `backgroundColor = .clear`，可见背景全部由 SwiftUI `promptPanelContainer()` 的 warm cream 圆角面板、hairline 描边和柔和阴影提供，避免顶部"标题栏条"和主体颜色不一致。面板固定 `NSAppearance(.aqua)`，输入框文本与 placeholder 直接使用 theme token，避免系统暗色模式下浅底面板出现低对比度文字。`isMovableByWindowBackground = true` 让任何空白处都能拖；首行左侧 input 不显示独立图标，也不绘制独立卡片、背景或边框，视觉上直接落在面板背景里。`draft` 没有可见内容时 `NSTextView` 只覆盖 placeholder 附近，右侧从文字区域外到设置按钮左侧都保持可拖动背景；`draft` 有可见内容后 input 占满设置按钮左侧剩余空间。新增首行控件时不要破坏这个空态拖动区 / 有内容扩展区切换。
+- **主题来源**：PromptPanel 的 SwiftUI 视觉由 `AppearanceThemeService.appTheme` 注入的 `AppTheme.light/dark` 决定；`design/tokens.json` 是 token 源，`GeneratedThemeTokens.swift` 是生成产物。`PromptPanelController.updateTheme(_:)` 会刷新已存在面板的 root view，并保留同一个 ViewModel。
+- **窗口与拖动区域**：`NSPanel` 自身设为 `isOpaque = false` + `backgroundColor = .clear`，可见背景全部由 SwiftUI `promptPanelContainer()` 的 token 化 command sheet 圆角面板、hairline 描边和柔和阴影提供，避免顶部"标题栏条"和主体颜色不一致。面板可保留 `NSAppearance(.aqua)` 作为 AppKit 控件渲染稳定手段，但这不是固定浅色 UI；SwiftUI 背景、文字、hover、warning/error、chip 和 action row 都必须来自注入的 `AppTheme`。`isMovableByWindowBackground = true` 让任何空白处都能拖；首行左侧 input 不显示独立图标，也不绘制独立卡片、背景或边框，视觉上直接落在面板背景里。`draft` 没有可见内容时 `NSTextView` 只覆盖 placeholder 附近，右侧从文字区域外到设置按钮左侧都保持可拖动背景；`draft` 有可见内容后 input 占满设置按钮左侧剩余空间。新增首行控件时不要破坏这个空态拖动区 / 有内容扩展区切换。
 - **焦点语义**：PromptPanel 被唤出后必须立即把首响应者交给输入框。首次启动后第一次打开时，SwiftUI 的 `NSViewRepresentable` 可能晚于面板 `orderFront` 才拿到 `window`，因此焦点建立由 `PromptPanelInputFocusRetrier` 在输入框层短时重试，直到 `NSTextView.window` 可用后同时设置 `initialFirstResponder` 与当前 first responder。如果面板因为点击外侧失焦，或因 ESC / 全局快捷键收起，必须把焦点返还给唤起前的前台应用。提交 prompt 时是 Electron ThreadWindow handoff，Coordinator 必须在发送 `thread_window.open_initial_prompt` 前调用 `hide(restoringFocus: false)`，避免 `orderOut` / `onDidResignKey` 重入恢复旧前台应用并把刚显示的 Electron ThreadWindow 推到后台。恢复逻辑只做本地窗口激活，不向 thread 注入任何 App 上下文。
-- **视觉风格**：PromptPanel 使用 `DESIGN.md` 的 cream canvas、coral emphasis、warm card hover 状态；附件 chip、server 不可用提示和 action hover 都走 `Theme` token，不回退到旧暗色玻璃或 Mango Amber。
+- **Warm Command Sheet 视觉风格**：PromptPanel 使用 `DESIGN.md` 的 warm canvas / coral emphasis / dark product surface 语言，但不得固定浅色。容器、输入 placeholder/disabled、设置按钮 hover、附件 chip、server banner、action row、trigger pill 和 empty state 都走 `theme.colors.*`、`theme.spacing.*`、`theme.radius.*`；附件 chip 区分普通文本、图片预览和 selection error，server 不可用使用 warning 语义，Action 渲染失败或缺必填参数使用 error 语义。不要回退到旧暗色玻璃、Mango Amber 或硬编码颜色。
 - **输入框高度**：PromptPanel 输入使用 `PromptPanelGrowingTextView` 包装 AppKit `NSTextView + NSScrollView`。输入框随文本自动增高，最多显示 5 行；超过 5 行后固定高度并出现垂直滚动条。普通 Return 提交；Shift/Option + Return 插入换行。
 - **Action 匹配大小写不敏感**：trigger 使用前缀匹配，title / description 使用包含匹配；trigger 冲突按 plugin id 稳定排序保留第一个。
 - **server 不可用时不丢草稿**：`submissionDisabledMessage != nil` 时输入框禁用并显示提示，`submit()` 直接返回，不清空 `draft` / `attachments`。
