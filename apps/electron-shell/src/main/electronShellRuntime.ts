@@ -1,5 +1,6 @@
 import type {
   ElectronToSwiftEvent,
+  HostTheme,
   SwiftToElectronCommand,
 } from "./protocol/electronShellProtocol.js";
 
@@ -18,6 +19,7 @@ type ThreadWindowHost = {
   openInitialPrompt(payload: InitialPromptCommand["payload"]): Promise<void>;
   openHistory(): Promise<void>;
   focus(): boolean;
+  updateTheme(theme: HostTheme): Promise<void>;
 };
 
 type ActivityWindowHost = {
@@ -120,6 +122,9 @@ export class ElectronShellRuntime {
         return;
       case "activity_window.show":
         await this.runCommand(command, () => this.options.activityWindow.show());
+        return;
+      case "theme.changed":
+        await this.runCommand(command, () => this.options.prewarmer.updateTheme(command.theme));
         return;
       case "shutdown":
         this.ack(command, true);

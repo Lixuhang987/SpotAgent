@@ -67,6 +67,25 @@ describe("ElectronShellRuntime", () => {
     });
   });
 
+  it("routes theme changed commands to the thread window host", async () => {
+    const harness = createHarness();
+
+    await harness.runtime.handleCommand({
+      channel: "electron_shell",
+      type: "theme.changed",
+      commandId: "theme-1",
+      theme: { preference: "system", resolved: "dark" },
+    });
+
+    expect(harness.prewarmer.updateTheme).toHaveBeenCalledWith({ preference: "system", resolved: "dark" });
+    expect(harness.events).toContainEqual({
+      channel: "electron_shell",
+      type: "command.ack",
+      commandId: "theme-1",
+      ok: true,
+    });
+  });
+
   it("requests the Swift prompt panel when activity click cannot focus a thread window", () => {
     const harness = createHarness({ focusResult: false });
 
@@ -291,6 +310,7 @@ function createHarness(options: { focusResult?: boolean; prepareError?: Error } 
     openInitialPrompt: vi.fn(async () => {}),
     openHistory: vi.fn(async () => {}),
     focus: vi.fn(() => options.focusResult ?? true),
+    updateTheme: vi.fn(async () => {}),
   };
   const activityWindow = {
     show: vi.fn(async () => {}),

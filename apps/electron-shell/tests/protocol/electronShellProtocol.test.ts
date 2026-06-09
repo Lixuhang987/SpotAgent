@@ -55,6 +55,24 @@ describe("electronShellProtocol", () => {
     expect(command.type).toBe("activity_window.show");
   });
 
+  it("accepts theme.changed commands with preference and resolved theme", () => {
+    expect(isSwiftToElectronCommand({
+      channel: "electron_shell",
+      type: "theme.changed",
+      commandId: "theme-1",
+      theme: { preference: "system", resolved: "dark" },
+    })).toBe(true);
+  });
+
+  it("rejects theme.changed commands with invalid resolved theme", () => {
+    expect(isSwiftToElectronCommand({
+      channel: "electron_shell",
+      type: "theme.changed",
+      commandId: "theme-1",
+      theme: { preference: "system", resolved: "system" },
+    })).toBe(false);
+  });
+
   it("encodes command acknowledgements", () => {
     expect(encodeEvent({
       channel: "electron_shell",

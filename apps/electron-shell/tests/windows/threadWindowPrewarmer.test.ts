@@ -25,6 +25,43 @@ describe("ThreadWindowPrewarmer", () => {
     expect(window.focusCount).toBe(0);
   });
 
+  it("passes the current theme to newly created windows", async () => {
+    const window = new FakeBrowserWindow();
+    const prewarmer = new ThreadWindowPrewarmer({
+      threadWindowURL: "http://127.0.0.1:4317/thread-window/index.html",
+      preloadPath: "/repo/apps/electron-shell/dist/preload/threadWindowPreload.js",
+      createWindow: (options) => {
+        expect(options.webPreferences?.additionalArguments).toContain(
+          `--handagent-theme=${encodeURIComponent(JSON.stringify({ preference: "system", resolved: "dark" }))}`,
+        );
+        return window;
+      },
+    });
+
+    await prewarmer.updateTheme({ preference: "system", resolved: "dark" });
+    const prepared = prewarmer.prepare();
+    window.webContents.emit("did-finish-load");
+    await prepared;
+  });
+
+  it("broadcasts theme changes to a prepared window", async () => {
+    const window = new FakeBrowserWindow();
+    const prewarmer = new ThreadWindowPrewarmer({
+      threadWindowURL: "http://127.0.0.1:4317/thread-window/index.html",
+      preloadPath: "/preload.js",
+      createWindow: () => window,
+    });
+
+    const prepared = prewarmer.prepare();
+    window.webContents.emit("did-finish-load");
+    await prepared;
+    await prewarmer.updateTheme({ preference: "dark", resolved: "dark" });
+
+    expect(window.sentMessages).toEqual([
+      ["handagent:theme-changed", { preference: "dark", resolved: "dark" }],
+    ]);
+  });
+
   it("delivers initial prompt before showing the prepared window", async () => {
     const window = new FakeBrowserWindow();
     const prewarmer = new ThreadWindowPrewarmer({
@@ -281,17 +318,22 @@ describe("ThreadWindowPrewarmer", () => {
 class FakeBrowserWindow extends EventEmitter {
   webContents = new EventEmitter() as EventEmitter & {
     executeJavaScript: (source: string) => Promise<void>;
+    send: (channel: string, payload: unknown) => void;
   };
   loadedURL: string | null = null;
   loadCount = 0;
   showCount = 0;
   focusCount = 0;
   executedJavaScript: string[] = [];
+  sentMessages: [string, unknown][] = [];
 
   constructor() {
     super();
     this.webContents.executeJavaScript = async (source: string) => {
       this.executedJavaScript.push(source);
+    };
+    this.webContents.send = (channel: string, payload: unknown) => {
+      this.sentMessages.push([channel, payload]);
     };
   }
 
