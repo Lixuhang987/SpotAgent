@@ -163,6 +163,7 @@
 - Electron flag 进程唯一性已验证：当前 packaged app 运行中计数为 `{"swiftHost":1,"electronMain":1,"agentServer":1}`；进程链路为 Swift host pid `67148` -> Electron main pid `67149` -> agent-server pid `67163`，`lsof -nP -iTCP:4317 -sTCP:LISTEN` 仅显示 node pid `67163` 监听 `127.0.0.1:4317`。
 - Electron shell production build 已验证：`pnpm --filter handagent-electron-shell build` 通过，完成 main / activity-window TypeScript 编译与 ActivityWindow Vite production build，Vite 输出 `31 modules transformed`、`dist/activity-window/index.html`、CSS 与 JS chunk。
 - Electron ThreadWindow initial prompt 已验证：提交前只有 Electron `HandAgent Activity`；使用真实全局快捷键打开 Swift PromptPanel（`640x448`）并提交 `ELECTRON_UI_SHELL_FINAL_QA_20260608 [mock:assistant-ok]` 后，Electron 出现 `HandAgent ThreadWindow`（`920x640`），Computer Use 可见该 user message 与 `Mock assistant response: main chain is reachable.`；`~/.spotAgent/threads/thread-1780964771699-7dvw8k.json` 持久化同一 user / assistant，`/api/activity` snapshot 指向该 thread 并回到 `status:"idle"`。
+- PromptPanel 连续第二次提交复用 Electron ThreadWindow 已验证：首次提交后 Electron 只有一个 `HandAgent ThreadWindow`，位置/尺寸为 `260,146,920,640`；第二次提交 `ELECTRON_UI_SHELL_FINAL_QA_20260608_B【mock：assistant-ok]` 后仍只有同一个 `HandAgent ThreadWindow` 且位置/尺寸不变，Computer Use 可见 tab 栏新增第二个 tab，当前显示 B prompt；`~/.spotAgent/threads/thread-1780964917550-h99lcu.json` 持久化 B user message。该次 B 的 mock trigger 错误由测试输入法把 `[mock:assistant-ok]` 转为全角 `【mock：assistant-ok]` 导致，不影响本条对“复用同一窗口并创建新 tab/thread”的验证。
 
 **2026-06-09 待回归修复项**：
 
@@ -176,7 +177,6 @@
 1. 确认启动日志包含 agent-server supervisor description，并明确 `mode`、`coreRuntimeHost: "agent-server"` 与 `utilityProcessBlocker`；如果走 Node child fallback，日志必须说明 utilityProcess 的具体 blocker。
 1. 启动完成前 PromptPanel 不允许提交；收到 `agent_server.health available=true` 与 `thread_window.prepared` 后 PromptPanel 才恢复可提交。
 1. 通过全局快捷键打开或切换 PromptPanel 多次，确认不会显示 ThreadWindow，也不会发送 `thread_window.prepare` command；hidden ThreadWindow 预热只由 Electron main 在 app-server ready 后完成。
-1. 再次打开 PromptPanel 连续提交第二条不同 prompt，确认复用同一个 Electron ThreadWindow，但创建新的 tab/thread，不写入当前 active tab 的 composer thread。
 1. 触发 `openHistory`，确认聚焦 Electron ThreadWindow 并显示历史侧栏，不创建 Swift WKWebView host。
 1. 触发 platform tool，例如 `clipboard.read`、`app.frontmost`、`screen.capture` 或 `accessibility.snapshot`，确认 agent-server 仍通过 `/api/platform` 请求 Swift 回写结果。
 1. 确认不再显示 Swift StatusBubble，右下角显示 Electron React StatusBubble；提交 prompt 后 Electron StatusBubble 能展示 `starting` / `running` / `completed`。

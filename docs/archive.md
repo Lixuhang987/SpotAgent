@@ -1130,3 +1130,11 @@
 - **验证过程**：提交前确认 Electron 只有 `HandAgent Activity`。用真实全局快捷键打开 Swift PromptPanel，输入并提交 `ELECTRON_UI_SHELL_FINAL_QA_20260608 [mock:assistant-ok]`，随后检查窗口、Computer Use 可见内容、thread 文件与 `/api/activity`。
 - **证据**：PromptPanel 打开后尺寸为 `640x448`；提交后 Electron 出现 `HandAgent ThreadWindow`，尺寸 `920x640`；Computer Use 可见 user message `ELECTRON_UI_SHELL_FINAL_QA_20260608 [mock:assistant-ok]` 与 assistant `Mock assistant response: main chain is reachable.`；thread 文件 `~/.spotAgent/threads/thread-1780964771699-7dvw8k.json` 持久化同一 user / assistant；`/api/activity` snapshot 为 `activeThreadId:"thread-1780964771699-7dvw8k"`、`status:"idle"`。
 - **结论**：通过。PromptPanel initial prompt 在 Electron flag 路径下打开 Electron ThreadWindow 并创建新 thread，不走 Swift WKWebView host。
+
+### Electron UI Shell 连续 PromptPanel 提交复用 ThreadWindow
+
+- **验证日期**：2026-06-09
+- **验证环境**：Electron flag packaged app，`mock-llm`；主仓库 `/Users/mu9/proj/handAgent`，branch `main`。
+- **验证过程**：首次提交 `ELECTRON_UI_SHELL_FINAL_QA_20260608 [mock:assistant-ok]` 后保持 Electron ThreadWindow 打开；再次通过 PromptPanel 提交第二条不同 prompt，检查 Electron 窗口数量、位置/尺寸、Computer Use tab 状态与持久化 thread。
+- **证据**：第二次提交前后 Electron 窗口仍只有 `HandAgent Activity` 与一个 `HandAgent ThreadWindow`，ThreadWindow 位置/尺寸保持 `260,146,920,640`；Computer Use 可见 tab 栏新增第二个 tab，当前 tab 显示 B prompt；`~/.spotAgent/threads/thread-1780964917550-h99lcu.json` 持久化第二个 user message。第二次测试输入被中文输入法转换为 `ELECTRON_UI_SHELL_FINAL_QA_20260608_B【mock：assistant-ok]`，因此 MockLLMClient 按预期报 mock trigger 不匹配；该输入法问题不影响窗口复用、tab 创建和 thread 隔离结论。
+- **结论**：通过。连续 PromptPanel 提交复用同一个 Electron ThreadWindow，并创建新的 tab/thread，没有写入首次提交的 active thread。
