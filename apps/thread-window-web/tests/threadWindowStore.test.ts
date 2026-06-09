@@ -12,7 +12,7 @@ describe("threadWindowStore", () => {
     vi.unstubAllGlobals();
   });
 
-  it("creates a tab from a started notification and keeps pending initial prompt", () => {
+  it("creates thread state from a started notification and keeps pending initial prompt without active UI state", () => {
     const store = createThreadWindowStore;
     store.getState().enqueueInitialPrompt({
       clientRequestId: "prompt-1",
@@ -30,8 +30,23 @@ describe("threadWindowStore", () => {
       payload: { preview: "hello" },
     });
 
-    expect(store.getState().activeTabId).toBe("thread-1");
-    expect(store.getState().tabs["thread-1"].pendingInitialPrompt?.text).toBe("hello");
+    expect(store.getState().threadsById["thread-1"].pendingInitialPrompt?.text).toBe("hello");
+    expect("activeTabId" in store.getState()).toBe(false);
+    expect("tabs" in store.getState()).toBe(false);
+  });
+
+  it("ensures cached thread state without selecting a visible thread", () => {
+    const store = createThreadWindowStore;
+
+    store.getState().ensureThreadState("thread-1");
+
+    expect(store.getState().threadsById["thread-1"]).toMatchObject({
+      threadId: "thread-1",
+      title: null,
+      status: "idle",
+      messages: [],
+    });
+    expect("activeTabId" in store.getState()).toBe(false);
   });
 
   it("merges snapshot without dropping pending initial user message", () => {
@@ -59,14 +74,14 @@ describe("threadWindowStore", () => {
       payload: { messages: [], status: "running" },
     });
 
-    expect(store.getState().tabs["thread-1"].messages).toEqual([
+    expect(store.getState().threadsById["thread-1"].messages).toEqual([
       { id: "pending-prompt-1", role: "user", text: "hello", pending: true, attachments: [] },
     ]);
   });
 
   it("appends assistant delta and tool events", () => {
     const store = createThreadWindowStore;
-    store.getState().openHistoryThread("thread-1");
+    store.getState().ensureThreadState("thread-1");
     store.getState().handleNotification({
       type: "assistant.delta",
       threadId: "thread-1",
@@ -86,12 +101,12 @@ describe("threadWindowStore", () => {
       payload: { text: "lo" },
     });
 
-    expect(store.getState().tabs["thread-1"].messages[0].text).toBe("hello");
+    expect(store.getState().threadsById["thread-1"].messages[0].text).toBe("hello");
   });
 
   it("queues composer input while the thread is running without appending a user message", () => {
     const store = createThreadWindowStore;
-    store.getState().openHistoryThread("thread-1");
+    store.getState().ensureThreadState("thread-1");
     store.getState().handleNotification({
       type: "turn.started",
       threadId: "thread-1",
@@ -103,15 +118,15 @@ describe("threadWindowStore", () => {
 
     store.getState().queueComposerInput("thread-1", "second");
 
-    const tab = store.getState().tabs["thread-1"];
-    expect(tab.messages).toEqual([]);
-    expect(tab.queuedComposerInputs).toEqual([{ text: "second", attachments: [] }]);
+    const thread = store.getState().threadsById["thread-1"];
+    expect(thread.messages).toEqual([]);
+    expect(thread.queuedComposerInputs).toEqual([{ text: "second", attachments: [] }]);
     expect(store.getState().takeNextQueuedInputForDispatch("thread-1")).toBeNull();
   });
 
   it("dispatches queued composer input one item at a time after the thread leaves running", () => {
     const store = createThreadWindowStore;
-    store.getState().openHistoryThread("thread-1");
+    store.getState().ensureThreadState("thread-1");
     store.getState().handleNotification({
       type: "turn.started",
       threadId: "thread-1",
@@ -158,25 +173,25 @@ describe("threadWindowStore", () => {
       text: "third",
       attachments: [],
     });
-    expect(store.getState().tabs["thread-1"].queuedComposerInputs).toEqual([]);
+    expect(store.getState().threadsById["thread-1"].queuedComposerInputs).toEqual([]);
   });
 
   it("removes a queued composer input by index", () => {
     const store = createThreadWindowStore;
-    store.getState().openHistoryThread("thread-1");
+    store.getState().ensureThreadState("thread-1");
     store.getState().queueComposerInput("thread-1", "first");
     store.getState().queueComposerInput("thread-1", "second");
 
     store.getState().removeQueuedComposerInput("thread-1", 0);
 
-    expect(store.getState().tabs["thread-1"].queuedComposerInputs).toEqual([
+    expect(store.getState().threadsById["thread-1"].queuedComposerInputs).toEqual([
       { text: "second", attachments: [] },
     ]);
   });
 
   it("holds queued composer input while a submitted input is waiting for turn start", () => {
     const store = createThreadWindowStore;
-    store.getState().openHistoryThread("thread-1");
+    store.getState().ensureThreadState("thread-1");
 
     store.getState().markComposerInputDispatchPending("thread-1");
     store.getState().queueComposerInput("thread-1", "second");
@@ -208,7 +223,7 @@ describe("threadWindowStore", () => {
 
   it("does not append duplicate assistant delta notifications", () => {
     const store = createThreadWindowStore;
-    store.getState().openHistoryThread("thread-1");
+    store.getState().ensureThreadState("thread-1");
 
     const notification = {
       type: "assistant.delta" as const,
@@ -223,10 +238,10 @@ describe("threadWindowStore", () => {
     store.getState().handleNotification(notification);
     store.getState().handleNotification(notification);
 
-    expect(store.getState().tabs["thread-1"].messages[0].text).toBe("hel");
+    expect(store.getState().threadsById["thread-1"].messages[0].text).toBe("hel");
   });
 
-  it("only removes history and tabs when delete status is deleted", () => {
+  it("only removes history and thread state when delete status is deleted", () => {
     const store = createThreadWindowStore;
     store.setState({
       history: [{
@@ -237,7 +252,7 @@ describe("threadWindowStore", () => {
         messageCount: 1,
       }],
     });
-    store.getState().openHistoryThread("thread-1");
+    store.getState().ensureThreadState("thread-1");
 
     store.getState().handleNotification({
       type: "thread.deleted",
@@ -248,8 +263,7 @@ describe("threadWindowStore", () => {
     });
 
     expect(store.getState().history.map((item) => item.id)).toEqual(["thread-1"]);
-    expect(store.getState().tabs["thread-1"]).toBeDefined();
-    expect(store.getState().activeTabId).toBe("thread-1");
+    expect(store.getState().threadsById["thread-1"]).toBeDefined();
 
     store.getState().handleNotification({
       type: "thread.deleted",
@@ -260,8 +274,7 @@ describe("threadWindowStore", () => {
     });
 
     expect(store.getState().history).toEqual([]);
-    expect(store.getState().tabs["thread-1"]).toBeUndefined();
-    expect(store.getState().activeTabId).toBeNull();
+    expect(store.getState().threadsById["thread-1"]).toBeUndefined();
   });
 
   it("stores workspaces from workspace.listed notifications", () => {
@@ -336,7 +349,7 @@ describe("threadWindowStore", () => {
 
   it("stores permission and workspace requests by thread", () => {
     const store = createThreadWindowStore;
-    store.getState().openHistoryThread("thread-1");
+    store.getState().ensureThreadState("thread-1");
     store.getState().handleRequest({
       type: "permission.requested",
       requestId: "thread-1:req-1",
@@ -352,13 +365,13 @@ describe("threadWindowStore", () => {
       payload: { prompt: "Pick", candidates: [] },
     });
 
-    expect(store.getState().tabs["thread-1"].permissionRequests).toHaveLength(1);
-    expect(store.getState().tabs["thread-1"].workspaceRequests).toHaveLength(1);
+    expect(store.getState().threadsById["thread-1"].permissionRequests).toHaveLength(1);
+    expect(store.getState().threadsById["thread-1"].workspaceRequests).toHaveLength(1);
   });
 
   it("removes answered requests through explicit store actions", () => {
     const store = createThreadWindowStore;
-    store.getState().openHistoryThread("thread-1");
+    store.getState().ensureThreadState("thread-1");
     store.getState().handleRequest({
       type: "permission.requested",
       requestId: "thread-1:req-1",
@@ -377,7 +390,7 @@ describe("threadWindowStore", () => {
     store.getState().resolvePermissionRequest("thread-1:req-1");
     store.getState().resolveWorkspaceRequest("thread-1:req-2");
 
-    expect(store.getState().tabs["thread-1"].permissionRequests).toEqual([]);
-    expect(store.getState().tabs["thread-1"].workspaceRequests).toEqual([]);
+    expect(store.getState().threadsById["thread-1"].permissionRequests).toEqual([]);
+    expect(store.getState().threadsById["thread-1"].workspaceRequests).toEqual([]);
   });
 });
