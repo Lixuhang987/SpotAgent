@@ -1186,3 +1186,11 @@
 - **验证过程**：先确认 Swift 无窗口且只有 Electron `HandAgent Activity`。提交 long-running `[mock:slow-focus]` 观察 running UI，再中断 long turn；随后提交短 `[mock:slow]` 并采集 `/api/activity` 状态序列、thread 文件和最终 ActivityWindow。
 - **证据**：Computer Use 在 long-running `thread-1780966195611-ii4g6x` 运行中看到 Electron ActivityWindow 文本 `正在回复 / 正在回复`；短 prompt `ELECTRON_STATUSBUBBLE_SEQUENCE_CURRENT_QA_20260609 [mock:slow]` 的 `/api/activity` 序列为 `starting:正在开始` -> `starting:<prompt>` -> `running:正在回复` -> `completed:已完成` -> `idle:点击开始`；thread 文件 `~/.spotAgent/threads/thread-1780966255243-1kysuw.json` 持久化 assistant `Mock slow response completed.`；最终 Computer Use 看到 Electron ActivityWindow 回到 `点击开始 / 点击开始`。
 - **结论**：通过。Electron flag 路径下不显示 Swift StatusBubble；右下角 Electron React StatusBubble 消费 `/api/activity` 并覆盖 starting / running / completed / idle 状态。
+
+### Electron UI Shell 关闭 visible ThreadWindow 后复用后台服务
+
+- **验证日期**：2026-06-09
+- **验证环境**：Electron flag packaged app，`mock-llm`；标准 `open dist/HandAgentDesktop.app` 启动。
+- **验证过程**：用 `thread_window.open_history` 打开 visible Electron ThreadWindow，关闭该窗口后检查 agent-server；随后用真实全局快捷键打开 Swift PromptPanel，粘贴 ASCII prompt 并提交，检查新 Electron ThreadWindow、thread 文件与 `/api/activity`。
+- **证据**：关闭前 Electron 有 `HandAgent Activity` + `HandAgent ThreadWindow`，ThreadWindow 尺寸 `920x640`；点击 close button 后只剩 `HandAgent Activity`，node pid `79262` 仍监听 `127.0.0.1:4317`；随后 PromptPanel 为 `640x448`，提交 `ELECTRON_CLOSE_REUSE_CURRENT_QA_20260609 [mock:assistant-ok]` 后 Electron 重新出现 `HandAgent ThreadWindow`；thread 文件 `~/.spotAgent/threads/thread-1780966465948-vh3h1g.json` 持久化 user prompt 与 assistant `Mock assistant response: main chain is reachable.`；`/api/activity` snapshot 为 `activeThreadId:"thread-1780966465948-vh3h1g"`、`status:"idle"`。
+- **结论**：通过。关闭 visible Electron ThreadWindow 不停止 agent-server；后续 PromptPanel submit 仍复用同一后台服务执行。
