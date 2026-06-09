@@ -1098,3 +1098,11 @@
 - **验证过程**：检查 `dist/HandAgentDesktop.app` bundle 内的 Electron shell main 入口，并核对当前 Electron main 进程命令是否使用该入口。
 - **证据**：`dist/HandAgentDesktop.app/Contents/Resources/ElectronShell/dist/main/main.js` 存在，大小 `6257` bytes，内容包含 `electron.ready`；当前 Electron main pid `67149` 使用同一路径启动。
 - **结论**：通过。mock packaged app bundle 已包含 Electron shell main 入口。
+
+### Electron UI Shell mock LLM packaged 路径
+
+- **验证日期**：2026-06-09
+- **验证环境**：Electron flag packaged app，`mock-llm`；主仓库 `/Users/mu9/proj/handAgent`，branch `main`。
+- **验证过程**：读取 packaged app runtime marker，随后通过 `/api/thread` 提交 mock prompt 并检查持久化 thread 与 `/api/activity`。
+- **证据**：`dist/HandAgentDesktop.app/Contents/Resources/HandAgentRuntimeMode.json` 为 `{"llmMode":"mock"}`；thread 文件 `~/.spotAgent/threads/thread-1780964395791-tvbdeb.json` 包含 user `ELECTRON_ACTIVITY_RECONNECT_QA_20260609 [mock:assistant-ok]` 与 assistant `Mock assistant response: main chain is reachable.`；`/api/activity` snapshot 回到 `activeThreadId:"thread-1780964395791-tvbdeb"`、`status:"idle"`。
+- **结论**：通过。Electron flag packaged app 在 mock LLM 模式下返回 mock assistant，不访问真实 LLM。

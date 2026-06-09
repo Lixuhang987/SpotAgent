@@ -159,6 +159,7 @@
 - `/api/activity` subscriber 断开重连已验证：Electron flag packaged mock app 启动后，Swift host pid `67148`、Electron main pid `67149`、agent-server pid `67163` 各一份，`127.0.0.1:4317` 由 node 监听，Computer Use 观察 Electron `HandAgent Activity` 显示 `点击开始 / HandAgent 空闲`。连续两次新建 `/api/activity` WebSocket 连接，首包均为 `activity.snapshot` 且 `status:"idle"`；随后通过 `/api/thread` 创建 `thread-1780964395791-tvbdeb` 并提交 `ELECTRON_ACTIVITY_RECONNECT_QA_20260609 [mock:assistant-ok]`，收到 assistant delta 与 `turn.completed(status:"completed")`，thread 文件持久化同一 user prompt 与 `Mock assistant response: main chain is reachable.`；再次新建 `/api/activity` 连接首包为 `activity.snapshot`，`activeThreadId:"thread-1780964395791-tvbdeb"`、`status:"idle"`、`latestSummary:"点击开始"`。
 - `HANDAGENT_ELECTRON_BINARY` 可用性已验证：`launchctl getenv HANDAGENT_ELECTRON_BINARY` 指向 `/Users/mu9/proj/handAgent/node_modules/.pnpm/electron@42.3.3/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron`，该 binary 可执行且 `--version` 返回 `v42.3.3`；当前 Electron main 进程命令也使用该 binary 启动 `dist/HandAgentDesktop.app/Contents/Resources/ElectronShell/dist/main/main.js`。
 - packaged app Electron main 产物已验证：`dist/HandAgentDesktop.app/Contents/Resources/ElectronShell/dist/main/main.js` 存在，大小 `6257` bytes，文件内容包含 `electron.ready`；当前 Electron main pid `67149` 正在用该入口运行。
+- mock LLM packaged app 路径已验证：`dist/HandAgentDesktop.app/Contents/Resources/HandAgentRuntimeMode.json` 为 `{"llmMode":"mock"}`；`~/.spotAgent/threads/thread-1780964395791-tvbdeb.json` 持久化 `ELECTRON_ACTIVITY_RECONNECT_QA_20260609 [mock:assistant-ok]` 与 assistant `Mock assistant response: main chain is reachable.`；`/api/activity` snapshot 回到 `status:"idle"`。
 
 **2026-06-09 待回归修复项**：
 
@@ -183,7 +184,6 @@
 1. 关闭 visible Electron ThreadWindow，确认 agent-server 进程仍存在；再次打开 PromptPanel 并提交，确认仍通过同一后台服务执行。
 1. 关闭 Electron StatusBubble，确认 agent-server 进程仍存在，ThreadWindow 仍可继续对话。
 1. 模拟 agent-server 非零退出，确认 supervisor 按退避重启；超过最大次数后 Swift 显示明确 fatal/diagnostic 文案。
-1. 使用 mock LLM packaged app 路径启动 Electron flag，确认 prompt 返回 mock assistant，不访问真实 LLM。
 1. 退出 HandAgent 后确认 Electron、agent-server 和 renderer 进程不残留。
 
 ## ThreadWindow UI 重构完整验收（P2）
