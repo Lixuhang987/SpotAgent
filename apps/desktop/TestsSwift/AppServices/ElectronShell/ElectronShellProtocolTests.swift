@@ -78,16 +78,6 @@ final class ElectronShellProtocolTests: XCTestCase {
         XCTAssertEqual(event, .threadWindowClosed(timestamp: "2026-06-08T00:00:00.000Z", wasVisible: true))
     }
 
-    func testDecodesPromptPanelShowRequestedEvent() throws {
-        let data = """
-        {"channel":"electron_shell","type":"prompt_panel.show_requested","reason":"activity_window.clicked_without_thread"}
-        """.data(using: .utf8)!
-
-        let event = try JSONDecoder().decode(ElectronShellEvent.self, from: data)
-
-        XCTAssertEqual(event, .promptPanelShowRequested(reason: .activityWindowClickedWithoutThread))
-    }
-
     func testRejectsUnknownRendererCrashedWindow() {
         let data = """
         {"channel":"electron_shell","type":"renderer.crashed","window":"settings","reason":"gone"}

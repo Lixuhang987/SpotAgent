@@ -67,17 +67,13 @@ describe("ElectronShellRuntime", () => {
     });
   });
 
-  it("requests the Swift prompt panel when activity click cannot focus a thread window", () => {
+  it("does nothing when an idle activity click has no thread id", () => {
     const harness = createHarness({ focusResult: false });
 
     harness.runtime.handleActivityWindowFocusRequest(null);
 
     expect(harness.prewarmer.focus).not.toHaveBeenCalled();
-    expect(harness.events).toContainEqual({
-      channel: "electron_shell",
-      type: "prompt_panel.show_requested",
-      reason: "activity_window.clicked_without_thread",
-    });
+    expect(harness.events).toEqual([]);
   });
 
   it("focuses the thread window when an activity click has a visible thread", () => {
@@ -86,37 +82,25 @@ describe("ElectronShellRuntime", () => {
     harness.runtime.handleActivityWindowFocusRequest("thread-1");
 
     expect(harness.prewarmer.focus).toHaveBeenCalledTimes(1);
-    expect(harness.events).not.toContainEqual({
-      channel: "electron_shell",
-      type: "prompt_panel.show_requested",
-      reason: "activity_window.clicked_without_thread",
-    });
+    expect(harness.events).toEqual([]);
   });
 
-  it("requests the Swift prompt panel when activity click has a thread id but no visible thread window", () => {
+  it("does not request the Swift prompt panel when activity click cannot focus a thread window", () => {
     const harness = createHarness({ focusResult: false });
 
     harness.runtime.handleActivityWindowFocusRequest("thread-1");
 
     expect(harness.prewarmer.focus).toHaveBeenCalledTimes(1);
-    expect(harness.events).toContainEqual({
-      channel: "electron_shell",
-      type: "prompt_panel.show_requested",
-      reason: "activity_window.clicked_without_thread",
-    });
+    expect(harness.events).toEqual([]);
   });
 
-  it("uses native activity focus as a click fallback when renderer IPC is not delivered", () => {
+  it("does not request the Swift prompt panel from native activity focus", () => {
     const harness = createHarness({ focusResult: false });
 
     harness.runtime.handleActivityWindowNativeFocus();
 
     expect(harness.prewarmer.focus).toHaveBeenCalledTimes(1);
-    expect(harness.events).toContainEqual({
-      channel: "electron_shell",
-      type: "prompt_panel.show_requested",
-      reason: "activity_window.clicked_without_thread",
-    });
+    expect(harness.events).toEqual([]);
   });
 
   it("focuses a visible thread window from native activity focus", () => {
@@ -125,24 +109,16 @@ describe("ElectronShellRuntime", () => {
     harness.runtime.handleActivityWindowNativeFocus();
 
     expect(harness.prewarmer.focus).toHaveBeenCalledTimes(1);
-    expect(harness.events).not.toContainEqual({
-      channel: "electron_shell",
-      type: "prompt_panel.show_requested",
-      reason: "activity_window.clicked_without_thread",
-    });
+    expect(harness.events).toEqual([]);
   });
 
-  it("uses native activity mouse down when focus is already held by the activity window", () => {
+  it("does not request the Swift prompt panel from native activity mouse down", () => {
     const harness = createHarness({ focusResult: false });
 
     harness.runtime.handleActivityWindowNativeMouseDown();
 
     expect(harness.prewarmer.focus).toHaveBeenCalledTimes(1);
-    expect(harness.events).toContainEqual({
-      channel: "electron_shell",
-      type: "prompt_panel.show_requested",
-      reason: "activity_window.clicked_without_thread",
-    });
+    expect(harness.events).toEqual([]);
   });
 
   it("focuses a visible thread window from native activity mouse down", () => {
@@ -151,11 +127,7 @@ describe("ElectronShellRuntime", () => {
     harness.runtime.handleActivityWindowNativeMouseDown();
 
     expect(harness.prewarmer.focus).toHaveBeenCalledTimes(1);
-    expect(harness.events).not.toContainEqual({
-      channel: "electron_shell",
-      type: "prompt_panel.show_requested",
-      reason: "activity_window.clicked_without_thread",
-    });
+    expect(harness.events).toEqual([]);
   });
 
   it("acks focus false when no visible thread window exists", async () => {

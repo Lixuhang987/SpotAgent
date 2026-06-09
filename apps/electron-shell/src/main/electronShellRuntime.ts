@@ -72,35 +72,17 @@ export class ElectronShellRuntime {
   }
 
   handleActivityWindowFocusRequest(threadId: string | null): void {
-    if (threadId && this.options.prewarmer.focus()) {
-      return;
+    if (threadId) {
+      this.options.prewarmer.focus();
     }
-
-    this.requestPromptPanelFromActivityWindow();
   }
 
   handleActivityWindowNativeFocus(): void {
-    if (this.options.prewarmer.focus()) {
-      return;
-    }
-
-    this.requestPromptPanelFromActivityWindow();
+    this.options.prewarmer.focus();
   }
 
   handleActivityWindowNativeMouseDown(): void {
-    if (this.options.prewarmer.focus()) {
-      return;
-    }
-
-    this.requestPromptPanelFromActivityWindow();
-  }
-
-  private requestPromptPanelFromActivityWindow(): void {
-    this.options.send({
-      channel: "electron_shell",
-      type: "prompt_panel.show_requested",
-      reason: "activity_window.clicked_without_thread",
-    });
+    this.options.prewarmer.focus();
   }
 
   async handleCommand(command: SwiftToElectronCommand): Promise<void> {

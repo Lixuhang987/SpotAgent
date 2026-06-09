@@ -27,7 +27,7 @@
 - PromptPanel 提交语义：先用 `hide(restoringFocus: false)` 隐藏 PromptPanel，不恢复唤起前的前台应用；再发送 `thread_window.open_initial_prompt` 给 Electron main。React 收到后通过 `/api/thread` 发送 `thread.start`，再在 `thread.started` 后发送首轮 `input.submit` 和 attachments。这样 Electron `BrowserWindow.show()/focus()` 后不会被 PromptPanel 的焦点恢复逻辑推到后台。
 - Settings 打开时会创建模型、builtin tool、Plugin、Append Prompt、MCP、权限和 workspace 的 ViewModel。Coordinator 只负责注入，不直接读写 `~/.spotAgent/plugins` 或 `~/.spotAgent/mcp.json`。
 - agent-server 健康状态独立：server 不可用时拒绝 `submitPrompt` 并保留面板草稿。
-- `AppCoordinator` 在 app-server available 后调用 `ActivityWindowCommanding.showActivityWindow()`；show 失败不回退到 Swift StatusBubble。Electron StatusBubble 点击无法聚焦 ThreadWindow 时，Coordinator 只打开 PromptPanel，不解析 `/api/activity` 状态。
+- `AppCoordinator` 在 app-server available 后调用 `ActivityWindowCommanding.showActivityWindow()`；show 失败不回退到 Swift StatusBubble。Electron StatusBubble 点击不再回调 Coordinator 打开 PromptPanel，Coordinator 也不解析 `/api/activity` 状态。
 
 ## 当前 Action 列表
 
@@ -45,7 +45,7 @@ openHistory / threadWindowClosed
 - 持有 `PromptPanelController`。
 - 持有 `AgentServerHealth`（来自 AppServices 层）。
 - 通过 `AgentServerHealth.onAvailabilityChange` 驱动 [PromptPanel](/Users/mu9/proj/handAgent/apps/desktop/Sources/PromptPanel/prompt-panel.md) 的提交启停状态。
-- 通过 `ActivityWindowCommanding` 显示 Electron ActivityWindow；该 command client 只承载窗口命令和 PromptPanel show 回调，不承载 activity 数据。
+- 通过 `ActivityWindowCommanding` 显示 Electron ActivityWindow；该 command client 只承载 ActivityWindow show 命令回执，不承载 activity 数据。
 - `AppActivationPolicyCoordinator` 实例由 Coordinator 创建并注入 lifecycle 控制器，各自负责推送激活策略。
 
 ## 编辑此目录的约束

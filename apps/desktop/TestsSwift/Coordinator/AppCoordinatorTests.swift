@@ -138,28 +138,7 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
-    func testActivityPromptRequestShowsPromptPanelWithoutFocusingThreadWindow() {
-        closePromptPanelWindows()
-        let app = NSApplication.shared
-        let commandClient = RecordingThreadWindowCommandClient()
-        let activityClient = RecordingActivityWindowCommandClient()
-        let coordinator = AppCoordinator(
-            services: electronServices(
-                commandClient: commandClient,
-                activityClient: activityClient
-            )
-        )
-
-        activityClient.requestPromptPanel()
-
-        XCTAssertTrue(app.windows.contains { $0 is PromptPanelWindow && $0.isVisible })
-        XCTAssertTrue(commandClient.focusedThreadIDs.isEmpty)
-        coordinator.send(.hidePromptPanel)
-        closePromptPanelWindows()
-    }
-
-    @MainActor
-    func testShutdownClearsElectronActivityPromptRequestCallback() async throws {
+    func testShutdownClearsElectronActivityWindowCommandCallback() async throws {
         closePromptPanelWindows()
         let app = NSApplication.shared
         let commandClient = RecordingThreadWindowCommandClient()
@@ -172,9 +151,7 @@ final class AppCoordinatorTests: XCTestCase {
         )
 
         coordinator.shutdown()
-        XCTAssertNil(activityClient.onPromptPanelShowRequested)
         XCTAssertNil(activityClient.onActivityWindowCommandResult)
-        activityClient.requestPromptPanel()
         try await Task.sleep(for: .milliseconds(10))
 
         XCTAssertFalse(app.windows.contains { $0 is PromptPanelWindow && $0.isVisible })
@@ -323,7 +300,6 @@ private enum RecordingActivityWindowCommandError: Error {
 @MainActor
 private final class RecordingActivityWindowCommandClient: ActivityWindowCommanding {
     var onActivityWindowCommandResult: ((ActivityWindowCommandResult) -> Void)?
-    var onPromptPanelShowRequested: (() -> Void)?
     var showError: Error?
     private(set) var showCount = 0
 
@@ -333,10 +309,6 @@ private final class RecordingActivityWindowCommandClient: ActivityWindowCommandi
             throw showError
         }
         return "activity-show-\(showCount)"
-    }
-
-    func requestPromptPanel() {
-        onPromptPanelShowRequested?()
     }
 
     func complete(commandId: String, ok: Bool, error: String? = nil) {

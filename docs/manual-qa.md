@@ -17,6 +17,14 @@
 
 ## 开发验证记录
 
+### Electron StatusBubble 空闲点击不再唤起 PromptPanel
+
+- 完成日期：待实机 QA
+- 实现位置：`apps/electron-shell/src/main/electronShellRuntime.ts`、`apps/electron-shell/src/main/protocol/electronShellProtocol.ts`、`apps/desktop/Sources/AppServices/ElectronShell/`、`apps/desktop/Sources/Coordinator/AppCoordinator.swift`
+- 链路证明：旧链路是 `ActivityWindow click/native focus/native mouseDown -> ElectronShellRuntime focus fallback -> prompt_panel.show_requested -> Swift ElectronBackedAppServer -> ActivityWindowCommanding.onPromptPanelShowRequested -> AppCoordinator -> PromptPanelController.show()`。本次破坏性删除后，ActivityWindow 点击只尝试聚焦已有 visible ThreadWindow；无 active thread、ThreadWindow 已关闭或无法聚焦时，Electron 不再发送 `prompt_panel.show_requested`，Swift 协议也不再解析或注册对应 callback。
+- 自动化验证：需执行 `pnpm --filter handagent-electron-shell exec vitest run tests/main/electronShellRuntime.test.ts tests/protocol/electronShellProtocol.test.ts`、`bash ./scripts/swiftw test --filter AppCoordinatorTests`、`bash ./scripts/swiftw test --filter ElectronBackedAppServerTests`、`bash ./scripts/swiftw test --filter ElectronShellProtocolTests`、`bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`。
+- 手工回归步骤：打包 mock app 后提交 `STATUSBUBBLE_NO_PROMPT_FALLBACK_QA_20260609 [mock:assistant-ok]`；确认有 visible ThreadWindow 时点击 StatusBubble 仍聚焦 ThreadWindow；关闭 visible ThreadWindow 后只剩 ActivityWindow，点击空闲 StatusBubble 不打开 Swift PromptPanel。
+
 ### Electron 开发态启动、热键与后台预热回归
 
 - 完成日期：待实机 QA
@@ -46,7 +54,7 @@
   2. 不设置 `HANDAGENT_ELECTRON_SHELL` 启动 packaged mock app；允许 `HANDAGENT_ELECTRON_BINARY` 只作为 Electron binary 覆盖。
   3. 确认启动后 Swift host、Electron main 和 agent-server 各一份，`127.0.0.1:4317` 只由 Electron 监督的 agent-server 监听，Electron ActivityWindow 可见且 `/api/activity` 首包为 `activity.snapshot`。
   4. 用真实全局快捷键打开 Swift PromptPanel，提交 `ELECTRON_ONLY_UI_SHELL_QA_20260609 [mock:assistant-ok]`；确认 Swift PromptPanel 隐藏，Electron `HandAgent ThreadWindow` 出现并显示 user prompt 与 mock assistant。
-  5. 点击 Electron ActivityWindow；有 visible ThreadWindow 时应聚焦 ThreadWindow，关闭 visible ThreadWindow 后点击 ActivityWindow 应通过 `prompt_panel.show_requested` 打开 Swift PromptPanel。
+  5. 点击 Electron ActivityWindow；有 visible ThreadWindow 时应聚焦 ThreadWindow，关闭 visible ThreadWindow 后点击 ActivityWindow 不应打开 Swift PromptPanel。
   6. 退出 app 后确认无 Electron main、Electron Helper、agent-server 残留，`127.0.0.1:4317` 无监听。
 - 边界确认：Swift 不创建 WKWebView ThreadWindow，不显示 Swift StatusBubble，不订阅 `/api/activity`，不直接启动 agent-server。
 
@@ -178,7 +186,7 @@
 - `ELECTRON_STARTING_SEQUENCE_QA_20260609_C [mock:assistant-ok]` 已验证 Electron ActivityWindow activity 流包含 `starting` / `running` / `completed` / `idle` 序列，thread 文件 `~/.spotAgent/threads/thread-1780947483869-t8ou50.json` 包含同一 user prompt 与 mock assistant。
 - 点击 Electron StatusBubble 的可见 ThreadWindow 分支已验证：先激活 Finder，再用 CGEvent 点击 ActivityWindow 中心，前台切到 Electron，`HandAgent ThreadWindow` 的 `AXMain=true`，`HandAgent Activity` 的 `AXMain=false`。
 - Electron ActivityWindow 非 key 行为曾在 `focusable:false` 版本验证：点击气泡后 `HandAgent Activity` 的 `AXMain=false` / `AXFocused=false`，CoreGraphics 只显示 owner 为 `Electron` 的 `HandAgent Activity` 小窗，layer 为 3，bounds 为 `{X: 1144, Y: 832, Width: 272, Height: 76}`。二次修复改为 `focusable:true` 后，2026-06-09 packaged 回归中 ActivityWindow 为 `AXMain=true` / `AXFocused=false`，最终非 key 行为需随下一次 StatusBubble 修复重新确认。
-- Electron ActivityWindow `focusable:true` 后非激活展示与无可聚焦 ThreadWindow fallback 已复验：2026-06-09 重新执行 `bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`、`pnpm --filter handagent-electron-shell build` 与 `bash ./scripts/package-app.sh --mock-llm`，通过 Electron binary 覆盖和 `open dist/HandAgentDesktop.app` 标准启动 Electron packaged app。启动后只有 Swift host pid `62011`、Electron main pid `62015`、agent-server pid `62029` 各一份，`127.0.0.1:4317` 由 node 监听，runtime marker 为 `{"llmMode":"mock"}`。Computer Use 观察 Electron `HandAgent Activity` 只显示 `点击开始 / HandAgent 空闲`；AX 读取为 `Electron frontmost=false`、`HandAgent Activity AXMain=false / AXFocused=false`。用 CGEvent 点击 `{1280,870}` 后，Swift `PromptPanel` 打开为 `640x448`，Swift host `frontmost=true`，Electron ActivityWindow 为 `AXMain=true / AXFocused=false`，`/api/activity` 新连接仍立即收到 idle `activity.snapshot`。结论：初始展示不抢前台；无可聚焦 ThreadWindow 时点击 StatusBubble 会回退打开 Swift PromptPanel。
+- Electron ActivityWindow `focusable:true` 后非激活展示与无可聚焦 ThreadWindow fallback 曾在 2026-06-09 复验通过；该 fallback 产品路径已被本文件顶部“Electron StatusBubble 空闲点击不再唤起 PromptPanel”删除项取代。当前期望是：初始展示不抢前台；无可聚焦 ThreadWindow 时点击 StatusBubble 不打开 Swift PromptPanel。
 - supervisor 最大重启诊断已验证：先退出 QA app，用 Python 端口占用器监听 `127.0.0.1:4317`，再启动 Electron flag packaged app；超过 5 次 restart attempt 后，agent-server 不再残留，PromptPanel 可见错误文案 `agent-server stopped after 5 restart attempts: agent-server exited with code 1`，截图 `/tmp/handagent-qa/electron-supervisor-max-prompt.png`。清理后无 HandAgent / Electron / agent-server 残留，`127.0.0.1:4317` 无监听。
 - packaged app 产物与 mock LLM 路径已验证：`dist/HandAgentDesktop.app/Contents/Resources/ElectronShell/dist/main/main.js` 存在；`HANDAGENT_ELECTRON_BINARY` 指向的 Electron binary 可执行且版本为 `v42.3.3`；`~/.spotAgent/threads/thread-1780947483869-t8ou50.json` 中 assistant 内容为 `Mock assistant response: main chain is reachable.`，确认 mock packaged app 未访问真实 LLM。
 - PromptPanel 连续提交已验证复用同一个 Electron ThreadWindow 并创建不同 thread/tab：第一次提交 `ELECTRON_MULTI_PROMPT_QA_20260609_A [mock:assistant-ok]` 生成 `~/.spotAgent/threads/thread-1780948156864-2ttk2d.json`；第二次提交 `ELECTRON_MULTI_PROMPT_QA_20260609_B [mock:assistant-ok]` 生成 `~/.spotAgent/threads/thread-1780948177419-qwq8of.json`；两次提交后 `HandAgent ThreadWindow` 的 CoreGraphics window number 均为 `43975`，截图 `/tmp/handagent-qa/electron-two-prompt-tabs.png` 显示同一 Electron ThreadWindow 内有两个 tab，当前内容为 B prompt。
@@ -205,7 +213,7 @@
 
 **2026-06-09 历史回归说明**：
 
-- 关闭可见 Electron ThreadWindow 后，ActivityWindow 仍显示且 agent-server 继续监听 `127.0.0.1:4317` 时，用 CGEvent 点击 ActivityWindow 中心应打开 Swift `PromptPanel`。`09ff7f2` 已通过主仓库 packaged live 回归：visible ThreadWindow close 后销毁并重建 ActivityWindow，关闭后 ActivityWindow 为 `AXMain=false` / `AXFocused=false`，点击中心会打开 Swift PromptPanel。该子项不再阻塞 Electron UI Shell 最终态；保留本条历史说明用于追溯此前 `2af9ba0`、`412e1e9`、`366a706`、`e6901d2`、`a030945`、`b4af5ef` 的失败边界。
+- 关闭可见 Electron ThreadWindow 后点击 ActivityWindow 打开 Swift `PromptPanel` 曾是 Electron UI Shell 迁移期的历史验收子项；该行为已被本文件顶部“Electron StatusBubble 空闲点击不再唤起 PromptPanel”删除项取代。当前期望是 ActivityWindow 仍显示、agent-server 继续监听，点击无可聚焦 ThreadWindow 的 StatusBubble 不打开 Swift PromptPanel。
 
 **2026-06-09 非可执行阻塞观察**：
 

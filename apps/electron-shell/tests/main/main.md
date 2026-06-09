@@ -13,5 +13,5 @@
 ## 测试前提
 
 - 不创建真实 `BrowserWindow` 或 Electron app；runtime 测试通过 fake `prewarmer`、fake `activityWindow`、fake `send` 验证事件。
-- 改 `agent_server.health`、`thread_window.prepared`、`thread_window.prepare_failed`、`thread_window.closed`、ActivityWindow native focus 释放、native focus / mouse down 兜底或 ActivityWindow prompt fallback 语义时，优先在 `electronShellRuntime.test.ts` 加断言。
+- 改 `agent_server.health`、`thread_window.prepared`、`thread_window.prepare_failed`、`thread_window.closed`、ActivityWindow native focus 释放、native focus / mouse down 兜底或 StatusBubble 点击聚焦语义时，优先在 `electronShellRuntime.test.ts` 加断言。
 - ActivityWindow IPC 测试必须覆盖非当前 renderer sender 被忽略，避免任意 renderer 触发 focus/prompt 行为。

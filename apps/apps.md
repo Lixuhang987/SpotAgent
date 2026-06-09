@@ -48,7 +48,7 @@ flowchart LR
 ### 4. 状态反馈
 
 - Electron ActivityWindow 承载 React StatusBubble；renderer 订阅 `/api/activity`，接收 agent-server 派生的 `AgentActivityEvent`。
-- Electron 气泡点击时先请求 Electron main 聚焦 ThreadWindow；无法聚焦时 Electron 回告 Swift 打开 PromptPanel。
+- Electron 气泡点击时只请求 Electron main 聚焦已有 ThreadWindow；无法聚焦时不回告 Swift，也不打开 PromptPanel。
 - Swift 不订阅 `/api/activity`，也不把完整 ThreadWindow tabs、消息或历史同步到 Swift 状态。
 
 ## 本层关键 DTO

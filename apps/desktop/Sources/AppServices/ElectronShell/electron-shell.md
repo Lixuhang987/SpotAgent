@@ -13,7 +13,7 @@
 - 作为 `ActivityWindowCommanding` 实现，接收 Coordinator 的 showActivityWindow 意图，并编码为 `activity_window.show`。
 - 连接 `/api/platform`，继续由 Swift `PlatformBridgeService` 执行 macOS 原生能力。
 - visible Electron ThreadWindow 关闭时，通过 `onThreadWindowClosed` 通知 Coordinator 清理打开状态；隐藏预热窗口关闭只影响可提交 gate。
-- Electron StatusBubble 点击且无法聚焦 ThreadWindow 时，通过 `prompt_panel.show_requested` 让 Coordinator 打开 Swift PromptPanel。
+- Electron StatusBubble 点击只尝试聚焦已有 ThreadWindow；无法聚焦时不再让 Coordinator 打开 Swift PromptPanel。
 - `bash ./scripts/swiftw run HandAgentDesktop` 会先构建 `handagent-electron-shell`，确保开发态 `dist/main/main.js` 存在；不要依赖旧 worktree 残留产物。
 
 ## 文件

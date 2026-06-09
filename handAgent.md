@@ -19,7 +19,7 @@ Electron UI shell 是桌面端唯一 UI shell。Swift 启动 Electron，Electron
 ### 分层职责
 
 - `apps/desktop`：负责宿主生命周期、热键、PromptPanel、Settings、焦点恢复、Swift <-> Electron command bridge，以及通过 `MacPlatformProvider` 实现 macOS 原生能力（ScreenCaptureKit / NSWorkspace / NSPasteboard 等）。
-- `apps/electron-shell`：负责 Electron main 进程、Swift command socket、agent-server supervisor、隐藏 ThreadWindow 预热、PromptPanel submit/openHistory/focus 对应的 Electron `BrowserWindow` ThreadWindow 生命周期，以及 React StatusBubble ActivityWindow 生命周期。StatusBubble 点击时先通过 Electron main 聚焦 Electron ThreadWindow；无法聚焦时 Electron 回告 Swift 打开 PromptPanel。
+- `apps/electron-shell`：负责 Electron main 进程、Swift command socket、agent-server supervisor、隐藏 ThreadWindow 预热、PromptPanel submit/openHistory/focus 对应的 Electron `BrowserWindow` ThreadWindow 生命周期，以及 React StatusBubble ActivityWindow 生命周期。StatusBubble 点击只尝试通过 Electron main 聚焦已有 Electron ThreadWindow；没有可聚焦 ThreadWindow 时不唤起 PromptPanel。
 - `apps/thread-window-web`：负责 React ThreadWindow UI，直接持有 `/api/thread` WebSocket，管理历史、tabs、消息、请求回执和 composer 状态。
 - `apps/agent-server`：负责本地 WebSocket thread 桥、`/api/thread`、`/api/activity` 与 `/api/platform` 路径分流、thread/turn 路由、持久化封装和 runtime 驱动。
 - `packages/core`：负责 thread 输入归一化、消息模型、tool 注册、LLM/tool 循环、`RemotePlatformAdapter` 通过 `PlatformBridge` 接口向桌面 App 请求平台能力。

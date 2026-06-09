@@ -588,7 +588,7 @@ apps/thread-window-web/
 - agent-server 增加 activity publisher。
 - Electron StatusBubble 订阅 `/api/activity`。
 - Swift StatusBubble 停用或删除。
-- 点击 Electron StatusBubble 能聚焦 ThreadWindow，必要时让 Swift 打开 PromptPanel。
+- 点击 Electron StatusBubble 只尝试聚焦已有 ThreadWindow；没有可聚焦 ThreadWindow 时不唤起 Swift PromptPanel。
 
 验证：
 

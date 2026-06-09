@@ -116,33 +116,6 @@ final class ElectronBackedAppServerTests: XCTestCase {
         XCTAssertTrue(results.isEmpty)
     }
 
-    func testPromptPanelShowRequestInvokesCallback() {
-        let shell = RecordingElectronShellProcess()
-        let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
-        var showRequestCount = 0
-        appServer.onPromptPanelShowRequested = { showRequestCount += 1 }
-
-        appServer.start()
-        shell.emit(.promptPanelShowRequested(reason: .activityWindowClickedWithoutThread))
-
-        XCTAssertEqual(showRequestCount, 1)
-    }
-
-    func testPromptPanelShowRequestStillInvokesCallbackAfterVisibleThreadWindowClosed() {
-        let shell = RecordingElectronShellProcess()
-        let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
-        var showRequestCount = 0
-        appServer.onPromptPanelShowRequested = { showRequestCount += 1 }
-
-        appServer.start()
-        shell.emit(.agentServerHealth(available: true, message: nil))
-        shell.emit(.threadWindowPrepared(timestamp: "2026-06-08T00:00:01.000Z"))
-        shell.emit(.threadWindowClosed(timestamp: "2026-06-08T00:00:02.000Z", wasVisible: true))
-        shell.emit(.promptPanelShowRequested(reason: .activityWindowClickedWithoutThread))
-
-        XCTAssertEqual(showRequestCount, 1)
-    }
-
     func testVisibleThreadWindowClosedInvokesWindowClosedCallback() {
         let shell = RecordingElectronShellProcess()
         let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
@@ -332,24 +305,19 @@ final class ElectronBackedAppServerTests: XCTestCase {
         XCTAssertEqual(availability, [true, false])
     }
 
-    func testStopClearsActivityWindowCallbacksAndPendingCommands() throws {
+    func testStopClearsActivityWindowCommandCallbackAndPendingCommands() throws {
         let shell = RecordingElectronShellProcess()
         let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
         var results: [ActivityWindowCommandResult] = []
-        var showRequestCount = 0
         appServer.onActivityWindowCommandResult = { results.append($0) }
-        appServer.onPromptPanelShowRequested = { showRequestCount += 1 }
 
         appServer.start()
         let commandId = try appServer.showActivityWindow()
         appServer.stop()
         shell.emit(.commandAck(commandId: commandId, ok: true, error: nil))
-        shell.emit(.promptPanelShowRequested(reason: .activityWindowClickedWithoutThread))
 
         XCTAssertNil(appServer.onActivityWindowCommandResult)
-        XCTAssertNil(appServer.onPromptPanelShowRequested)
         XCTAssertTrue(results.isEmpty)
-        XCTAssertEqual(showRequestCount, 0)
     }
 
     func testUnexpectedShellTerminationReportsFatalErrorAndMarksUnavailable() {

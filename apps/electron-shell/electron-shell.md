@@ -10,7 +10,7 @@
 - 处理 `thread_window.open_initial_prompt`、`thread_window.open_history` 和 `thread_window.focus`；`thread_window.prepare` 不是 Swift command。
 - 处理 `activity_window.show`，创建并展示 React StatusBubble ActivityWindow。
 - visible ThreadWindow 关闭后回报 `thread_window.closed wasVisible=true`，并在 agent-server 仍可用时重新预热隐藏窗口。
-- 向 Swift 回报 `electron.ready`、`agent_server.health`、`thread_window.prepared`、`thread_window.prepare_failed`、`thread_window.closed`、`prompt_panel.show_requested`、`renderer.crashed` 和 `command.ack`。
+- 向 Swift 回报 `electron.ready`、`agent_server.health`、`thread_window.prepared`、`thread_window.prepare_failed`、`thread_window.closed`、`renderer.crashed` 和 `command.ack`。
 - 使用 `contextIsolation: true` 与 preload，把 React 需要的 `handAgentThreadWindowConfig` 和初始 prompt receiver 安装到 renderer main world。
 - macOS 下 Electron main 以 accessory activation policy 运行并隐藏 Dock 图标；Electron 只作为后台 UI shell 预热，不应在 Dock / app switcher 中作为独立前台 app 出现。
 
@@ -30,7 +30,7 @@
 - activity renderer 直接连接 `ws://127.0.0.1:4317/api/activity`，只消费 `AgentActivityEvent`。
 - ActivityWindow 的 `webPreferences` 固定为 `contextIsolation: true`、`nodeIntegration: false`。
 - preload 只暴露 activity WebSocket URL 和 `focusThread(threadId)`；renderer 不获得 Node/Electron 全量能力。
-- 点击气泡后 Electron main 优先聚焦 visible ThreadWindow；如果没有可聚焦窗口，发送 `prompt_panel.show_requested` 给 Swift。
+- 点击气泡后 Electron main 只尝试聚焦 visible ThreadWindow；如果没有可聚焦窗口，点击不再唤起 Swift PromptPanel。
 
 ## 边界
 
