@@ -4,7 +4,7 @@
 
 **Goal:** 从 `apps/thread-window-web` 删除 tab 产品和代码概念，只保留后台 `threadId -> ThreadState` 缓存，并让右侧固定渲染 `App` 本地 state 选中的 thread。
 
-**Architecture:** `createThreadWindowStore` 只保存 thread 数据缓存、历史、workspace 和窗口级状态；`activeThreadId` 由 `App` 本地 `useState` 持有。`ThreadSocketClient` 仍作为当前 WebSocket transport，但删除全部 reconnect 行为和基于重连的恢复订阅；入站消息 handler 始终按 `threadId` 更新 `threadsById`，右侧组件只按传入的 `threadId` 从 store 读取状态渲染。
+**Architecture:** `createThreadWindowStore` 只保存 thread 数据缓存、历史、workspace 和窗口级状态；`activeThreadId` 由 `App` 本地 `useState` 持有。`ThreadSocketClient` 仍作为当前 WebSocket transport，但删除全部 reconnect 行为；非主动断开后不做任何断线恢复，包括不重连、不恢复订阅、不拉取 snapshot、不发送任何恢复命令。入站消息 handler 始终按 `threadId` 更新 `threadsById`，右侧组件只按传入的 `threadId` 从 store 读取状态渲染。
 
 **Tech Stack:** React 19、TypeScript、zustand、immer、Vitest、React DOM server render tests、Tailwind CSS、WebSocket protocol helpers from `@handagent/core`。
 
@@ -58,12 +58,12 @@ Expected: confirm these facts before editing:
 
 Modify:
 - `apps/thread-window-web/src/store/threadWindowStore.ts`: rename tab model to `ThreadState`, replace `tabs` with `threadsById`, remove `activeTabId`, `openHistoryThread`, `closeTab`, add `ensureThreadState`, keep request and queue state per thread.
-- `apps/thread-window-web/src/thread/threadSocketClient.ts`: delete reconnect timer/options/state path and delete `getOpenThreadIds`; keep connect/disconnect, send queue, initial prompt side effects, explicit `resumeThread(threadId)` for user-opened history and first prompt flow only.
+- `apps/thread-window-web/src/thread/threadSocketClient.ts`: delete reconnect timer/options/state path and delete `getOpenThreadIds`; on unexpected close only report `disconnected` and perform no recovery action. Keep connect/disconnect, send queue, initial prompt side effects, explicit `resumeThread(threadId)` for user-opened history and first prompt flow only.
 - `apps/thread-window-web/src/App.tsx`: introduce local `activeThreadId`, remove `TabBar`, pass `activeThreadId` to sidebar, move right pane into `ThreadWorkspacePane`, iterate `threadsById` for queued dispatch.
 - `apps/thread-window-web/src/components/HistorySidebar.tsx`: rename prop `activeTabId` to `activeThreadId`.
 - `apps/thread-window-web/src/components/WorkspaceGroup.tsx`: rename prop `activeTabId` to `activeThreadId`.
 - `apps/thread-window-web/tests/threadWindowStore.test.ts`: update assertions to `threadsById`, add no-UI-active-state coverage.
-- `apps/thread-window-web/tests/threadSocketClient.test.ts`: remove reconnect tests and add unexpected close does not reconnect / does not resume cached threads coverage.
+- `apps/thread-window-web/tests/threadSocketClient.test.ts`: remove reconnect tests and add unexpected close performs no recovery action coverage.
 - `apps/thread-window-web/tests/scrollContainers.test.ts`: remove `TabBar` rendering test and assert workspace shell no longer has tab strip.
 - `apps/thread-window-web/tests/historySidebar.test.ts`: rename prop usage.
 - `apps/thread-window-web/thread-window-web.md`: update package facts from tabs/reconnect to thread cache and no reconnect.
@@ -383,7 +383,7 @@ and variants returning `["thread-1"]`.
 pnpm --filter handagent-thread-window-web test -- tests/threadSocketClient.test.ts
 ```
 
-Expected: FAIL because constructor still requires `getOpenThreadIds`, reconnect state exists, and open still resumes cached threads.
+Expected: FAIL because constructor still requires `getOpenThreadIds`, reconnect state exists, and open still sends recovery resumes for cached threads.
 
 - [ ] **Step 4: Delete reconnect implementation from ThreadSocketClient**
 
@@ -484,7 +484,7 @@ this.resumeThread(notification.threadId);
 this.submitInput(notification.threadId, pending.text, pending.attachments);
 ```
 
-This `thread.resume` is part of opening a newly started thread snapshot path, not reconnect recovery.
+This `thread.resume` is part of opening a newly started thread snapshot path, not a disconnect recovery action.
 
 - [ ] **Step 6: Run socket tests**
 
@@ -1039,7 +1039,7 @@ Use a subagent with this exact task:
 2. 阅读 handAgent.md、apps/apps.md、apps/thread-window-web/thread-window-web.md，以及所有已修改文件所在目录的 <dir>.md。
 3. 核对文档是否仍描述 tabs、activeTabId、自动 reconnect、reconnect 恢复、getOpenThreadIds 或关闭 tab。
 4. 更新过期文档，保持中文、边界明确。
-5. 更新 docs/manual-qa.md，加入手工验收项：后台运行 thread 切换不丢当前缓存 delta；权限/workspace 请求保存在对应 thread；WebSocket 非主动断开不自动重连也不发送恢复命令。
+5. 更新 docs/manual-qa.md，加入手工验收项：后台运行 thread 切换不丢当前缓存 delta；权限/workspace 请求保存在对应 thread；WebSocket 非主动断开后不做任何断线恢复，不自动重连、不恢复订阅、不拉取 snapshot、不发送任何恢复命令。
 6. 最终回复列出修改过的文档和仍有风险。
 ```
 
@@ -1066,7 +1066,7 @@ Store section must say:
 Socket boundary must say:
 
 ```md
-本次 React 和 app-server 之间视为稳定长连接；`ThreadSocketClient` 不做自动 reconnect，不用 `thread.resume` 做断线恢复。非主动断开只把连接状态置为 `disconnected`，thread state 保留最后收到的流式 delta 和请求状态。
+本次 React 和 app-server 之间视为稳定长连接；`ThreadSocketClient` 不做自动 reconnect，也不做任何断线恢复。非主动断开只把连接状态置为 `disconnected`，不恢复订阅，不拉取 snapshot，不发送任何恢复命令；thread state 保留最后收到的流式 delta 和请求状态。
 ```
 
 - [ ] **Step 3: Update architecture docs if subagent did not**
@@ -1098,7 +1098,7 @@ Append or update an item in `docs/manual-qa.md`:
 
 - 启动一个会持续流式输出的 thread，切到历史中的另一个 thread，再切回原 thread；右侧应直接显示原 thread 当前已缓存的 assistant delta，不出现 tab 条，也不清空消息。
 - 在后台 thread 触发 permission 或 workspace 请求后，切回该 thread；对应请求面板仍可见并可回答。
-- 人为让 `/api/thread` WebSocket 非主动断开时，前端连接状态可变为 disconnected，但不得自动创建新 WebSocket，不得自动发送 `thread.resume` 或恢复订阅命令，已有 thread state 保留在最后收到的位置。
+- 人为让 `/api/thread` WebSocket 非主动断开时，前端连接状态可变为 disconnected，但不得做任何断线恢复：不得自动创建新 WebSocket，不得恢复订阅，不得拉取 snapshot，不得发送任何恢复命令；已有 thread state 保留在最后收到的位置。
 ```
 
 - [ ] **Step 5: Run doc grep**
@@ -1177,7 +1177,7 @@ Expected: working tree clean, recent commits include store migration, socket rec
   - Inbound handlers update hidden/background threads: Task 1 store tests.
   - Permission/workspace requests stay per thread: Task 1 and Task 3.
   - No reconnect operations: Task 2.
-  - No reconnect recovery via `thread.resume`: Task 2.
+  - No disconnect recovery of any kind: Task 2.
   - Docs and manual QA: Task 6.
 - Placeholder scan: no TBD/TODO/fill-in placeholders.
 - Type consistency:

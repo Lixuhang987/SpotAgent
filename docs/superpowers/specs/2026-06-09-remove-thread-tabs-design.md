@@ -28,7 +28,7 @@
 ## 非目标
 
 - 不保留 WebSocket 自动重连。
-- 不把 `thread.resume` 作为断线恢复手段。
+- 不做任何断线恢复；非主动断开后不重连、不恢复订阅、不拉取 snapshot、不发送任何恢复命令。
 - 不修改 agent-server 的 thread socket 订阅、权限绑定或 close 中断语义。
 - 不设计服务端 delta 重放、事件序列号或 snapshot merge。
 - 不修改 Electron main、Swift desktop 或 `/api/activity`。
@@ -36,7 +36,7 @@
 
 ## 连接边界
 
-本次把 React 和 app-server 之间视为稳定长连接。`ThreadSocketClient` 仍是当前 WebSocket transport，但必须删除自动 reconnect 行为：socket 非主动断开后只把连接状态置为 `disconnected`，不调度重连，不发送 `thread.resume`，不发送任何订阅或恢复命令。
+本次把 React 和 app-server 之间视为稳定长连接。`ThreadSocketClient` 仍是当前 WebSocket transport，但必须删除自动 reconnect 行为：socket 非主动断开后只把连接状态置为 `disconnected`，不调度重连，不恢复订阅，不拉取 snapshot，不发送任何恢复命令。
 
 如果 WebSocket transport 未来替换为 Electron 通信机制，只替换最外层 transport：发送命令、接收入站消息、连接状态回调。`threadsById`、`ThreadState` 和右侧渲染组件不应随 transport 改动。
 
