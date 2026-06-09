@@ -1122,3 +1122,11 @@
 - **验证过程**：执行 `pnpm --filter handagent-electron-shell build`。
 - **证据**：命令通过；构建链路完成 `tsc -p tsconfig.json`、`tsc -p tsconfig.activity-window.json` 与 `vite build -c vite.activity-window.config.ts`；Vite 输出 `31 modules transformed`，生成 `dist/activity-window/index.html`、CSS 与 JS chunk。
 - **结论**：通过。Electron shell production build 当前可完成。
+
+### Electron UI Shell initial prompt 打开 Electron ThreadWindow
+
+- **验证日期**：2026-06-09
+- **验证环境**：Electron flag packaged app，`mock-llm`；主仓库 `/Users/mu9/proj/handAgent`，branch `main`。
+- **验证过程**：提交前确认 Electron 只有 `HandAgent Activity`。用真实全局快捷键打开 Swift PromptPanel，输入并提交 `ELECTRON_UI_SHELL_FINAL_QA_20260608 [mock:assistant-ok]`，随后检查窗口、Computer Use 可见内容、thread 文件与 `/api/activity`。
+- **证据**：PromptPanel 打开后尺寸为 `640x448`；提交后 Electron 出现 `HandAgent ThreadWindow`，尺寸 `920x640`；Computer Use 可见 user message `ELECTRON_UI_SHELL_FINAL_QA_20260608 [mock:assistant-ok]` 与 assistant `Mock assistant response: main chain is reachable.`；thread 文件 `~/.spotAgent/threads/thread-1780964771699-7dvw8k.json` 持久化同一 user / assistant；`/api/activity` snapshot 为 `activeThreadId:"thread-1780964771699-7dvw8k"`、`status:"idle"`。
+- **结论**：通过。PromptPanel initial prompt 在 Electron flag 路径下打开 Electron ThreadWindow 并创建新 thread，不走 Swift WKWebView host。
