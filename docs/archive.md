@@ -1082,3 +1082,11 @@
 - **验证过程**：启动后确认 Swift host、Electron main、agent-server 各一份，`127.0.0.1:4317` 由 node 监听，Computer Use 观察 Electron `HandAgent Activity` 显示 `点击开始 / HandAgent 空闲`。连续两次新建 `/api/activity` WebSocket 连接，首包均为 `activity.snapshot` 且状态为 `idle`。随后通过 `/api/thread` 创建 thread 并提交 `ELECTRON_ACTIVITY_RECONNECT_QA_20260609 [mock:assistant-ok]`，收到 assistant delta 与 `turn.completed(status:"completed")`；再次新建 `/api/activity` 连接，首包仍立即返回 snapshot，且指向刚完成的 active thread。
 - **证据**：进程 pid 为 Swift host `67148`、Electron main `67149`、agent-server `67163`；thread 文件 `~/.spotAgent/threads/thread-1780964395791-tvbdeb.json` 持久化 user prompt 与 `Mock assistant response: main chain is reachable.`；重连后 `/api/activity` snapshot 为 `activeThreadId:"thread-1780964395791-tvbdeb"`、`status:"idle"`、`latestSummary:"点击开始"`。
 - **结论**：通过。`/api/activity` subscriber 断开重连不会影响 `/api/thread` 消息流，新 subscriber 会立即收到当前 activity snapshot。
+
+### Electron UI Shell Electron binary 可用性
+
+- **验证日期**：2026-06-09
+- **验证环境**：Electron flag packaged app，`mock-llm`；主仓库 `/Users/mu9/proj/handAgent`，branch `main`。
+- **验证过程**：读取 launchd 环境变量 `HANDAGENT_ELECTRON_BINARY`，确认其指向 pnpm 安装的 Electron binary；执行该 binary 的 `--version`；同时检查当前 Electron main 进程命令。
+- **证据**：`HANDAGENT_ELECTRON_BINARY=/Users/mu9/proj/handAgent/node_modules/.pnpm/electron@42.3.3/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron`；`--version` 返回 `v42.3.3`；当前 Electron main pid `67149` 使用该 binary 启动 `dist/HandAgentDesktop.app/Contents/Resources/ElectronShell/dist/main/main.js`。
+- **结论**：通过。Electron flag packaged app 可通过 `HANDAGENT_ELECTRON_BINARY` 使用可执行 Electron binary，不依赖 PATH 中存在全局 `electron`。
