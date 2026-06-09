@@ -96,6 +96,13 @@ final class ElectronBackedAppServer: AppServerManaging, ThreadWindowCommanding, 
     }
 
     @discardableResult
+    func sendThemeChanged(_ theme: HostThemePayload) throws -> String {
+        let commandId = UUID().uuidString
+        try shell.send(.themeChanged(commandId: commandId, theme: theme))
+        return commandId
+    }
+
+    @discardableResult
     func showActivityWindow() throws -> String {
         let commandId = UUID().uuidString
         pendingActivityCommandKinds[commandId] = .show

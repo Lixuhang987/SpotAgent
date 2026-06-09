@@ -5,6 +5,7 @@ import { MessageList } from "./components/MessageList.tsx";
 import { RequestPanels } from "./components/RequestPanels.tsx";
 import { TabBar } from "./components/TabBar.tsx";
 import { getThreadWebSocketURL, installInitialPromptReceiver } from "./native/nativeConfig.ts";
+import { applyThemeToDocument, getInitialTheme, installThemeSubscription } from "./native/themeConfig.ts";
 import {
   encodePermissionAnswer,
   encodeThreadDelete,
@@ -40,6 +41,13 @@ export function App() {
       tab.queuedInputDispatchPending ? "pending" : "ready",
     ].join(":"))
     .join("|");
+
+  useEffect(() => {
+    applyThemeToDocument(getInitialTheme());
+    return installThemeSubscription((theme) => {
+      applyThemeToDocument(theme);
+    });
+  }, []);
 
   useEffect(() => {
     const socket = new ThreadSocketClient({
@@ -102,7 +110,7 @@ export function App() {
 
   return (
     <main
-      className="grid h-screen w-full max-w-full overflow-hidden bg-canvas text-ink font-body"
+      className="grid h-screen w-full max-w-full overflow-hidden bg-app-canvas text-app-text-primary font-body"
       style={{ gridTemplateColumns: sidebarLayout.gridTemplateColumns }}
     >
       {sidebarLayout.isSidebarVisible ? (
@@ -119,8 +127,8 @@ export function App() {
           onNewThread={handleNewThread}
         />
       ) : null}
-      <section className="grid h-screen min-h-0 min-w-0 grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-hidden bg-surface-dark text-on-dark shadow-product-inner" aria-label="Thread workspace">
-        <header className="flex min-h-[52px] min-w-0 items-center gap-3 overflow-hidden border-b border-white/10 bg-surface-dark-soft px-sm py-xs">
+      <section className="grid h-screen min-h-0 min-w-0 grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-hidden bg-app-canvas text-app-text-primary shadow-product-inner" aria-label="Thread workspace">
+        <header className="flex min-h-[52px] min-w-0 items-center gap-3 overflow-hidden border-b border-app-hairline bg-app-surface px-sm py-xs">
           <TabBar
             tabs={tabs}
             activeTabId={state.activeTabId}
@@ -131,7 +139,7 @@ export function App() {
 
         <div className="min-h-0 min-w-0 overflow-hidden" data-thread-window-error-slot="true">
           {state.windowErrorMessage ? (
-            <div className="mx-sm mt-xs rounded-md border border-error/30 bg-error/10 px-sm py-xs text-sm text-error">
+            <div className="mx-sm mt-xs rounded-md border border-app-error/30 bg-app-error/10 px-sm py-xs text-sm text-app-error">
               {state.windowErrorMessage}
             </div>
           ) : null}
@@ -203,8 +211,8 @@ export function App() {
             />
           </>
         ) : (
-          <div className="flex min-h-0 min-w-0 items-center justify-center overflow-hidden text-sm text-on-dark-soft">
-            <div className="rounded-lg border border-white/10 bg-surface-dark-elevated px-lg py-md">
+          <div className="flex min-h-0 min-w-0 items-center justify-center overflow-hidden text-sm text-app-text-muted">
+            <div className="rounded-lg border border-app-hairline bg-app-surface-elevated px-lg py-md">
               准备开始
             </div>
           </div>

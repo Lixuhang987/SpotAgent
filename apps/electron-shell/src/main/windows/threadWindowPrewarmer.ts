@@ -1,4 +1,5 @@
 import type { BrowserWindowConstructorOptions } from "electron";
+import type { HostTheme } from "../protocol/electronShellProtocol.js";
 
 type InitialPromptPayload = {
   clientRequestId: string;
@@ -16,6 +17,7 @@ type BrowserWindowLike = {
   webContents: {
     once(event: "did-finish-load" | "did-fail-load", listener: () => void): unknown;
     executeJavaScript(source: string): Promise<unknown>;
+    send(channel: "handagent:theme-changed", theme: HostTheme): void;
   };
   on(event: "closed", listener: () => void): unknown;
   loadURL(url: string): Promise<unknown> | unknown;
@@ -34,6 +36,7 @@ export class ThreadWindowPrewarmer {
   private window: BrowserWindowLike | null = null;
   private prepared = false;
   private visible = false;
+  private theme: HostTheme = { preference: "system", resolved: "light" };
   private preparePromise: Promise<void> | null = null;
   private rejectPrepare: ((error: Error) => void) | null = null;
 
@@ -55,6 +58,7 @@ export class ThreadWindowPrewarmer {
           preload: this.options.preloadPath,
           contextIsolation: true,
           nodeIntegration: false,
+          additionalArguments: [`--handagent-theme=${encodeURIComponent(JSON.stringify(this.theme))}`],
         },
       });
       this.window.on("closed", () => this.handleClosed());
@@ -126,6 +130,13 @@ export class ThreadWindowPrewarmer {
     }
     this.window.focus();
     return true;
+  }
+
+  async updateTheme(theme: HostTheme): Promise<void> {
+    this.theme = theme;
+    if (this.window && this.prepared) {
+      this.window.webContents.send("handagent:theme-changed", theme);
+    }
   }
 
   private showAndFocus(window: BrowserWindowLike): void {

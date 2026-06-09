@@ -20,6 +20,7 @@ final class SettingsLifecycle {
 
     func openOrFocus(
         settingsViewModel: AgentSettingsViewModel,
+        appearanceViewModel: AppearanceSettingsViewModel,
         toolSettingsViewModel: ToolSettingsViewModel,
         pluginSettingsViewModel: PluginSettingsViewModel,
         appendPromptSettingsViewModel: AppendPromptSettingsViewModel,
@@ -27,6 +28,7 @@ final class SettingsLifecycle {
         permissionRulesViewModel: PermissionRulesViewModel,
         workspaceViewModel: WorkspaceSettingsViewModel,
         shortcutActions: [ActionDefinition],
+        appTheme: AppTheme,
         onClosed: @escaping @MainActor () -> Void
     ) {
         setActivationPolicy(activationPolicy.policyAfterUpdatingSettingsWindow(isOpen: true))
@@ -39,6 +41,7 @@ final class SettingsLifecycle {
 
         window = windowPresenter.present(
             settingsViewModel: settingsViewModel,
+            appearanceViewModel: appearanceViewModel,
             toolSettingsViewModel: toolSettingsViewModel,
             pluginSettingsViewModel: pluginSettingsViewModel,
             appendPromptSettingsViewModel: appendPromptSettingsViewModel,
@@ -46,6 +49,7 @@ final class SettingsLifecycle {
             permissionRulesViewModel: permissionRulesViewModel,
             workspaceViewModel: workspaceViewModel,
             shortcutActions: shortcutActions,
+            appTheme: appTheme,
             onClose: { Task { @MainActor in onClosed() } }
         )
     }

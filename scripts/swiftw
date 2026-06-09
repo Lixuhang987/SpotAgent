@@ -73,6 +73,14 @@ ensure_thread_window_web_build() {
   )
 }
 
+ensure_theme_tokens() {
+  ensure_workspace_dependencies
+  (
+    cd "$ROOT_DIR"
+    pnpm generate:theme-tokens
+  )
+}
+
 ensure_electron_shell_build() {
   ensure_workspace_dependencies
   (
@@ -101,6 +109,7 @@ if [[ "${1:-}" == "test" || "${1:-}" == "build" ]]; then
 fi
 
 if [[ "${1:-}" == "run" && "${2:-}" == "HandAgentDesktop" ]]; then
+  ensure_theme_tokens
   ensure_thread_window_web_build
   ensure_electron_shell_build
 fi

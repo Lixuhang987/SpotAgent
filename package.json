@@ -6,7 +6,9 @@
   "scripts": {
     "build:electron-shell": "pnpm --filter handagent-electron-shell build",
     "build:thread-window-web": "pnpm --filter handagent-thread-window-web build",
+    "generate:theme-tokens": "node scripts/generate-theme-tokens.mjs",
     "test:electron-shell": "pnpm --filter handagent-electron-shell test",
+    "test:theme-tokens": "vitest run scripts/generate-theme-tokens.test.mjs",
     "test:thread-window-web": "pnpm --filter handagent-thread-window-web test",
     "test:llm:integration": "HANDAGENT_LLM_INTEGRATION=1 vitest run packages/core/tests/llm/vercel-client.integration.test.ts"
   },

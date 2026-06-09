@@ -6,12 +6,13 @@
 
 | 文件 | 职责 |
 |------|------|
-| `threadWindowPreload.ts` | 向 ThreadWindow main world 注入 `/api/thread` URL、pending initial prompt 队列和临时 receiver |
+| `threadWindowPreload.ts` | 向 ThreadWindow main world 注入 `/api/thread` URL、host theme、theme change subscription、pending initial prompt 队列和临时 receiver |
 | `activityWindowPreload.ts` | 向 ActivityWindow main world 注入 `/api/activity` URL，并暴露 `focusThread(threadId)` IPC |
 
 ## ThreadWindow preload
 
-- 通过 `contextBridge.executeInMainWorld()` 写入 `window.handAgentThreadWindowConfig.threadWebSocketURL`。
+- 通过 `contextBridge.executeInMainWorld()` 写入 `window.handAgentThreadWindowConfig.threadWebSocketURL` 和 `window.handAgentTheme`。
+- 通过 `contextBridge.exposeInMainWorld()` 暴露 `handAgentSubscribeThemeChange(handler)`；该函数只订阅已校验的 `HostTheme` payload，不暴露原始 `ipcRenderer`。
 - 初始化 `window.handAgentPendingInitialPrompts`，并在 React receiver 尚未安装时提供临时 `window.handAgentReceiveInitialPrompt(payload)`。
 - 如果 React 已经安装正式 receiver，preload 必须保留它，不覆盖。
 - `handAgentElectron` 只暴露轻量 feature marker，不提供 Electron 或 Node 能力。

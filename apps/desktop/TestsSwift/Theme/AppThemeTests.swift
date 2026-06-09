@@ -4,10 +4,10 @@ import XCTest
 final class AppThemeTests: XCTestCase {
     func testDefaultThemeHasExpectedSpacing() {
         let theme = AppTheme.default
-        XCTAssertEqual(theme.spacing.sm, 8)
-        XCTAssertEqual(theme.spacing.lg, 16)
-        XCTAssertEqual(theme.spacing.xl, 24)
-        XCTAssertEqual(theme.spacing.xxl, 32)
+        XCTAssertEqual(theme.spacing.sm, GeneratedThemeTokens.spacing.sm)
+        XCTAssertEqual(theme.spacing.lg, GeneratedThemeTokens.spacing.lg)
+        XCTAssertEqual(theme.spacing.xl, GeneratedThemeTokens.spacing.xl)
+        XCTAssertEqual(theme.spacing.xxl, GeneratedThemeTokens.spacing.xxl)
     }
 
     func testDefaultThemeHasDesignSemanticColors() {

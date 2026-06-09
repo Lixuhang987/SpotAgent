@@ -88,10 +88,10 @@ if [[ "$run_output" != *"swift stdout for run --cache-path $TEMP_ROOT/.cache/swi
   exit 1
 fi
 
-expected_calls=$'pnpm --filter handagent-thread-window-web build\npnpm --filter handagent-electron-shell build\nswift run --cache-path '"$TEMP_ROOT/.cache/swiftpm"$' HandAgentDesktop\nclang_cache='"$TEMP_ROOT/.cache/swift/clang-module-cache"$'\nswift_cache='"$TEMP_ROOT/.cache/swift/swift-module-cache"
+expected_calls=$'pnpm generate:theme-tokens\npnpm --filter handagent-thread-window-web build\npnpm --filter handagent-electron-shell build\nswift run --cache-path '"$TEMP_ROOT/.cache/swiftpm"$' HandAgentDesktop\nclang_cache='"$TEMP_ROOT/.cache/swift/clang-module-cache"$'\nswift_cache='"$TEMP_ROOT/.cache/swift/swift-module-cache"
 actual_calls="$(cat "$CALLS_LOG")"
 if [[ "$actual_calls" != "$expected_calls" ]]; then
-  printf 'Expected run to build thread-window-web before swift run, got:\n%s\n' "$actual_calls" >&2
+  printf 'Expected run to generate theme tokens and build thread-window-web before swift run, got:\n%s\n' "$actual_calls" >&2
   exit 1
 fi
 
@@ -104,10 +104,10 @@ if [[ "$install_run_output" != *"[swiftw] node_modules missing, running pnpm ins
   exit 1
 fi
 
-expected_install_calls=$'pnpm install\npnpm --filter handagent-thread-window-web build\npnpm --filter handagent-electron-shell build\nswift run --cache-path '"$TEMP_ROOT/.cache/swiftpm"$' HandAgentDesktop\nclang_cache='"$TEMP_ROOT/.cache/swift/clang-module-cache"$'\nswift_cache='"$TEMP_ROOT/.cache/swift/swift-module-cache"
+expected_install_calls=$'pnpm install\npnpm generate:theme-tokens\npnpm --filter handagent-thread-window-web build\npnpm --filter handagent-electron-shell build\nswift run --cache-path '"$TEMP_ROOT/.cache/swiftpm"$' HandAgentDesktop\nclang_cache='"$TEMP_ROOT/.cache/swift/clang-module-cache"$'\nswift_cache='"$TEMP_ROOT/.cache/swift/swift-module-cache"
 actual_install_calls="$(cat "$CALLS_LOG")"
 if [[ "$actual_install_calls" != "$expected_install_calls" ]]; then
-  printf 'Expected run to install dependencies before web build, got:\n%s\n' "$actual_install_calls" >&2
+  printf 'Expected run to install dependencies before token generation and web build, got:\n%s\n' "$actual_install_calls" >&2
   exit 1
 fi
 

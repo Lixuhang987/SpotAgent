@@ -9,6 +9,7 @@
 | `AgentServer/` | [agent-server.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/AgentServer/agent-server.md) | `AppServerManaging` health 协议、`/api/platform` WebSocket client、Electron launch 所需仓库根定位 |
 | `ElectronShell/` | [electron-shell.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/ElectronShell/electron-shell.md) | Swift 到 Electron 进程桥、event 解码、app-server 可用性门控、ThreadWindow/ActivityWindow command client |
 | `AgentSettings/` | [agent-settings.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/AgentSettings/agent-settings.md) | `~/.spotAgent/settings.json` 读写 + 500ms 轮询；模型配置 UI |
+| `Appearance/` | [appearance.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Appearance/appearance.md) | Swift 宿主主题偏好、解析后主题和传给 Electron/React 的 theme payload |
 | `Hotkey/` | [hotkey.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Hotkey/hotkey.md) | 固定系统入口快捷键（`showPromptPanel` / `captureSelection` / `captureRegion`）与 manifest Action 全局快捷键注册 |
 | `Lifecycle/` | [lifecycle.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Lifecycle/lifecycle.md) | 根据 Electron ThreadWindow / SettingsWindow 计数切换激活策略 |
 | `PlatformBridge/` | [platform-bridge.md](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/PlatformBridge/platform-bridge.md) | 反向 IPC：把 macOS 原生能力（剪贴板 / 前台 App / 窗口列表 / ScreenCaptureKit 截图等）通过 `/api/platform` 暴露给 agent-server |
@@ -18,7 +19,7 @@
 
 | 文件 | 职责 |
 |------|------|
-| `AppServices.swift` | DI 容器：持有 `appServer` / `threadWindowCommandClient` / `activityWindowCommandClient` / `settingsStore` / `actionManifestStore` / `platformServerURL` / `hotkeyRegistrar` / `settingsWindowPresenter` / `fatalAlertPresenter` / `setActivationPolicy` / `showsFatalAlert`。生产 `defaultRuntime` 始终选择 `ElectronBackedAppServer` 作为 app-server health source、ThreadWindow command client 和 ActivityWindow command client。测试用 `AppServices.testing()` 注入 nop 替身 |
+| `AppServices.swift` | DI 容器：持有 `appServer` / `threadWindowCommandClient` / `activityWindowCommandClient` / `settingsStore` / `appearanceThemeService` / `appearanceChangeObserver` / `actionManifestStore` / `platformServerURL` / `hotkeyRegistrar` / `settingsWindowPresenter` / `fatalAlertPresenter` / `setActivationPolicy` / `showsFatalAlert`。生产 `defaultRuntime` 始终选择 `ElectronBackedAppServer` 作为 app-server health source、ThreadWindow command client 和 ActivityWindow command client；`AppearanceThemeService` 负责宿主主题解析和同步 payload，`SystemAppearanceChangeObserver` 负责监听 macOS 外观变化。测试用 `AppServices.testing()` 注入 nop 替身 |
 | `AppServicesProductionImpls.swift` | 生产实现：`ProductionHotkeyRegistrar` / `ProductionSettingsWindowPresenter` / `ProductionFatalAlertPresenter`；Settings window presenter 通过 `WindowCloseObservation` 持有和释放关闭通知 token |
 
 ## DI 协议
@@ -29,6 +30,7 @@
 | `ElectronShellProcessing`（在 `ElectronShell/ElectronShellProcess.swift`）| `ElectronShellProcess` | 测试内 recording shell |
 | `ThreadWindowCommanding`（在 `ElectronShell/ThreadWindowCommanding.swift`）| `ElectronBackedAppServer` | `NopThreadWindowCommandClient` / 测试内 recording command client |
 | `ActivityWindowCommanding`（在 `ElectronShell/ActivityWindowCommanding.swift`）| `ElectronBackedAppServer` | 测试内 recording command client |
+| `AppearanceChangeObserving`（在 `Appearance/AppearanceChangeObserver.swift`）| `SystemAppearanceChangeObserver` | `NopAppearanceChangeObserver` / 测试内 recording observer |
 | `HotkeyRegistering` | `ProductionHotkeyRegistrar` | `NopHotkeyRegistrar` |
 | `SettingsWindowPresenting` | `ProductionSettingsWindowPresenter` | `NopSettingsWindowPresenter` |
 | `FatalAlertPresenting` | `ProductionFatalAlertPresenter` | `NopFatalAlertPresenter` |

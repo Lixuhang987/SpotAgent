@@ -10,6 +10,10 @@ type InitialPromptPayload = {
   actionBinding: ActionBindingPayload | null;
 };
 
+export type ThemePreference = "light" | "dark" | "system";
+export type ResolvedTheme = "light" | "dark";
+export type HostTheme = { preference: ThemePreference; resolved: ResolvedTheme };
+
 export type SwiftToElectronCommand =
   | {
       channel: "electron_shell";
@@ -32,6 +36,12 @@ export type SwiftToElectronCommand =
       channel: "electron_shell";
       type: "activity_window.show";
       commandId: string;
+    }
+  | {
+      channel: "electron_shell";
+      type: "theme.changed";
+      commandId: string;
+      theme: HostTheme;
     }
   | {
       channel: "electron_shell";
@@ -78,9 +88,17 @@ export function isSwiftToElectronCommand(value: unknown): value is SwiftToElectr
       return true;
     case "thread_window.focus":
       return value.threadId === undefined || value.threadId === null || typeof value.threadId === "string";
+    case "theme.changed":
+      return isHostTheme(value.theme);
     default:
       return false;
   }
+}
+
+function isHostTheme(value: unknown): value is HostTheme {
+  return isRecord(value)
+    && (value.preference === "light" || value.preference === "dark" || value.preference === "system")
+    && (value.resolved === "light" || value.resolved === "dark");
 }
 
 function isActionBinding(value: unknown): value is ActionBindingPayload {

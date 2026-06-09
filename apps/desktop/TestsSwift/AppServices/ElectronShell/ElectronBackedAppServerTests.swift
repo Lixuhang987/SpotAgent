@@ -56,6 +56,24 @@ final class ElectronBackedAppServerTests: XCTestCase {
         XCTAssertEqual(sentCommandId, commandId)
     }
 
+    func testSendThemeChangedSendsThemeCommandWithoutPendingThreadResult() throws {
+        let shell = RecordingElectronShellProcess()
+        let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
+        var results: [ThreadWindowCommandResult] = []
+        appServer.onCommandResult = { results.append($0) }
+
+        let commandId = try appServer.sendThemeChanged(HostThemePayload(preference: .system, resolved: .dark))
+
+        guard case .themeChanged(let sentCommandId, let theme) = shell.sentCommands.first else {
+            return XCTFail("expected theme changed command")
+        }
+        XCTAssertEqual(sentCommandId, commandId)
+        XCTAssertEqual(theme, HostThemePayload(preference: .system, resolved: .dark))
+
+        shell.emit(.commandAck(commandId: commandId, ok: false, error: "ignored"))
+        XCTAssertTrue(results.isEmpty)
+    }
+
     func testCommandAckPublishesThreadWindowCommandResult() throws {
         let shell = RecordingElectronShellProcess()
         let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)

@@ -24,6 +24,22 @@ final class ElectronShellProtocolTests: XCTestCase {
         XCTAssertTrue(encodedPayload["actionBinding"] is NSNull)
     }
 
+    func testEncodesThemeChangedCommand() throws {
+        let command = ElectronShellCommand.themeChanged(
+            commandId: "theme-1",
+            theme: HostThemePayload(preference: .system, resolved: .dark)
+        )
+        let data = try JSONEncoder().encode(command)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let theme = try XCTUnwrap(json["theme"] as? [String: Any])
+
+        XCTAssertEqual(json["channel"] as? String, "electron_shell")
+        XCTAssertEqual(json["type"] as? String, "theme.changed")
+        XCTAssertEqual(json["commandId"] as? String, "theme-1")
+        XCTAssertEqual(theme["preference"] as? String, "system")
+        XCTAssertEqual(theme["resolved"] as? String, "dark")
+    }
+
     func testDecodesAgentServerHealthEvent() throws {
         let data = """
         {"channel":"electron_shell","type":"agent_server.health","available":true}

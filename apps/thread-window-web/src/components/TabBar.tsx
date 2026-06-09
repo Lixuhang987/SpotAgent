@@ -25,8 +25,8 @@ export function TabBar({ tabs, activeTabId, onActivate, onClose }: TabBarProps) 
               'group relative flex min-w-[120px] max-w-[180px] flex-shrink-0 items-center gap-xs rounded-t-lg px-sm py-xs transition-colors',
               // GPT 浏览器风格：活跃 tab 与内容区融合
               isActive
-                ? 'bg-surface-dark text-on-dark'
-                : 'bg-surface-dark-soft text-on-dark-soft hover:bg-surface-dark-elevated'
+                ? 'bg-app-canvas text-app-text-primary'
+                : 'bg-app-surface text-app-text-muted hover:bg-app-surface-elevated'
             )}
           >
             <button
@@ -46,12 +46,12 @@ export function TabBar({ tabs, activeTabId, onActivate, onClose }: TabBarProps) 
                 onClose(tab.threadId);
               }}
               className={cn(
-                'flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-sm transition-opacity hover:bg-white/10',
+                'flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-sm transition-opacity hover:bg-app-surface-muted',
                 isActive ? 'opacity-0 group-hover:opacity-100' : 'opacity-0 group-hover:opacity-100'
               )}
               aria-label="关闭 tab"
             >
-              <svg width="10" height="10" viewBox="0 0 10 10" className="text-on-dark-soft">
+              <svg width="10" height="10" viewBox="0 0 10 10" className="text-app-text-muted">
                 <path
                   d="M2 2L8 8M8 2L2 8"
                   stroke="currentColor"
@@ -70,7 +70,7 @@ export function TabBar({ tabs, activeTabId, onActivate, onClose }: TabBarProps) 
           // 触发新建会话（通过 parent 组件处理）
           console.log('新建 tab 按钮点击');
         }}
-        className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md text-on-dark-soft transition-colors hover:bg-surface-dark-elevated"
+        className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md text-app-text-muted transition-colors hover:bg-app-surface-elevated"
         title="新建 tab"
       >
         <svg width="16" height="16" viewBox="0 0 16 16">

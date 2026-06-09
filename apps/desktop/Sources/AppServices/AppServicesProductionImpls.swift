@@ -40,6 +40,7 @@ final class ProductionSettingsWindowPresenter: SettingsWindowPresenting {
 
     func present(
         settingsViewModel: AgentSettingsViewModel,
+        appearanceViewModel: AppearanceSettingsViewModel,
         toolSettingsViewModel: ToolSettingsViewModel,
         pluginSettingsViewModel: PluginSettingsViewModel,
         appendPromptSettingsViewModel: AppendPromptSettingsViewModel,
@@ -47,11 +48,13 @@ final class ProductionSettingsWindowPresenter: SettingsWindowPresenting {
         permissionRulesViewModel: PermissionRulesViewModel,
         workspaceViewModel: WorkspaceSettingsViewModel,
         shortcutActions: [ActionDefinition],
+        appTheme: AppTheme,
         onClose: @escaping () -> Void
     ) -> NSWindow? {
         let hosting = NSHostingController(
             rootView: SettingsView(
                 settingsViewModel: settingsViewModel,
+                appearanceViewModel: appearanceViewModel,
                 toolSettingsViewModel: toolSettingsViewModel,
                 pluginSettingsViewModel: pluginSettingsViewModel,
                 appendPromptSettingsViewModel: appendPromptSettingsViewModel,
@@ -60,6 +63,7 @@ final class ProductionSettingsWindowPresenter: SettingsWindowPresenting {
                 workspaceViewModel: workspaceViewModel,
                 shortcutActions: shortcutActions
             )
+            .environment(\.appTheme, appTheme)
         )
         let window = NSWindow(contentViewController: hosting)
         window.title = "设置"

@@ -53,6 +53,7 @@ flowchart TD
 - 初始上下文只来自用户主动输入和主动附件。PromptPanel 的 attachment 只通过 Electron initial prompt command 进入 React；屏幕、剪贴板、App 状态和文件读取都必须走 tool。
 - Thread 主协议只跑在 `/api/thread`：React 发送 `ThreadCommand` / `ClientResponse`，agent-server 发送 `ThreadNotification` / `ServerRequest`。
 - Activity 轻量状态只跑在 `/api/activity`：agent-server 只发送 `AgentActivityEvent`；新连接先收到 `activity.snapshot`，状态变化时收到 `activity.changed`。该流由 `ThreadNotification` / `ServerRequest` 派生，不承载完整 thread 消息。
+- 主题偏好由 Swift 宿主持久化和解析：用户只在 Swift Settings 中选择 `light` / `dark` / `system`，Swift 将解析后的 `light` 或 `dark` 通过 `theme.changed` command 传给 Electron，React ThreadWindow 只订阅宿主主题变化。
 - 平台 RPC 只跑在 `/api/platform`：Swift desktop 发送 `platform_bridge_hello`，处理 `channel: "platform"` 的 `platform_request`，并回写 `platform_response`。
 - `thread.snapshot` 是打开、恢复和重连后的 thread 状态入口；`workspace.listed` 是 `workspace.list` 的连接级响应，不带 `threadId`。
 - `permission.requested` / `workspace.requested` 是 server 向 React 提问、等待 UI 回执的少量交互；不要把它们混入普通 notification 或 platform RPC。

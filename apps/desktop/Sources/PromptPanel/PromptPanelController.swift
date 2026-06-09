@@ -8,6 +8,7 @@ final class PromptPanelController {
     private var panel: PromptPanelWindow?
     private var eventMonitor: Any?
     private var viewModel: PromptPanelViewModel?
+    private var appTheme: AppTheme = .default
     private let quickLookController = QuickLookPreviewController()
     private let captureFocusOwner: () -> Any?
     private let restoreFocusOwner: (Any) -> Void
@@ -30,6 +31,14 @@ final class PromptPanelController {
 
     func configure(viewModel: PromptPanelViewModel) {
         self.viewModel = viewModel
+    }
+
+    func updateTheme(_ theme: AppTheme) {
+        appTheme = theme
+        guard let viewModel, let hostingView = panel?.contentView as? NSHostingView<AnyView> else {
+            return
+        }
+        hostingView.rootView = AnyView(PromptPanelView(viewModel: viewModel).environment(\.appTheme, theme))
     }
 
     func register(actions: [ActionDefinition]) {
@@ -149,7 +158,9 @@ final class PromptPanelController {
             if QuickLookPreviewController.isQuickLookVisible { return }
             self?.hide()
         }
-        let hostingView = NSHostingView(rootView: PromptPanelView(viewModel: viewModel))
+        let hostingView = NSHostingView(
+            rootView: AnyView(PromptPanelView(viewModel: viewModel).environment(\.appTheme, appTheme))
+        )
         hostingView.frame = NSRect(origin: .zero, size: panel.contentRect(forFrameRect: panel.frame).size)
         panel.contentView = hostingView
         hostingView.layoutSubtreeIfNeeded()

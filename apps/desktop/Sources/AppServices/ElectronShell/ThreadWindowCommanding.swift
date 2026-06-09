@@ -26,4 +26,7 @@ protocol ThreadWindowCommanding: AnyObject {
 
     @discardableResult
     func focus(threadId: String?) throws -> String
+
+    @discardableResult
+    func sendThemeChanged(_ theme: HostThemePayload) throws -> String
 }

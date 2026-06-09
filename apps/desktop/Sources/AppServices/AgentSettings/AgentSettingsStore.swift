@@ -96,6 +96,7 @@ struct AgentToolSettings: Codable, Equatable {
 }
 
 private struct AgentSettingsFile: Codable {
+    var appearance: AppearanceSettings?
     var llm: AgentSettings?
     var tools: AgentToolSettings?
 }
@@ -103,6 +104,7 @@ private struct AgentSettingsFile: Codable {
 @Observable
 @MainActor
 final class AgentSettingsStore {
+    private(set) var appearance: AppearanceSettings
     private(set) var settings: AgentSettings
     private(set) var toolSettings: AgentToolSettings
     private(set) var saveErrorMessage: String?
@@ -119,6 +121,7 @@ final class AgentSettingsStore {
         self.fileManager = fileManager
         self.homeDirectoryURL = homeDirectoryURL
         let loadedState = Self.loadState(fileManager: fileManager, homeDirectoryURL: homeDirectoryURL)
+        self.appearance = loadedState.appearance
         self.settings = loadedState.settings
         self.toolSettings = loadedState.toolSettings
         self.lastLoadedData = loadedState.data
@@ -136,6 +139,13 @@ final class AgentSettingsStore {
         persist()
     }
 
+    func updateAppearance(_ mutate: (inout AppearanceSettings) -> Void) {
+        var nextAppearance = appearance
+        mutate(&nextAppearance)
+        appearance = nextAppearance
+        persist()
+    }
+
     func updateToolSettings(_ mutate: (inout AgentToolSettings) -> Void) {
         var nextToolSettings = toolSettings
         mutate(&nextToolSettings)
@@ -146,6 +156,7 @@ final class AgentSettingsStore {
     func reloadFromDisk() {
         let loadedState = Self.loadState(fileManager: fileManager, homeDirectoryURL: homeDirectoryURL)
         guard loadedState.data != lastLoadedData else { return }
+        appearance = loadedState.appearance
         settings = loadedState.settings
         toolSettings = loadedState.toolSettings
         lastLoadedData = loadedState.data
@@ -159,6 +170,7 @@ final class AgentSettingsStore {
     }
 
     private static func loadState(fileManager: FileManager, homeDirectoryURL: URL) -> (
+        appearance: AppearanceSettings,
         settings: AgentSettings,
         toolSettings: AgentToolSettings,
         data: Data?
@@ -167,9 +179,14 @@ final class AgentSettingsStore {
         guard let data = try? Data(contentsOf: fileURL),
               let persisted = try? JSONDecoder().decode(AgentSettingsFile.self, from: data)
         else {
-            return (.defaultValue, .defaultValue, nil)
+            return (.defaultValue, .defaultValue, .defaultValue, nil)
         }
-        return (persisted.llm ?? .defaultValue, persisted.tools ?? .defaultValue, data)
+        return (
+            persisted.appearance ?? .defaultValue,
+            persisted.llm ?? .defaultValue,
+            persisted.tools ?? .defaultValue,
+            data
+        )
     }
 
     private func persist() {
@@ -180,7 +197,13 @@ final class AgentSettingsStore {
             try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            let data = try encoder.encode(AgentSettingsFile(llm: settings, tools: toolSettings))
+            let data = try encoder.encode(
+                AgentSettingsFile(
+                    appearance: appearance,
+                    llm: settings,
+                    tools: toolSettings
+                )
+            )
             try data.write(to: fileURL, options: .atomic)
             lastLoadedData = data
             saveErrorMessage = nil

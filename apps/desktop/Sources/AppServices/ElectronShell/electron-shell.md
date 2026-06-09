@@ -9,7 +9,7 @@
 - Electron -> Swift 的 `ElectronShellEvent` 通过 stdout newline-delimited JSON 回传。
 - 主动停机时先通过 command socket 发送 `shutdown` command；Electron 未在 2 秒内退出时才兜底 `terminate()`，主动停机不作为 fatal termination 上报。
 - 在 `agent_server.health available=true` 与 `thread_window.prepared` 同时成立后，向 `AgentServerHealth` 暴露可提交状态。
-- 作为 `ThreadWindowCommanding` 实现，只接收 Coordinator 的 openInitialPrompt/openHistory/focus 意图。
+- 作为 `ThreadWindowCommanding` 实现，只接收 Coordinator 的 openInitialPrompt/openHistory/focus/themeChanged 意图；`theme.changed` 不参与 ThreadWindow 可用性 gate。
 - 作为 `ActivityWindowCommanding` 实现，接收 Coordinator 的 showActivityWindow 意图，并编码为 `activity_window.show`。
 - 连接 `/api/platform`，继续由 Swift `PlatformBridgeService` 执行 macOS 原生能力。
 - visible Electron ThreadWindow 关闭时，通过 `onThreadWindowClosed` 通知 Coordinator 清理打开状态；隐藏预热窗口关闭只影响可提交 gate。
@@ -23,7 +23,7 @@
 | `ElectronShellProcess.swift` | 启动 Electron 子进程、通过 Unix socket 写入 command JSON line、读取 stdout event JSON line、处理主动停机和非主动退出 |
 | `ElectronShellProtocol.swift` | Swift 端 command/event DTO，必须与 TS `electronShellProtocol.ts` 字段一致 |
 | `ElectronBackedAppServer.swift` | app-server health gate、ThreadWindow command client、ActivityWindow command client 和 platform bridge 连接管理 |
-| `ThreadWindowCommanding.swift` | Coordinator 面向 ThreadWindow 的 command 抽象：open initial prompt、open history、focus |
+| `ThreadWindowCommanding.swift` | Coordinator 面向 ThreadWindow 的 command 抽象：open initial prompt、open history、focus、theme changed |
 | `ActivityWindowCommanding.swift` | Coordinator 面向 Electron ActivityWindow 的 show command 抽象 |
 | `UserMessageAttachmentPayload.swift` | Swift 到 Electron initial prompt command 的 attachment DTO |
 
@@ -45,7 +45,7 @@
 
 ## 修改约束
 
-- 新增或改名 Electron command/event 时，先改 `ElectronShellProtocol.swift`，再同步 `apps/electron-shell/src/main/protocol/electronShellProtocol.ts` 和双方测试。
+- 新增或改名 Electron command/event 时，先改 `ElectronShellProtocol.swift`，再同步 `apps/electron-shell/src/main/protocol/electronShellProtocol.ts` 和双方测试。主题同步 command 固定为 `theme.changed`，payload 为 `{ preference, resolved }`。
 - 不把 `ThreadCommand` / `ThreadNotification` 引入本目录；Swift 只传 initial prompt payload 和窗口 command。
 - `ElectronShellProcess` 的 stdout 只能解析 event；stderr 作为 diagnostic 日志原样转发到宿主 stderr，支持 packaged app stdout/stderr 重定向观察。不要把 Electron diagnostic 写到 stdout。
 - Swift->Electron command socket 路径必须保持短路径；macOS `sockaddr_un.sun_path` 长度有限，当前使用 `/tmp/hae-<uuid>.sock`。

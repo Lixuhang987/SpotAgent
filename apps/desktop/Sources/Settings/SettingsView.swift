@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Bindable var settingsViewModel: AgentSettingsViewModel
+    @Bindable var appearanceViewModel: AppearanceSettingsViewModel
     @Bindable var toolSettingsViewModel: ToolSettingsViewModel
     @Bindable var pluginSettingsViewModel: PluginSettingsViewModel
     @Bindable var appendPromptSettingsViewModel: AppendPromptSettingsViewModel
@@ -27,6 +28,8 @@ struct SettingsView: View {
         switch selectedTab {
         case .model:
             AgentSettingsView(viewModel: settingsViewModel)
+        case .appearance:
+            AppearanceSettingsView(viewModel: appearanceViewModel)
         case .tools:
             ToolSettingsView(viewModel: toolSettingsViewModel)
         case .plugins:

@@ -18,7 +18,7 @@
 
 - 唯一入口是 `send(_ action: Action)`；所有模块向 Coordinator 报告意图都必须通过该入口。
 - Action 是封闭枚举；新增协调事件必须显式声明分支，不要用 `NotificationCenter` 绕开。
-- 子模块回调统一在 `bootstrap()` 阶段注入闭包，闭包内只允许 `send(.xxx)` 或打开 PromptPanel。
+- 子模块回调统一在 `bootstrap()` 阶段注入闭包；外观系统回调只转给 `AppearanceThemeService.systemAppearanceDidChange()`，其他闭包内只允许 `send(.xxx)` 或打开 PromptPanel。
 - 应用退出由 `HandAgentApplicationDelegate` 接收 macOS termination 回调并调用 `shutdown()`；不要绕过 Coordinator 直接 stop Electron shell。
 - 测试模式走 `AppServices.testing()` 注入 nop 替身，跳过窗口/进程/激活策略副作用。
 - 窗口生命周期由 lifecycle 控制器闭环：Electron ThreadWindow 由 `ElectronThreadWindowLifecycle` 通过 `ThreadWindowCommanding` 管理，`SettingsLifecycle` 管 Settings；Coordinator 不持有 AppKit 对象。
@@ -29,6 +29,7 @@
 - Settings 打开时会创建模型、builtin tool、Plugin、Append Prompt、MCP、权限和 workspace 的 ViewModel。Coordinator 只负责注入，不直接读写 `~/.spotAgent/plugins` 或 `~/.spotAgent/mcp.json`。
 - agent-server 健康状态独立：server 不可用时拒绝 `submitPrompt` 并保留面板草稿。
 - `AppCoordinator` 在 app-server available 后调用 `ActivityWindowCommanding.showActivityWindow()`；show 失败不回退到 Swift StatusBubble。Electron StatusBubble 点击不再回调 Coordinator 打开 PromptPanel，Coordinator 也不解析 `/api/activity` 状态。
+- `AppCoordinator` 在 bootstrap 时启动 `AppearanceChangeObserving`；macOS 外观变化时由 `AppearanceThemeService` 重新解析 `system` 并通过 `theme.changed` 下发给 Electron。
 
 ## 当前 Action 列表
 
@@ -47,6 +48,7 @@ openHistory / threadWindowClosed
 - 持有 `AgentServerHealth`（来自 AppServices 层）。
 - 通过 `AgentServerHealth.onAvailabilityChange` 驱动 [PromptPanel](/Users/mu9/proj/handAgent/apps/desktop/Sources/PromptPanel/prompt-panel.md) 的提交启停状态。
 - 通过 `ActivityWindowCommanding` 显示 Electron ActivityWindow；该 command client 只承载 ActivityWindow show 命令回执，不承载 activity 数据。
+- 通过 `AppearanceChangeObserving` 接收 macOS 外观变化，并交给 `AppearanceThemeService` 生成宿主主题 payload。
 - `AppActivationPolicyCoordinator` 实例由 Coordinator 创建；SettingsWindow 由 `SettingsLifecycle` 推送激活策略，Electron ThreadWindow 由 Coordinator 在 open/close ack 回调中推送激活策略。
 
 ## 编辑此目录的约束

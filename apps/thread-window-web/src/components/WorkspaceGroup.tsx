@@ -27,18 +27,18 @@ export function WorkspaceGroup({
       <Accordion.Header>
         <Accordion.Trigger
           onClick={onToggle}
-          className="flex w-full items-center justify-between rounded-md px-sm py-xs text-left text-sm text-ink transition-colors hover:bg-surface-soft"
+          className="flex w-full items-center justify-between rounded-md px-sm py-xs text-left text-sm text-app-text-primary transition-colors hover:bg-app-surface-soft"
         >
           <span className="min-w-0">
             <span className="block truncate font-medium">{workspace.name}</span>
-            <span className="block truncate text-[11px] text-muted">{workspace.rootPath}</span>
+            <span className="block truncate text-[11px] text-app-text-secondary">{workspace.rootPath}</span>
           </span>
           <svg
             width="12"
             height="12"
             viewBox="0 0 12 12"
             className={cn(
-              'ml-xs flex-shrink-0 text-muted transition-transform',
+              'ml-xs flex-shrink-0 text-app-text-secondary transition-transform',
               isExpanded && 'rotate-180'
             )}
           >
@@ -56,7 +56,7 @@ export function WorkspaceGroup({
       <Accordion.Content className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down">
         <div className="flex flex-col gap-xs pt-xs">
           {threads.length === 0 ? (
-            <p className="px-sm py-xs text-xs text-muted">
+            <p className="px-sm py-xs text-xs text-app-text-secondary">
               暂无对话
             </p>
           ) : (
@@ -99,17 +99,17 @@ function ThreadItem({ thread, isActive, onOpen, onDelete }: ThreadItemProps) {
       onClick={onOpen}
       onKeyDown={handleKeyDown}
       className={cn(
-        'grid grid-cols-[1fr_28px] items-stretch gap-xs rounded-md border transition-colors focus:outline-none focus:ring-4 focus:ring-accent-ring',
+        'grid grid-cols-[1fr_28px] items-stretch gap-xs rounded-md border transition-colors focus:outline-none focus:ring-4 focus:ring-app-accent-ring',
         isActive
-          ? 'border-hairline bg-canvas shadow-soft'
-          : 'border-transparent hover:bg-surface-soft'
+          ? 'border-app-hairline bg-app-canvas shadow-soft'
+          : 'border-transparent hover:bg-app-surface-soft'
       )}
     >
       <div className="min-w-0 rounded-md px-sm py-xs text-left">
-        <span className="block truncate text-[13px] font-medium text-ink">
+        <span className="block truncate text-[13px] font-medium text-app-text-primary">
           {thread.preview || '新对话'}
         </span>
-        <small className="block text-[11px] text-muted">
+        <small className="block text-[11px] text-app-text-secondary">
           {new Date(thread.updatedAt).toLocaleDateString('zh-CN')}
         </small>
       </div>
@@ -118,7 +118,7 @@ function ThreadItem({ thread, isActive, onOpen, onDelete }: ThreadItemProps) {
           event.stopPropagation();
           onDelete();
         }}
-        className="my-auto h-[26px] w-[26px] rounded-sm text-muted transition-colors hover:bg-surface-cream-strong hover:text-ink"
+        className="my-auto h-[26px] w-[26px] rounded-sm text-app-text-secondary transition-colors hover:bg-app-surface-muted hover:text-app-text-primary"
         aria-label="删除对话"
       >
         <svg width="14" height="14" viewBox="0 0 14 14" className="mx-auto">

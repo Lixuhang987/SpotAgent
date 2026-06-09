@@ -16,6 +16,7 @@ final class SettingsLifecycleTests: XCTestCase {
 
         lifecycle.openOrFocus(
             settingsViewModel: AgentSettingsViewModel(store: AgentSettingsStore()),
+            appearanceViewModel: AppearanceSettingsViewModel(store: AgentSettingsStore()),
             toolSettingsViewModel: ToolSettingsViewModel(store: AgentSettingsStore()),
             pluginSettingsViewModel: PluginSettingsViewModel(),
             appendPromptSettingsViewModel: AppendPromptSettingsViewModel(),
@@ -23,6 +24,7 @@ final class SettingsLifecycleTests: XCTestCase {
             permissionRulesViewModel: PermissionRulesViewModel(),
             workspaceViewModel: WorkspaceSettingsViewModel(),
             shortcutActions: [],
+            appTheme: .default,
             onClosed: {}
         )
 
@@ -42,6 +44,7 @@ final class SettingsLifecycleTests: XCTestCase {
 
         lifecycle.openOrFocus(
             settingsViewModel: AgentSettingsViewModel(store: AgentSettingsStore()),
+            appearanceViewModel: AppearanceSettingsViewModel(store: AgentSettingsStore()),
             toolSettingsViewModel: ToolSettingsViewModel(store: AgentSettingsStore()),
             pluginSettingsViewModel: PluginSettingsViewModel(),
             appendPromptSettingsViewModel: AppendPromptSettingsViewModel(),
@@ -49,10 +52,12 @@ final class SettingsLifecycleTests: XCTestCase {
             permissionRulesViewModel: PermissionRulesViewModel(),
             workspaceViewModel: WorkspaceSettingsViewModel(),
             shortcutActions: [],
+            appTheme: .default,
             onClosed: {}
         )
         lifecycle.openOrFocus(
             settingsViewModel: AgentSettingsViewModel(store: AgentSettingsStore()),
+            appearanceViewModel: AppearanceSettingsViewModel(store: AgentSettingsStore()),
             toolSettingsViewModel: ToolSettingsViewModel(store: AgentSettingsStore()),
             pluginSettingsViewModel: PluginSettingsViewModel(),
             appendPromptSettingsViewModel: AppendPromptSettingsViewModel(),
@@ -60,6 +65,7 @@ final class SettingsLifecycleTests: XCTestCase {
             permissionRulesViewModel: PermissionRulesViewModel(),
             workspaceViewModel: WorkspaceSettingsViewModel(),
             shortcutActions: [],
+            appTheme: .default,
             onClosed: {}
         )
 
@@ -77,6 +83,7 @@ final class SettingsLifecycleTests: XCTestCase {
 
         lifecycle.openOrFocus(
             settingsViewModel: AgentSettingsViewModel(store: AgentSettingsStore()),
+            appearanceViewModel: AppearanceSettingsViewModel(store: AgentSettingsStore()),
             toolSettingsViewModel: ToolSettingsViewModel(store: AgentSettingsStore()),
             pluginSettingsViewModel: PluginSettingsViewModel(),
             appendPromptSettingsViewModel: AppendPromptSettingsViewModel(),
@@ -84,6 +91,7 @@ final class SettingsLifecycleTests: XCTestCase {
             permissionRulesViewModel: PermissionRulesViewModel(),
             workspaceViewModel: WorkspaceSettingsViewModel(),
             shortcutActions: [],
+            appTheme: .default,
             onClosed: {}
         )
         lifecycle.handleClosed()

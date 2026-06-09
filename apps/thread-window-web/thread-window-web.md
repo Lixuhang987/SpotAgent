@@ -11,6 +11,7 @@
 | `src/thread/threadSocketClient.ts` | `/api/thread` WebSocket client，负责连接、重连、发送队列、初始 prompt 首轮流程和入站消息分派。 |
 | `src/store/threadWindowStore.ts` | `zustand + immer` store，是 tabs、历史、消息、请求、workspace 列表和窗口错误的状态源。 |
 | `src/native/nativeConfig.ts` | 读取 host 注入的 thread WebSocket URL，安装 `window.handAgentReceiveInitialPrompt`。 |
+| `src/native/themeConfig.ts` | 读取 host 注入的初始 theme，设置 `documentElement.dataset.theme`，订阅 `handAgentSubscribeThemeChange`。 |
 | `src/components/` | ThreadWindow UI 组件：历史侧栏、tabs、消息列表、composer、权限与 workspace 请求面板。 |
 | `src/utils/` | 纯函数工具：workspace 分组、侧栏响应式布局、className 合并。 |
 | `tests/` | Vitest 测试，覆盖协议守卫、socket client、store、native config、侧栏布局、滚动容器和设计 token。 |
@@ -20,7 +21,7 @@
 ## 运行边界
 
 - React 直接持有 `/api/thread` WebSocket；Swift 不解析 `ThreadNotification`，也不发送 `ThreadCommand`。
-- Electron preload 注入 `window.handAgentThreadWindowConfig` 和 `window.handAgentReceiveInitialPrompt`。React 不持有 host 差异，仍直接连接 `/api/thread`。平台 tool 走独立 `/api/platform`。
+- Electron preload 注入 `window.handAgentThreadWindowConfig`、`window.handAgentTheme`、`window.handAgentSubscribeThemeChange` 和 `window.handAgentReceiveInitialPrompt`。React 不持久化主题，只把宿主 resolved theme 写到 `data-theme`；thread 数据仍直接连接 `/api/thread`。平台 tool 走独立 `/api/platform`。
 - `ThreadSocketClient` 只处理收发、重连、发送队列和通知副作用，不直接写 UI；UI 状态由 store action 更新。
 - 组件只通过明确 props、store action 或根组件 callback 触发行为，不应绕过根组件直接操作 WebSocket。
 - 当前不把 ThreadWindow tabs、消息或历史同步给 Swift；StatusBubble 状态由 Electron ActivityWindow renderer 订阅 `/api/activity`。
@@ -85,8 +86,10 @@ React `App` 挂载后通过 `installInitialPromptReceiver` 替换正式 receiver
 
 ## 样式前提
 
-- 样式系统是 Tailwind CSS，主题 token 在 `tailwind.config.js`。
-- `tests/designTokens.test.ts` 会校验关键 token，避免回退到旧的单一 dark-only 配色。
+- 样式系统是 Tailwind CSS v4 CSS-first，主题 token 由 `design/tokens.json` 生成到 `src/styles/generated-theme.css`。
+- `tailwind.config.js` 已删除；新增 token 必须先改 `design/tokens.json`，再运行 `pnpm generate:theme-tokens`。
+- React 组件使用 `bg-app-*` / `text-app-*` / `border-app-*` 等生成语义 class，不再使用旧 v3 token class。
+- `tests/designTokens.test.ts` 会校验生成 CSS，避免手写 CSS 或旧配置回流。
 - 新 UI 应优先复用现有 token 和组件密度，不在组件内散落协议状态字符串或重复色值。
 - ThreadWindow 滚动条统一在 `src/styles/tailwind.css` 的 base layer 定义：标准属性使用 `scrollbar-width` / `scrollbar-color`，Electron/Chromium 兼容使用 `::-webkit-scrollbar*`；track 和 corner 必须保持透明，避免滚动容器出现白色 gutter。不要在组件内重复定义局部滚动条样式。
 

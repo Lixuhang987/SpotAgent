@@ -114,6 +114,7 @@ private final class RecordingThreadWindowCommandClient: ThreadWindowCommanding {
     private(set) var openedPrompts: [PromptSubmission] = []
     private(set) var openHistoryCount = 0
     private(set) var focusedThreadIDs: [String?] = []
+    private(set) var sentThemes: [HostThemePayload] = []
     private var commandCounters: [ThreadWindowCommandKind: Int] = [:]
 
     func openInitialPrompt(_ prompt: PromptSubmission) throws -> String {
@@ -129,6 +130,11 @@ private final class RecordingThreadWindowCommandClient: ThreadWindowCommanding {
     func focus(threadId: String?) throws -> String {
         focusedThreadIDs.append(threadId)
         return nextCommandId(for: .focus)
+    }
+
+    func sendThemeChanged(_ theme: HostThemePayload) throws -> String {
+        sentThemes.append(theme)
+        return "theme-\(sentThemes.count)"
     }
 
     func complete(

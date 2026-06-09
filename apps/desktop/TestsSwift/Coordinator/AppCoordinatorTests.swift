@@ -111,6 +111,54 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testAppearancePreferenceChangeSendsThemeToElectron() {
+        let client = RecordingThreadWindowCommandClient()
+        let coordinator = AppCoordinator(services: electronServices(commandClient: client))
+
+        coordinator.makeAppearanceSettingsViewModel().themePreference = .dark
+
+        XCTAssertEqual(client.sentThemes.last, HostThemePayload(preference: .dark, resolved: .dark))
+    }
+
+    @MainActor
+    func testSystemAppearanceChangeSendsResolvedThemeToElectron() {
+        let client = RecordingThreadWindowCommandClient()
+        let observer = RecordingAppearanceChangeObserver()
+        let homeURL = TestFiles.makeTemporaryHomeDirectory()
+        defer { try? FileManager.default.removeItem(at: homeURL) }
+        let settingsStore = AgentSettingsStore(homeDirectoryURL: homeURL)
+        var resolvedTheme: ResolvedAppearanceTheme = .light
+        let appearanceThemeService = AppearanceThemeService(
+            store: settingsStore,
+            systemResolver: { resolvedTheme }
+        )
+        let coordinator = AppCoordinator(
+            services: AppServices(
+                appServer: NopAppServer(),
+                threadWindowCommandClient: client,
+                settingsStore: settingsStore,
+                appearanceThemeService: appearanceThemeService,
+                appearanceChangeObserver: observer,
+                platformServerURL: URL(string: "ws://127.0.0.1:0/noop-platform")!,
+                hotkeyRegistrar: NopHotkeyRegistrar(),
+                settingsWindowPresenter: NopSettingsWindowPresenter(),
+                fatalAlertPresenter: NopFatalAlertPresenter(),
+                setActivationPolicy: { _ in }
+            )
+        )
+
+        XCTAssertEqual(observer.startCount, 1)
+
+        resolvedTheme = .dark
+        observer.publishSystemAppearanceChange()
+
+        XCTAssertEqual(client.sentThemes.last, HostThemePayload(preference: .system, resolved: .dark))
+
+        coordinator.shutdown()
+        XCTAssertEqual(observer.stopCount, 1)
+    }
+
+    @MainActor
     func testShowAndTogglePromptPanelDoNotSendThreadWindowCommand() {
         let client = RecordingThreadWindowCommandClient()
         let coordinator = AppCoordinator(services: electronServices(commandClient: client))
@@ -125,11 +173,12 @@ final class AppCoordinatorTests: XCTestCase {
     func testShowsActivityWindowWhenAppServerBecomesAvailable() async throws {
         let appServer = TriggerableAppServer()
         appServer.isAvailable = false
+        let client = RecordingThreadWindowCommandClient()
         let activityClient = RecordingActivityWindowCommandClient()
         let coordinator = AppCoordinator(
             services: electronServices(
                 appServer: appServer,
-                commandClient: RecordingThreadWindowCommandClient(),
+                commandClient: client,
                 activityClient: activityClient
             )
         )
@@ -140,6 +189,7 @@ final class AppCoordinatorTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(10))
 
         XCTAssertEqual(activityClient.showCount, 1)
+        XCTAssertEqual(client.sentThemes, [HostThemePayload(preference: .system, resolved: .light)])
         _ = coordinator
     }
 
@@ -337,10 +387,13 @@ private func electronServices(
     activityClient: RecordingActivityWindowCommandClient? = nil,
     setActivationPolicy: @escaping @MainActor (NSApplication.ActivationPolicy) -> Void = { _ in }
 ) -> AppServices {
-    AppServices(
+    let settingsStore = AgentSettingsStore(homeDirectoryURL: TestFiles.makeTemporaryHomeDirectory())
+    return AppServices(
         appServer: appServer,
         threadWindowCommandClient: commandClient,
         activityWindowCommandClient: activityClient,
+        settingsStore: settingsStore,
+        appearanceThemeService: AppearanceThemeService(store: settingsStore, systemResolver: { .light }),
         platformServerURL: URL(string: "ws://127.0.0.1:0/noop-platform")!,
         hotkeyRegistrar: NopHotkeyRegistrar(),
         settingsWindowPresenter: NopSettingsWindowPresenter(),
@@ -351,6 +404,25 @@ private func electronServices(
 
 private enum RecordingActivityWindowCommandError: Error {
     case showFailed
+}
+
+@MainActor
+private final class RecordingAppearanceChangeObserver: AppearanceChangeObserving {
+    var onSystemAppearanceChange: (() -> Void)?
+    private(set) var startCount = 0
+    private(set) var stopCount = 0
+
+    func start() {
+        startCount += 1
+    }
+
+    func stop() {
+        stopCount += 1
+    }
+
+    func publishSystemAppearanceChange() {
+        onSystemAppearanceChange?()
+    }
 }
 
 @MainActor
@@ -403,6 +475,7 @@ private final class RecordingThreadWindowCommandClient: ThreadWindowCommanding {
     private(set) var openedPrompts: [PromptSubmission] = []
     private(set) var openHistoryCount = 0
     private(set) var focusedThreadIDs: [String?] = []
+    private(set) var sentThemes: [HostThemePayload] = []
     private var commandCounters: [ThreadWindowCommandKind: Int] = [:]
 
     var commandCount: Int {
@@ -422,6 +495,11 @@ private final class RecordingThreadWindowCommandClient: ThreadWindowCommanding {
     func focus(threadId: String?) throws -> String {
         focusedThreadIDs.append(threadId)
         return nextCommandId(for: .focus)
+    }
+
+    func sendThemeChanged(_ theme: HostThemePayload) throws -> String {
+        sentThemes.append(theme)
+        return "theme-\(sentThemes.count)"
     }
 
     func complete(
@@ -466,6 +544,7 @@ final class StubSettingsWindowPresenter: SettingsWindowPresenting {
 
     func present(
         settingsViewModel: AgentSettingsViewModel,
+        appearanceViewModel: AppearanceSettingsViewModel,
         toolSettingsViewModel: ToolSettingsViewModel,
         pluginSettingsViewModel: PluginSettingsViewModel,
         appendPromptSettingsViewModel: AppendPromptSettingsViewModel,
@@ -473,6 +552,7 @@ final class StubSettingsWindowPresenter: SettingsWindowPresenting {
         permissionRulesViewModel: PermissionRulesViewModel,
         workspaceViewModel: WorkspaceSettingsViewModel,
         shortcutActions: [ActionDefinition],
+        appTheme: AppTheme,
         onClose: @escaping () -> Void
     ) -> NSWindow? {
         lastShortcutActions = shortcutActions

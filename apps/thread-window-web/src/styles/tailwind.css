@@ -1,6 +1,5 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@import "./generated-theme.css";
 
 @layer base {
   :root {
@@ -25,8 +24,8 @@
     margin: 0;
     min-width: 0;
     min-height: 0;
-    background: #faf9f5;
-    color: #141413;
+    background: var(--ha-color-canvas);
+    color: var(--ha-color-text-primary);
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
   }

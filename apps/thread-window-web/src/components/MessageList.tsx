@@ -19,14 +19,14 @@ export function MessageList({ messages, errorMessage, isRunning = false }: Messa
   }, -1);
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-col gap-sm overflow-y-auto overflow-x-hidden bg-surface-dark px-lg py-md">
+    <div className="flex min-h-0 min-w-0 flex-col gap-sm overflow-y-auto overflow-x-hidden bg-app-canvas px-lg py-md">
       {messages.length === 0 ? (
-        <div className="flex h-full items-center justify-center text-sm text-on-dark-soft">
-          <div className="rounded-lg border border-white/10 bg-surface-dark-elevated px-lg py-md text-center shadow-product-inner">
-            <div className="font-display text-[28px] font-normal tracking-[-0.02em] text-on-dark">
+        <div className="flex h-full items-center justify-center text-sm text-app-text-muted">
+          <div className="rounded-lg border border-app-hairline bg-app-surface-elevated px-lg py-md text-center shadow-product-inner">
+            <div className="font-display text-[28px] font-normal tracking-[-0.02em] text-app-text-primary">
               等待输入
             </div>
-            <div className="mt-xs text-sm text-on-dark-soft">
+            <div className="mt-xs text-sm text-app-text-muted">
               从下方输入框开始一个 thread
             </div>
           </div>
@@ -46,7 +46,7 @@ export function MessageList({ messages, errorMessage, isRunning = false }: Messa
         ))}
 
         {errorMessage && (
-          <div className="rounded-lg border border-error/30 bg-error/10 px-md py-sm text-sm text-error">
+          <div className="rounded-lg border border-app-error/30 bg-app-error/10 px-md py-sm text-sm text-app-error">
             {errorMessage}
           </div>
         )}

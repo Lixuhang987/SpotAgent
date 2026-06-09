@@ -10,6 +10,7 @@ cd "$PROJECT_ROOT"
 bash "$PROJECT_ROOT/scripts/swiftw.test.sh"
 bash "$PROJECT_ROOT/scripts/package-app.test.sh"
 
+pnpm test:theme-tokens
 pnpm --filter handagent-electron-shell test
 
 pnpm exec vitest run \

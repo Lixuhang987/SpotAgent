@@ -9,6 +9,7 @@ final class ProductionSettingsWindowPresenterTests: XCTestCase {
 
         let window = presenter.present(
             settingsViewModel: AgentSettingsViewModel(store: AgentSettingsStore()),
+            appearanceViewModel: AppearanceSettingsViewModel(store: AgentSettingsStore()),
             toolSettingsViewModel: ToolSettingsViewModel(store: AgentSettingsStore()),
             pluginSettingsViewModel: PluginSettingsViewModel(),
             appendPromptSettingsViewModel: AppendPromptSettingsViewModel(),
@@ -16,6 +17,7 @@ final class ProductionSettingsWindowPresenterTests: XCTestCase {
             permissionRulesViewModel: PermissionRulesViewModel(),
             workspaceViewModel: WorkspaceSettingsViewModel(),
             shortcutActions: [],
+            appTheme: .default,
             onClose: {}
         )
         defer { window?.close() }

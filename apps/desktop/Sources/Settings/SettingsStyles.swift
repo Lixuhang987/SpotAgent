@@ -4,6 +4,7 @@ import SwiftUI
 
 enum SettingsTab: String, CaseIterable, Identifiable {
     case model
+    case appearance
     case tools
     case plugins
     case appendPrompts
@@ -17,6 +18,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .model: return "模型"
+        case .appearance: return "外观"
         case .tools: return "工具"
         case .plugins: return "Plugin"
         case .appendPrompts: return "追加"
@@ -30,6 +32,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .model: return "cpu"
+        case .appearance: return "circle.lefthalf.filled"
         case .tools: return "slider.horizontal.3"
         case .plugins: return "puzzlepiece.extension"
         case .appendPrompts: return "text.badge.plus"

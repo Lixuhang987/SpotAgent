@@ -47,10 +47,11 @@ enum ElectronShellCommand: Encodable, Equatable {
     case openHistory(commandId: String)
     case focus(commandId: String, threadId: String?)
     case showActivityWindow(commandId: String)
+    case themeChanged(commandId: String, theme: HostThemePayload)
     case shutdown(commandId: String)
 
     private enum CodingKeys: String, CodingKey {
-        case channel, type, commandId, payload, threadId
+        case channel, type, commandId, payload, threadId, theme
     }
 
     func encode(to encoder: Encoder) throws {
@@ -71,6 +72,10 @@ enum ElectronShellCommand: Encodable, Equatable {
         case .showActivityWindow(let commandId):
             try container.encode("activity_window.show", forKey: .type)
             try container.encode(commandId, forKey: .commandId)
+        case .themeChanged(let commandId, let theme):
+            try container.encode("theme.changed", forKey: .type)
+            try container.encode(commandId, forKey: .commandId)
+            try container.encode(theme, forKey: .theme)
         case .shutdown(let commandId):
             try container.encode("shutdown", forKey: .type)
             try container.encode(commandId, forKey: .commandId)
