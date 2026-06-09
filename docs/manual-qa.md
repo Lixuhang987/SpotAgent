@@ -216,15 +216,9 @@
 1. 继续回到 thread A 发送需要工具的第二轮 prompt，确认 thread A 仍可继续使用真实工具，不会退回只暴露 `use_tools`。
 1. 打开 `~/.spotAgent/log/<YYYY-MM-DD>/network-NNN.jsonl`，对比两条 thread 的请求体：thread A 激活后应包含完整工具集，thread B 未激活时仍只包含 `use_tools`。
 
-### 场景 4：agent-server 重启后激活状态可恢复
-
-1. 完成场景 2（触发过工具激活的 thread），记录该 thread id。
-1. 在终端 kill agent-server 进程，再重新启动（或重启桌面 App）。
-1. 在 ThreadWindow 中打开同一 thread，发送新的 user message（例如"再截一次屏"）。
-1. 打开 `~/.spotAgent/log/` 中本轮对应的网络日志条目，确认请求体 `tools` 数组直接是完整工具集，不出现新的 `use_tools` 调用（验证 agent-server 通过历史 tool message 正确推断了激活状态）。
-
 ### 对于每个可交互的点，都验证一遍，看是否符合预期，这里不当做硬性bug，而是记录下可能不符合的行为，事无巨细
 
+- 2026-06-09 观察：在历史侧栏搜索出 `HANDAGENT_REAL_PERMISSION_REPLAY_OCR5...` 后，Computer Use 直接触发该 AX row button 会打开删除确认；用鼠标点击 row 左侧正文区域可以正常打开 thread。该现象先记录为可访问性 / hit area 待观察点，不影响普通指针路径。
 - 本文件中对应条目的用户可见行为、持久化记录、错误文案和隔离边界均符合预期。
 - 所有错误路径均有明确文案，不出现静默失败。
 - 每个通过的条目都已从本文件删除，并在 [archive.md](./archive.md) 保留完整验证记录。
