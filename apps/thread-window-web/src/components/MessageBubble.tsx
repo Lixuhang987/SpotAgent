@@ -39,16 +39,16 @@ export function MessageBubble({ message, onCopy, isRunning = false }: MessageBub
           className={cn(
             'px-lg py-md',
             // GPT 风格样式
-            isUser && 'rounded-2xl bg-surface-card text-ink', // user: 16pt 圆角 + 背景
-            isAssistant && 'bg-transparent text-on-dark', // assistant: 完全透明
-            isTool && 'rounded-lg bg-tool-bubble/50 text-on-dark-soft' // tool: 低调呈现
+            isUser && 'rounded-2xl bg-app-surface text-app-text-primary', // user: 16pt 圆角 + 背景
+            isAssistant && 'bg-transparent text-app-text-primary', // assistant: 完全透明
+            isTool && 'rounded-lg bg-app-tool-bubble/50 text-app-text-muted' // tool: 低调呈现
           )}
         >
           {message.toolName && (
             <div
               className={cn(
                 'mb-xs font-code text-xs',
-                isTool ? 'text-on-dark-soft' : 'text-muted'
+                isTool ? 'text-app-text-muted' : 'text-app-text-secondary'
               )}
             >
               [{message.toolName}]
@@ -58,9 +58,9 @@ export function MessageBubble({ message, onCopy, isRunning = false }: MessageBub
             className={cn(
               'm-0 whitespace-pre-wrap break-words leading-[1.6]',
               isTool ? 'font-code text-[13px]' : 'text-[15px]',
-              isAssistant && 'text-on-dark',
-              isUser && 'text-ink',
-              isTool && 'text-on-dark-soft'
+              isAssistant && 'text-app-text-primary',
+              isUser && 'text-app-text-primary',
+              isTool && 'text-app-text-muted'
             )}
           >
             {message.text}
@@ -69,7 +69,7 @@ export function MessageBubble({ message, onCopy, isRunning = false }: MessageBub
             <small
               className={cn(
                 'mt-xs block text-xs',
-                isTool ? 'text-on-dark-soft' : 'text-muted'
+                isTool ? 'text-app-text-muted' : 'text-app-text-secondary'
               )}
             >
               处理中...
@@ -85,7 +85,7 @@ export function MessageBubble({ message, onCopy, isRunning = false }: MessageBub
           <div className="mt-xs flex h-8 items-center gap-xs px-xs">
             <button
               onClick={handleCopy}
-              className="flex h-6 items-center gap-1 rounded-sm px-xs text-xs text-on-dark-soft transition-colors hover:bg-white/10 hover:text-on-dark"
+              className="flex h-6 items-center gap-1 rounded-sm px-xs text-xs text-app-text-muted transition-colors hover:bg-app-surface-muted hover:text-app-text-primary"
               aria-label="复制消息"
             >
               <svg width="14" height="14" viewBox="0 0 14 14">
@@ -112,14 +112,14 @@ export function MessageBubble({ message, onCopy, isRunning = false }: MessageBub
             {/* 预留按钮 - 禁用状态 */}
             <button
               disabled
-              className="h-6 cursor-not-allowed rounded-sm px-xs text-xs text-on-dark-soft/50"
+              className="h-6 cursor-not-allowed rounded-sm px-xs text-xs text-app-text-muted/50"
               title="即将推出"
             >
               编辑
             </button>
             <button
               disabled
-              className="h-6 cursor-not-allowed rounded-sm px-xs text-xs text-on-dark-soft/50"
+              className="h-6 cursor-not-allowed rounded-sm px-xs text-xs text-app-text-muted/50"
               title="即将推出"
             >
               重新生成

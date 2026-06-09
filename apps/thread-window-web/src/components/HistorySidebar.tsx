@@ -33,22 +33,22 @@ export function HistorySidebar({
   );
 
   return (
-    <aside className="flex h-screen min-h-0 min-w-0 flex-col overflow-hidden border-r border-hairline bg-surface-card p-sm">
+    <aside className="flex h-screen min-h-0 min-w-0 flex-col overflow-hidden border-r border-app-hairline bg-app-surface p-sm">
       <header className="mb-sm">
         <div className="flex items-center gap-xs">
-          <span className="grid h-6 w-6 place-items-center rounded-full bg-ink text-canvas text-[15px] leading-none" aria-hidden="true">
+          <span className="grid h-6 w-6 place-items-center rounded-full bg-app-text-primary text-app-canvas text-[15px] leading-none" aria-hidden="true">
             ✣
           </span>
-          <h1 className="font-display text-[25px] font-normal leading-none tracking-[-0.02em] text-ink">
+          <h1 className="font-display text-[25px] font-normal leading-none tracking-[-0.02em] text-app-text-primary">
             HandAgent
           </h1>
         </div>
-        <p className="mt-xs text-xs text-muted">
+        <p className="mt-xs text-xs text-app-text-secondary">
           本地 thread 工作台
         </p>
         <button
           onClick={onNewThread}
-          className="mt-sm h-10 w-full rounded-md bg-primary px-sm text-sm font-medium text-on-primary transition-colors hover:bg-primary-active disabled:bg-primary-disabled disabled:text-muted"
+          className="mt-sm h-10 w-full rounded-md bg-app-accent px-sm text-sm font-medium text-app-on-accent transition-colors hover:bg-app-accent-hover disabled:bg-app-surface-muted disabled:text-app-text-secondary"
         >
           新建对话
         </button>
@@ -59,7 +59,7 @@ export function HistorySidebar({
         placeholder="搜索对话..."
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
-        className="mb-sm h-10 w-full rounded-md border border-hairline bg-canvas px-sm text-sm text-ink placeholder:text-muted-soft outline-none transition-shadow focus:border-primary focus:ring-4 focus:ring-accent-ring"
+        className="mb-sm h-10 w-full rounded-md border border-app-hairline bg-app-canvas px-sm text-sm text-app-text-primary placeholder:text-app-text-muted outline-none transition-shadow focus:border-app-accent focus:ring-4 focus:ring-app-accent-ring"
       />
 
       {/* Workspace 分组和默认分组 */}
@@ -84,8 +84,8 @@ export function HistorySidebar({
 
         {/* 默认分组 - 固定在底部 */}
         {grouped.defaultGroup.length > 0 && (
-          <div className="mt-md border-t border-hairline pt-sm">
-            <h3 className="px-sm py-xs text-xs font-medium text-muted">
+          <div className="mt-md border-t border-app-hairline pt-sm">
+            <h3 className="px-sm py-xs text-xs font-medium text-app-text-secondary">
               默认对话
             </h3>
             <div className="flex flex-col gap-xs">
@@ -103,7 +103,7 @@ export function HistorySidebar({
         )}
 
         {history.length === 0 && (
-          <p className="rounded-md border border-hairline bg-canvas px-sm py-md text-sm text-muted">
+          <p className="rounded-md border border-app-hairline bg-app-canvas px-sm py-md text-sm text-app-text-secondary">
             暂无对话历史
           </p>
         )}
@@ -135,17 +135,17 @@ function ThreadItem({ thread, isActive, onOpen, onDelete }: ThreadItemProps) {
       onClick={onOpen}
       onKeyDown={handleKeyDown}
       className={cn(
-        'grid grid-cols-[1fr_28px] items-stretch gap-xs rounded-md border transition-colors focus:outline-none focus:ring-4 focus:ring-accent-ring',
+        'grid grid-cols-[1fr_28px] items-stretch gap-xs rounded-md border transition-colors focus:outline-none focus:ring-4 focus:ring-app-accent-ring',
         isActive
-          ? 'border-hairline bg-canvas shadow-soft'
-          : 'border-transparent hover:bg-surface-soft'
+          ? 'border-app-hairline bg-app-canvas shadow-soft'
+          : 'border-transparent hover:bg-app-surface-soft'
       )}
     >
       <div className="min-w-0 rounded-md px-sm py-xs text-left">
-        <span className="block truncate text-[13px] font-medium text-ink">
+        <span className="block truncate text-[13px] font-medium text-app-text-primary">
           {thread.preview || '新对话'}
         </span>
-        <small className="block text-[11px] text-muted">
+        <small className="block text-[11px] text-app-text-secondary">
           {new Date(thread.updatedAt).toLocaleDateString('zh-CN')}
         </small>
       </div>
@@ -154,7 +154,7 @@ function ThreadItem({ thread, isActive, onOpen, onDelete }: ThreadItemProps) {
           event.stopPropagation();
           onDelete();
         }}
-        className="my-auto h-[26px] w-[26px] rounded-sm text-muted transition-colors hover:bg-surface-cream-strong hover:text-ink"
+        className="my-auto h-[26px] w-[26px] rounded-sm text-app-text-secondary transition-colors hover:bg-app-surface-muted hover:text-app-text-primary"
         aria-label="删除对话"
       >
         <svg width="14" height="14" viewBox="0 0 14 14" className="mx-auto">
