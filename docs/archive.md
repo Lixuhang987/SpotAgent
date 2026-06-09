@@ -1138,3 +1138,11 @@
 - **验证过程**：首次提交 `ELECTRON_UI_SHELL_FINAL_QA_20260608 [mock:assistant-ok]` 后保持 Electron ThreadWindow 打开；再次通过 PromptPanel 提交第二条不同 prompt，检查 Electron 窗口数量、位置/尺寸、Computer Use tab 状态与持久化 thread。
 - **证据**：第二次提交前后 Electron 窗口仍只有 `HandAgent Activity` 与一个 `HandAgent ThreadWindow`，ThreadWindow 位置/尺寸保持 `260,146,920,640`；Computer Use 可见 tab 栏新增第二个 tab，当前 tab 显示 B prompt；`~/.spotAgent/threads/thread-1780964917550-h99lcu.json` 持久化第二个 user message。第二次测试输入被中文输入法转换为 `ELECTRON_UI_SHELL_FINAL_QA_20260608_B【mock：assistant-ok]`，因此 MockLLMClient 按预期报 mock trigger 不匹配；该输入法问题不影响窗口复用、tab 创建和 thread 隔离结论。
 - **结论**：通过。连续 PromptPanel 提交复用同一个 Electron ThreadWindow，并创建新的 tab/thread，没有写入首次提交的 active thread。
+
+### Electron UI Shell packaged startup ready 链路
+
+- **验证日期**：2026-06-09
+- **验证环境**：Electron flag packaged app，`mock-llm`；`HANDAGENT_ELECTRON_BINARY` 指向 `electron@42.3.3` binary，标准 `open dist/HandAgentDesktop.app` 启动。
+- **验证过程**：用 launchd 环境变量启用 Electron flag 并启动 packaged app；检查进程、端口、`/api/activity` 首包、Computer Use 可见窗口，以及 packaged Electron main 入口中的 ready / supervisor 启动顺序。
+- **证据**：Swift host pid `74172`、Electron main pid `74174`、agent-server pid `74188` 成功运行；`lsof -nP -iTCP:4317 -sTCP:LISTEN` 仅显示 node pid `74188` 监听；`/api/activity` 首包为 `activity.snapshot` 且 `status:"idle"`；Computer Use 只看到 Electron `HandAgent Activity`，文本为 `点击开始 / HandAgent 空闲`，Swift 无窗口；`dist/HandAgentDesktop.app/Contents/Resources/ElectronShell/dist/main/main.js` 包含 `electron.ready`、`agent-server supervisor` 与 `startSupervisor`，且 `electron.ready` 位于 supervisor log 之前。
+- **结论**：通过。Electron main 未因 Swift command bridge / stdin 阻塞，ready 路径存在并继续拉起 agent-server。
