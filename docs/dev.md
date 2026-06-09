@@ -37,8 +37,8 @@ bash ./scripts/swiftw run HandAgentDesktop
 
 说明：
 
-- `bash ./scripts/swiftw run HandAgentDesktop` 会先自动执行 `pnpm --filter handagent-thread-window-web build` 与 `pnpm --filter handagent-electron-shell build`，确保 Electron-only UI shell 的 React 静态资源和 `apps/electron-shell/dist/main/main.js` 都存在。
-- 如果根目录缺少 `node_modules`，`swiftw run HandAgentDesktop` 会先输出 `[swiftw] node_modules missing, running pnpm install...` 并自动执行 `pnpm install`，再构建 ThreadWindow Web 与 Electron shell。
+- `bash ./scripts/swiftw run HandAgentDesktop` 会先自动执行 `pnpm generate:theme-tokens`、`pnpm --filter handagent-thread-window-web build` 与 `pnpm --filter handagent-electron-shell build`，确保 Swift / Tailwind v4 主题 token 适配层、React 静态资源和 `apps/electron-shell/dist/main/main.js` 都存在。
+- 如果根目录缺少 `node_modules`，`swiftw run HandAgentDesktop` 会先输出 `[swiftw] node_modules missing, running pnpm install...` 并自动执行 `pnpm install`，再生成主题 token、构建 ThreadWindow Web 与 Electron shell。
 - `ThreadWindow` 由 Electron `BrowserWindow` 承载，默认走 `http://127.0.0.1:4317/thread-window/index.html`。这个静态入口由 Electron 监督的 `agent-server` 同端口提供。
 
 4. 如果 `swiftw run` 在当前机器报错，优先检查 Xcode 版本与 `xcode-select` 是否指向完整 Xcode，再执行同样流程。
@@ -74,13 +74,13 @@ bash ./scripts/swiftw build
 
 - `swiftw` 会把 SwiftPM 依赖缓存写到主 checkout 的 `.cache/swiftpm/`，所以多个 `.worktrees/` 能复用依赖下载缓存。Swift/Clang module cache 默认仍在当前 worktree 的 `.cache/swift/`，避免不同源码状态互相污染。
 - 如果需要主动跨 worktree 共享 module cache，可设置 `HANDAGENT_SWIFT_MODULE_CACHE_DIR=/path/to/cache`；如需自定义 SwiftPM 依赖缓存，可设置 `HANDAGENT_SWIFTPM_CACHE_DIR=/path/to/cache`。两个变量同样适用于 `bash ./scripts/package-app.sh`。
-- 如果需要观察窗口与热键行为，优先用 PromptPanel、ThreadWindow 和状态气泡的可见状态来定位问题。
+- 如果需要观察窗口与热键行为，优先用 PromptPanel、Electron ThreadWindow 和 React StatusBubble 的可见状态来定位问题。
 - 热键相关问题先确认辅助功能权限是否已授权。
 
 ### 端到端
 
-- 文本链路：热键唤起 -> PromptPanel 输入 prompt -> 新建 ThreadWindow -> bubble 输出结果。
-- 状态链路：状态气泡展示 -> 点击后回到 running thread 或最近活跃窗口。
+- 文本链路：热键唤起 -> PromptPanel 输入 prompt -> Electron ThreadWindow -> bubble 输出结果。
+- 状态链路：React StatusBubble 展示 -> 点击后尝试聚焦已有 visible ThreadWindow；没有可聚焦窗口时不唤起 PromptPanel。
 - 工具链路：先通过 `packages/core/tests/*` 里对应测试验证，再考虑接到 ThreadWindow。
 
 ### 打包与系统权限
@@ -95,7 +95,9 @@ bash ./scripts/swiftw build
 ### 目录边界
 
 - `apps/desktop/HandAgentApp.swift` 只放 macOS 宿主入口与顶层协调逻辑。
-- `apps/desktop/Sources/` 按 `AppServices`、`PromptPanel`、`ThreadWindow`、`StatusBubble` 分目录放 Swift 实现。
+- `apps/desktop/Sources/` 按 `AppServices`、`PromptPanel`、`Settings`、`Theme` 等分目录放 Swift 宿主实现；不要新增 Swift ThreadWindow 或 Swift StatusBubble。
+- `apps/electron-shell/` 承载 Electron ThreadWindow、React StatusBubble 与 agent-server supervisor。
+- `apps/thread-window-web/` 承载 React ThreadWindow；Tailwind v4 theme token 由 `design/tokens.json` 生成。
 - `packages/core/` 只放跨平台的 Agent Core、tool 协议和通用测试。
 - macOS 平台能力放在 `apps/desktop/Sources/AppServices/PlatformBridge/MacPlatformProvider.swift`，通过 `PlatformBridgeService` 暴露反向 IPC。
 
