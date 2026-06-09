@@ -53,6 +53,7 @@ Swift 原生 UI 只保留 PromptPanel 和 Settings：
 
 - 持有 `AppCoordinator` 为 `@State`；非测试态 `init` 自动 `bootstrap()`。
 - 通过 `HandAgentApplicationDelegate` 接入 macOS termination 回调；`applicationShouldTerminate` / `applicationWillTerminate` 会幂等调用 `AppCoordinator.shutdown()`，确保 Electron shell 进入 stop 链路。
+- 当 Electron ThreadWindow 是前台 App 并先收到 `Command+Q` 时，Electron shell clean exit 会反向请求 Swift 宿主退出；Swift 再进入同一个 `applicationShouldTerminate` / `shutdown()` 链路，避免把 status 0 当作 agent-server fatal alert。
 - `Settings` scene 仅放空占位，实际设置窗口由 Coordinator 用 `NSWindow` 托管（需要主动 `openOrFocus` 控制）。
 - `CommandGroup(replacing: .appSettings)` 把 ⌘, 路由到 `coordinator.send(.openSettings)`。
 

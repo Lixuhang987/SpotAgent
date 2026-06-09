@@ -6,6 +6,7 @@ protocol AppServerManaging: AnyObject {
     var startupErrorMessage: String? { get }
     var onAvailabilityChange: ((Bool) -> Void)? { get set }
     var onFatalError: ((String) -> Void)? { get set }
+    var onHostTerminationRequest: (() -> Void)? { get set }
 
     func start()
     func stop()

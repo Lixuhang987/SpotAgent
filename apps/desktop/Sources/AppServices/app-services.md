@@ -19,7 +19,7 @@
 
 | 文件 | 职责 |
 |------|------|
-| `AppServices.swift` | DI 容器：持有 `appServer` / `threadWindowCommandClient` / `activityWindowCommandClient` / `settingsStore` / `appearanceThemeService` / `appearanceChangeObserver` / `actionManifestStore` / `platformServerURL` / `hotkeyRegistrar` / `settingsWindowPresenter` / `fatalAlertPresenter` / `setActivationPolicy` / `showsFatalAlert`。生产 `defaultRuntime` 始终选择 `ElectronBackedAppServer` 作为 app-server health source、ThreadWindow command client 和 ActivityWindow command client；`AppearanceThemeService` 负责宿主主题解析和同步 payload，`SystemAppearanceChangeObserver` 负责监听 macOS 外观变化。测试用 `AppServices.testing()` 注入 nop 替身 |
+| `AppServices.swift` | DI 容器：持有 `appServer` / `threadWindowCommandClient` / `activityWindowCommandClient` / `settingsStore` / `appearanceThemeService` / `appearanceChangeObserver` / `actionManifestStore` / `platformServerURL` / `hotkeyRegistrar` / `settingsWindowPresenter` / `fatalAlertPresenter` / `setActivationPolicy` / `terminateApplication` / `showsFatalAlert`。生产 `defaultRuntime` 始终选择 `ElectronBackedAppServer` 作为 app-server health source、ThreadWindow command client 和 ActivityWindow command client；`AppearanceThemeService` 负责宿主主题解析和同步 payload，`SystemAppearanceChangeObserver` 负责监听 macOS 外观变化。测试用 `AppServices.testing()` 注入 nop 替身 |
 | `AppServicesProductionImpls.swift` | 生产实现：`ProductionHotkeyRegistrar` / `ProductionSettingsWindowPresenter` / `ProductionFatalAlertPresenter`；Settings window presenter 通过 `WindowCloseObservation` 持有和释放关闭通知 token |
 
 ## DI 协议
@@ -43,3 +43,4 @@
 - **`@Observable` 优先**：新建状态类不要再用 `ObservableObject` / `@Published` / Combine。
 - **依赖通过 init 注入**：`AgentSettingsStore(homeDirectoryURL:)` 这样允许测试注入临时目录；不要在服务内直接读 `FileManager.default.homeDirectoryForCurrentUser` 之外的全局状态。
 - **错误对外暴露规则**：服务内部捕获错误后写 `xxxErrorMessage` 字段供 UI 读，不要直接 `fatalError` 或抛到 Coordinator。
+- **宿主退出边界**：Electron clean exit 只能通过 `AppServerManaging.onHostTerminationRequest` 上报给 Coordinator，再由注入的 `terminateApplication` 调用 `NSApplication.terminate`；不要在服务层直接退出 Swift 宿主。

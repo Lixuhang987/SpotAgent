@@ -4,6 +4,8 @@ import {
   resolveOpenAIApiKey,
 } from "../../src/llm/OpenAIConfig";
 import {
+  createOpenAICompatibleFetch,
+  filterEmptySSEDataEvents,
   sanitizeToolName,
   toVercelMessages,
   toVercelTools,
@@ -47,6 +49,57 @@ class MemoryBlobStore implements BlobStore {
 }
 
 describe("VercelClient adapters", () => {
+  it("filters empty SSE data events before AI SDK parses provider streams", () => {
+    const raw = [
+      "event:response.created",
+      "data: ",
+      "",
+      "data: {\"type\":\"response.created\"}",
+      "",
+      "event:response.output_text.delta",
+      "data: {\"type\":\"response.output_text.delta\",\"delta\":\"hi\"}",
+      "",
+      "",
+    ].join("\n");
+
+    expect(filterEmptySSEDataEvents(raw)).toBe([
+      "event:response.created",
+      "data: {\"type\":\"response.created\"}",
+      "",
+      "event:response.output_text.delta",
+      "data: {\"type\":\"response.output_text.delta\",\"delta\":\"hi\"}",
+      "",
+      "",
+    ].join("\n"));
+  });
+
+  it("filters empty SSE data events from streaming fetch responses", async () => {
+    const raw = [
+      "event:response.created",
+      "data: ",
+      "",
+      "data: {\"type\":\"response.created\"}",
+      "",
+    ].join("\n");
+    const baseFetch = vi.fn(async () =>
+      new Response(new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(raw));
+          controller.close();
+        },
+      }), {
+        status: 200,
+        headers: { "content-type": "text/event-stream; charset=utf-8" },
+      }),
+    ) as unknown as typeof fetch;
+    const wrappedFetch = createOpenAICompatibleFetch(baseFetch);
+
+    const response = await wrappedFetch("https://api.example.com/v1/responses");
+    const text = await response.text();
+
+    expect(text).toBe("event:response.created\ndata: {\"type\":\"response.created\"}\n");
+  });
+
   it("converts agent messages to AI SDK model messages", async () => {
     const messages: AgentMessage[] = [
       {

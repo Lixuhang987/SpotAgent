@@ -357,6 +357,23 @@ final class ElectronBackedAppServerTests: XCTestCase {
         XCTAssertEqual(availability, [true, false])
     }
 
+    func testCleanShellTerminationRequestsHostTerminationWithoutFatalAlert() {
+        let shell = RecordingElectronShellProcess()
+        let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)
+        var fatalMessages: [String] = []
+        var hostTerminationRequestCount = 0
+        appServer.onFatalError = { fatalMessages.append($0) }
+        appServer.onHostTerminationRequest = { hostTerminationRequestCount += 1 }
+
+        appServer.start()
+        shell.emit(.threadWindowPrepared(timestamp: "2026-06-08T00:00:00.000Z"))
+        shell.emit(.agentServerHealth(available: true, message: nil))
+        shell.terminate(message: "Electron shell exited with status 0")
+
+        XCTAssertEqual(hostTerminationRequestCount, 1)
+        XCTAssertTrue(fatalMessages.isEmpty)
+    }
+
     func testRendererCrashReportsFatalErrorAndMarksUnavailable() {
         let shell = RecordingElectronShellProcess()
         let appServer = ElectronBackedAppServer(shell: shell, platformClient: nil)

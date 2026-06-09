@@ -8,6 +8,7 @@
 - Swift 启动 Electron 时把子进程 stdin 指向 `/dev/null`，避免 Electron CLI 在 pipe stdin 未 EOF 时阻塞加载 main entry；`ElectronShellCommand` 通过 `HANDAGENT_ELECTRON_COMMAND_SOCKET` 指向的本地 Unix domain socket 发送。
 - Electron -> Swift 的 `ElectronShellEvent` 通过 stdout newline-delimited JSON 回传。
 - 主动停机时先通过 command socket 发送 `shutdown` command；Electron 未在 2 秒内退出时才兜底 `terminate()`，主动停机不作为 fatal termination 上报。
+- Electron 作为前台 ThreadWindow host 收到 `Command+Q` 时可能自行 clean exit；Swift 侧把 `Electron shell exited with status 0` 解释为宿主退出请求，上报给 Coordinator 调用 Swift `NSApplication.terminate`，不弹 fatal alert。非 0 status 仍作为异常退出上报。
 - 在 `agent_server.health available=true` 与 `thread_window.prepared` 同时成立后，向 `AgentServerHealth` 暴露可提交状态。
 - 作为 `ThreadWindowCommanding` 实现，只接收 Coordinator 的 openInitialPrompt/openHistory/focus/themeChanged 意图；`theme.changed` 不参与 ThreadWindow 可用性 gate。
 - 作为 `ActivityWindowCommanding` 实现，接收 Coordinator 的 showActivityWindow 意图，并编码为 `activity_window.show`。
@@ -49,4 +50,4 @@
 - 不把 `ThreadCommand` / `ThreadNotification` 引入本目录；Swift 只传 initial prompt payload 和窗口 command。
 - `ElectronShellProcess` 的 stdout 只能解析 event；stderr 作为 diagnostic 日志原样转发到宿主 stderr，支持 packaged app stdout/stderr 重定向观察。不要把 Electron diagnostic 写到 stdout。
 - Swift->Electron command socket 路径必须保持短路径；macOS `sockaddr_un.sun_path` 长度有限，当前使用 `/tmp/hae-<uuid>.sock`。
-- `stop()` 必须清理 callbacks、pending command kind、platform client 和 shell handlers，避免旧 Electron 事件影响下一次 start。
+- `stop()` 必须清理 callbacks、pending command kind、platform client、宿主退出请求回调和 shell handlers，避免旧 Electron 事件影响下一次 start。

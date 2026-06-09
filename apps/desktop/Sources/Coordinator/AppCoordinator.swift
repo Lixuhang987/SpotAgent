@@ -149,6 +149,10 @@ final class AppCoordinator {
     }
 
     private func setupAgentServerHealth() {
+        services.appServer.onHostTerminationRequest = { [weak self] in
+            guard let self else { return }
+            self.services.terminateApplication()
+        }
         agentServerHealth.onAvailabilityChange = { [weak self] available, message in
             guard let self else { return }
             self.promptPanelController.setSubmissionEnabled(available, message: message)

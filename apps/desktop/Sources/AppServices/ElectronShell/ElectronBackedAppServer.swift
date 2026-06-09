@@ -19,6 +19,7 @@ final class ElectronBackedAppServer: AppServerManaging, ThreadWindowCommanding, 
 
     var onAvailabilityChange: ((Bool) -> Void)?
     var onFatalError: ((String) -> Void)?
+    var onHostTerminationRequest: (() -> Void)?
     var onThreadWindowClosed: (() -> Void)?
     var onCommandResult: ((ThreadWindowCommandResult) -> Void)?
     var onActivityWindowCommandResult: ((ActivityWindowCommandResult) -> Void)?
@@ -61,6 +62,7 @@ final class ElectronBackedAppServer: AppServerManaging, ThreadWindowCommanding, 
         isRunning = false
         shell.onEvent = nil
         shell.onTermination = nil
+        onHostTerminationRequest = nil
         onThreadWindowClosed = nil
         onCommandResult = nil
         onActivityWindowCommandResult = nil
@@ -169,6 +171,18 @@ final class ElectronBackedAppServer: AppServerManaging, ThreadWindowCommanding, 
 
     private func handleTermination(_ message: String) {
         guard isRunning else { return }
+
+        if message == "Electron shell exited with status 0" {
+            isRunning = false
+            hasAgentServerHealth = false
+            hasPreparedThreadWindow = false
+            platformClient?.disconnect()
+            pendingCommandKinds.removeAll()
+            pendingActivityCommandKinds.removeAll()
+            publishAvailability(force: lastPublishedAvailability)
+            onHostTerminationRequest?()
+            return
+        }
 
         agentServerErrorMessage = message
         hasAgentServerHealth = false

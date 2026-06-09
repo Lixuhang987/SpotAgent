@@ -6,7 +6,7 @@
 
 | 文件 | 职责 |
 |------|------|
-| `AppServer.swift` | `AppServerManaging` 协议与 `PlatformBridgeConnectionClient`；后者连接 `/api/platform`，发送 `platform_bridge_hello`，处理 `platform_request` 并回写 `platform_response` |
+| `AppServer.swift` | `AppServerManaging` 协议与 `PlatformBridgeConnectionClient`；协议暴露 availability、fatal error 和 Electron clean exit 触发的宿主退出请求，后者连接 `/api/platform`，发送 `platform_bridge_hello`，处理 `platform_request` 并回写 `platform_response` |
 | `AgentServerHealth.swift` | 主线程健康状态桥：订阅 `AppServerManaging` 可用性与 fatal error，向 PromptPanel 暴露可提交状态，并在需要时调用原生 fatal alert |
 | `AgentServerRuntimeMode.swift` | 读取 bundle resource marker 与环境变量，决定 Electron supervisor 是否注入 `HANDAGENT_LLM_MODE=mock` |
 | `AgentServerRepositoryRootLocator.swift` | 用于 Electron launch config 定位 worktree 或 packaged resources |
@@ -18,6 +18,7 @@
 2. 连接成功后发送 `channel: "platform"` 的 `platform_bridge_hello`。
 3. 收到 `platform_request` 后交给 `PlatformBridgeService`，再通过同一 socket 回写 `platform_response`。
 4. `AgentServerHealth` 只观察 `ElectronBackedAppServer` 暴露的 availability/fatal 状态，不直接启动或停止 Node 子进程。
+5. Electron 前台收到 `Command+Q` 后可能先 clean exit；该路径由 `AppServerManaging.onHostTerminationRequest` 交给 Coordinator 调用宿主 `NSApplication.terminate`，不走 fatal alert。
 
 桌面端不持有 `/api/thread` client，也不订阅 `/api/activity`。ThreadWindow 的 thread 协议由 React 前端通过 `/api/thread` 处理；StatusBubble 的 activity 协议由 Electron ActivityWindow renderer 通过 `/api/activity` 处理。
 
@@ -29,6 +30,6 @@
 
 ## 与其他模块的关系
 
-- [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 在 `bootstrap()` 调 `start()`，在 `shutdown()` 调 `stop()`；订阅 `onAvailabilityChange` 与 `onFatalError`。
+- [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 在 `bootstrap()` 调 `start()`，在 `shutdown()` 调 `stop()`；订阅 `onAvailabilityChange`、`onFatalError` 与 `onHostTerminationRequest`。
 - [ElectronShell](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/ElectronShell/electron-shell.md) 通过 `ElectronBackedAppServer` 暴露 app-server health、ThreadWindow command client 和 ActivityWindow command client。
 - [PlatformBridge](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/PlatformBridge/platform-bridge.md) 走独立 `/api/platform` WebSocket，通过 `channel: "platform"` 处理平台 RPC。

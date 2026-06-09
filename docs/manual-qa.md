@@ -25,6 +25,15 @@
 - 自动化验证：需执行 `bash ./scripts/swiftw test --filter AppCoordinatorTests`、`bash ./scripts/swiftw test --filter AppServicesTests`、`swift package show-dependencies`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`、`bash ./scripts/test.sh`。
 - 手工回归步骤：启动桌面 App，确认 Swift PromptPanel、Settings、快捷键仍可用；提交 `SWIFT_FRONTEND_CLEANUP_QA_20260610 [mock:assistant-ok]` 后确认 Electron ThreadWindow 打开并显示响应，Electron ActivityWindow 仍显示状态；关闭 ThreadWindow 后确认 Swift 不创建 WKWebView ThreadWindow 或 Swift StatusBubble。
 
+### OpenAI-compatible Responses 空 data SSE 兼容回归
+
+- 完成日期：待实机 QA
+- 实现位置：`packages/core/src/llm/VercelAdapters.ts`、`packages/core/src/llm/VercelClient.ts`
+- 链路证明：期望链路是 `PromptPanel submit -> Electron ThreadWindow 显示 user message -> React /api/thread input.submit -> agent-server ThreadRuntimeOrchestrator -> SettingsBackedLLMClient -> VercelClient.stream -> AI SDK fullStream -> assistant delta -> ThreadWindow`。失败边界定位为本地 `127.0.0.1:8090/v1/responses` 返回的 Responses SSE 把 `event:response.output_text.delta` 与空 `data:` 拆成独立事件，再把 JSON 放到后续 `data:`；AI SDK 先解析空 data 时抛 `JSONParseError text: ''`，只证明 provider stream 解析失败，不代表 PromptPanel 请求为空或 UI 没有发送。
+- 修复结论：`VercelClient` 的 OpenAI-compatible fetch 包装层会把空 data 事件中的 `event:*` 元数据与紧随其后的 JSON `data:` 事件合并后再交给 AI SDK；同一本地服务的真实 `VercelClient.stream` probe 已能收到 `text_delta`。
+- 自动化验证：需执行 `pnpm exec vitest run packages/core/tests/llm/vercel-client.test.ts`、`bash ./scripts/test.sh`。
+- 手工回归步骤：在 Settings 中使用 `provider=openai-compatible`、`api=responses`、`baseUrl=http://127.0.0.1:8090/v1` 的本地兼容服务；执行 `bash ./scripts/swiftw run HandAgentDesktop`；通过 PromptPanel 提交普通 prompt；确认 ThreadWindow 先显示用户消息，随后显示 assistant 流式回复，不再在 agent-server stderr 出现 `JSONParseError [AI_JSONParseError]: JSON parsing failed: Text: .`。
+
 ### ThreadWindow 无 tab 后台 thread 状态
 
 - 完成日期：待实机 QA

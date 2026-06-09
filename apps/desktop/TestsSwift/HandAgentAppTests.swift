@@ -37,6 +37,7 @@ private final class RecordingLifecycleAppServer: AppServerManaging {
     var startupErrorMessage: String?
     var onAvailabilityChange: ((Bool) -> Void)?
     var onFatalError: ((String) -> Void)?
+    var onHostTerminationRequest: (() -> Void)?
     private(set) var stopCount = 0
 
     func start() {}
