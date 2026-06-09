@@ -13,7 +13,7 @@
 
 ## Token 分类
 
-- **colors**：`AppTheme` 保留 SwiftUI 现有语义 API（如 `canvas` / `surfaceSoft` / `surfaceCard` / `surfaceDark` / `hairline` / `ink` / `muted` / `accentTeal` / `accent` / `accentHover` / `accentPressed` / `accentSubtle` / `accentRing` / `error` / bubble 三色），但取值来源统一是 `GeneratedThemeTokens`，不再维护手写颜色常量源。
+- **colors**：`AppTheme` 保留 SwiftUI 现有语义 API（如 `canvas` / `surfaceSoft` / `surfaceCard` / `surfaceElevated` / `surfaceDark` / `hairline` / `ink` / `muted` / `accentTeal` / `accent` / `accentHover` / `accentPressed` / `accentSubtle` / `accentRing` / `error` / bubble 三色），但取值来源统一是 `GeneratedThemeTokens`，不再维护手写颜色常量源。
 - **typography**：`titleFont` / `bodyFont` / `captionFont` / `promptInputFont`
 - **spacing**：来自生成 token 的 `xs / sm / md / lg / xl / xxl`
 - **radius**：`sm(6) / md(8) / lg(12)`

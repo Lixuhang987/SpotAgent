@@ -9,12 +9,11 @@ struct AppearanceSettingsView: View {
             SettingsSectionHeader("外观")
             SettingsSection {
                 SettingsRow("主题") {
-                    Picker("主题", selection: $viewModel.themePreference) {
-                        ForEach(AppearanceThemePreference.allCases) { preference in
-                            Text(preference.title).tag(preference)
-                        }
-                    }
-                    .pickerStyle(.segmented)
+                    SettingsSegmentedControl(
+                        AppearanceThemePreference.allCases,
+                        selection: $viewModel.themePreference,
+                        title: \.title
+                    )
                     .frame(width: 260)
                 }
             }

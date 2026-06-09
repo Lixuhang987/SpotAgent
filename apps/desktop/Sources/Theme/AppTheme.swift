@@ -37,6 +37,7 @@ struct ThemeColors: Sendable {
     let canvas: Color
     let surfaceSoft: Color
     let surfaceCard: Color
+    let surfaceElevated: Color
     let surfaceCreamStrong: Color
     let surfaceDark: Color
     let surfaceDarkElevated: Color
@@ -77,6 +78,7 @@ struct ThemeColors: Sendable {
         canvas = Self.color(generated.canvas)
         surfaceSoft = Self.color(generated.surfaceSoft)
         surfaceCard = Self.color(generated.surface)
+        surfaceElevated = Self.color(generated.surfaceElevated)
         surfaceCreamStrong = Self.color(generated.surfaceMuted)
         surfaceDark = Self.color(generated.canvas)
         surfaceDarkElevated = Self.color(generated.surfaceElevated)

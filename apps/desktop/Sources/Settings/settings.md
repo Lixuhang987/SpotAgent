@@ -9,7 +9,7 @@
 | `SettingsView.swift` | 设置容器，挂"模型" / "外观" / "工具" / "Plugin" / "追加" / "MCP" / "权限" / "快捷键" / "工作区"九个 Tab，统一 app theme 背景 |
 | `AgentSettingsViewModel.swift` | `@Observable` 代理：把 `AgentSettingsStore.settings` 包装成可双向绑定的属性，写时自动 trim |
 | `AppearanceSettingsViewModel.swift` | `@Observable` 代理：通过 `AppearanceThemeService` 修改 `system` / `light` / `dark` 主题偏好，并触发 Electron 主题同步 |
-| `AppearanceSettingsView.swift` | 外观主题 UI：segmented picker 切换 `跟随系统` / `浅色` / `深色` |
+| `AppearanceSettingsView.swift` | 外观主题 UI：使用 token 化 `SettingsSegmentedControl` 切换 `跟随系统` / `浅色` / `深色` |
 | `ToolSettingsViewModel.swift` | `@Observable` 代理：把 `AgentSettingsStore.toolSettings` 包装成工具目录 + 启用/禁用切换，写时自动同步到 `settings.json` |
 | `ToolSettingsView.swift` | 工具管理 UI：builtin tool 列表、风险提示、开关切换 |
 | `PluginSettingsViewModel.swift` | `@Observable` 代理：读取 / 写入 `~/.spotAgent/plugins/<plugin-id>/plugin.json` 中的 plugin action manifest，支持启停、删除、新增和写入示例 |
@@ -23,7 +23,7 @@
 | `ShortcutSettingsView.swift` | 快捷键配置 UI；上栏是固定系统入口“全局快捷键”，下栏是 manifest `ActionDefinition` 派生的“Action 快捷键”，两栏都用 `KeyboardShortcuts.Recorder` |
 | `WorkspaceSettingsView.swift` | 工作区列表 + 添加 / 编辑 / 删除 UI；SwiftUI `fileImporter` 选目录 + 表单 sheet |
 | `WorkspaceSettingsViewModel.swift` | `@Observable` 代理：直接读写 `~/.spotAgent/workspaces.json`（与 core 侧 `FileWorkspaceRegistry` 共享文件） |
-| `SettingsStyles.swift` | 共享样式：`SettingsTab`、`SettingsTabBar`、`SettingsSection`、`SettingsListSection`、`SettingsRow`、`SettingsRowDivider`、`SettingsFieldStyle`、`SettingsTextEditor`、`SettingsSectionSeparator`；顶部 tab button 等分铺满整行 |
+| `SettingsStyles.swift` | 共享样式：`SettingsTab`、`SettingsTabBar`、`SettingsSection`、`SettingsListSection`、`SettingsRow`、`SettingsRowDivider`、`SettingsSegmentedControl`、`SettingsFieldStyle`、`SettingsTextEditor`、`SettingsSectionSeparator`；顶部 tab button 等分铺满整行 |
 
 模型设置的具体 UI 在 [AppServices/AgentSettings/AgentSettingsView.swift](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/AgentSettings/AgentSettingsView.swift)（历史遗留，未来应迁回 `Sources/Settings/`），由本模块的 SettingsView 嵌入。
 
@@ -60,7 +60,7 @@ AppearanceThemeService.onThemeChange
 - **写入时统一 trim**：所有字符串字段在 setter 里 `trimmingCharacters(in: .whitespacesAndNewlines)`，避免空白污染 settings.json。
 - **不要把 store 直接传给 View**：始终经过 ViewModel；测试也是 `AgentSettingsViewModel(store:)`。
 - **Tab 增加规则**：新建 Tab 先在 `SettingsTab` enum 增 case、标题和图标，再在 `SettingsView.tabContent` 接入内容；Tab 内如果有副作用则配套加 ViewModel；纯展示可直接写 View。
-- **视觉风格**：设置页面使用 `SettingsTabBar`、`SettingsFieldStyle`、`SettingsRow`、`SettingsListSection` 等共享样式，与 PromptPanel 等 SwiftUI 原生界面保持统一 `DESIGN.md` warm-canvas / coral / dark product surface 视觉。不要使用系统 `Form` / `GroupBox` / `.grouped` 样式。窗口标题栏设为透明 + fullSizeContentView；窗口可保留 `NSAppearance(.aqua)` 作为 AppKit segmented picker / field 的渲染稳定手段，但视觉正确性以注入的 `AppTheme.light/dark` 为准，不能把 `.aqua` 当成固定浅色主题。
+- **视觉风格**：设置页面使用 `SettingsTabBar`、`SettingsSegmentedControl`、`SettingsFieldStyle`、`SettingsRow`、`SettingsListSection` 等共享样式，与 PromptPanel 等 SwiftUI 原生界面保持统一 `DESIGN.md` warm-canvas / coral / dark product surface 视觉。不要使用系统 `Form` / `GroupBox` / `.grouped` 样式；主题、provider、api、MCP transport 这类分段选择必须使用 token 化 `SettingsSegmentedControl`，避免 AppKit segmented control 在深色主题下沿用浅色文字。窗口标题栏设为透明 + fullSizeContentView；窗口可保留 `NSAppearance(.aqua)` 作为 AppKit field 等控件的渲染稳定手段，但视觉正确性以注入的 `AppTheme.light/dark` 为准，不能把 `.aqua` 当成固定浅色主题。
 - **外观主题刷新**：外观 Tab 写入 `AppearanceThemeService`，该服务解析 `system` 为当前 `light` / `dark` 后更新 Swift 原生 UI，并通过 `theme.changed` 同步 Electron/React。已打开的 Settings 窗口必须通过 `SettingsLifecycle.updateTheme(_:)` 和 `SettingsWindowPresenting.updateTheme(_:for:)` 重新注入 `AppTheme`，避免用户切换主题后 Settings 自身停留在旧 token。
 - **不要在 Settings 里读 LLM/tool 运行态**：宿主层不组装 LLM 消息，`api`/`baseURL`/`apiKey`、工具开关、plugin manifest 和 MCP server 配置都只是写入本地文件；agent-server 侧自己按既有时机读取。
 - **快捷键只有两类模型**：固定系统入口全局快捷键仅包含“唤起面板 / 捕获文本选区 / 圈选区域截图”；manifest prompt 派生的 `ActionDefinition` 归为 Action 快捷键，由 `ActionDefinition.shortcutName` 生成 `KeyboardShortcuts.Name("action.<id>")` 并注册为系统级全局快捷键。

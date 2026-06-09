@@ -15,6 +15,7 @@ final class AppThemeTests: XCTestCase {
         _ = theme.colors.canvas
         _ = theme.colors.surfaceSoft
         _ = theme.colors.surfaceCard
+        _ = theme.colors.surfaceElevated
         _ = theme.colors.surfaceDark
         _ = theme.colors.surfaceDarkElevated
         _ = theme.colors.accentTeal

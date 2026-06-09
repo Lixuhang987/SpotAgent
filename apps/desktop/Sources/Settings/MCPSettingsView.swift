@@ -152,14 +152,11 @@ struct MCPSettingsView: View {
             SettingsSectionHeader("新增 MCP Server")
             SettingsSection {
                 SettingsRow("Transport") {
-                    Picker("Transport", selection: $transport) {
-                        ForEach(TransportOption.allCases) { option in
-                            Text(option.title).tag(option)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .controlSize(.small)
+                    SettingsSegmentedControl(
+                        TransportOption.allCases,
+                        selection: $transport,
+                        title: \.title
+                    )
                     .frame(maxWidth: 340)
                 }
                 SettingsRowDivider()

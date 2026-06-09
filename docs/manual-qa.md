@@ -17,6 +17,18 @@
 
 ## 开发验证记录
 
+### Settings 深色主题分段控件文本颜色修复
+
+- 完成日期：待实机 QA
+- 实现位置：`apps/desktop/Sources/Settings/SettingsStyles.swift`、`apps/desktop/Sources/Settings/AppearanceSettingsView.swift`、`apps/desktop/Sources/AppServices/AgentSettings/AgentSettingsView.swift`、`apps/desktop/Sources/Settings/MCPSettingsView.swift`、`apps/desktop/Sources/Theme/AppTheme.swift`
+- 修复结论：Settings 中的外观主题、模型 provider、模型接口和 MCP transport 不再使用 AppKit 系统 segmented picker，统一改为消费 `AppTheme` 的 `SettingsSegmentedControl`。深色主题下未选中项使用 `textSecondary`，选中项使用 `textPrimary + surfaceElevated + accentRing`，避免 `NSAppearance(.aqua)` 让 AppKit segmented control 在深色背景上显示黑色文字。
+- 自动化验证：需执行 `bash ./scripts/swiftw test --filter AppThemeTests`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`、`bash ./scripts/test.sh`。
+- 手工回归步骤：
+  1. 打开 Swift Settings → 外观，切到 `深色`，确认 `跟随系统` / `浅色` / `深色` 三段文字均可读，未选中项不再是黑色。
+  2. 在深色主题下切到模型页，确认 provider 和接口分段控件的选中、未选中、hover/点击后状态文字对比清晰。
+  3. 在 MCP 页展开新增表单，确认 transport 分段控件在深色主题下文字、背景、边框都使用当前 theme token。
+  4. 切回 `浅色` 和 `跟随系统`，确认上述分段控件随 Settings 已打开窗口实时刷新，没有固定深色或固定浅色残留。
+
 ### PromptPanel Warm Command Sheet / theme sync
 
 - 完成日期：待实机 QA
