@@ -8,6 +8,7 @@ final class PromptPanelViewModelTests: XCTestCase {
         let vm = PromptPanelViewModel(actions: actions)
 
         XCTAssertEqual(vm.filteredActions.map(\.id), ["new-thread", "weather/current"])
+        XCTAssertEqual(vm.selectedActionId, "new-thread")
     }
 
     @MainActor
@@ -18,6 +19,7 @@ final class PromptPanelViewModelTests: XCTestCase {
         vm.draft = "weather"
 
         XCTAssertEqual(vm.filteredActions.map(\.id), ["weather/current"])
+        XCTAssertEqual(vm.selectedActionId, "weather/current")
     }
 
     @MainActor
@@ -41,6 +43,7 @@ final class PromptPanelViewModelTests: XCTestCase {
         vm.draft = "history"
 
         XCTAssertEqual(vm.filteredActions.map(\.id), ["recent-thread-1"])
+        XCTAssertEqual(vm.selectedActionId, "recent-thread-1")
     }
 
     @MainActor
@@ -172,16 +175,16 @@ final class PromptPanelViewModelTests: XCTestCase {
         let vm = PromptPanelViewModel(actions: makeTestActions())
 
         vm.moveSelectedAction(.next)
-        XCTAssertEqual(vm.selectedActionId, "new-thread")
-
-        vm.moveSelectedAction(.next)
         XCTAssertEqual(vm.selectedActionId, "weather/current")
 
         vm.moveSelectedAction(.next)
         XCTAssertEqual(vm.selectedActionId, "new-thread")
+
+        vm.moveSelectedAction(.next)
+        XCTAssertEqual(vm.selectedActionId, "weather/current")
 
         vm.moveSelectedAction(.previous)
-        XCTAssertEqual(vm.selectedActionId, "weather/current")
+        XCTAssertEqual(vm.selectedActionId, "new-thread")
     }
 
     @MainActor
@@ -198,10 +201,9 @@ final class PromptPanelViewModelTests: XCTestCase {
     func testSelectedActionIsNilWhenFilteredOut() {
         let vm = PromptPanelViewModel(actions: makeTestActions())
 
-        vm.moveSelectedAction(.next)
         vm.draft = "weather"
 
-        XCTAssertNil(vm.selectedAction)
+        XCTAssertEqual(vm.selectedAction?.id, "weather/current")
     }
 
     @MainActor
@@ -210,7 +212,6 @@ final class PromptPanelViewModelTests: XCTestCase {
         var submitted: String?
         vm.onSubmit = { prompt, _ in submitted = prompt }
 
-        vm.moveSelectedAction(.next)
         vm.moveSelectedAction(.next)
         vm.submitSelectedAction()
 
@@ -250,12 +251,13 @@ final class PromptPanelViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testSubmitSelectedActionFallsBackToPlainSubmitWhenNothingSelected() {
+    func testSubmitSelectedActionFallsBackToPlainSubmitWhenNoFilteredActionExists() {
         let vm = PromptPanelViewModel(actions: makeTestActions())
         var submitted: String?
         vm.onSubmit = { prompt, _ in submitted = prompt }
 
         vm.draft = "hello"
+        XCTAssertNil(vm.selectedAction)
         vm.submitSelectedAction()
 
         XCTAssertEqual(submitted, "hello")

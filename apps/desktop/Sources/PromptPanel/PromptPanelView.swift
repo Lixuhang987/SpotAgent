@@ -126,6 +126,7 @@ struct PromptPanelView: View {
             isFocused: isQueryFocused,
             isDisabled: viewModel.isSubmissionInputDisabled,
             maxVisibleLines: 5,
+            onSubmit: { viewModel.submit() },
             onMoveSelection: { viewModel.moveSelectedAction($0) },
             onSubmitSelectedAction: { viewModel.submitSelectedAction() }
         )
@@ -212,7 +213,7 @@ struct PromptPanelView: View {
 
     private func actionRow(_ action: ActionDefinition) -> some View {
         let isHovered = hoveredActionId == action.id
-        let isSelected = viewModel.selectedActionId == action.id
+        let isSelected = viewModel.selectedAction?.id == action.id
         let isHighlighted = isHovered || isSelected
         return Button { viewModel.selectAction(action) } label: {
             HStack(alignment: .center, spacing: theme.spacing.md) {

@@ -11,6 +11,7 @@ struct PromptPanelGrowingTextView: NSViewRepresentable {
     let isFocused: Bool
     let isDisabled: Bool
     let maxVisibleLines: Int
+    let onSubmit: () -> Void
     let onMoveSelection: (PromptPanelActionSelectionDirection) -> Void
     let onSubmitSelectedAction: () -> Void
 
@@ -110,6 +111,8 @@ struct PromptPanelGrowingTextView: NSViewRepresentable {
             }
 
             switch command {
+            case .submit:
+                parent.onSubmit()
             case .insertNewline:
                 textView.insertNewlineIgnoringFieldEditor(nil)
             case .selectPreviousAction:

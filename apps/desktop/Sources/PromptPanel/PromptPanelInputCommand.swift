@@ -1,6 +1,7 @@
 import AppKit
 
 enum PromptPanelInputCommand: Equatable {
+    case submit
     case insertNewline
     case selectPreviousAction
     case selectNextAction
@@ -13,7 +14,7 @@ enum PromptPanelInputCommand: Equatable {
         switch commandSelector {
         case #selector(NSResponder.insertNewline(_:)):
             if modifierFlags.intersection([.shift, .option]).isEmpty {
-                return .submitSelectedAction
+                return .submit
             }
             return .insertNewline
         case #selector(NSResponder.moveUp(_:)):

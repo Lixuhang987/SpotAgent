@@ -21,14 +21,14 @@
 
 - 完成日期：待实机 QA
 - 实现位置：`apps/desktop/Sources/PromptPanel/PromptPanelView.swift`、`apps/desktop/Sources/PromptPanel/PromptPanelGrowingTextView.swift`、`apps/desktop/Sources/PromptPanel/PromptPanelInputCommand.swift`、`apps/desktop/Sources/PromptPanel/PromptPanelViewModel.swift`、`apps/desktop/Sources/PromptPanel/ActionDefinition.swift`
-- 修复结论：PromptPanel 输入框现在把上下键解析为 action 选中切换，在当前过滤结果内循环高亮；选中 action 后，Return 或 Tab 会直接提交该 action。若当前 draft 已是同一 trigger 的参数形式，选中提交会复用参数；若必填参数缺失，则预填 `trigger [arg: ]` 并保留缺参提示；无选中 action 时 Return 仍保持普通 prompt 提交语义。
+- 修复结论：PromptPanel 输入框现在把上下键解析为 action 选中切换，在当前过滤结果内循环高亮，并默认选中第一条匹配 action。Return 始终只走 PromptPanel 自身提交；只有 Tab 才会提交当前选中 action。若当前 draft 已是同一 trigger 的参数形式，Tab 提交会复用参数；若必填参数缺失，则预填 `trigger [arg: ]` 并保留缺参提示。
 - 自动化验证：需执行 `bash ./scripts/swiftw test --filter PromptPanel`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`、`bash ./scripts/test.sh`。
 - 手工回归步骤：
-  1. 打开 PromptPanel，确认空 draft 下按 Down 高亮第一条 action，继续按 Down 循环到下一条；按 Up 可反向循环。
+  1. 打开 PromptPanel，确认空 draft 时第一条 action 默认高亮；按 Down 循环到下一条，按 Up 可反向循环。
   2. 输入能过滤 action 的文本，确认上下键只在过滤结果中切换，高亮行视觉与 hover 高亮一致。
-  3. 选中无必填参数 action 后分别用 Return 和 Tab 验证，确认都能直接提交并打开 Electron ThreadWindow。
-  4. 选中有必填参数 action 后按 Return 或 Tab，确认 draft 变为 `trigger [arg: ]`，显示缺参提示且不丢附件；补全参数后按 Return 可提交。
-  5. 未选中 action 时输入普通 prompt 并按 Return，确认仍按普通 prompt 提交；Shift/Option + Return 仍插入换行。
+  3. 选中无必填参数 action 后按 Return，确认只提交当前 draft，不因为高亮 action 触发 action 提交；按 Tab 才直接提交该 action 并打开 Electron ThreadWindow。
+  4. 选中有必填参数 action 后按 Tab，确认 draft 变为 `trigger [arg: ]`，显示缺参提示且不丢附件；补全参数后按 Tab 可提交。
+  5. 输入普通 prompt 并按 Return，确认仍按普通 prompt 提交；Shift/Option + Return 仍插入换行。
 
 ### 全局快捷键只唤起 PromptPanel
 
