@@ -21,11 +21,9 @@ struct PromptPanelGrowingTextView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSScrollView()
-        scrollView.drawsBackground = false
-        scrollView.borderType = .noBorder
         scrollView.hasVerticalScroller = false
-        scrollView.autohidesScrollers = true
         scrollView.verticalScrollElasticity = .automatic
+        PromptPanelScrollbarStyle.apply(to: scrollView, theme: theme)
 
         let textView = PlaceholderTextView()
         textView.delegate = context.coordinator
@@ -62,6 +60,7 @@ struct PromptPanelGrowingTextView: NSViewRepresentable {
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         context.coordinator.parent = self
         guard let textView = scrollView.documentView as? PlaceholderTextView else { return }
+        PromptPanelScrollbarStyle.apply(to: scrollView, theme: theme)
 
         if textView.string != text {
             textView.string = text

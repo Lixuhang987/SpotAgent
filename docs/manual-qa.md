@@ -71,6 +71,7 @@
   4. 已打开 Settings 时切换外观：Settings 自身立即刷新，PromptPanel 下次或当前显示时使用同一 resolved theme，Electron ThreadWindow 收到同步主题。
   5. agent-server 不可用或 Action 缺必填参数时，banner 使用 warning/error 语义，草稿不丢失。
   6. 图片附件 chip 可预览，删除按钮点击区域与视觉边界一致。
+  7. 输入超过 5 行后，PromptPanel 输入区滚动条轨道保持透明，不出现白色边条；浅色和深色主题下 thumb 都沿用当前面板背景语义，不突兀跳成系统默认样式。
 
 ### ThreadWindow 与 StatusBubble 主题视觉重构
 
