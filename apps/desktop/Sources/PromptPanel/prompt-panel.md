@@ -88,6 +88,6 @@ Action prompt 的参数与提交流程：
 ## 与其他模块的关系
 
 - 由 [Coordinator](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/coordinator.md) 持有并注入 actions。
-- 提交 prompt 后由 Coordinator 通过 [ElectronThreadWindowLifecycle](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/ElectronThreadWindowLifecycle.swift) 发送 `thread_window.open_initial_prompt`；Electron main 展示 React ThreadWindow 并注入 initial prompt，React 通过 `/api/thread` 创建新 thread 并提交首轮 `input.submit`。右侧当前展示的既有 thread 不会接收 PromptPanel 的初始提交。
+- 提交 prompt 后由 Coordinator 通过 [ElectronThreadWindowLifecycle](/Users/mu9/proj/handAgent/apps/desktop/Sources/Coordinator/ElectronThreadWindowLifecycle.swift) 发送 `thread_window.open_initial_prompt`；payload 携带 `UserInput.items` 与可选 action binding。Electron main 展示 React ThreadWindow 并注入 initial prompt，React 通过 `/api/thread` 创建新 thread 并提交首轮 `op.submit(UserInput)`。右侧当前展示的既有 thread 不会接收 PromptPanel 的初始提交。
 - [AgentServer](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/AgentServer/agent-server.md) 可用性变化会同步到 `setSubmissionEnabled`，避免重启期间提交新 prompt。
 - 全局热键来自 [AppServices/Hotkey](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/Hotkey/hotkey.md)。

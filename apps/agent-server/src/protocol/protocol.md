@@ -12,7 +12,7 @@
 
 ## 运行位置
 
-- 上游：`thread/ThreadRuntimeOrchestrator.ts` 在 runtime event 回调中调用 `toThreadNotification()` 和 `toAuditEvent()`。
+- 上游：Agent 内部的 `thread/ThreadRuntimeOrchestrator.ts` 在 runtime event 回调中调用 `toThreadNotification()` 和 `toAuditEvent()`。
 - 下游：React ThreadWindow store 消费 `assistant.delta`、`tool.started`、`tool.finished`、`thread.error` 等 `ThreadNotification`；`ThreadStore` 持久化审计 `ThreadAuditEvent`。
 - 旁路：`thread/ThreadPersistence.ts` 调 `composeUserContent()` 和 `agentMessagesToConversation()`。
 - 不处理：`permission.requested` / `workspace.requested` 由 `bridges/` 构造；`workspace.listed` 由 `thread/ThreadCommandRouter` 构造；`PlatformBridgeMessage` 由 `server/` 与 `bridges/WebSocketPlatformBridge.ts` 处理。

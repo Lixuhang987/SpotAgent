@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  encodeInputSubmit,
+  encodeOpSubmit,
   encodePermissionAnswer,
   encodeThreadList,
   encodeThreadStart,
+  createUserInputFromText,
   isServerRequest,
   isThreadNotification,
 } from "../src/protocol/threadProtocol.ts";
@@ -23,22 +24,45 @@ describe("thread protocol helpers", () => {
     });
   });
 
-  it("encodes input.submit with attachments", () => {
-    expect(JSON.parse(encodeInputSubmit({
+  it("encodes op.submit with user input items", () => {
+    expect(JSON.parse(encodeOpSubmit({
       threadId: "thread-1",
-      inputId: "input-2",
+      commandId: "command-op",
       timestamp: "2026-06-06T00:00:01.000Z",
-      text: "hello",
-      attachments: [{ kind: "text_selection", id: "sel-1", text: "selected" }],
+      op: {
+        type: "user_input",
+        opId: "input-2",
+        timestamp: "2026-06-06T00:00:01.000Z",
+        payload: {
+          items: [
+            { type: "text", id: "text-1", text: "hello" },
+            { type: "text_selection", id: "sel-1", text: "selected" },
+          ],
+        },
+      },
     }))).toMatchObject({
-      type: "input.submit",
+      type: "op.submit",
       threadId: "thread-1",
-      inputId: "input-2",
+      commandId: "command-op",
       payload: {
-        text: "hello",
-        attachments: [{ kind: "text_selection", id: "sel-1", text: "selected" }],
+        op: {
+          type: "user_input",
+          opId: "input-2",
+          payload: {
+            items: [
+              { type: "text", id: "text-1", text: "hello" },
+              { type: "text_selection", id: "sel-1", text: "selected" },
+            ],
+          },
+        },
       },
     });
+  });
+
+  it("creates user input from plain text", () => {
+    expect(createUserInputFromText("hello").items).toEqual([
+      expect.objectContaining({ type: "text", text: "hello" }),
+    ]);
   });
 
   it("encodes thread.list and permission answer", () => {

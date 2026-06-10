@@ -11,6 +11,7 @@
 | 子目录 | 子文档 | 职责 |
 |------|------|------|
 | `activity/` | [activity/activity.md](/Users/mu9/proj/handAgent/apps/agent-server/src/activity/activity.md) | 从 thread 通知和待回执请求派生 `/api/activity` 轻量运行态 |
+| `agent/` | [agent/agent.md](/Users/mu9/proj/handAgent/apps/agent-server/src/agent/agent.md) | 持久 Agent owner，维护 `threadId -> Agent`，通过 `tx_sub` 接收运行期 `Op` |
 | `server/` | [server/server.md](/Users/mu9/proj/handAgent/apps/agent-server/src/server/server.md) | 进程入口、WebSocket socket 绑定、组合根与 `~/.spotAgent` 路径解析 |
 | `thread/` | [thread/thread.md](/Users/mu9/proj/handAgent/apps/agent-server/src/thread/thread.md) | thread 路由、一轮 turn 编排、持久化恢复与删除 |
 | `protocol/` | [protocol/protocol.md](/Users/mu9/proj/handAgent/apps/agent-server/src/protocol/protocol.md) | core runtime event、thread 消息、审计事件与多模态 STUB 的翻译 |
@@ -21,7 +22,8 @@
 ## 内部依赖方向
 
 - `server/` 是组合根；只有这里创建长驻依赖、读取 `~/.spotAgent` 路径并绑定 HTTP / WebSocket。
-- `thread/` 消费已经注入的 runtime、persistence、publisher、workspace registry 和 action binding resolver，不直接创建 LLM client、MCP client 或 platform adapter；用户输入通过 `input.submit` 进入 `ThreadRuntimeOrchestrator.submitInput`。
+- `agent/` 维护持久 Agent 映射，运行期输入通过 `op.submit` 进入 Agent 的 `tx_sub`；旧 `ThreadRuntimeOrchestrator` 只作为 Agent 内部 turn 执行器被调用。
+- `thread/` 消费已经注入的 agent manager、persistence、publisher、workspace registry 和 action binding resolver，不直接创建 LLM client、MCP client 或 platform adapter；公开运行期输入只处理 `op.submit`。
 - `protocol/` 只做 runtime event、conversation message、audit event 和 attachment STUB 的翻译。
 - `settings/` 把 `settings.json` 热加载成 LLM client 与 builtin tool registry。
 - `actions/` 组合 builtin tools、MCP tools 与 plugin action binding，产出 thread 级工具表。

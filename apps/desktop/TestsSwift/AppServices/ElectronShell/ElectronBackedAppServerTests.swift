@@ -14,8 +14,11 @@ final class ElectronBackedAppServerTests: XCTestCase {
             return XCTFail("expected open initial prompt command")
         }
         XCTAssertEqual(sentCommandId, commandId)
-        XCTAssertEqual(payload.text, "hello")
-        XCTAssertEqual(payload.attachments, [])
+        XCTAssertEqual(payload.userInput.items.count, 1)
+        guard case .text(_, let text)? = payload.userInput.items.first else {
+            return XCTFail("expected text item")
+        }
+        XCTAssertEqual(text, "hello")
         XCTAssertNil(payload.actionBinding)
     }
 

@@ -1,12 +1,11 @@
 import type {
   ActionBindingPayload,
-  ThreadAttachment,
 } from "@handagent/core/protocol/ThreadProtocolShared.ts";
+import type { UserInput } from "@handagent/core/protocol/Op.ts";
 
 type InitialPromptPayload = {
   clientRequestId: string;
-  text: string;
-  attachments: ThreadAttachment[];
+  userInput: UserInput;
   actionBinding: ActionBindingPayload | null;
 };
 
@@ -78,9 +77,7 @@ export function isSwiftToElectronCommand(value: unknown): value is SwiftToElectr
     case "thread_window.open_initial_prompt":
       return isRecord(value.payload)
         && typeof value.payload.clientRequestId === "string"
-        && typeof value.payload.text === "string"
-        && Array.isArray(value.payload.attachments)
-        && value.payload.attachments.every(isThreadAttachment)
+        && isUserInput(value.payload.userInput)
         && (value.payload.actionBinding === null || isActionBinding(value.payload.actionBinding));
     case "thread_window.open_history":
     case "activity_window.show":
@@ -107,18 +104,35 @@ function isActionBinding(value: unknown): value is ActionBindingPayload {
     && typeof value.promptName === "string";
 }
 
-function isThreadAttachment(value: unknown): value is ThreadAttachment {
+function isUserInput(value: unknown): value is UserInput {
+  return isRecord(value)
+    && Array.isArray(value.items)
+    && value.items.length > 0
+    && value.items.every(isInputItem);
+}
+
+function isInputItem(value: unknown): boolean {
   if (!isRecord(value) || typeof value.id !== "string") {
     return false;
   }
 
-  if (value.kind === "text_selection") {
+  if (value.type === "text") {
     return typeof value.text === "string";
   }
 
-  if (value.kind === "image") {
+  if (value.type === "text_selection") {
+    return typeof value.text === "string";
+  }
+
+  if (value.type === "image") {
     return (value.mimeType === "image/png" || value.mimeType === "image/jpeg" || value.mimeType === "image/webp")
       && typeof value.base64 === "string";
+  }
+
+  if (value.type === "skill") {
+    return typeof value.actionId === "string"
+      && typeof value.title === "string"
+      && typeof value.prompt === "string";
   }
 
   return false;

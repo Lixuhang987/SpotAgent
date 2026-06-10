@@ -6,8 +6,9 @@ final class ElectronShellProtocolTests: XCTestCase {
     func testEncodesOpenInitialPromptCommand() throws {
         let payload = ElectronInitialPromptPayload(
             clientRequestId: "prompt-1",
-            text: "hello",
-            attachments: [],
+            userInput: PromptUserInput(items: [
+                .text(id: "text-1", text: "hello")
+            ]),
             actionBinding: nil
         )
         let command = ElectronShellCommand.openInitialPrompt(commandId: "cmd-1", payload: payload)
@@ -19,8 +20,7 @@ final class ElectronShellProtocolTests: XCTestCase {
         XCTAssertEqual(object["type"] as? String, "thread_window.open_initial_prompt")
         XCTAssertEqual(object["commandId"] as? String, "cmd-1")
         let encodedPayload = try XCTUnwrap(object["payload"] as? [String: Any])
-        XCTAssertEqual(encodedPayload["text"] as? String, "hello")
-        XCTAssertTrue(encodedPayload["attachments"] is [Any])
+        XCTAssertTrue(encodedPayload["userInput"] is [String: Any])
         XCTAssertTrue(encodedPayload["actionBinding"] is NSNull)
     }
 

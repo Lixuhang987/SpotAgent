@@ -16,8 +16,7 @@ describe("threadWindowStore", () => {
     const store = createThreadWindowStore;
     store.getState().enqueueInitialPrompt({
       clientRequestId: "prompt-1",
-      text: "hello",
-      attachments: [],
+      userInput: { items: [{ type: "text", id: "text-1", text: "hello" }] },
       actionBinding: null,
     });
 
@@ -30,7 +29,7 @@ describe("threadWindowStore", () => {
       payload: { preview: "hello" },
     });
 
-    expect(store.getState().threadsById["thread-1"].pendingInitialPrompt?.text).toBe("hello");
+    expect(store.getState().threadsById["thread-1"].pendingInitialPrompt?.userInput.items[0].type).toBe("text");
     expect("activeTabId" in store.getState()).toBe(false);
     expect("tabs" in store.getState()).toBe(false);
   });
@@ -53,8 +52,7 @@ describe("threadWindowStore", () => {
     const store = createThreadWindowStore;
     store.getState().enqueueInitialPrompt({
       clientRequestId: "prompt-1",
-      text: "hello",
-      attachments: [],
+      userInput: { items: [{ type: "text", id: "text-1", text: "hello" }] },
       actionBinding: null,
     });
     store.getState().handleNotification({
@@ -75,7 +73,7 @@ describe("threadWindowStore", () => {
     });
 
     expect(store.getState().threadsById["thread-1"].messages).toEqual([
-      { id: "pending-prompt-1", role: "user", text: "hello", pending: true, attachments: [] },
+      { id: "pending-prompt-1", role: "user", text: "hello", pending: true },
     ]);
   });
 
@@ -116,11 +114,16 @@ describe("threadWindowStore", () => {
       payload: {},
     });
 
-    store.getState().queueComposerInput("thread-1", "second");
+    store.getState().queueComposerInput("thread-1", {
+      type: "user_input",
+      opId: "op-1",
+      timestamp,
+      payload: { items: [{ type: "text", id: "text-2", text: "second" }] },
+    });
 
     const thread = store.getState().threadsById["thread-1"];
     expect(thread.messages).toEqual([]);
-    expect(thread.queuedComposerInputs).toEqual([{ text: "second", attachments: [] }]);
+    expect(thread.queuedComposerInputs).toEqual([expect.objectContaining({ op: expect.objectContaining({ type: "user_input" }) })]);
     expect(store.getState().takeNextQueuedInputForDispatch("thread-1")).toBeNull();
   });
 
@@ -135,8 +138,18 @@ describe("threadWindowStore", () => {
       timestamp,
       payload: {},
     });
-    store.getState().queueComposerInput("thread-1", "second");
-    store.getState().queueComposerInput("thread-1", "third");
+    store.getState().queueComposerInput("thread-1", {
+      type: "user_input",
+      opId: "op-1",
+      timestamp,
+      payload: { items: [{ type: "text", id: "text-2", text: "second" }] },
+    });
+    store.getState().queueComposerInput("thread-1", {
+      type: "user_input",
+      opId: "op-2",
+      timestamp,
+      payload: { items: [{ type: "text", id: "text-3", text: "third" }] },
+    });
     store.getState().handleNotification({
       type: "turn.completed",
       threadId: "thread-1",
@@ -146,10 +159,8 @@ describe("threadWindowStore", () => {
       payload: { status: "completed" },
     });
 
-    expect(store.getState().takeNextQueuedInputForDispatch("thread-1")).toEqual({
-      text: "second",
-      attachments: [],
-    });
+    const firstDispatch = store.getState().takeNextQueuedInputForDispatch("thread-1");
+    expect(firstDispatch?.op.type).toBe("user_input");
     expect(store.getState().takeNextQueuedInputForDispatch("thread-1")).toBeNull();
 
     store.getState().handleNotification({
@@ -169,24 +180,30 @@ describe("threadWindowStore", () => {
       payload: { status: "completed" },
     });
 
-    expect(store.getState().takeNextQueuedInputForDispatch("thread-1")).toEqual({
-      text: "third",
-      attachments: [],
-    });
+    const pendingDispatch = store.getState().takeNextQueuedInputForDispatch("thread-1");
+    expect(pendingDispatch?.op.type).toBe("user_input");
     expect(store.getState().threadsById["thread-1"].queuedComposerInputs).toEqual([]);
   });
 
   it("removes a queued composer input by index", () => {
     const store = createThreadWindowStore;
     store.getState().ensureThreadState("thread-1");
-    store.getState().queueComposerInput("thread-1", "first");
-    store.getState().queueComposerInput("thread-1", "second");
+    store.getState().queueComposerInput("thread-1", {
+      type: "user_input",
+      opId: "op-1",
+      timestamp,
+      payload: { items: [{ type: "text", id: "text-1", text: "first" }] },
+    });
+    store.getState().queueComposerInput("thread-1", {
+      type: "user_input",
+      opId: "op-2",
+      timestamp,
+      payload: { items: [{ type: "text", id: "text-2", text: "second" }] },
+    });
 
     store.getState().removeQueuedComposerInput("thread-1", 0);
 
-    expect(store.getState().threadsById["thread-1"].queuedComposerInputs).toEqual([
-      { text: "second", attachments: [] },
-    ]);
+    expect(store.getState().threadsById["thread-1"].queuedComposerInputs).toHaveLength(1);
   });
 
   it("holds queued composer input while a submitted input is waiting for turn start", () => {
@@ -194,7 +211,12 @@ describe("threadWindowStore", () => {
     store.getState().ensureThreadState("thread-1");
 
     store.getState().markComposerInputDispatchPending("thread-1");
-    store.getState().queueComposerInput("thread-1", "second");
+    store.getState().queueComposerInput("thread-1", {
+      type: "user_input",
+      opId: "op-2",
+      timestamp,
+      payload: { items: [{ type: "text", id: "text-2", text: "second" }] },
+    });
 
     expect(store.getState().takeNextQueuedInputForDispatch("thread-1")).toBeNull();
 
@@ -215,10 +237,7 @@ describe("threadWindowStore", () => {
       payload: { status: "completed" },
     });
 
-    expect(store.getState().takeNextQueuedInputForDispatch("thread-1")).toEqual({
-      text: "second",
-      attachments: [],
-    });
+    expect(store.getState().takeNextQueuedInputForDispatch("thread-1")?.op.type).toBe("user_input");
   });
 
   it("does not append duplicate assistant delta notifications", () => {

@@ -36,8 +36,9 @@ node --experimental-transform-types --experimental-specifier-resolution=node app
 4. 通过 `SettingsBackedToolRegistry` 注册 builtin tools。
 5. 通过 `SettingsBackedLLMClient` 或 `MockLLMClient` 选择 LLM 模式。
 6. 按 thread 缓存 `AgentRuntime`，注入 thread 级 tool registry、permission policy、blob store 和 turn summarizer；mock 模式使用 `MockLLMClient` 且不启用 summarizer。
-7. 创建 `AgentActivityPublisher`、`ThreadPersistence`、`ThreadRuntimeOrchestrator`、`ThreadInputQueue` 驱动的 per-thread session loop、`ThreadNotificationPublisher`、`ThreadCommandRouter`。
-8. 启动同端口 HTTP + WebSocket 服务：`/api/thread` 挂载 thread command/response handler，`/api/activity` 挂载 activity subscriber handler，`/api/platform` 挂载 platform bridge handler，`/thread-window/*` 提供 React 静态资源，未知 path 直接关闭或返回 404。
+7. 创建 `AgentManager` 作为持久 Agent owner；每个 Agent 暴露 `tx_sub`、`rx_event`、`agent_status`、`session`，并在内部复用 `ThreadRuntimeOrchestrator` 执行 ReAct turn。
+8. 创建 `AgentActivityPublisher`、`ThreadPersistence`、`ThreadNotificationPublisher`、`ThreadCommandRouter`。
+9. 启动同端口 HTTP + WebSocket 服务：`/api/thread` 挂载 thread command/response handler，`/api/activity` 挂载 activity subscriber handler，`/api/platform` 挂载 platform bridge handler，`/thread-window/*` 提供 React 静态资源，未知 path 直接关闭或返回 404。
 
 ## 主消息流
 
@@ -50,7 +51,8 @@ flowchart TD
   B --> C{"ClientResponse / ThreadCommand"}
   C -- "ClientResponse" --> E["bridges/ThreadPermissionBridge<br/>bridges/ThreadWorkspaceAskBridge"]
   C -- "ThreadCommand" --> F["thread/ThreadCommandRouter"]
-  F --> G["thread/ThreadRuntimeOrchestrator"]
+  F --> AM["agent/AgentManager"]
+  AM --> G["thread/ThreadRuntimeOrchestrator<br/>Agent 内部 turn 执行器"]
   F --> H["thread/ThreadNotificationPublisher"]
   G --> I["@handagent/core AgentRuntime"]
   I --> J["protocol/MessageTranslator"]
@@ -62,7 +64,7 @@ flowchart TD
   G --> L["thread/ThreadPersistence"]
 ```
 
-`input.submit` 是普通用户输入入口；公开 `/api/thread` 路由只在目标 thread 非 running 时接收并交给 `ThreadRuntimeOrchestrator`。running 时的普通用户 follow-up 由 React ThreadWindow 前端排队展示，暂不发送到后端；若仍收到 running `input.submit`，router 只向发起连接返回 `thread.error(code: "thread_running")`。后端 `ThreadInputQueue` 保留为 session loop 内部机制和后续子 agent / response item 通信预留，不作为当前普通用户 follow-up 的展示队列。当前 thread command 协议的普通用户输入入口是 `input.submit`。
+`op.submit` 是唯一运行期输入入口，payload 内的 `op` 只能是 `UserInput` 或 `Interrupt`。`thread.start` 只负责创建 thread、解析 action binding 并注册持久 Agent；后续普通输入和停止请求都经 `AgentManager.submit(threadId, op)` 进入对应 Agent 的 `tx_sub`。router 不再因为 thread running 拒绝用户 follow-up；是否排队由 Agent / 内部 turn 执行器处理。
 
 ## 协议主干
 
@@ -73,6 +75,7 @@ flowchart TD
 - activity 状态由 `AgentActivityPublisher` 从 `ThreadNotification` / `ServerRequest` 派生；activity subscriber 发送失败只影响该 subscriber，不影响 `/api/thread` 分发。
 - permission / workspace 的交互式回流统一由 server 发 `ServerRequest`，React 回 `ClientResponse`。
 - `workspace.listed` 是 `workspace.list` 的连接级响应，不带 `threadId`，只发给发起命令的 `/api/thread` 连接。
+- `op.submit` 是运行期输入 envelope；`input.submit` 与 `turn.interrupt` 不再属于公开 `ThreadCommand`。
 - permission / workspace request-response 都绑定到 thread 当前连接；断线或旧 token 回包不能影响新连接。
 - 单条 React thread socket 可以同时接收多个已订阅 thread 的通知；当前协议不承诺显式 unsubscribe。
 

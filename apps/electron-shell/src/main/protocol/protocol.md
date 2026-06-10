@@ -11,9 +11,9 @@
 ## Command 边界
 
 - 所有 Swift -> Electron command 必须是 `channel: "electron_shell"`，且必须带 string `commandId`。
-- 当前 command 只有 `thread_window.open_initial_prompt`、`thread_window.open_history`、`thread_window.focus`、`activity_window.show`、`shutdown`。
+- 当前 command 只有 `thread_window.open_initial_prompt`、`thread_window.open_history`、`thread_window.focus`、`activity_window.show`、`theme.changed`、`shutdown`。
 - `thread_window.prepare` 不存在；hidden ThreadWindow 预热由 Electron main 在 agent-server ready 后主动执行。
-- `thread_window.open_initial_prompt.payload` 只接受 `clientRequestId`、`text`、`attachments`、`actionBinding`。attachments 的 runtime 校验只允许 `text_selection` 和 `image`，image MIME 限定 `image/png`、`image/jpeg`、`image/webp`。
+- `thread_window.open_initial_prompt.payload` 只接受 `clientRequestId`、`userInput`、`actionBinding`。`userInput.items` 必须非空，item 类型只允许 `text`、`image`、`skill`、`text_selection`；image MIME 限定 `image/png`、`image/jpeg`、`image/webp`。
 
 ## Event 边界
 
@@ -25,5 +25,5 @@
 ## 修改约束
 
 - 新增、删除或改名 command/event 时，必须同步更新 Swift [ElectronShellProtocol.swift](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/ElectronShell/ElectronShellProtocol.swift) 和双方测试。
-- 不在本目录复制 core DTO。Initial prompt 的 attachment/action binding 类型从 `@handagent/core/protocol/*` 引用。
+- 不在本目录复制 core DTO。Initial prompt 的 `UserInput` / action binding 类型从 `@handagent/core/protocol/*` 引用。
 - `parseCommand()` 需要拒绝未知命令，尤其要持续覆盖拒绝 `thread_window.prepare` 的测试。
