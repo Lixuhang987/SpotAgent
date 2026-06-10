@@ -12,6 +12,24 @@
     font-family: var(--font-body);
   }
 
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --thread-window-glow-warm: color-mix(in srgb, var(--ha-color-accent) 14%, transparent);
+    --thread-window-glow-cool: color-mix(in srgb, var(--ha-color-teal) 12%, transparent);
+    --thread-window-panel-shadow: 0 18px 50px rgba(72, 58, 42, 0.10);
+    --thread-window-floating-shadow: 0 16px 42px rgba(64, 52, 38, 0.14);
+    --thread-window-inset-line: inset 0 1px 0 rgba(255, 255, 255, 0.68);
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --thread-window-glow-warm: color-mix(in srgb, var(--ha-color-accent) 13%, transparent);
+    --thread-window-glow-cool: color-mix(in srgb, var(--ha-color-teal) 10%, transparent);
+    --thread-window-panel-shadow: 0 20px 56px rgba(0, 0, 0, 0.24);
+    --thread-window-floating-shadow: 0 18px 46px rgba(0, 0, 0, 0.34);
+    --thread-window-inset-line: inset 0 1px 0 rgba(250, 249, 245, 0.08);
+  }
+
   html,
   body,
   #root {
@@ -68,5 +86,16 @@
   input,
   button {
     font: inherit;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }

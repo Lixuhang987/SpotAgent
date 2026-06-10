@@ -59,19 +59,19 @@ export function Composer({
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex min-w-0 flex-col items-center justify-end overflow-hidden bg-app-canvas px-lg py-md"
+      className="flex min-w-0 flex-col items-center justify-end overflow-hidden bg-app-canvas/85 px-lg py-md"
     >
       {queuedInputs.length > 0 ? (
         <div
           data-queued-composer-panel="true"
-          className="mb-xs max-h-[156px] min-w-0 w-full max-w-[720pt] overflow-y-auto rounded-2xl border border-app-hairline bg-app-surface-elevated/95 px-xs py-xs shadow-product-inner"
+          className="mb-xs max-h-[156px] min-w-0 w-full max-w-[720pt] overflow-y-auto rounded-2xl border border-app-hairline bg-app-surface-elevated/95 px-xs py-xs shadow-[var(--thread-window-floating-shadow)]"
         >
           <div className="space-y-1">
             {queuedInputs.map((queuedInput, index) => (
               <div
                 key={`${index}-${queuedInput.text}`}
                 data-queued-composer-item="true"
-                className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-xs rounded-xl px-xs py-1 text-sm text-app-text-muted hover:bg-app-surface-muted/60"
+                className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-xs rounded-xl px-xs py-1 text-sm text-app-text-muted transition-colors duration-200 hover:bg-app-surface-muted/60"
               >
                 <span className="font-code text-xs text-app-text-muted/70">↳</span>
                 <span className="truncate text-app-text-primary" title={queuedInput.text}>
@@ -82,7 +82,7 @@ export function Composer({
                   type="button"
                   aria-label={`移除排队输入 ${index + 1}`}
                   onClick={() => onRemoveQueuedInput?.(index)}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg text-app-text-muted transition-colors hover:bg-app-surface-muted hover:text-app-text-primary"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-app-text-muted transition-colors duration-200 hover:bg-app-surface-muted hover:text-app-text-primary focus:outline-none focus:ring-4 focus:ring-app-accent-ring"
                 >
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
                     <path
@@ -100,8 +100,7 @@ export function Composer({
         </div>
       ) : null}
 
-      {/* GPT 风格 pill 形容器 */}
-      <div className="relative mx-auto min-w-0 w-full max-w-[720pt] rounded-3xl border border-app-hairline bg-app-surface-elevated px-md py-xs shadow-product-inner transition-colors focus-within:border-app-hairline">
+      <div className="relative mx-auto min-w-0 w-full max-w-[720pt] rounded-3xl border border-app-hairline bg-app-surface-elevated/98 px-md py-xs shadow-[var(--thread-window-floating-shadow),var(--thread-window-inset-line)] transition-shadow duration-200 focus-within:border-app-accent focus-within:ring-4 focus-within:ring-app-accent-ring">
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-xs">
           {/* 文本输入区域 */}
           <textarea
@@ -121,7 +120,7 @@ export function Composer({
             <button
               type="button"
               disabled
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-app-text-muted transition-colors hover:bg-app-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex h-9 w-9 items-center justify-center rounded-xl text-app-text-muted transition-colors duration-200 hover:bg-app-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
               title="附件（即将推出）"
             >
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
@@ -139,7 +138,7 @@ export function Composer({
                 type="button"
                 onClick={onStop}
                 disabled={stopDisabled}
-                className="flex h-8 w-8 items-center justify-center rounded-lg bg-app-accent text-app-on-accent transition-colors hover:bg-app-accent-hover disabled:cursor-not-allowed disabled:bg-app-surface-muted disabled:text-app-text-secondary"
+                className="flex h-9 w-9 items-center justify-center rounded-xl bg-app-accent text-app-on-accent transition-colors duration-200 hover:bg-app-accent-hover focus:outline-none focus:ring-4 focus:ring-app-accent-ring disabled:cursor-not-allowed disabled:bg-app-surface-muted disabled:text-app-text-secondary"
                 title="停止"
               >
                 <svg width="12" height="12" viewBox="0 0 12 12">
@@ -157,7 +156,7 @@ export function Composer({
             <button
               type="submit"
               disabled={disabled || !text.trim()}
-              className="flex h-8 w-8 items-center justify-center rounded-lg bg-app-accent text-app-on-accent transition-colors hover:bg-app-accent-hover disabled:cursor-not-allowed disabled:bg-app-surface-elevated disabled:text-app-text-muted"
+              className="flex h-9 w-9 items-center justify-center rounded-xl bg-app-accent text-app-on-accent transition-colors duration-200 hover:bg-app-accent-hover focus:outline-none focus:ring-4 focus:ring-app-accent-ring disabled:cursor-not-allowed disabled:bg-app-surface-muted disabled:text-app-text-muted"
               title="发送"
             >
               <svg width="16" height="16" viewBox="0 0 16 16">

@@ -263,7 +263,9 @@ describe("ActivityWindowController", () => {
 });
 
 class FakeBrowserWindow extends EventEmitter {
-  webContents = new EventEmitter();
+  webContents = Object.assign(new EventEmitter(), {
+    send: vi.fn(),
+  });
   bounds: { x: number; y: number; width: number; height: number } | null = null;
   loadedFile: string | null = null;
   loadFileCount = 0;

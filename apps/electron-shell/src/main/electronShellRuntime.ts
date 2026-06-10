@@ -25,6 +25,7 @@ type ThreadWindowHost = {
 type ActivityWindowHost = {
   show(): Promise<void>;
   releaseNativeFocusForNextClick(): void;
+  updateTheme(theme: HostTheme): Promise<void>;
 };
 
 type Options = {
@@ -106,7 +107,10 @@ export class ElectronShellRuntime {
         await this.runCommand(command, () => this.options.activityWindow.show());
         return;
       case "theme.changed":
-        await this.runCommand(command, () => this.options.prewarmer.updateTheme(command.theme));
+        await this.runCommand(command, async () => {
+          await this.options.prewarmer.updateTheme(command.theme);
+          await this.options.activityWindow.updateTheme(command.theme);
+        });
         return;
       case "shutdown":
         this.ack(command, true);

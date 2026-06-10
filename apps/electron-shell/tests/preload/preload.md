@@ -7,10 +7,11 @@
 | 文件 | 覆盖对象 |
 |------|------|
 | `threadWindowPreload.test.ts` | ThreadWindow preload 的 `/api/thread` config、pending initial prompt receiver 和既有 receiver 保留 |
-| `activityWindowPreload.test.ts` | ActivityWindow preload 的 `/api/activity` config 与 `focusThread` IPC wrapper |
+| `activityWindowPreload.test.ts` | ActivityWindow preload 的 `/api/activity` config、host theme 注入、theme change subscription 与 `focusThread` IPC wrapper |
 
 ## 测试前提
 
 - 使用 `vi.doMock("electron", ...)` mock `contextBridge` / `ipcRenderer`，不加载真实 Electron。
 - ThreadWindow preload 测试要在 fake main world 中执行 `executeInMainWorld` 的 `func`，确认 globals 写入结果。
+- ActivityWindow preload 测试要覆盖 `additionalArguments` 里的初始 host theme fallback / parse、`handagent:theme-changed` payload 过滤和 unsubscribe。
 - 新增 preload API 时，必须测试它没有暴露原始 `ipcRenderer` 或 Node/Electron 对象。

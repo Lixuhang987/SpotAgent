@@ -1,9 +1,11 @@
 import type { BrowserWindowConstructorOptions, Rectangle } from "electron";
+import type { HostTheme } from "../protocol/electronShellProtocol.js";
 
 export type BrowserWindowLike = {
   webContents: {
     on(event: "render-process-gone", listener: (event: unknown, details: { reason: string }) => void): unknown;
     on(event: "before-mouse-event", listener: (event: { preventDefault(): void }, mouse: { type: string; button?: string }) => void): unknown;
+    send(channel: "handagent:theme-changed", theme: HostTheme): void;
   };
   on(event: "closed" | "focus", listener: () => void): unknown;
   loadFile(filePath: string): Promise<unknown> | unknown;
@@ -33,6 +35,7 @@ const ACTIVITY_WINDOW_MARGIN = 24;
 export class ActivityWindowController {
   private window: BrowserWindowLike | null = null;
   private hasLoaded = false;
+  private theme: HostTheme = { preference: "system", resolved: "light" };
 
   constructor(private readonly options: Options) {}
 
@@ -73,6 +76,13 @@ export class ActivityWindowController {
     });
   }
 
+  async updateTheme(theme: HostTheme): Promise<void> {
+    this.theme = theme;
+    if (this.window && this.hasLoaded) {
+      this.window.webContents.send("handagent:theme-changed", theme);
+    }
+  }
+
   private ensureWindow(): BrowserWindowLike {
     if (this.window) {
       return this.window;
@@ -93,6 +103,7 @@ export class ActivityWindowController {
         preload: this.options.preloadPath,
         contextIsolation: true,
         nodeIntegration: false,
+        additionalArguments: [`--handagent-theme=${encodeURIComponent(JSON.stringify(this.theme))}`],
       },
     });
 
