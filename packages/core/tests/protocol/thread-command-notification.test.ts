@@ -9,11 +9,18 @@ import type { ThreadNotification } from "../../src/protocol/ThreadNotification.t
 describe("thread command/notification protocol", () => {
   it("keeps UI commands separate from server notifications", () => {
     const command: ThreadCommand = {
-      type: "input.submit",
+      type: "op.submit",
       threadId: "thread-1",
-      inputId: "input-1",
+      commandId: "command-op",
       timestamp: "2026-06-05T00:00:00.000Z",
-      payload: { text: "hello" },
+      payload: {
+        op: {
+          type: "user_input",
+          opId: "input-1",
+          timestamp: "2026-06-05T00:00:00.000Z",
+          payload: { items: [{ type: "text", id: "item-1", text: "hello" }] },
+        },
+      },
     };
     const notification: ThreadNotification = {
       type: "assistant.delta",
@@ -25,11 +32,11 @@ describe("thread command/notification protocol", () => {
       payload: { text: "world" },
     };
 
-    expect(command.type).toBe("input.submit");
+    expect(command.type).toBe("op.submit");
     expect(notification.type).toBe("assistant.delta");
   });
 
-  it("exposes the minimal thread, input, and turn commands", () => {
+  it("exposes lifecycle commands separately from runtime op submission", () => {
     const start: ThreadCommand = {
       type: "thread.start",
       commandId: "command-start",
@@ -56,18 +63,19 @@ describe("thread command/notification protocol", () => {
       timestamp: "2026-06-05T00:00:03.000Z",
       payload: { targetThreadId: "thread-1" },
     };
-    const submitInput: ThreadCommand = {
-      type: "input.submit",
+    const submitOp: ThreadCommand = {
+      type: "op.submit",
       threadId: "thread-1",
-      inputId: "input-1",
+      commandId: "command-op",
       timestamp: "2026-06-05T00:00:03.500Z",
-      payload: { text: "hello" },
-    };
-    const interrupt: ThreadCommand = {
-      type: "turn.interrupt",
-      threadId: "thread-1",
-      commandId: "command-interrupt",
-      timestamp: "2026-06-05T00:00:04.000Z",
+      payload: {
+        op: {
+          type: "interrupt",
+          opId: "op-interrupt",
+          timestamp: "2026-06-05T00:00:03.500Z",
+          payload: { reason: "user" },
+        },
+      },
     };
 
     expect([
@@ -75,15 +83,13 @@ describe("thread command/notification protocol", () => {
       resume.type,
       list.type,
       deleteCommand.type,
-      submitInput.type,
-      interrupt.type,
+      submitOp.type,
     ]).toEqual([
       "thread.start",
       "thread.resume",
       "thread.list",
       "thread.delete",
-      "input.submit",
-      "turn.interrupt",
+      "op.submit",
     ]);
   });
 

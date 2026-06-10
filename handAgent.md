@@ -35,7 +35,8 @@ flowchart TD
   E --> F[React 连接 /api/thread 并发送 ThreadCommand]
   F --> G[agent-server 接收 ThreadCommand]
   G --> H[ThreadCommandRouter 路由命令]
-  H --> I[AgentRuntime.run]
+  H --> Agt[AgentManager / Agent tx_sub]
+  Agt --> I[AgentRuntime.run]
   I --> J[LLMClient.stream]
   J --> K[转发 delta / tool / request 为单向事件]
   K --> L{返回 toolCalls?}
@@ -67,7 +68,7 @@ flowchart TD
 - Swift desktop 不持有 thread client，不发送 `ThreadCommand`，不解析 `ThreadNotification`，不订阅 `/api/activity`。
 - Swift 不发送 `thread_window.prepare`；Electron main 是 hidden ThreadWindow 预热的唯一 owner。agent-server 是唯一承载 core runtime 的后台进程，关闭 Electron UI 窗口不停止该进程。
 - React ThreadWindow 是历史、后台 thread 状态缓存、消息、运行态、permission/workspace 请求面板和 composer 的 UI 状态源；右侧当前展示的 thread 由 React `App` 本地 state 编排，不进入 store。
-- agent-server 是组合根和本地桥：负责 socket 路径拆分、thread/turn 路由、runtime 驱动、持久化封装、permission/workspace 回执桥和 platform bridge 转发；外部用户输入命令统一是 `input.submit`，后端内部归一化为 input item。
+- agent-server 是组合根和本地桥：负责 socket 路径拆分、thread 生命周期路由、持久 Agent owner、runtime 驱动、持久化封装、permission/workspace 回执桥和 platform bridge 转发；外部运行期输入统一是 `op.submit(UserInput | Interrupt)`。
 - packages/core 只定义跨平台 runtime、tool、platform、protocol、storage、workspace 和 permission 抽象，不实现 UI 或 macOS 原生能力。
 
 ## 阅读顺序建议

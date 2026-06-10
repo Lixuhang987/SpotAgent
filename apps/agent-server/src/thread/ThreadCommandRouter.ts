@@ -6,9 +6,9 @@ import type {
   ThreadSummary,
 } from "@handagent/core/storage/index.ts";
 import type { WorkspaceRegistry } from "@handagent/core/workspace/Workspace.ts";
+import type { Agent, AgentManager } from "../agent/AgentManager.ts";
 import { ThreadNotificationPublisher } from "./ThreadNotificationPublisher.ts";
 import type { ThreadPersistence } from "./ThreadPersistence.ts";
-import type { ThreadRuntimeOrchestrator } from "./ThreadRuntimeOrchestrator.ts";
 
 type CreateThreadActionBinding = {
   pluginId: string;
@@ -19,13 +19,7 @@ type ActionBindingResolver = {
   resolve(binding: CreateThreadActionBinding): Promise<ThreadActionBinding>;
 };
 
-type RouterOrchestrator = Pick<ThreadRuntimeOrchestrator, "submitInput"> &
-  Partial<
-    Pick<
-      ThreadRuntimeOrchestrator,
-      "interruptThread" | "interruptAndWait" | "isThreadRunning"
-    >
-  >;
+type AgentFactory = (threadId: string) => Agent;
 
 type ResponseHandlers = {
   onPermissionResponse?: (
@@ -40,7 +34,7 @@ type ResponseHandlers = {
 
 export class ThreadCommandRouter {
   constructor(
-    private readonly orchestrator: RouterOrchestrator,
+    private readonly agentManager: AgentManager,
     private readonly persistence: ThreadPersistence,
     private readonly publisher: ThreadNotificationPublisher,
     private readonly now: () => string = () => new Date().toISOString(),
@@ -48,6 +42,7 @@ export class ThreadCommandRouter {
     private readonly onThreadDeleted?: (threadId: string) => void,
     private readonly responseHandlers: ResponseHandlers = {},
     private readonly workspaceRegistry?: WorkspaceRegistry,
+    private readonly createAgent?: AgentFactory,
   ) {}
 
   async receive(command: ThreadCommand, connectionId: string): Promise<void> {
@@ -56,10 +51,8 @@ export class ThreadCommandRouter {
         return this.handleCreateThread(command, connectionId);
       case "thread.resume":
         return this.handleResumeThread(command, connectionId);
-      case "input.submit":
-        return this.handleInputSubmit(command, connectionId);
-      case "turn.interrupt":
-        return this.interruptThread(command.threadId);
+      case "op.submit":
+        return this.handleOpSubmit(command, connectionId);
       case "thread.list":
         return this.handleListThreads(command, connectionId);
       case "thread.delete":
@@ -81,14 +74,7 @@ export class ThreadCommandRouter {
   }
 
   async interruptThread(threadId: string): Promise<void> {
-    const push = (event: ThreadNotification) => {
-      this.publisher.publish(event);
-    };
-    if (this.orchestrator.interruptAndWait) {
-      await this.orchestrator.interruptAndWait(threadId, push);
-      return;
-    }
-    this.orchestrator.interruptThread?.(threadId, push);
+    await this.agentManager.interrupt(threadId);
   }
 
   private async handleCreateThread(
@@ -121,6 +107,7 @@ export class ThreadCommandRouter {
       command.payload.workspaceId,
     );
     const threadId = thread.metadata.id;
+    this.ensureAgent(threadId);
     this.publisher.subscribe(connectionId, threadId);
     this.publisher.publishToConnection(connectionId, {
       type: "thread.started",
@@ -153,7 +140,8 @@ export class ThreadCommandRouter {
       return;
     }
 
-    const isRunning = this.orchestrator.isThreadRunning?.(command.threadId) ?? false;
+    this.ensureAgent(command.threadId);
+    const isRunning = this.agentManager.isRunning(command.threadId);
     const recoveredStatus = !isRunning
       ? await this.persistence.recoverIncompleteTurnForSnapshot(command.threadId, this.now())
       : null;
@@ -172,8 +160,8 @@ export class ThreadCommandRouter {
     });
   }
 
-  private async handleInputSubmit(
-    command: Extract<ThreadCommand, { type: "input.submit" }>,
+  private async handleOpSubmit(
+    command: Extract<ThreadCommand, { type: "op.submit" }>,
     connectionId?: string,
   ): Promise<void> {
     if (!(await this.persistence.getThread(command.threadId))) {
@@ -194,39 +182,10 @@ export class ThreadCommandRouter {
       }
       return;
     }
-    if (this.orchestrator.isThreadRunning?.(command.threadId)) {
-      const errorEvent: ThreadNotification = {
-        type: "thread.error",
-        threadId: command.threadId,
-        notificationId: this.makeNotificationId(),
-        timestamp: this.now(),
-        payload: {
-          code: "thread_running",
-          message: "Thread is running; queue user follow-up input in the frontend.",
-        },
-      };
-      if (connectionId) {
-        this.publisher.publishToConnection(connectionId, errorEvent);
-      } else {
-        this.publisher.publish(errorEvent);
-      }
-      return;
-    }
 
-    await this.orchestrator.submitInput(
-      {
-        threadId: command.threadId,
-        messageId: command.inputId,
-        timestamp: command.timestamp,
-        payload: {
-          text: command.payload.text,
-          attachments: command.payload.attachments,
-        },
-      },
-      (event) => {
-        this.publisher.publish(event);
-      },
-    );
+    const op = command.payload.op;
+    this.ensureAgent(command.threadId);
+    await this.agentManager.submit(command.threadId, op);
   }
 
   private async handleListThreads(
@@ -265,11 +224,7 @@ export class ThreadCommandRouter {
       return;
     }
 
-    if (this.orchestrator.isThreadRunning?.(targetThreadId)) {
-      await this.orchestrator.interruptAndWait?.(targetThreadId, (event) => {
-        this.publisher.publish(event);
-      });
-    }
+    await this.agentManager.delete(targetThreadId);
 
     await this.persistence.deleteThread(targetThreadId);
     this.onThreadDeleted?.(targetThreadId);
@@ -321,6 +276,14 @@ export class ThreadCommandRouter {
 
   private makeNotificationId(): string {
     return `notification-${Math.random().toString(36).slice(2, 10)}`;
+  }
+
+  private ensureAgent(threadId: string): void {
+    if (this.agentManager.has(threadId) || !this.createAgent) {
+      return;
+    }
+
+    this.agentManager.register(threadId, this.createAgent(threadId));
   }
 }
 

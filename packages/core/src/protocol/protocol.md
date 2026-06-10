@@ -11,7 +11,8 @@
 
 | 文件 | 职责 |
 |------|------|
-| `ThreadCommand.ts` | 最小命令协议：`thread.start` / `thread.resume` / `thread.list` / `thread.delete` / `input.submit` / `turn.interrupt` / `workspace.list` |
+| `Op.ts` | 运行期输入协议：`UserInput` / `Interrupt` 以及 `Text` / `Image` / `Skill` / `TextSelection` 输入项 |
+| `ThreadCommand.ts` | 最小命令协议：`thread.start` / `thread.resume` / `thread.list` / `thread.delete` / `op.submit` / `workspace.list` |
 | `ThreadNotification.ts` | 通知协议：`thread.started` / `thread.snapshot` / `assistant.delta` / `tool.started` / `turn.completed` 等 |
 | `ServerRequest.ts` | 待回执请求：`permission.requested` / `workspace.requested`，按 `threadId` 路由 |
 | `ClientResponse.ts` | 回执协议：`permission.answered` / `workspace.answered` |
@@ -47,8 +48,7 @@ flowchart LR
 - `thread.resume`
 - `thread.list`
 - `thread.delete`
-- `input.submit`
-- `turn.interrupt`
+- `op.submit`
 - `workspace.list`
 
 ### `ThreadNotification`
@@ -81,30 +81,40 @@ flowchart LR
 
 这组消息只用于状态气泡、桌宠等轻量运行态展示。它由 agent-server 从 thread 通知和待回执请求派生，不暴露完整消息内容。`/api/activity` subscriber 连接后先收到 `activity.snapshot`，只有状态变化时才收到 `activity.changed`。
 
-## Thread Socket 恢复模型
+## Thread Socket 状态入口
 
 - React ThreadWindow 持有到 `/api/thread` 的长连接。
-- thread 打开或 thread socket 重连时发送 `thread.resume(threadId)`。
+- 用户打开历史 thread，或初始 prompt 创建 thread 后需要拉取初始状态时，发送 `thread.resume(threadId)`。
 - `thread.resume` 的结果是 `thread.snapshot`，不是新建 socket，也不是额外握手通道。
 - 普通 thread 级 `ThreadNotification` 与 `ServerRequest` 都带 `threadId`，由 React store 按 thread 分发。
 - 连接级通知是例外，例如 `workspace.listed` 对应 `workspace.list` 命令，只返回给发起命令的连接，不带 `threadId`。
+- React 和 app-server 当前不做断线恢复；非主动断开后不自动重连、不恢复订阅、不拉取 snapshot、不发送恢复命令。
 
 ## core 侧消费方式
 
-- 新主路径由 agent-server 的 thread runtime 编排 `AgentRuntime`，对外只暴露 `ThreadNotification`。
+- 新主路径由 agent-server 的持久 Agent 消费运行期 `Op`，并由内部 turn 执行器编排 `AgentRuntime`；对外只暴露 `ThreadNotification`。
 - `AgentRuntimeEvent` 到 `ThreadNotification` 的归一化由 agent-server thread 层维护，避免 runtime 内部事件直接暴露给 UI。
 
 ## Action Binding
 
 plugin action 绑定信息位于 `thread.start.payload.actionBinding`。agent-server 会重新读取本地 manifest，确认该 prompt 是可绑定的 plugin action，解析并持久化 thread metadata 的 `actionBinding.mcpServerIds`，随后只在该 thread 的 runtime 前组合对应 MCP tools。`kind: "skill"` 的 action 只提交渲染后的普通 prompt，不携带 action binding。
 
-普通 `input.submit` 不携带 action binding；一个 thread 的 MCP scope 由创建时 metadata 决定，不随后续消息变化。
+普通 `op.submit(UserInput)` 不携带 action binding；一个 thread 的 MCP scope 由创建时 metadata 决定，不随后续消息变化。
 
 ## Turn 中断
 
-- 主路径下，ThreadWindow 运行态 Stop 控件发送 `turn.interrupt`，不会断开 socket。
+- 主路径下，ThreadWindow 运行态 Stop 控件发送 `op.submit(Interrupt)`，不会断开 socket。
 - agent-server 在中断后输出 `turn.completed(status: "interrupted")` 与 `thread.status.changed(value: "interrupted")`。
 - 已中断 run 的后续 assistant delta、tool result 与最终 runtime result 不再继续产出新事件。
+
+## 运行期 Op
+
+`Op` 只替代运行期输入，不替代 thread 生命周期：
+
+- `UserInput`：`payload.items` 是用户本次主动输入的结构化列表，支持 `text`、`image`、`skill`、`text_selection`。
+- `Interrupt`：表示用户或系统请求中断当前运行。
+
+`thread.start` / `thread.resume` / `thread.list` / `thread.delete` / `workspace.list` 仍是独立 `ThreadCommand`。
 
 ## 附件
 

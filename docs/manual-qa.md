@@ -98,7 +98,7 @@
 
 - 完成日期：待实机 QA
 - 实现位置：`packages/core/src/llm/VercelAdapters.ts`、`packages/core/src/llm/VercelClient.ts`
-- 链路证明：期望链路是 `PromptPanel submit -> Electron ThreadWindow 显示 user message -> React /api/thread input.submit -> agent-server ThreadRuntimeOrchestrator -> SettingsBackedLLMClient -> VercelClient.stream -> AI SDK fullStream -> assistant delta -> ThreadWindow`。失败边界定位为本地 `127.0.0.1:8090/v1/responses` 返回的 Responses SSE 把 `event:response.output_text.delta` 与空 `data:` 拆成独立事件，再把 JSON 放到后续 `data:`；AI SDK 先解析空 data 时抛 `JSONParseError text: ''`，只证明 provider stream 解析失败，不代表 PromptPanel 请求为空或 UI 没有发送。
+- 链路证明：期望链路是 `PromptPanel submit -> Electron ThreadWindow 显示 user message -> React /api/thread op.submit(UserInput) -> agent-server AgentManager -> ThreadRuntimeOrchestrator -> SettingsBackedLLMClient -> VercelClient.stream -> AI SDK fullStream -> assistant delta -> ThreadWindow`。失败边界定位为本地 `127.0.0.1:8090/v1/responses` 返回的 Responses SSE 把 `event:response.output_text.delta` 与空 `data:` 拆成独立事件，再把 JSON 放到后续 `data:`；AI SDK 先解析空 data 时抛 `JSONParseError text: ''`，只证明 provider stream 解析失败，不代表 PromptPanel 请求为空或 UI 没有发送。
 - 修复结论：`VercelClient` 的 OpenAI-compatible fetch 包装层会把空 data 事件中的 `event:*` 元数据与紧随其后的 JSON `data:` 事件合并后再交给 AI SDK；同一本地服务的真实 `VercelClient.stream` probe 已能收到 `text_delta`。
 - 自动化验证：需执行 `pnpm exec vitest run packages/core/tests/llm/vercel-client.test.ts`、`bash ./scripts/test.sh`。
 - 手工回归步骤：在 Settings 中使用 `provider=openai-compatible`、`api=responses`、`baseUrl=http://127.0.0.1:8090/v1` 的本地兼容服务；执行 `bash ./scripts/swiftw run HandAgentDesktop`；通过 PromptPanel 提交普通 prompt；确认 ThreadWindow 先显示用户消息，随后显示 assistant 流式回复，不再在 agent-server stderr 出现 `JSONParseError [AI_JSONParseError]: JSON parsing failed: Text: .`。
@@ -172,7 +172,7 @@
 
 - 完成日期：待实机 QA
 - 实现位置：`apps/desktop/Sources/Coordinator/AppCoordinator.swift`、`apps/desktop/Sources/PromptPanel/PromptPanelController.swift`
-- 链路证明：期望链路是 `PromptPanel submit -> AppCoordinator.compose -> PromptPanel hide without focus restore -> Swift command bridge thread_window.open_initial_prompt -> Electron ThreadWindow show/focus -> React /api/thread input.submit -> StatusBubble 更新`。失败边界定位为 PromptPanel submit 原先等 Electron open ack 后调用 `hide()`，而 `hide()` 固定恢复唤起前的前台应用；同时 Electron `show()/focus()` 还可能先触发 PromptPanel `onDidResignKey -> hide()`，导致旧前台 App 被重新激活，ThreadWindow 看起来只闪现一瞬间但仍可被 StatusBubble 点击聚焦。
+- 链路证明：期望链路是 `PromptPanel submit -> AppCoordinator.compose -> PromptPanel hide without focus restore -> Swift command bridge thread_window.open_initial_prompt -> Electron ThreadWindow show/focus -> React /api/thread op.submit(UserInput) -> StatusBubble 更新`。失败边界定位为 PromptPanel submit 原先等 Electron open ack 后调用 `hide()`，而 `hide()` 固定恢复唤起前的前台应用；同时 Electron `show()/focus()` 还可能先触发 PromptPanel `onDidResignKey -> hide()`，导致旧前台 App 被重新激活，ThreadWindow 看起来只闪现一瞬间但仍可被 StatusBubble 点击聚焦。
 - 修复结论：`PromptPanelController.hide(restoringFocus:)` 默认保持旧焦点恢复语义；`AppCoordinator` 在发送 `thread_window.open_initial_prompt` 前调用 `hide(restoringFocus: false)`，并且 `hide(restoringFocus: false)` 在 `orderOut` 前清空焦点 token，覆盖 `onDidResignKey` 重入。
 - 自动化验证：需执行 `bash ./scripts/swiftw test --filter PromptPanelControllerTests`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`。
 - 手工回归步骤：打包 mock app 后用真实全局快捷键打开 Swift PromptPanel，提交 `PROMPT_HANDOFF_QA_20260609 [mock:assistant-ok]`；确认 PromptPanel 消失后 Electron `HandAgent ThreadWindow` 保持前台可见，不被提交前的 App 盖住；StatusBubble 正常从 starting/running 回到 idle，点击 StatusBubble 仍能聚焦同一个 ThreadWindow。
@@ -277,12 +277,12 @@
 - 手工回归结果：2026-06-09 重新执行 `bash ./scripts/package-app.sh --mock-llm` 后启动 Electron flag packaged app，提交 `ELECTRON_PLATFORM_BRIDGE_FIXED_QA_20260609 [mock:clipboard-read]`；`~/.spotAgent/threads/thread-1780946481700-4m0hzp.json` 中 `clipboard.read` tool result 为 `{"text":{"text":"ELECTRON_PLATFORM_BRIDGE_FIXED_QA_20260609 [mock:clipboard-read]"}}`，确认 platform bridge 已由 Swift 回写。
 - 边界确认：修复只覆盖 Electron packaged 路径下 Swift `/api/platform` hello 可靠发送与 agent-server 同 socket hello 幂等；不改变 Electron ThreadWindow、ActivityWindow、权限策略或 platform tool 业务实现。
 
-### Thread 输入队列与 input.submit 破坏性迁移
+### Thread 输入队列与运行期输入破坏性迁移
 
 - 完成日期：2026-06-07（后端队列）；2026-06-08（输入协议破坏性迁移、running 输入显示顺序修正）
 - 关键 commit：`b0893c5`（后端队列）；`3e562e1`（输入协议迁移）
 - 实现位置：`packages/core/src/protocol/ThreadCommand.ts`、`apps/agent-server/src/thread/ThreadInputQueue.ts`、`apps/agent-server/src/thread/ThreadRuntimeOrchestrator.ts`、`apps/agent-server/src/thread/ThreadCommandRouter.ts`、`apps/agent-server/src/server/server.ts`、`apps/thread-window-web/src/protocol/threadProtocol.ts`、`apps/thread-window-web/src/thread/threadSocketClient.ts`、`apps/thread-window-web/src/store/threadWindowStore.ts`、`apps/thread-window-web/src/App.tsx`、`apps/thread-window-web/src/components/Composer.tsx`
-- 验收结果：外部用户输入命令统一为 `input.submit`，旧输入命令已从当前 `ThreadCommand` 移除；ThreadWindow composer 在 running 状态下仍可提交输入并保留 Stop，但 running 输入先进入前端本地 FIFO 队列并显示在 Composer 上方，等 thread 离开 running 后逐条发送，避免两个 user input 连续显示；后端公开 `/api/thread input.submit` 在 running 时返回 `thread.error(code: "thread_running")`，普通用户 follow-up 不走后端排队。已通过 `bash ./scripts/test.sh`、`pnpm --filter handagent-thread-window-web test -- tests/threadWindowStore.test.ts`、`pnpm --filter handagent-thread-window-web build`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`。
+- 验收结果：该历史条目已被 2026-06-11 的 `op.submit(UserInput | Interrupt)` 运行期输入模型取代。当前公开 `ThreadCommand` 已不包含 `input.submit` / `turn.interrupt`；普通输入、附件、技能动作和停止操作均通过 `op.submit` 进入持久 Agent。
 
 ### ThreadWindow workspace 分组排序修复
 
@@ -387,3 +387,4 @@
 - 本文件中对应条目的用户可见行为、持久化记录、错误文案和隔离边界均符合预期。
 - 所有错误路径均有明确文案，不出现静默失败。
 - 每个通过的条目都已从本文件删除，并在 [archive.md](./archive.md) 保留完整验证记录。
+- 2026-06-11 这轮重构已完成协议、runtime 骨架与 agent-server Agent owner 接线验证：`packages/core/src/protocol/Op.ts` 新增 `Op` / `UserInput` / `InputItem`，`ThreadCommand` 运行期输入只保留 `op.submit`；React ThreadWindow、Electron shell、Swift `ElectronInitialPromptPayload` 均已切到 `userInput` 载荷。`packages/core/src/runtime/AgentRunner.ts`、`AgentSession.ts`、`AgentThreadPort.ts` 已补最小实现；`apps/agent-server/src/agent/AgentManager.ts` 新增持久 Agent owner，`thread.start` 注册 Agent，`op.submit(UserInput | Interrupt)` 通过 `tx_sub` 进入对应 Agent，`input.submit` / `turn.interrupt` 已从公开 server 路径移除。独立文档审核子 agent 已核对 spec、代码和相关 md，并补齐 Electron/Swift/core/selection/agent 文档。最终自动化验证覆盖 `pnpm exec vitest run apps/agent-server/tests/agent/AgentManager.test.ts apps/agent-server/tests/thread/ThreadCommandRouter.test.ts apps/agent-server/tests/server/server.test.ts`、`bash ./scripts/test.sh`、`bash ./scripts/swiftw test`、`bash ./scripts/swiftw build`。仍需补实机 QA：PromptPanel plain text、text selection、image region、skill action、plugin action、ThreadWindow composer follow-up、running stop。

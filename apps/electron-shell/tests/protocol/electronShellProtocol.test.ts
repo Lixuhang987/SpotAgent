@@ -13,19 +13,20 @@ describe("electronShellProtocol", () => {
       commandId: "cmd-1",
       payload: {
         clientRequestId: "prompt-1",
-        text: "hello",
-        attachments: [
-          { kind: "text_selection", id: "selection-1", text: "selected text" },
-          { kind: "image", id: "image-1", mimeType: "image/png", base64: "abc123" },
-        ],
+        userInput: {
+          items: [
+            { type: "text", id: "text-1", text: "hello" },
+            { type: "text_selection", id: "selection-1", text: "selected text" },
+            { type: "image", id: "image-1", mimeType: "image/png", base64: "abc123" },
+          ],
+        },
         actionBinding: { pluginId: "plugin-a", promptName: "prompt-a" },
       },
     }));
 
     expect(isSwiftToElectronCommand(command)).toBe(true);
     expect(command.type).toBe("thread_window.open_initial_prompt");
-    expect(command.payload.text).toBe("hello");
-    expect(command.payload.attachments).toHaveLength(2);
+    expect(command.payload.userInput.items).toHaveLength(3);
     expect(command.payload.actionBinding?.pluginId).toBe("plugin-a");
   });
 
@@ -92,7 +93,7 @@ describe("electronShellProtocol", () => {
     })).toBe("{\"channel\":\"electron_shell\",\"type\":\"thread_window.closed\",\"timestamp\":\"2026-06-08T00:00:00.000Z\",\"wasVisible\":true}");
   });
 
-  it("rejects malformed initial prompt attachments", () => {
+  it("rejects legacy initial prompt text and attachment payloads", () => {
     expect(() => parseCommand(JSON.stringify({
       channel: "electron_shell",
       type: "thread_window.open_initial_prompt",
@@ -100,7 +101,22 @@ describe("electronShellProtocol", () => {
       payload: {
         clientRequestId: "prompt-4",
         text: "hello",
-        attachments: [{ kind: "image", id: "image-1", mimeType: "image/gif", base64: "abc123" }],
+        attachments: [],
+        actionBinding: null,
+      },
+    }))).toThrow("unsupported electron shell command");
+  });
+
+  it("rejects malformed initial prompt user input items", () => {
+    expect(() => parseCommand(JSON.stringify({
+      channel: "electron_shell",
+      type: "thread_window.open_initial_prompt",
+      commandId: "cmd-5",
+      payload: {
+        clientRequestId: "prompt-5",
+        userInput: {
+          items: [{ type: "image", id: "image-1", mimeType: "image/gif", base64: "abc123" }],
+        },
         actionBinding: null,
       },
     }))).toThrow("unsupported electron shell command");

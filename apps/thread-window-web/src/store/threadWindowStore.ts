@@ -2,9 +2,9 @@ import { produce } from "immer";
 import { create } from "zustand";
 import type {
   InitialPromptPayload,
+  Op,
   RunStatus,
   ServerRequest,
-  ThreadAttachment,
   ThreadListEntry,
   ThreadNotification,
   WorkspaceAskCandidate,
@@ -67,14 +67,12 @@ export type ThreadMessage = {
   role: "user" | "assistant" | "tool" | "system";
   text: string;
   pending?: boolean;
-  attachments?: ThreadAttachment[];
   toolName?: string;
   status?: string;
 };
 
 export type QueuedComposerInput = {
-  text: string;
-  attachments: ThreadAttachment[];
+  op: Op;
 };
 
 export type PermissionRequestState = {
@@ -121,7 +119,7 @@ export type ThreadWindowState = {
   setWorkspaces(workspaces: Array<{ id: string; name: string; rootPath: string }>): void;
   toggleWorkspaceExpanded(workspaceId: string): void;
   setSearchQuery(query: string): void;
-  queueComposerInput(threadId: string, text: string, attachments?: ThreadAttachment[]): void;
+  queueComposerInput(threadId: string, op: Op): void;
   removeQueuedComposerInput(threadId: string, index: number): void;
   markComposerInputDispatchPending(threadId: string): void;
   takeNextQueuedInputForDispatch(threadId: string): QueuedComposerInput | null;
@@ -182,10 +180,10 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
     set({ searchQuery: query });
   },
 
-  queueComposerInput(threadId, text, attachments = []) {
+  queueComposerInput(threadId, op) {
     set(produce<ThreadWindowState>((draft) => {
       const thread = draft.threadsById[threadId] ??= emptyThreadState(threadId);
-      thread.queuedComposerInputs.push({ text, attachments });
+      thread.queuedComposerInputs.push({ op });
     }));
   },
 
@@ -220,10 +218,7 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
       }
       const queuedInput = thread.queuedComposerInputs.shift() ?? null;
       if (queuedInput) {
-        nextInput = {
-          text: queuedInput.text,
-          attachments: [...queuedInput.attachments],
-        };
+        nextInput = { op: cloneOp(queuedInput.op) };
         thread.queuedInputDispatchPending = true;
       }
     }));
@@ -290,16 +285,22 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
           }));
           if (
             thread.pendingInitialPrompt
-            && !thread.messages.some(
-              (message) => message.role === "user" && message.text === thread.pendingInitialPrompt?.text,
-            )
+            && !thread.messages.some((message) => message.role === "user" && message.pending)
           ) {
+            const pendingText = thread.pendingInitialPrompt.userInput.items
+              .map((item) => {
+                if (item.type === "text" || item.type === "text_selection") {
+                  return item.text;
+                }
+                return "";
+              })
+              .filter((value) => value.length > 0)
+              .join("\n\n");
             thread.messages.unshift({
               id: `pending-${thread.pendingInitialPrompt.clientRequestId}`,
               role: "user",
-              text: thread.pendingInitialPrompt.text,
+              text: pendingText,
               pending: true,
-              attachments: thread.pendingInitialPrompt.attachments,
             });
           }
           break;
@@ -450,3 +451,42 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
     }));
   },
 }));
+
+function cloneOp(op: Op): Op {
+  if (op.type === "interrupt") {
+    return {
+      type: "interrupt",
+      opId: op.opId,
+      timestamp: op.timestamp,
+      payload: { reason: op.payload.reason },
+    };
+  }
+
+  return {
+    type: "user_input",
+    opId: op.opId,
+    timestamp: op.timestamp,
+    payload: {
+      items: op.payload.items.map((item) => cloneInputItem(item)),
+    },
+  };
+}
+
+function cloneInputItem(item: Op["payload"] extends { items: Array<infer T> } ? T : never): any {
+  switch (item.type) {
+    case "text":
+      return { type: "text", id: item.id, text: item.text };
+    case "image":
+      return { type: "image", id: item.id, mimeType: item.mimeType, base64: item.base64 };
+    case "skill":
+      return {
+        type: "skill",
+        id: item.id,
+        actionId: item.actionId,
+        title: item.title,
+        prompt: item.prompt,
+      };
+    case "text_selection":
+      return { type: "text_selection", id: item.id, text: item.text };
+  }
+}

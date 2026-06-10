@@ -32,7 +32,7 @@ Web 侧命令和通知类型以 `packages/core/src/protocol/` 为真相，`src/p
 
 当前 Web 包必须覆盖这些协议点：
 
-- 出站 `ThreadCommand`：`thread.start`、`thread.resume`、`thread.list`、`thread.delete`、`input.submit`、`turn.interrupt`、`workspace.list`。
+- 出站 `ThreadCommand`：`thread.start`、`thread.resume`、`thread.list`、`thread.delete`、`op.submit`、`workspace.list`。
 - 入站 `ThreadNotification`：消息流、tool 流、状态变化、`thread.listed`、`thread.deleted`、`thread.error`、`workspace.listed`。
 - 入站 `ServerRequest`：`permission.requested` 与 `workspace.requested`。
 - 出站 `ClientResponse`：`permission.answered` 与 `workspace.answered`。
@@ -53,8 +53,8 @@ React `App` 挂载后通过 `installInitialPromptReceiver` 替换正式 receiver
 
 1. `App` 收到 `InitialPromptPayload` 后先写入 store 的 `pendingInitialPrompts`。
 2. `ThreadSocketClient.startInitialPrompt` 发送 `thread.start`，`commandId` 使用 `clientRequestId`，并携带 `actionBinding`。
-3. 收到匹配 `commandId` 的 `thread.started` 后，store 创建对应 `ThreadState`，`App` 把该 `threadId` 设为右侧当前展示 thread；socket client 发送 `thread.resume` 拉取初始 snapshot，再发送首轮 `input.submit` 和 attachments。
-4. 若收到匹配 `commandId` 的 `thread.error`，socket client 清理 pending prompt，store 暴露窗口级错误，不再补发 `input.submit`。
+3. 收到匹配 `commandId` 的 `thread.started` 后，store 创建对应 `ThreadState`，`App` 把该 `threadId` 设为右侧当前展示 thread；socket client 发送 `thread.resume` 拉取初始 snapshot，再发送首轮 `op.submit(UserInput)`。
+4. 若收到匹配 `commandId` 的 `thread.error`，socket client 清理 pending prompt，store 暴露窗口级错误，不再补发 `op.submit`。
 
 这个顺序同时保护“先建 thread 再补首轮输入”和“WebSocket 未 open 时排队发送”的场景；相关测试在 `tests/nativeConfig.test.ts`、`tests/threadSocketClient.test.ts`、`tests/threadWindowStore.test.ts`。
 
@@ -66,7 +66,7 @@ React `App` 挂载后通过 `installInitialPromptReceiver` 替换正式 receiver
 - 历史：`history` 来自 `thread.listed`。
 - thread 状态缓存：`threadsById` 中每个 `ThreadState` 持有 `threadId`、title、run status、messages、pending initial prompt、权限请求、workspace 请求、composer 队列和 thread 级错误。右侧当前展示的 `activeThreadId` 是 `App` 本地 React state，不进入 store。
 - 请求面板：`permission.requested` / `workspace.requested` 按 `threadId` 放到对应 `ThreadState`；用户回答后根组件发送 response 并调用显式 resolve action 移除请求。
-- composer running 输入：目标 thread running 或已有 queued input 派发中时，`App` 不发送 `input.submit`，而是写入对应 `ThreadState` 的 `queuedComposerInputs` 并在 Composer 上方展示队列；等对应 thread 离开 running 且连接可用后，每个 thread 一次只取一条 queued input 发送，防止多个 user message 连续插到当前 assistant 回复前。
+- composer running 输入：目标 thread running 或已有 queued input 派发中时，`App` 不立即发送下一条 `op.submit(UserInput)`，而是写入对应 `ThreadState` 的 `queuedComposerInputs` 并在 Composer 上方展示队列；等对应 thread 离开 running 且连接可用后，每个 thread 一次只取一条 queued input 发送，防止多个 user message 连续插到当前 assistant 回复前。停止按钮发送 `op.submit(Interrupt)`。
 - workspace：`workspaces` 来自 `workspace.listed`，`expandedWorkspaceIds` 和 `searchQuery` 驱动历史侧栏；`expandedWorkspaceIds` 会用 `localStorage` 做轻量持久化，刷新或重开同一 ThreadWindow 前端后保留展开状态。
 - 去重：`processedNotificationIds` 防止重复处理同一 notification，特别是 streaming delta。
 

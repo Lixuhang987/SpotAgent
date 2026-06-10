@@ -8,6 +8,7 @@ import type { ClientResponse } from "@handagent/core/protocol/ClientResponse.ts"
 import type { ThreadNotification } from "@handagent/core/protocol/ThreadNotification.ts";
 import type { ServerRequest } from "@handagent/core/protocol/ServerRequest.ts";
 import type { AgentActivityEvent } from "@handagent/core/protocol/AgentActivity.ts";
+import type { Op } from "@handagent/core/protocol/Op.ts";
 import type { MCPClient } from "@handagent/core/mcp/MCPClient.ts";
 import type { MCPServerConfig } from "@handagent/core/mcp/MCPConfig.ts";
 import type { PlatformAdapter } from "@handagent/core/platform/PlatformAdapter.ts";
@@ -15,6 +16,12 @@ import { parseMCPConfig } from "@handagent/core/mcp/MCPConfig.ts";
 import type { AgentMessage } from "@handagent/core/runtime/AgentMessage.ts";
 import { META_TOOL_NAME } from "@handagent/core/tools/MetaToolUseTool.ts";
 import { ThreadPersistence } from "../thread/ThreadPersistence.ts";
+import {
+  AgentManager,
+  createSharedAgentStatus,
+  renderUserInputForRuntime,
+  type Agent,
+} from "../agent/AgentManager.ts";
 import { AgentActivityPublisher } from "../activity/AgentActivityPublisher.ts";
 import { ThreadCommandRouter } from "../thread/ThreadCommandRouter.ts";
 import { ThreadNotificationPublisher } from "../thread/ThreadNotificationPublisher.ts";
@@ -89,7 +96,7 @@ export function attachThreadSocketHandlers(
       if ("threadId" in message && typeof message.threadId === "string") {
         eventPublisher.subscribe(connectionId, message.threadId);
       }
-      if (message.type === "input.submit") {
+      if (message.type === "op.submit") {
         if (permissionBridge && !boundThreads.has(message.threadId)) {
           const token = permissionBridge.bindThread(
             message.threadId,
@@ -204,8 +211,7 @@ function isThreadCommand(message: unknown): message is ThreadCommand {
     "thread.resume",
     "thread.list",
     "thread.delete",
-    "input.submit",
-    "turn.interrupt",
+    "op.submit",
     "workspace.list",
   ].includes((message as { type?: string }).type ?? "");
 }
@@ -480,8 +486,44 @@ export async function startDefaultServer(port = 4317) {
   const eventPublisher = new ThreadNotificationPublisher((event) => {
     activityPublisher.observe(event);
   });
+  const agentManager = new AgentManager();
+  const createAgent = (threadId: string): Agent => {
+    const agentStatus = createSharedAgentStatus();
+    const publishRuntimeEvent = (event: ThreadNotification) => {
+      observeAgentStatus(agentStatus, event);
+      eventPublisher.publish(event);
+    };
+
+    return {
+      tx_sub: {
+        async send(op: Op) {
+          if (op.type === "interrupt") {
+            await orchestrator.interruptAndWait(threadId, publishRuntimeEvent);
+            return;
+          }
+
+          const runtimeInput = renderUserInputForRuntime(op);
+          await orchestrator.submitInput(
+            {
+              threadId,
+              messageId: op.opId,
+              timestamp: op.timestamp,
+              payload: runtimeInput,
+            },
+            publishRuntimeEvent,
+          );
+        },
+      },
+      rx_event: (async function* emptyRuntimeEventStream() {})(),
+      agent_status: agentStatus,
+      session: { threadId },
+      async close() {
+        await orchestrator.interruptAndWait(threadId, publishRuntimeEvent);
+      },
+    };
+  };
   const commandRouter = new ThreadCommandRouter(
-    orchestrator,
+    agentManager,
     persistence,
     eventPublisher,
     undefined,
@@ -492,6 +534,7 @@ export async function startDefaultServer(port = 4317) {
     },
     {},
     workspaceRegistry,
+    createAgent,
   );
 
   return startServer({
@@ -505,6 +548,25 @@ export async function startDefaultServer(port = 4317) {
     staticFilesDir: resolveThreadWindowWebDistDir(),
     port,
   });
+}
+
+function observeAgentStatus(
+  agentStatus: ReturnType<typeof createSharedAgentStatus>,
+  event: ThreadNotification,
+): void {
+  if (event.type === "turn.started") {
+    agentStatus.set("running");
+    return;
+  }
+
+  if (event.type === "turn.completed") {
+    agentStatus.set(event.payload.status === "completed" ? "idle" : event.payload.status);
+    return;
+  }
+
+  if (event.type === "thread.status.changed") {
+    agentStatus.set(event.payload.value);
+  }
 }
 
 interface ServerPaths {

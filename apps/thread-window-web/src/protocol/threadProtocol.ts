@@ -1,4 +1,5 @@
 import type { ClientResponse } from "@handagent/core/protocol/ClientResponse.ts";
+import type { Op, UserInput } from "@handagent/core/protocol/Op.ts";
 import type { ServerRequest } from "@handagent/core/protocol/ServerRequest.ts";
 import type { ThreadCommand } from "@handagent/core/protocol/ThreadCommand.ts";
 import type { ThreadNotification } from "@handagent/core/protocol/ThreadNotification.ts";
@@ -16,14 +17,14 @@ export type {
   WorkspaceAskCandidate,
 } from "@handagent/core/protocol/ThreadProtocolShared.ts";
 export type { ClientResponse } from "@handagent/core/protocol/ClientResponse.ts";
+export type { Op, UserInput } from "@handagent/core/protocol/Op.ts";
 export type { ServerRequest } from "@handagent/core/protocol/ServerRequest.ts";
 export type { ThreadCommand } from "@handagent/core/protocol/ThreadCommand.ts";
 export type { ThreadNotification } from "@handagent/core/protocol/ThreadNotification.ts";
 
 export type InitialPromptPayload = {
   clientRequestId: string;
-  text: string;
-  attachments: ThreadAttachment[];
+  userInput: UserInput;
   actionBinding: ActionBindingPayload | null;
 };
 
@@ -93,36 +94,33 @@ export function encodeThreadDelete(input: {
   });
 }
 
-export function encodeInputSubmit(input: {
+export function encodeOpSubmit(input: {
   threadId: string;
-  inputId: string;
+  commandId: string;
   timestamp: string;
-  text: string;
-  attachments: ThreadAttachment[];
+  op: Op;
 }): string {
   return encode({
-    type: "input.submit",
+    type: "op.submit",
     threadId: input.threadId,
-    inputId: input.inputId,
+    commandId: input.commandId,
     timestamp: input.timestamp,
     payload: {
-      text: input.text,
-      ...(input.attachments.length ? { attachments: input.attachments } : {}),
+      op: input.op,
     },
   });
 }
 
-export function encodeTurnInterrupt(input: {
-  threadId: string;
-  commandId: string;
-  timestamp: string;
-}): string {
-  return encode({
-    type: "turn.interrupt",
-    threadId: input.threadId,
-    commandId: input.commandId,
-    timestamp: input.timestamp,
-  });
+export function createUserInputFromText(text: string): UserInput {
+  return {
+    items: [
+      {
+        type: "text",
+        id: crypto.randomUUID(),
+        text,
+      },
+    ],
+  };
 }
 
 export function encodePermissionAnswer(input: {

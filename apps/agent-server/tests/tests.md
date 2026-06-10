@@ -9,6 +9,7 @@
 | 子节点 | 职责 |
 |------|------|
 | `activity/` | `AgentActivityPublisher` 的 snapshot、状态派生和 subscriber 广播 |
+| `agent/` | `AgentManager` 的注册、`op.submit` 转发、删除关闭和 `UserInput` bridge 转换 |
 | `server/` | `startServer`、`attachThreadSocketHandlers`、`attachPlatformSocketHandlers`、顶层 `PlatformBridgeMessage / ThreadCommand / ClientResponse` 分派、按 MCP 配置创建 client、LLM 模式解析、Computer Use client 选择 |
 | `thread/` | `ThreadCommandRouter`、`ThreadNotificationPublisher`、`ThreadRuntimeOrchestrator`、`ThreadPersistence`、thread 级工具激活状态 |
 | `protocol/` | `MessageTranslator` 的 `ThreadNotification`、审计事件、用户附件和 image STUB 翻译 |

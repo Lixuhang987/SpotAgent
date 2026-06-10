@@ -2,11 +2,12 @@ import {
   encodeThreadList,
   encodeThreadResume,
   encodeThreadStart,
-  encodeInputSubmit,
+  encodeOpSubmit,
   encodeWorkspaceList,
+  type InitialPromptPayload,
+  type Op,
   isServerRequest,
   isThreadNotification,
-  type InitialPromptPayload,
   type ServerRequest,
   type ThreadNotification,
 } from "../protocol/threadProtocol.ts";
@@ -95,17 +96,12 @@ export class ThreadSocketClient {
     }));
   }
 
-  submitInput(
-    threadId: string,
-    text: string,
-    attachments: InitialPromptPayload["attachments"] = [],
-  ): void {
-    this.sendRaw(encodeInputSubmit({
+  submitOp(threadId: string, op: Op): void {
+    this.sendRaw(encodeOpSubmit({
       threadId,
-      inputId: this.nextId(),
+      commandId: this.nextId(),
       timestamp: this.now(),
-      text,
-      attachments,
+      op,
     }));
   }
 
@@ -175,7 +171,12 @@ export class ThreadSocketClient {
 
     this.pendingInitialPrompts.delete(notification.commandId);
     this.resumeThread(notification.threadId);
-    this.submitInput(notification.threadId, pending.text, pending.attachments);
+    this.submitOp(notification.threadId, {
+      type: "user_input",
+      opId: pending.clientRequestId,
+      timestamp: this.now(),
+      payload: pending.userInput,
+    });
   }
 
   private hasActiveSocket(): boolean {

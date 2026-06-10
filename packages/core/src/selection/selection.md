@@ -10,7 +10,7 @@
 
 ## 与桌面采集路径的关系
 
-- core 的 `SelectionCapture` 是抽象接口，**当前 agent-server 主链路并不调用它**。生产路径是：desktop 端 [SelectionCapture 模块](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/SelectionCapture/selection-capture.md) 直接采集 → PromptPanel attachment chip → `user_message.attachments` → server 端 `composeUserContent` 拼成 user message。
+- core 的 `SelectionCapture` 是抽象接口，**当前 agent-server 主链路并不调用它**。生产路径是：desktop 端 [SelectionCapture 模块](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/SelectionCapture/selection-capture.md) 直接采集 → PromptPanel attachment chip → `UserInput.items` → React 首轮 `op.submit(UserInput)` → server 端 `composeUserContent` 拼成 user message。
 - core 这个接口主要是给未来无桌面环境（CLI / 测试 / 其他平台）兜底用的；desktop 平台的实际实现走 Swift 而非 TS。
 - `AgentThread.buildInitialUserMessage()` 仍消费 `SelectionCaptureResult.selected`，把选区拼到 prompt 前面（中文 prefix「选区文本：」）。
 

@@ -29,7 +29,7 @@ captureRegion 热键
             └─ error(message)   → PromptPanelController.appendAttachment(.selectionError(...))
 ```
 
-附件提交后由 Coordinator 通过 `PromptSubmission.compose(...)` 组装为 `composed prompt + summary + UserMessageAttachmentPayload[]`，再通过 `thread_window.open_initial_prompt` command 交给 Electron main。React ThreadWindow 收到 initial prompt 后先通过 `/api/thread` 发送 `thread.start`，收到 `thread.started` 后再发送首轮 `input.submit`，其中 `input.submit.payload.attachments` 携带 `text_selection` / `image` attachments。
+附件提交后由 Coordinator 通过 `PromptSubmission.compose(...)` 组装为 `UserInput.items` 与摘要，再通过 `thread_window.open_initial_prompt` command 交给 Electron main。React ThreadWindow 收到 initial prompt 后先通过 `/api/thread` 发送 `thread.start`，收到 `thread.started` 后再发送首轮 `op.submit(UserInput)`；其中 `text_selection` / `image` 均作为 `InputItem` 进入 `UserInput.items`。
 
 ## 设计备注
 
@@ -45,4 +45,4 @@ captureRegion 热键
 
 - 不要在此目录新增 tool 化的「screen.capture」或「accessibility.read」实现，那是 [PlatformBridge](/Users/mu9/proj/handAgent/apps/desktop/Sources/AppServices/PlatformBridge/platform-bridge.md) 的职责。
 - 不要把 Provider 的结果直接发给 agent-server，必须让 PromptPanel 展示 chip。
-- 新增采集路径请同时新增对应的 `PromptAttachmentResult` case 与 `UserMessageAttachmentPayload` case，并保持两者一一映射。
+- 新增采集路径请同时新增对应的 `PromptAttachmentResult` case 与 `InputItem` case，并保持两者一一映射。

@@ -8,7 +8,7 @@
 
 | 子模块 | 子文档 | 一句话职责 |
 |------|------|------|
-| `runtime/` | [runtime/runtime.md](/Users/mu9/proj/handAgent/packages/core/src/runtime/runtime.md) | LLM/tool 主循环、消息模型、ToolCallEnvelope |
+| `runtime/` | [runtime/runtime.md](/Users/mu9/proj/handAgent/packages/core/src/runtime/runtime.md) | LLM/tool 主循环、AgentRunner、消息模型、ToolCallEnvelope |
 | `actions/` | [actions/actions.md](/Users/mu9/proj/handAgent/packages/core/src/actions/actions.md) | Action manifest 与 thread binding 解析 |
 | `blob/` | [blob/blob.md](/Users/mu9/proj/handAgent/packages/core/src/blob/blob.md) | 大段上下文内容的本地 Blob 持久化与 summary 元数据 |
 | `llm/` | [llm/llm.md](/Users/mu9/proj/handAgent/packages/core/src/llm/llm.md) | LLMClient 抽象 + Vercel AI SDK 适配 |
@@ -34,7 +34,7 @@
 
 ### 2. runtime 阶段
 
-- 主路径由 agent-server 的 `ThreadRuntimeOrchestrator` 调 `AgentRuntime.runWithMessages(messages, onEvent, {threadId})`
+- 主路径由 agent-server 的持久 Agent 消费 `Op`，再由 Agent 内部 turn 执行器调 `AgentRuntime.runWithMessages(messages, onEvent, {threadId})`
 - 每轮先通过 `SystemPrompt` 把默认 system prompt sections 临时前置到 LLM 输入，再消费 `LLMClient.stream(llmMessages, registry.list(), {blobStore?})`
 - 处理 `toolCalls`：`PermissionPolicy.check` → ask / allow / deny → tool 调用 → 写 tool message
 - 详细流程图见 [runtime/runtime.md](/Users/mu9/proj/handAgent/packages/core/src/runtime/runtime.md)
@@ -73,7 +73,7 @@ plugin action 绑定的外部能力不由 core tools 目录加载私有插件进
 
 - React ThreadWindow 与 agent-server 走 `/api/thread` WebSocket；Thread 主路径拆为 `ThreadCommand`、`ThreadNotification`、`ServerRequest`、`ClientResponse` 四类消息。
 - Electron StatusBubble 和后续桌宠订阅 `/api/activity` WebSocket，只接收 `AgentActivityEvent` 轻量状态，不接收完整 thread 消息。
-- `ThreadCommand` 只表示 UI 主动提交的命令；`ThreadNotification` 只表示 agent-server 向 UI 推送的结果通知。
+- `ThreadCommand` 只表示 UI 主动提交的命令；运行期输入统一封装为 `op.submit(UserInput | Interrupt)`；`ThreadNotification` 只表示 agent-server 向 UI 推送的结果通知。
 - `ServerRequest` / `ClientResponse` 只覆盖少量“server 提问，UI 回执”的交互，如权限审批与 workspace 选择。
 - Swift desktop 不参与 thread 主协议，只通过 `/api/platform` 处理独立 `PlatformBridgeMessage`，并用 `channel: "platform"` 分流。
 - 字段说明详见 [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md)。

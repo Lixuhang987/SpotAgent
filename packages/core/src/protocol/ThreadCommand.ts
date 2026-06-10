@@ -1,7 +1,7 @@
 import type {
   ActionBindingPayload,
-  ThreadAttachment,
 } from "./ThreadProtocolShared.ts";
+import type { Op } from "./Op.ts";
 
 export type ThreadCommand =
   | {
@@ -33,20 +33,13 @@ export type ThreadCommand =
       };
     }
   | {
-      type: "input.submit";
-      threadId: string;
-      inputId: string;
-      timestamp: string;
-      payload: {
-        text: string;
-        attachments?: ThreadAttachment[];
-      };
-    }
-  | {
-      type: "turn.interrupt";
+      type: "op.submit";
       threadId: string;
       commandId: string;
       timestamp: string;
+      payload: {
+        op: Op;
+      };
     }
   | {
       type: "workspace.list";

@@ -7,8 +7,8 @@ import {
   encodePermissionAnswer,
   encodeThreadDelete,
   encodeThreadStart,
-  encodeTurnInterrupt,
   encodeWorkspaceAnswer,
+  createUserInputFromText,
 } from "./protocol/threadProtocol.ts";
 import { createThreadWindowStore } from "./store/threadWindowStore.ts";
 import { ThreadSocketClient } from "./thread/threadSocketClient.ts";
@@ -89,7 +89,7 @@ export function App() {
     for (const thread of Object.values(store.threadsById)) {
       const nextInput = store.takeNextQueuedInputForDispatch(thread.threadId);
       if (nextInput) {
-        clientRef.current?.submitInput(thread.threadId, nextInput.text, nextInput.attachments);
+        clientRef.current?.submitOp(thread.threadId, nextInput.op);
       }
     }
   }, [state.connectionState, queuedDispatchKey]);
@@ -144,11 +144,21 @@ export function App() {
               || latestThread.queuedInputDispatchPending
               || latestThread.queuedComposerInputs.length > 0;
             if (shouldQueue) {
-              createThreadWindowStore.getState().queueComposerInput(threadId, text);
+              createThreadWindowStore.getState().queueComposerInput(threadId, {
+                type: "user_input",
+                opId: id("op"),
+                timestamp: now(),
+                payload: createUserInputFromText(text),
+              });
               return;
             }
             createThreadWindowStore.getState().markComposerInputDispatchPending(threadId);
-            clientRef.current?.submitInput(threadId, text);
+            clientRef.current?.submitOp(threadId, {
+              type: "user_input",
+              opId: id("op"),
+              timestamp: now(),
+              payload: createUserInputFromText(text),
+            });
           }}
           onRemoveQueuedInput={(threadId, index) => {
             createThreadWindowStore.getState().removeQueuedComposerInput(threadId, index);
@@ -158,11 +168,12 @@ export function App() {
             if (state.connectionState !== "connected" || latestThread?.status !== "running") {
               return;
             }
-            clientRef.current?.sendRaw(encodeTurnInterrupt({
-              threadId,
-              commandId: id("interrupt"),
+            clientRef.current?.submitOp(threadId, {
+              type: "interrupt",
+              opId: id("interrupt"),
               timestamp: now(),
-            }));
+              payload: { reason: "user" },
+            });
           }}
           onAnswerPermission={(requestId, decision) => {
             clientRef.current?.sendRaw(encodePermissionAnswer({

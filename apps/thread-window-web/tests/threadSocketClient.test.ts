@@ -92,8 +92,9 @@ describe("ThreadSocketClient", () => {
     socket.open();
     client.startInitialPrompt({
       clientRequestId: "prompt-1",
-      text: "hello",
-      attachments: [],
+      userInput: {
+        items: [{ type: "text", id: "text-1", text: "hello" }],
+      },
       actionBinding: null,
     });
     socket.onmessage?.({
@@ -112,7 +113,7 @@ describe("ThreadSocketClient", () => {
       { type: "thread.list", commandId: "list-1" },
       { type: "thread.start", commandId: "prompt-1", payload: { actionBinding: null, workspaceId: null } },
       { type: "thread.resume", threadId: "thread-1", commandId: "resume-1" },
-      { type: "input.submit", threadId: "thread-1", inputId: "input-1", payload: { text: "hello" } },
+      { type: "op.submit", threadId: "thread-1", commandId: "input-1", payload: { op: { type: "user_input", opId: "prompt-1", payload: { items: [{ type: "text", id: "text-1", text: "hello" }] } } } },
     ]);
   });
 
@@ -216,8 +217,9 @@ describe("ThreadSocketClient", () => {
 
     expect(() => client.startInitialPrompt({
       clientRequestId: "prompt-1",
-      text: "hello before open",
-      attachments: [],
+      userInput: {
+        items: [{ type: "text", id: "text-1", text: "hello before open" }],
+      },
       actionBinding: null,
     })).not.toThrow();
     expect(socket.sent).toEqual([]);
@@ -239,7 +241,7 @@ describe("ThreadSocketClient", () => {
       { type: "workspace.list", commandId: "workspace-list-1" },
       { type: "thread.list", commandId: "list-1" },
       { type: "thread.resume", threadId: "thread-1", commandId: "resume-1" },
-      { type: "input.submit", threadId: "thread-1", inputId: "input-1", payload: { text: "hello before open" } },
+      { type: "op.submit", threadId: "thread-1", commandId: "input-1", payload: { op: { type: "user_input", opId: "prompt-1", payload: { items: [{ type: "text", id: "text-1", text: "hello before open" }] } } } },
     ]);
   });
 
@@ -259,7 +261,12 @@ describe("ThreadSocketClient", () => {
 
       client.connect();
       const socket = FakeWebSocket.instances[0];
-      client.submitInput("thread-1", "queued before open");
+      client.submitOp("thread-1", {
+        type: "user_input",
+        opId: "queued-1",
+        timestamp: "2026-06-06T00:00:00.000Z",
+        payload: { items: [{ type: "text", id: "text-1", text: "queued before open" }] },
+      });
       socket.onclose?.();
       client.disconnect();
       vi.advanceTimersByTime(25);
@@ -292,8 +299,9 @@ describe("ThreadSocketClient", () => {
     socket.open();
     client.startInitialPrompt({
       clientRequestId: "prompt-1",
-      text: "hello",
-      attachments: [],
+      userInput: {
+        items: [{ type: "text", id: "text-1", text: "hello" }],
+      },
       actionBinding: null,
     });
 
@@ -366,15 +374,17 @@ describe("ThreadSocketClient", () => {
     socket.open();
     client.startInitialPrompt({
       clientRequestId: "prompt-1",
-      text: "first",
-      attachments: [],
+      userInput: {
+        items: [{ type: "text", id: "text-1", text: "first" }],
+      },
       actionBinding: null,
     });
 
     expect(() => client.startInitialPrompt({
       clientRequestId: "prompt-1",
-      text: "second",
-      attachments: [],
+      userInput: {
+        items: [{ type: "text", id: "text-2", text: "second" }],
+      },
       actionBinding: null,
     })).toThrow(/already pending/);
 
@@ -394,7 +404,19 @@ describe("ThreadSocketClient", () => {
       { type: "thread.list", commandId: "list-1" },
       { type: "thread.start", commandId: "prompt-1", payload: { actionBinding: null, workspaceId: null } },
       { type: "thread.resume", threadId: "thread-1", commandId: "resume-1" },
-      { type: "input.submit", threadId: "thread-1", inputId: "input-1", payload: { text: "first" } },
+      {
+        type: "op.submit",
+        threadId: "thread-1",
+        commandId: "input-1",
+        payload: {
+          op: {
+            type: "user_input",
+            opId: "prompt-1",
+            timestamp: "2026-06-06T00:00:00.000Z",
+            payload: { items: [{ type: "text", id: "text-1", text: "first" }] },
+          },
+        },
+      },
     ]);
   });
 });
