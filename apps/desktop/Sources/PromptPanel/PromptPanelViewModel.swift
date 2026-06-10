@@ -8,7 +8,9 @@ enum PromptPanelActionSelectionDirection {
 @Observable
 @MainActor
 final class PromptPanelViewModel {
-    var draft = ""
+    var draft = "" {
+        didSet { normalizeSelectedAction() }
+    }
     var focusSeed = 0
     var attachments: [PromptAttachmentResult] = []
     var selectedActionId: String?
@@ -28,19 +30,23 @@ final class PromptPanelViewModel {
     }
 
     var selectedAction: ActionDefinition? {
-        guard let selectedActionId else { return nil }
-        return filteredActions.first { $0.id == selectedActionId }
+        let actions = filteredActions
+        guard !actions.isEmpty else { return nil }
+        if let selectedActionId,
+           let selected = actions.first(where: { $0.id == selectedActionId }) {
+            return selected
+        }
+        return actions.first
     }
 
     init(actions: [ActionDefinition]) {
         self.actions = actions
+        normalizeSelectedAction()
     }
 
     func updateActions(_ actions: [ActionDefinition]) {
         self.actions = actions
-        if selectedAction == nil {
-            selectedActionId = nil
-        }
+        normalizeSelectedAction()
     }
 
     func appendAttachment(_ attachment: PromptAttachmentResult) {
@@ -64,7 +70,7 @@ final class PromptPanelViewModel {
     func resetForNewThread() {
         draft = ""
         attachments = []
-        selectedActionId = nil
+        normalizeSelectedAction()
     }
 
     func setSubmissionEnabled(_ enabled: Bool, message: String?) {
@@ -137,6 +143,21 @@ final class PromptPanelViewModel {
                 submit()
             }
         }
+    }
+
+    private func normalizeSelectedAction() {
+        let actions = filteredActions
+        guard !actions.isEmpty else {
+            selectedActionId = nil
+            return
+        }
+
+        if let selectedActionId,
+           actions.contains(where: { $0.id == selectedActionId }) {
+            return
+        }
+
+        selectedActionId = actions.first?.id
     }
 
     func openSettings() {

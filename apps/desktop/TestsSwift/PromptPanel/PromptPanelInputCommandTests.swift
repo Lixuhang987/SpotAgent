@@ -3,13 +3,13 @@ import XCTest
 @testable import HandAgentDesktop
 
 final class PromptPanelInputCommandTests: XCTestCase {
-    func testReturnSubmitsSelectedActionOrDraftWithoutShiftOrOption() {
+    func testReturnSubmitsPromptPanelWithoutShiftOrOption() {
         XCTAssertEqual(
             PromptPanelInputCommand.resolve(
                 commandSelector: #selector(NSResponder.insertNewline(_:)),
                 modifierFlags: []
             ),
-            .submitSelectedAction
+            .submit
         )
     }
 
