@@ -70,6 +70,7 @@ final class AppServices {
     let setActivationPolicy: @MainActor (NSApplication.ActivationPolicy) -> Void
     let terminateApplication: @MainActor () -> Void
     let showsFatalAlert: Bool
+    let promptPanelPresentationMode: PromptPanelPresentationMode
 
     init(
         appServer: (any AppServerManaging)? = nil,
@@ -90,7 +91,8 @@ final class AppServices {
             NSApplication.shared.terminate(nil)
         },
         environment: [String: String] = ProcessInfo.processInfo.environment,
-        showsFatalAlert: Bool = true
+        showsFatalAlert: Bool = true,
+        promptPanelPresentationMode: PromptPanelPresentationMode = .visible
     ) {
         let runtime = appServer == nil
             ? AppServices.defaultRuntime(
@@ -112,6 +114,7 @@ final class AppServices {
         self.setActivationPolicy = setActivationPolicy
         self.terminateApplication = terminateApplication
         self.showsFatalAlert = showsFatalAlert
+        self.promptPanelPresentationMode = promptPanelPresentationMode
     }
 
     static func testing(
@@ -140,7 +143,8 @@ final class AppServices {
             fatalAlertPresenter: NopFatalAlertPresenter(),
             setActivationPolicy: setActivationPolicy,
             terminateApplication: {},
-            showsFatalAlert: false
+            showsFatalAlert: false,
+            promptPanelPresentationMode: .hiddenForTesting
         )
     }
 

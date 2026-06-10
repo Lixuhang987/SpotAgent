@@ -4,6 +4,12 @@ import KeyboardShortcuts
 import SwiftUI
 
 @MainActor
+enum PromptPanelPresentationMode {
+    case visible
+    case hiddenForTesting
+}
+
+@MainActor
 final class PromptPanelController {
     private var panel: PromptPanelWindow?
     private var eventMonitor: Any?
@@ -12,6 +18,7 @@ final class PromptPanelController {
     private let quickLookController = QuickLookPreviewController()
     private let captureFocusOwner: () -> Any?
     private let restoreFocusOwner: (Any) -> Void
+    private let presentationMode: PromptPanelPresentationMode
     private var previousFocusOwner: Any?
 
     var onSubmit: ((String, [PromptAttachmentResult]) -> Void)?
@@ -20,8 +27,10 @@ final class PromptPanelController {
     var onDidShow: (() -> Void)?
 
     init<FocusRestorer: PromptPanelFocusRestoring>(
-        focusRestorer: FocusRestorer = MacPromptPanelFocusRestorer()
+        focusRestorer: FocusRestorer = MacPromptPanelFocusRestorer(),
+        presentationMode: PromptPanelPresentationMode = .visible
     ) {
+        self.presentationMode = presentationMode
         captureFocusOwner = { focusRestorer.captureCurrentFocusOwner() }
         restoreFocusOwner = { token in
             guard let typedToken = token as? FocusRestorer.Token else { return }
@@ -94,8 +103,15 @@ final class PromptPanelController {
             previousFocusOwner = captureFocusOwner()
         }
         panel.center()
-        panel.orderFrontRegardless()
         panel.contentView?.layoutSubtreeIfNeeded()
+        guard presentationMode == .visible else {
+            DispatchQueue.main.async { [weak self] in
+                self?.viewModel?.focusSeed += 1
+                self?.onDidShow?()
+            }
+            return
+        }
+        panel.orderFrontRegardless()
         panel.makeKey()
         installEventMonitor()
         DispatchQueue.main.async { [weak self] in

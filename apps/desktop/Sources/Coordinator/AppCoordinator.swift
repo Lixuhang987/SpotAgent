@@ -27,7 +27,9 @@ final class AppCoordinator {
     @ObservationIgnored private let activationPolicy = AppActivationPolicyCoordinator()
     @ObservationIgnored private var isThreadWindowCountedInActivationPolicy = false
     @ObservationIgnored private var registeredActionShortcutNames: Set<KeyboardShortcuts.Name> = []
-    @ObservationIgnored private lazy var promptPanelController = PromptPanelController()
+    @ObservationIgnored private lazy var promptPanelController = PromptPanelController(
+        presentationMode: services.promptPanelPresentationMode
+    )
     @ObservationIgnored private lazy var captureCoordinator = PromptCaptureCoordinator(
         controller: promptPanelController,
         selectionProvider: MacSelectionCaptureProvider(),

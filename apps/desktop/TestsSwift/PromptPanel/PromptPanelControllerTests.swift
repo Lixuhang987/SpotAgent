@@ -4,8 +4,25 @@ import ObjectiveC
 
 @MainActor
 final class PromptPanelControllerTests: XCTestCase {
+    func testShowCanCreatePanelWithoutDisplayingWindowForTests() async throws {
+        let controller = PromptPanelController(
+            focusRestorer: FakePromptPanelFocusRestorer(),
+            presentationMode: .hiddenForTesting
+        )
+        let viewModel = PromptPanelViewModel(actions: [])
+        controller.configure(viewModel: viewModel)
+        defer { controller.hide() }
+
+        controller.show()
+        try await Task.sleep(for: .milliseconds(20))
+
+        let panel = Mirror(reflecting: controller).descendant("panel") as? NSPanel
+        XCTAssertNotNil(panel)
+        XCTAssertFalse(panel?.isVisible ?? true)
+    }
+
     func testShowDoesNotAppendSelectionAttachment() async throws {
-        let controller = PromptPanelController(focusRestorer: FakePromptPanelFocusRestorer())
+        let controller = makeController()
         let viewModel = PromptPanelViewModel(actions: [])
         controller.configure(viewModel: viewModel)
         defer { controller.hide() }
@@ -33,7 +50,7 @@ final class PromptPanelControllerTests: XCTestCase {
     }
 
     func testCaptureSelectionCoordinatorStillAppendsSelectionBeforeShowingPanel() async throws {
-        let controller = PromptPanelController(focusRestorer: FakePromptPanelFocusRestorer())
+        let controller = makeController()
         let viewModel = PromptPanelViewModel(actions: [])
         let provider = FakeSelectionCaptureProvider(result: .selected(text: "active selection"))
         let coordinator = PromptCaptureCoordinator(
@@ -52,7 +69,7 @@ final class PromptPanelControllerTests: XCTestCase {
     }
 
     func testSelectActionAndShowPrefillsArgumentTemplate() async throws {
-        let controller = PromptPanelController(focusRestorer: FakePromptPanelFocusRestorer())
+        let controller = makeController()
         let action = ActionDefinition.skill(
             id: "review/code",
             trigger: "r",
@@ -76,7 +93,7 @@ final class PromptPanelControllerTests: XCTestCase {
 
     func testHideRestoresFocusToAppCapturedBeforeShow() async throws {
         let focusRestorer = FakePromptPanelFocusRestorer()
-        let controller = PromptPanelController(focusRestorer: focusRestorer)
+        let controller = makeController(focusRestorer: focusRestorer)
         let viewModel = PromptPanelViewModel(actions: [])
         controller.configure(viewModel: viewModel)
 
@@ -90,7 +107,7 @@ final class PromptPanelControllerTests: XCTestCase {
 
     func testRepeatedHideRestoresFocusOnlyOnce() async throws {
         let focusRestorer = FakePromptPanelFocusRestorer()
-        let controller = PromptPanelController(focusRestorer: focusRestorer)
+        let controller = makeController(focusRestorer: focusRestorer)
         let viewModel = PromptPanelViewModel(actions: [])
         controller.configure(viewModel: viewModel)
 
@@ -104,7 +121,7 @@ final class PromptPanelControllerTests: XCTestCase {
 
     func testHideCanSkipRestoringFocusWhenHandingOffToThreadWindow() async throws {
         let focusRestorer = FakePromptPanelFocusRestorer()
-        let controller = PromptPanelController(focusRestorer: focusRestorer)
+        let controller = makeController(focusRestorer: focusRestorer)
         let viewModel = PromptPanelViewModel(actions: [])
         controller.configure(viewModel: viewModel)
 
@@ -140,6 +157,16 @@ final class PromptPanelControllerTests: XCTestCase {
         XCTAssertTrue(window.initialFirstResponder === textView)
         XCTAssertTrue(window.firstResponder === textView)
     }
+}
+
+@MainActor
+private func makeController(
+    focusRestorer: FakePromptPanelFocusRestorer = FakePromptPanelFocusRestorer()
+) -> PromptPanelController {
+    PromptPanelController(
+        focusRestorer: focusRestorer,
+        presentationMode: .hiddenForTesting
+    )
 }
 
 @MainActor

@@ -6,7 +6,7 @@ import XCTest
 @MainActor
 final class PromptPanelAppearanceTests: XCTestCase {
     func testShowKeepsAquaForAppKitControlStabilization() {
-        let controller = PromptPanelController(focusRestorer: FakePromptPanelAppearanceFocusRestorer())
+        let controller = makeAppearanceController()
         controller.configure(viewModel: PromptPanelViewModel(actions: []))
         defer { controller.hide() }
 
@@ -20,7 +20,7 @@ final class PromptPanelAppearanceTests: XCTestCase {
     }
 
     func testUpdateThemeRefreshesExistingRootViewWithoutReplacingViewModel() {
-        let controller = PromptPanelController(focusRestorer: FakePromptPanelAppearanceFocusRestorer())
+        let controller = makeAppearanceController()
         let viewModel = PromptPanelViewModel(actions: [])
         viewModel.draft = "keep me"
         controller.configure(viewModel: viewModel)
@@ -34,6 +34,14 @@ final class PromptPanelAppearanceTests: XCTestCase {
         XCTAssertNotNil(hosting)
         XCTAssertEqual(viewModel.draft, "keep me")
     }
+}
+
+@MainActor
+private func makeAppearanceController() -> PromptPanelController {
+    PromptPanelController(
+        focusRestorer: FakePromptPanelAppearanceFocusRestorer(),
+        presentationMode: .hiddenForTesting
+    )
 }
 
 @MainActor
