@@ -96,7 +96,6 @@ final class PromptPanelController {
         panel.center()
         panel.orderFrontRegardless()
         panel.contentView?.layoutSubtreeIfNeeded()
-        NSApp.activate(ignoringOtherApps: true)
         panel.makeKey()
         installEventMonitor()
         DispatchQueue.main.async { [weak self] in
