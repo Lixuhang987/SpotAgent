@@ -74,56 +74,63 @@ export function attachThreadSocketHandlers(
     const message = parseSocketMessage(raw);
 
     if (isClientResponse(message)) {
-      if (message.type === "permission.answered" && permissionBridge) {
-        const token = boundThreads.get(threadIdFromRequestId(message.requestId));
-        if (token !== undefined) {
-          permissionBridge.handleResponse(message, token);
-        }
-        return;
+      switch (message.type) {
+        case "permission.answered":
+          if (permissionBridge) {
+            const token = boundThreads.get(threadIdFromRequestId(message.requestId));
+            if (token !== undefined) {
+              permissionBridge.handleResponse(message, token);
+            }
+          }
+          return;
+        case "workspace.answered":
+          if (workspaceAskBridge) {
+            const token = workspaceAskBoundThreads.get(threadIdFromRequestId(message.requestId));
+            if (token !== undefined) {
+              workspaceAskBridge.handleResponse(message, token);
+            }
+          }
+          return;
+        default:
+          commandRouter.handleResponse(message, connectionId);
+          return;
       }
-      if (message.type === "workspace.answered" && workspaceAskBridge) {
-        const token = workspaceAskBoundThreads.get(threadIdFromRequestId(message.requestId));
-        if (token !== undefined) {
-          workspaceAskBridge.handleResponse(message, token);
-        }
-        return;
-      }
-      commandRouter.handleResponse(message, connectionId);
-      return;
     }
 
     if (isThreadCommand(message)) {
       if ("threadId" in message && typeof message.threadId === "string") {
         eventPublisher.subscribe(connectionId, message.threadId);
       }
-      if (message.type === "op.submit") {
-        if (permissionBridge && !boundThreads.has(message.threadId)) {
-          const token = permissionBridge.bindThread(
-            message.threadId,
-            (request) => eventPublisher.publishToConnection(connectionId, request),
-          );
-          boundThreads.set(message.threadId, token);
-        }
-        if (workspaceAskBridge && !workspaceAskBoundThreads.has(message.threadId)) {
-          const token = workspaceAskBridge.bindThread(
-            message.threadId,
-            (request) => eventPublisher.publishToConnection(connectionId, request),
-          );
-          workspaceAskBoundThreads.set(message.threadId, token);
-        }
+
+      switch (message.type) {
+        case "op.submit":
+          if (permissionBridge && !boundThreads.has(message.threadId)) {
+            const token = permissionBridge.bindThread(
+              message.threadId,
+              (request) => eventPublisher.publishToConnection(connectionId, request),
+            );
+            boundThreads.set(message.threadId, token);
+          }
+          if (workspaceAskBridge && !workspaceAskBoundThreads.has(message.threadId)) {
+            const token = workspaceAskBridge.bindThread(
+              message.threadId,
+              (request) => eventPublisher.publishToConnection(connectionId, request),
+            );
+            workspaceAskBoundThreads.set(message.threadId, token);
+          }
+          break;
+        case "thread.resume":
+          if (permissionBridge && !boundThreads.has(message.threadId)) {
+            const token = permissionBridge.bindThread(
+              message.threadId,
+              (request) => eventPublisher.publishToConnection(connectionId, request),
+            );
+            boundThreads.set(message.threadId, token);
+          }
+          break;
       }
+
       await commandRouter.receive(message, connectionId);
-      if (
-        message.type === "thread.resume" &&
-        permissionBridge &&
-        !boundThreads.has(message.threadId)
-      ) {
-        const token = permissionBridge.bindThread(
-          message.threadId,
-          (request) => eventPublisher.publishToConnection(connectionId, request),
-        );
-        boundThreads.set(message.threadId, token);
-      }
       return;
     }
   });
