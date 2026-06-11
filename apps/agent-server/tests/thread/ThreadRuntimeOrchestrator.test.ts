@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AgentMessage } from "@handagent/core/runtime/AgentMessage.ts";
 import type { AgentRuntimeEvent } from "@handagent/core/runtime/AgentRuntime.ts";
-import type { ThreadNotification } from "@handagent/core/protocol/ThreadNotification.ts";
+import type { ThreadNotification, AssistantDeltaNotification } from "@handagent/core/protocol/ThreadNotification.ts";
 import type { ThreadAttachment } from "@handagent/core/protocol/ThreadProtocolShared.ts";
 import { InMemoryThreadStore } from "@handagent/core/storage/index.ts";
 import { MemoryBlobStore } from "../support/MemoryBlobStore.ts";
@@ -471,7 +471,7 @@ describe("ThreadRuntimeOrchestrator", () => {
     await orchestrator.waitForThreadIdle("Thread-delta-ids");
 
     const assistantDeltas = pushed.filter(
-      (message): message is Extract<ThreadNotification, { type: "assistant.delta" }> =>
+      (message): message is AssistantDeltaNotification =>
         message.type === "assistant.delta",
     );
     expect(assistantDeltas.map((message) => message.payload.text)).toEqual([

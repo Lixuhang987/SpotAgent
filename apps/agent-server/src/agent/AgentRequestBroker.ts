@@ -2,12 +2,13 @@ import { randomUUID } from "node:crypto";
 import type { AskResolver } from "@handagent/core/permission/FilePermissionPolicy.ts";
 import type { AgentServerRequestEvent } from "@handagent/core/protocol/AgentEvent.ts";
 import type { ClientResponseOp } from "@handagent/core/protocol/Op.ts";
-import type { ServerRequest } from "@handagent/core/protocol/ServerRequest.ts";
+import type { ServerRequest, PermissionRequestedRequest } from "@handagent/core/protocol/ServerRequest.ts";
 import type { WorkspaceAskCandidate } from "@handagent/core/protocol/ThreadProtocolShared.ts";
 import type {
   WorkspaceAskResolver,
   WorkspaceAskUserResult,
 } from "@handagent/core/tools/builtins/WorkspaceAskUserTool.ts";
+import type { PermissionAnsweredResponse, WorkspaceAnsweredResponse } from "@handagent/core/protocol/ClientResponse.ts";
 
 type EmitRequest = (event: AgentServerRequestEvent) => void;
 
@@ -95,7 +96,7 @@ export class AgentRequestBroker {
         resolve({ decision: "deny", reason: "permission request timed out" });
       }, timeoutMs);
 
-      const requestMessage: Extract<ServerRequest, { type: "permission.requested" }> = {
+      const requestMessage: PermissionRequestedRequest = {
         type: "permission.requested",
         requestId,
         threadId,
@@ -169,7 +170,7 @@ export class AgentRequestBroker {
   }
 
   private handlePermissionResponse(
-    response: Extract<ServerRequestResponse, { type: "permission.answered" }>,
+    response: PermissionAnsweredResponse,
   ): void {
     const pending = this.permissionPending.get(response.requestId);
     if (!pending) return;
@@ -184,7 +185,7 @@ export class AgentRequestBroker {
   }
 
   private handleWorkspaceResponse(
-    response: Extract<ServerRequestResponse, { type: "workspace.answered" }>,
+    response: WorkspaceAnsweredResponse,
   ): void {
     const threadId = threadIdFromRequestId(response.requestId);
     const active = this.workspaceActive.get(threadId);

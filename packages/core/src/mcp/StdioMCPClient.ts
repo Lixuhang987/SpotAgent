@@ -10,9 +10,9 @@ import type {
   MCPServerInfo,
   MCPToolDescription,
 } from "./MCPClient.ts";
-import type { MCPServerConfig } from "./MCPConfig.ts";
+import type { StdioMCPServerConfig } from "./MCPConfig.ts";
 
-type StdioServerConfig = Extract<MCPServerConfig, { transport: "stdio" }>;
+type StdioServerConfig = StdioMCPServerConfig;
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 60_000;
 

@@ -1,7 +1,11 @@
+export type SelectedCaptureResult = { kind: "selected"; text: string };
+export type EmptyCaptureResult = { kind: "empty" };
+export type ErrorCaptureResult = { kind: "error"; message?: string };
+
 export type SelectionCaptureResult =
-  | { kind: "selected"; text: string }
-  | { kind: "empty" }
-  | { kind: "error"; message?: string };
+  | SelectedCaptureResult
+  | EmptyCaptureResult
+  | ErrorCaptureResult;
 
 export interface SelectionCapture {
   captureSelectedText(): Promise<SelectionCaptureResult>;

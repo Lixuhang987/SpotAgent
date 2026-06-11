@@ -13,49 +13,108 @@ export type ThemePreference = "light" | "dark" | "system";
 export type ResolvedTheme = "light" | "dark";
 export type HostTheme = { preference: ThemePreference; resolved: ResolvedTheme };
 
+export type OpenInitialPromptCommand = {
+  channel: "electron_shell";
+  type: "thread_window.open_initial_prompt";
+  commandId: string;
+  payload: InitialPromptPayload;
+};
+
+export type OpenHistoryCommand = {
+  channel: "electron_shell";
+  type: "thread_window.open_history";
+  commandId: string;
+};
+
+export type FocusThreadWindowCommand = {
+  channel: "electron_shell";
+  type: "thread_window.focus";
+  commandId: string;
+  threadId?: string | null;
+};
+
+export type ShowActivityWindowCommand = {
+  channel: "electron_shell";
+  type: "activity_window.show";
+  commandId: string;
+};
+
+export type ThemeChangedCommand = {
+  channel: "electron_shell";
+  type: "theme.changed";
+  commandId: string;
+  theme: HostTheme;
+};
+
+export type ShutdownCommand = {
+  channel: "electron_shell";
+  type: "shutdown";
+  commandId: string;
+};
+
 export type SwiftToElectronCommand =
-  | {
-      channel: "electron_shell";
-      type: "thread_window.open_initial_prompt";
-      commandId: string;
-      payload: InitialPromptPayload;
-    }
-  | {
-      channel: "electron_shell";
-      type: "thread_window.open_history";
-      commandId: string;
-    }
-  | {
-      channel: "electron_shell";
-      type: "thread_window.focus";
-      commandId: string;
-      threadId?: string | null;
-    }
-  | {
-      channel: "electron_shell";
-      type: "activity_window.show";
-      commandId: string;
-    }
-  | {
-      channel: "electron_shell";
-      type: "theme.changed";
-      commandId: string;
-      theme: HostTheme;
-    }
-  | {
-      channel: "electron_shell";
-      type: "shutdown";
-      commandId: string;
-    };
+  | OpenInitialPromptCommand
+  | OpenHistoryCommand
+  | FocusThreadWindowCommand
+  | ShowActivityWindowCommand
+  | ThemeChangedCommand
+  | ShutdownCommand;
+
+export type ElectronReadyEvent = {
+  channel: "electron_shell";
+  type: "electron.ready";
+  timestamp: string;
+};
+
+export type ThreadWindowPreparedEvent = {
+  channel: "electron_shell";
+  type: "thread_window.prepared";
+  timestamp: string;
+};
+
+export type ThreadWindowPrepareFailedEvent = {
+  channel: "electron_shell";
+  type: "thread_window.prepare_failed";
+  message: string;
+};
+
+export type CommandAckEvent = {
+  channel: "electron_shell";
+  type: "command.ack";
+  commandId: string;
+  ok: boolean;
+  error?: string;
+};
+
+export type ThreadWindowClosedEvent = {
+  channel: "electron_shell";
+  type: "thread_window.closed";
+  timestamp: string;
+  wasVisible: boolean;
+};
+
+export type RendererCrashedEvent = {
+  channel: "electron_shell";
+  type: "renderer.crashed";
+  window: "thread" | "activity";
+  reason: string;
+};
+
+export type AgentServerHealthEvent = {
+  channel: "electron_shell";
+  type: "agent_server.health";
+  available: boolean;
+  message?: string;
+};
 
 export type ElectronToSwiftEvent =
-  | { channel: "electron_shell"; type: "electron.ready"; timestamp: string }
-  | { channel: "electron_shell"; type: "thread_window.prepared"; timestamp: string }
-  | { channel: "electron_shell"; type: "thread_window.prepare_failed"; message: string }
-  | { channel: "electron_shell"; type: "command.ack"; commandId: string; ok: boolean; error?: string }
-  | { channel: "electron_shell"; type: "thread_window.closed"; timestamp: string; wasVisible: boolean }
-  | { channel: "electron_shell"; type: "renderer.crashed"; window: "thread" | "activity"; reason: string }
-  | { channel: "electron_shell"; type: "agent_server.health"; available: boolean; message?: string };
+  | ElectronReadyEvent
+  | ThreadWindowPreparedEvent
+  | ThreadWindowPrepareFailedEvent
+  | CommandAckEvent
+  | ThreadWindowClosedEvent
+  | RendererCrashedEvent
+  | AgentServerHealthEvent;
 
 export function parseCommand(raw: string): SwiftToElectronCommand {
   const value = JSON.parse(raw) as unknown;

@@ -1,22 +1,26 @@
+export type StdioMCPServerConfig = {
+  id: string;
+  title: string;
+  transport: "stdio";
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+  cwd?: string;
+  requestTimeoutMs?: number;
+  elicitation?: MCPElicitationConfig;
+};
+
+export type StreamableHttpMCPServerConfig = {
+  id: string;
+  title: string;
+  transport: "streamableHttp";
+  url: string;
+  headers?: Record<string, string>;
+};
+
 export type MCPServerConfig =
-  | {
-      id: string;
-      title: string;
-      transport: "stdio";
-      command: string;
-      args?: string[];
-      env?: Record<string, string>;
-      cwd?: string;
-      requestTimeoutMs?: number;
-      elicitation?: MCPElicitationConfig;
-    }
-  | {
-      id: string;
-      title: string;
-      transport: "streamableHttp";
-      url: string;
-      headers?: Record<string, string>;
-    };
+  | StdioMCPServerConfig
+  | StreamableHttpMCPServerConfig;
 
 export type MCPConfig = {
   version: 1;

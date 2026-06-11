@@ -16,9 +16,12 @@ export type WorkspaceAskUserRequest = {
   candidates: WorkspaceSummary[];
 };
 
+export type WorkspaceAskUserSelectedResult = { workspaceId: string; cancelled?: false };
+export type WorkspaceAskUserCancelledResult = { cancelled: true };
+
 export type WorkspaceAskUserResult =
-  | { workspaceId: string; cancelled?: false }
-  | { cancelled: true };
+  | WorkspaceAskUserSelectedResult
+  | WorkspaceAskUserCancelledResult;
 
 export type WorkspaceAskResolver = (
   request: WorkspaceAskUserRequest,

@@ -1,7 +1,13 @@
-import type { AgentMessage } from "@handagent/core/runtime/AgentMessage.ts";
+import type { AgentMessage, UserAgentMessage } from "@handagent/core/runtime/AgentMessage.ts";
 import type { AgentRuntimeEvent } from "@handagent/core/runtime/AgentRuntime.ts";
-import type { ThreadNotification } from "@handagent/core/protocol/ThreadNotification.ts";
-import type { ThreadAttachment } from "@handagent/core/protocol/ThreadProtocolShared.ts";
+import type {
+  ThreadNotification,
+  AssistantDeltaNotification,
+  ToolStartedNotification,
+  ToolFinishedNotification,
+  ThreadErrorNotification,
+} from "@handagent/core/protocol/ThreadNotification.ts";
+import type { ThreadAttachment, ImageAttachment } from "@handagent/core/protocol/ThreadProtocolShared.ts";
 import type { ConversationMessage } from "@handagent/core/conversation/ConversationMessage.ts";
 import type { ThreadAuditEvent } from "@handagent/core/storage/index.ts";
 import type { BlobStore } from "@handagent/core/blob/BlobStore.ts";
@@ -14,13 +20,10 @@ export function toThreadNotification(
   timestamp: string,
   notificationSequence?: number,
 ):
-  | Extract<
-      ThreadNotification,
-      | { type: "assistant.delta" }
-      | { type: "tool.started" }
-      | { type: "tool.finished" }
-      | { type: "thread.error" }
-    >
+  | AssistantDeltaNotification
+  | ToolStartedNotification
+  | ToolFinishedNotification
+  | ThreadErrorNotification
   | null {
   switch (event.type) {
     case "assistant_message_delta":
@@ -236,9 +239,9 @@ export function toErrorMessage(error: unknown): string {
   return "Agent runtime failed.";
 }
 
-function parseRuntimeUserContent(content: string): Extract<AgentMessage, { role: "user" }>["content"] {
+function parseRuntimeUserContent(content: string): UserAgentMessage["content"] {
   const stubPattern = /\[STUB [^\]]*\]\n[\s\S]*?\n?\[\/STUB\]/g;
-  const parts: Exclude<Extract<AgentMessage, { role: "user" }>["content"], string> = [];
+  const parts: Exclude<UserAgentMessage["content"], string> = [];
   let cursor = 0;
   let match: RegExpExecArray | null;
 
@@ -271,7 +274,7 @@ function parseRuntimeUserContent(content: string): Extract<AgentMessage, { role:
 }
 
 function appendTextPart(
-  parts: Exclude<Extract<AgentMessage, { role: "user" }>["content"], string>,
+  parts: Exclude<UserAgentMessage["content"], string>,
   text: string,
 ): void {
   const normalized = text.trim();
@@ -287,7 +290,7 @@ function mimeTypeForPath(path: string): "image/png" | "image/jpeg" | "image/webp
   return undefined;
 }
 
-function imageExtension(mimeType: Extract<ThreadAttachment, { kind: "image" }>["mimeType"]): string {
+function imageExtension(mimeType: ImageAttachment["mimeType"]): string {
   switch (mimeType) {
     case "image/jpeg":
       return "jpg";

@@ -9,9 +9,9 @@ import type {
   MCPServerInfo,
   MCPToolDescription,
 } from "./MCPClient.ts";
-import type { MCPServerConfig } from "./MCPConfig.ts";
+import type { StreamableHttpMCPServerConfig } from "./MCPConfig.ts";
 
-type HttpServerConfig = Extract<MCPServerConfig, { transport: "streamableHttp" }>;
+type HttpServerConfig = StreamableHttpMCPServerConfig;
 
 type JsonRpcResponse = {
   jsonrpc: "2.0";

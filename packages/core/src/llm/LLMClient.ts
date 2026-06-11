@@ -1,27 +1,33 @@
-import type { AgentMessage } from "../runtime/AgentMessage.ts";
+import type { AgentMessage, AssistantAgentMessage } from "../runtime/AgentMessage.ts";
 import type { ToolCallEnvelope } from "../runtime/ToolCallEnvelope.ts";
 import type { RegisteredTool } from "../tools/ToolRegistry.ts";
 import type { BlobStore } from "../blob/BlobStore.ts";
 
 export type LLMCompletion = {
-  message: Extract<AgentMessage, { role: "assistant" }>;
+  message: AssistantAgentMessage;
+  toolCalls?: ToolCallEnvelope[];
+};
+
+export type TextDeltaStreamEvent = {
+  type: "text_delta";
+  text: string;
+};
+
+export type ToolCallStreamEvent = {
+  type: "tool_call";
+  toolCall: ToolCallEnvelope;
+};
+
+export type MessageEndStreamEvent = {
+  type: "message_end";
+  message: AssistantAgentMessage;
   toolCalls?: ToolCallEnvelope[];
 };
 
 export type LLMStreamEvent =
-  | {
-      type: "text_delta";
-      text: string;
-    }
-  | {
-      type: "tool_call";
-      toolCall: ToolCallEnvelope;
-    }
-  | {
-      type: "message_end";
-      message: Extract<AgentMessage, { role: "assistant" }>;
-      toolCalls?: ToolCallEnvelope[];
-    };
+  | TextDeltaStreamEvent
+  | ToolCallStreamEvent
+  | MessageEndStreamEvent;
 
 export type LLMCompleteOptions = {
   blobStore?: BlobStore;
@@ -88,7 +94,7 @@ export async function collectLLMStream(
 ): Promise<LLMCompletion> {
   let content = "";
   const toolCalls: ToolCallEnvelope[] = [];
-  let finalMessage: Extract<AgentMessage, { role: "assistant" }> | undefined;
+  let finalMessage: AssistantAgentMessage | undefined;
   let finalToolCalls: ToolCallEnvelope[] | undefined;
 
   for await (const event of stream) {

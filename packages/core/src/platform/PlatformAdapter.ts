@@ -21,25 +21,33 @@ export type WindowInfo = {
 };
 
 export type ScreenCaptureTarget =
-  | {
-      kind: "screen";
-      screenId?: string;
-    }
-  | {
-      kind: "display";
-      displayId?: string;
-    }
-  | {
-      kind: "window";
-      windowId: number;
-    }
-  | {
-      kind: "region";
-      x: number;
-      y: number;
-      width: number;
-      height: number;
-    };
+  | ScreenCaptureScreenTarget
+  | ScreenCaptureDisplayTarget
+  | ScreenCaptureWindowTarget
+  | ScreenCaptureRegionTarget;
+
+export type ScreenCaptureScreenTarget = {
+  kind: "screen";
+  screenId?: string;
+};
+
+export type ScreenCaptureDisplayTarget = {
+  kind: "display";
+  displayId?: string;
+};
+
+export type ScreenCaptureWindowTarget = {
+  kind: "window";
+  windowId: number;
+};
+
+export type ScreenCaptureRegionTarget = {
+  kind: "region";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
 
 export type ScreenCaptureRequest = {
   target?: ScreenCaptureTarget;
@@ -71,23 +79,31 @@ export type OCRResult = {
   resolution: "best_effort";
 };
 
+export type FrontmostAppSnapshotTarget = {
+  kind: "frontmost_app";
+};
+
+export type AppSnapshotTarget = {
+  kind: "app";
+  bundleId?: string;
+  pid?: number;
+};
+
+export type WindowSnapshotTarget = {
+  kind: "window";
+  windowId?: number;
+};
+
+export type ElementSnapshotTarget = {
+  kind: "element";
+  elementId?: string;
+};
+
 export type AccessibilitySnapshotTarget =
-  | {
-      kind: "frontmost_app";
-    }
-  | {
-      kind: "app";
-      bundleId?: string;
-      pid?: number;
-    }
-  | {
-      kind: "window";
-      windowId?: number;
-    }
-  | {
-      kind: "element";
-      elementId?: string;
-    };
+  | FrontmostAppSnapshotTarget
+  | AppSnapshotTarget
+  | WindowSnapshotTarget
+  | ElementSnapshotTarget;
 
 export type AccessibilityNodeSnapshot = {
   role: string;
@@ -98,39 +114,52 @@ export type AccessibilityNodeSnapshot = {
   resolution: "best_effort";
 };
 
-export type AccessibilityActionTarget =
-  | {
-      kind: "frontmost_app";
-    }
-  | {
-      kind: "window";
-      windowId?: number;
-    }
-  | {
-      kind: "element";
-      elementId: string;
-    };
+export type FrontmostAppActionTarget = {
+  kind: "frontmost_app";
+};
 
-export type AccessibilityActionRequest =
-  | {
-      target: AccessibilityActionTarget;
-      action:
-        | {
-            kind: "press";
-          }
-        | {
-            kind: "click";
-          }
-        | {
-            kind: "set_value";
-            value: string;
-          };
-    };
+export type WindowActionTarget = {
+  kind: "window";
+  windowId?: number;
+};
+
+export type ElementActionTarget = {
+  kind: "element";
+  elementId: string;
+};
+
+export type AccessibilityActionTarget =
+  | FrontmostAppActionTarget
+  | WindowActionTarget
+  | ElementActionTarget;
+
+export type PressAccessibilityAction = {
+  kind: "press";
+};
+
+export type ClickAccessibilityAction = {
+  kind: "click";
+};
+
+export type SetValueAccessibilityAction = {
+  kind: "set_value";
+  value: string;
+};
+
+export type AccessibilityAction =
+  | PressAccessibilityAction
+  | ClickAccessibilityAction
+  | SetValueAccessibilityAction;
+
+export type AccessibilityActionRequest = {
+  target: AccessibilityActionTarget;
+  action: AccessibilityAction;
+};
 
 export type AccessibilityActionResult = {
   ok: boolean;
   target: AccessibilityActionTarget;
-  action: AccessibilityActionRequest["action"];
+  action: AccessibilityAction;
   resolution: "best_effort";
 };
 

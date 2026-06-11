@@ -7,9 +7,12 @@ export type PermissionRequest = {
   toolCallId: string;
 };
 
+export type AllowPermissionResolution = { decision: "allow"; remember?: PermissionScope };
+export type DenyPermissionResolution = { decision: "deny"; remember?: PermissionScope; reason?: string };
+
 export type PermissionResolution =
-  | { decision: "allow"; remember?: PermissionScope }
-  | { decision: "deny"; remember?: PermissionScope; reason?: string };
+  | AllowPermissionResolution
+  | DenyPermissionResolution;
 
 export type PermissionScope = "once" | "thread" | "always";
 

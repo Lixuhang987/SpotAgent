@@ -1,4 +1,4 @@
-import type { AgentMessage } from "./AgentMessage.ts";
+import type { AgentMessage, ToolAgentMessage } from "./AgentMessage.ts";
 import type { ToolCallEnvelope } from "./ToolCallEnvelope.ts";
 import type { LLMClientLike } from "../llm/LLMClient.ts";
 import type { LLMCompletion } from "../llm/LLMClient.ts";
@@ -24,49 +24,63 @@ export type AgentRunResult = {
   messages: AgentMessage[];
 };
 
+export type AssistantMessageStartEvent = {
+  type: "assistant_message_start";
+  messageId: string;
+  payload: { role: "assistant" };
+};
+
+export type AssistantMessageDeltaEvent = {
+  type: "assistant_message_delta";
+  messageId: string;
+  payload: { text: string };
+};
+
+export type AssistantMessageEndEvent = {
+  type: "assistant_message_end";
+  messageId: string;
+  payload: { status: "completed" | "interrupted" };
+};
+
+export type ToolCallEvent = {
+  type: "tool_call";
+  toolCallId: string;
+  toolName: string;
+  input: Record<string, unknown>;
+};
+
+export type ToolResultEvent = {
+  type: "tool_result";
+  toolCallId: string;
+  toolName: string;
+  status: "success" | "error";
+  output: string;
+  durationMs: number;
+};
+
+export type PermissionDecisionEvent = {
+  type: "permission_decision";
+  toolCallId: string;
+  toolName: string;
+  decision: "allow" | "deny";
+  scope?: "once" | "thread" | "always";
+  reason?: string;
+};
+
+export type RuntimeErrorEvent = {
+  type: "runtime_error";
+  message: string;
+  code?: string;
+};
+
 export type AgentRuntimeEvent =
-  | {
-      type: "assistant_message_start";
-      messageId: string;
-      payload: { role: "assistant" };
-    }
-  | {
-      type: "assistant_message_delta";
-      messageId: string;
-      payload: { text: string };
-    }
-  | {
-      type: "assistant_message_end";
-      messageId: string;
-      payload: { status: "completed" | "interrupted" };
-    }
-  | {
-      type: "tool_call";
-      toolCallId: string;
-      toolName: string;
-      input: Record<string, unknown>;
-    }
-  | {
-      type: "tool_result";
-      toolCallId: string;
-      toolName: string;
-      status: "success" | "error";
-      output: string;
-      durationMs: number;
-    }
-  | {
-      type: "permission_decision";
-      toolCallId: string;
-      toolName: string;
-      decision: "allow" | "deny";
-      scope?: "once" | "thread" | "always";
-      reason?: string;
-    }
-  | {
-      type: "runtime_error";
-      message: string;
-      code?: string;
-    };
+  | AssistantMessageStartEvent
+  | AssistantMessageDeltaEvent
+  | AssistantMessageEndEvent
+  | ToolCallEvent
+  | ToolResultEvent
+  | PermissionDecisionEvent
+  | RuntimeErrorEvent;
 
 export type AgentRuntimeRunOptions = {
   threadId?: string;
@@ -442,7 +456,7 @@ export class AgentRuntime {
     toolName: string;
     toolContent: string;
     cached?: StubCacheScope;
-  }): Promise<Extract<AgentMessage, { role: "tool" }>> {
+  }): Promise<ToolAgentMessage> {
     if (!input.cached || !this.blobStore) {
       return {
         role: "tool",

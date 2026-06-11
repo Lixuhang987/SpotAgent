@@ -3,15 +3,19 @@ import type { AgentRuntimeEvent } from "./AgentRuntime.ts";
 import type { Op, UserInputOp } from "../protocol/Op.ts";
 import type { RunStatus } from "../protocol/ThreadProtocolShared.ts";
 
+export type ThreadStatusChangedLifecycleEvent = {
+  type: "thread.status.changed";
+  value: RunStatus;
+};
+
+export type TurnCompletedLifecycleEvent = {
+  type: "turn.completed";
+  status: "completed" | "interrupted" | "failed";
+};
+
 export type AgentThreadLifecycleEvent =
-  | {
-      type: "thread.status.changed";
-      value: RunStatus;
-    }
-  | {
-      type: "turn.completed";
-      status: "completed" | "interrupted" | "failed";
-    };
+  | ThreadStatusChangedLifecycleEvent
+  | TurnCompletedLifecycleEvent;
 
 export type RecordedUserInput = {
   messageId: string;

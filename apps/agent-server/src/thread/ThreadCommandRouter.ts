@@ -1,5 +1,17 @@
-import type { ThreadCommand } from "@handagent/core/protocol/ThreadCommand.ts";
-import type { ClientResponse } from "@handagent/core/protocol/ClientResponse.ts";
+import type {
+  ThreadCommand,
+  ThreadStartCommand,
+  ThreadResumeCommand,
+  ThreadListCommand,
+  ThreadDeleteCommand,
+  OpSubmitCommand,
+  WorkspaceListCommand,
+} from "@handagent/core/protocol/ThreadCommand.ts";
+import type {
+  ClientResponse,
+  PermissionAnsweredResponse,
+  WorkspaceAnsweredResponse,
+} from "@handagent/core/protocol/ClientResponse.ts";
 import type { ThreadNotification } from "@handagent/core/protocol/ThreadNotification.ts";
 import type {
   ThreadActionBinding,
@@ -24,11 +36,11 @@ type AgentFactory = (threadId: string) => Agent;
 
 type ResponseHandlers = {
   onPermissionResponse?: (
-    response: Extract<ClientResponse, { type: "permission.answered" }>,
+    response: PermissionAnsweredResponse,
     connectionId: string,
   ) => void;
   onWorkspaceResponse?: (
-    response: Extract<ClientResponse, { type: "workspace.answered" }>,
+    response: WorkspaceAnsweredResponse,
     connectionId: string,
   ) => void;
 };
@@ -79,7 +91,7 @@ export class ThreadCommandRouter {
   }
 
   private async handleCreateThread(
-    command: Extract<ThreadCommand, { type: "thread.start" }>,
+    command: ThreadStartCommand,
     connectionId: string,
   ): Promise<void> {
     let actionBinding: ThreadActionBinding | undefined;
@@ -121,7 +133,7 @@ export class ThreadCommandRouter {
   }
 
   private async handleResumeThread(
-    command: Extract<ThreadCommand, { type: "thread.resume" }>,
+    command: ThreadResumeCommand,
     connectionId: string,
   ): Promise<void> {
     this.publisher.subscribe(connectionId, command.threadId);
@@ -162,7 +174,7 @@ export class ThreadCommandRouter {
   }
 
   private async handleOpSubmit(
-    command: Extract<ThreadCommand, { type: "op.submit" }>,
+    command: OpSubmitCommand,
     connectionId?: string,
   ): Promise<void> {
     if (!(await this.persistence.getThread(command.threadId))) {
@@ -190,7 +202,7 @@ export class ThreadCommandRouter {
   }
 
   private async handleListThreads(
-    command: Extract<ThreadCommand, { type: "thread.list" }>,
+    command: ThreadListCommand,
     connectionId: string,
   ): Promise<void> {
     const threads = await this.persistence.listThreads();
@@ -206,7 +218,7 @@ export class ThreadCommandRouter {
   }
 
   private async handleDeleteThread(
-    command: Extract<ThreadCommand, { type: "thread.delete" }>,
+    command: ThreadDeleteCommand,
     connectionId: string,
   ): Promise<void> {
     const targetThreadId = command.payload.targetThreadId;
@@ -242,7 +254,7 @@ export class ThreadCommandRouter {
   }
 
   private async handleListWorkspaces(
-    command: Extract<ThreadCommand, { type: "workspace.list" }>,
+    command: WorkspaceListCommand,
     connectionId: string,
   ): Promise<void> {
     if (!this.workspaceRegistry) {

@@ -10,10 +10,14 @@ export type MCPCallToolResult = {
   [key: string]: unknown;
 };
 
+export type MCPTextContent = { type: "text"; text: string };
+export type MCPImageContent = { type: "image"; data: string; mimeType: string };
+export type MCPResourceContent = { type: "resource"; resource: { uri: string; text?: string; blob?: string; mimeType?: string } };
+
 export type MCPContent =
-  | { type: "text"; text: string }
-  | { type: "image"; data: string; mimeType: string }
-  | { type: "resource"; resource: { uri: string; text?: string; blob?: string; mimeType?: string } };
+  | MCPTextContent
+  | MCPImageContent
+  | MCPResourceContent;
 
 export type MCPPromptDescription = {
   name: string;

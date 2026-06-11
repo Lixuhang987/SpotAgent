@@ -2,18 +2,22 @@ import type { ConversationMessage } from "../conversation/ConversationMessage.ts
 
 export type RunStatus = "idle" | "running" | "failed" | "interrupted";
 
+export type TextSelectionAttachment = {
+  kind: "text_selection";
+  id: string;
+  text: string;
+};
+
+export type ImageAttachment = {
+  kind: "image";
+  id: string;
+  mimeType: "image/png" | "image/jpeg" | "image/webp";
+  base64: string;
+};
+
 export type ThreadAttachment =
-  | {
-      kind: "text_selection";
-      id: string;
-      text: string;
-    }
-  | {
-      kind: "image";
-      id: string;
-      mimeType: "image/png" | "image/jpeg" | "image/webp";
-      base64: string;
-    };
+  | TextSelectionAttachment
+  | ImageAttachment;
 
 export type ThreadListEntry = {
   id: string;

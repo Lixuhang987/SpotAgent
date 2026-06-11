@@ -2,7 +2,7 @@ import type { BlobRecord } from "../blob/BlobRecord.ts";
 import type { BlobStore } from "../blob/BlobStore.ts";
 import type { LLMClientLike } from "../llm/LLMClient.ts";
 import { completeLLM } from "../llm/LLMClient.ts";
-import type { AgentMessage } from "./AgentMessage.ts";
+import type { AgentMessage, ToolAgentMessage } from "./AgentMessage.ts";
 import { renderStub } from "./Stub.ts";
 
 export interface TurnSummarizerLike {
@@ -50,7 +50,7 @@ export class TurnSummarizer implements TurnSummarizerLike {
     return changed;
   }
 
-  private async summarizeMessage(message: Extract<AgentMessage, { role: "tool" }>): Promise<void> {
+  private async summarizeMessage(message: ToolAgentMessage): Promise<void> {
     const blobId = message.blob?.id;
     if (!blobId) return;
 
@@ -92,7 +92,7 @@ export class TurnSummarizer implements TurnSummarizerLike {
   }
 
   private renderSummary(
-    message: Extract<AgentMessage, { role: "tool" }>,
+    message: ToolAgentMessage,
     record: BlobRecord,
     summary: string,
   ): void {
@@ -111,7 +111,7 @@ export class TurnSummarizer implements TurnSummarizerLike {
 
 function isUnsummarizedTurnToolMessage(
   message: AgentMessage,
-): message is Extract<AgentMessage, { role: "tool" }> {
+): message is ToolAgentMessage {
   return (
     message.role === "tool" &&
     message.blob?.cached === "turn" &&

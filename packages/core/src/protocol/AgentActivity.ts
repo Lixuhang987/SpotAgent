@@ -9,24 +9,28 @@ export type AgentActivityStatus =
 
 export type AgentActivityWaitingRequest = "permission" | "workspace";
 
+export type ActivitySnapshotEvent = {
+  channel: "activity";
+  type: "activity.snapshot";
+  activeThreadId: string | null;
+  status: AgentActivityStatus;
+  latestSummary: string | null;
+  waitingRequest: AgentActivityWaitingRequest | null;
+  error: string | null;
+  updatedAt: string;
+};
+
+export type ActivityChangedEvent = {
+  channel: "activity";
+  type: "activity.changed";
+  activeThreadId: string | null;
+  status: AgentActivityStatus;
+  latestSummary: string | null;
+  waitingRequest: AgentActivityWaitingRequest | null;
+  error: string | null;
+  updatedAt: string;
+};
+
 export type AgentActivityEvent =
-  | {
-      channel: "activity";
-      type: "activity.snapshot";
-      activeThreadId: string | null;
-      status: AgentActivityStatus;
-      latestSummary: string | null;
-      waitingRequest: AgentActivityWaitingRequest | null;
-      error: string | null;
-      updatedAt: string;
-    }
-  | {
-      channel: "activity";
-      type: "activity.changed";
-      activeThreadId: string | null;
-      status: AgentActivityStatus;
-      latestSummary: string | null;
-      waitingRequest: AgentActivityWaitingRequest | null;
-      error: string | null;
-      updatedAt: string;
-    };
+  | ActivitySnapshotEvent
+  | ActivityChangedEvent;

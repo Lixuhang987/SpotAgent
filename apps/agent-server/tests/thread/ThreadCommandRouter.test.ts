@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { InMemoryThreadStore } from "@handagent/core/storage/index.ts";
-import type { ThreadCommand } from "@handagent/core/protocol/ThreadCommand.ts";
+import type { ThreadCommand, ThreadStartCommand, OpSubmitCommand } from "@handagent/core/protocol/ThreadCommand.ts";
 import type { ThreadNotification } from "@handagent/core/protocol/ThreadNotification.ts";
 import { AgentManager, createSharedAgentStatus, type Agent } from "../../src/agent/AgentManager.ts";
 import { ThreadPersistence } from "../../src/thread/ThreadPersistence.ts";
@@ -297,7 +297,7 @@ function makeAgent(
   };
 }
 
-function createCommand(): Extract<ThreadCommand, { type: "thread.start" }> {
+function createCommand(): ThreadStartCommand {
   return {
     type: "thread.start",
     commandId: "create-1",
@@ -309,7 +309,7 @@ function createCommand(): Extract<ThreadCommand, { type: "thread.start" }> {
   };
 }
 
-function userInputCommand(threadId: string): Extract<ThreadCommand, { type: "op.submit" }> {
+function userInputCommand(threadId: string): OpSubmitCommand {
   return {
     type: "op.submit",
     threadId,

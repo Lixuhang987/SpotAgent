@@ -11,7 +11,7 @@ import type { AgentActivityEvent } from "@handagent/core/protocol/AgentActivity.
 import type { AgentEvent } from "@handagent/core/protocol/AgentEvent.ts";
 import type { Op } from "@handagent/core/protocol/Op.ts";
 import type { MCPClient } from "@handagent/core/mcp/MCPClient.ts";
-import type { MCPServerConfig } from "@handagent/core/mcp/MCPConfig.ts";
+import type { MCPServerConfig, StdioMCPServerConfig, StreamableHttpMCPServerConfig } from "@handagent/core/mcp/MCPConfig.ts";
 import type { PlatformAdapter } from "@handagent/core/platform/PlatformAdapter.ts";
 import { parseMCPConfig } from "@handagent/core/mcp/MCPConfig.ts";
 import type { AgentMessage } from "@handagent/core/runtime/AgentMessage.ts";
@@ -588,9 +588,9 @@ export async function readMCPConfig(filePath: string) {
 export function createMCPClientFromConfig(
   config: MCPServerConfig,
   clients: {
-    StdioMCPClient: new (config: Extract<MCPServerConfig, { transport: "stdio" }>) => MCPClient;
+    StdioMCPClient: new (config: StdioMCPServerConfig) => MCPClient;
     StreamableHttpMCPClient: new (
-      config: Extract<MCPServerConfig, { transport: "streamableHttp" }>,
+      config: StreamableHttpMCPServerConfig,
     ) => MCPClient;
     ComputerUseMCPClient?: new (options: {
       serverId: string;

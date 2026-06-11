@@ -4,7 +4,7 @@ import type {
   LLMCompletion,
   LLMStreamEvent,
 } from "./LLMClient.ts";
-import type { AgentMessage } from "../runtime/AgentMessage.ts";
+import type { AgentMessage, UserAgentMessage } from "../runtime/AgentMessage.ts";
 import type { RegisteredTool } from "../tools/ToolRegistry.ts";
 
 type MockScenarioContext = {
@@ -474,11 +474,11 @@ function findScenarioInTexts(
 
 function userMessageTexts(messages: AgentMessage[]): string[] {
   return messages
-    .filter((message): message is Extract<AgentMessage, { role: "user" }> => message.role === "user")
+    .filter((message): message is UserAgentMessage => message.role === "user")
     .map((message) => messageText(message));
 }
 
-function messageText(message: Extract<AgentMessage, { role: "user" }>): string {
+function messageText(message: UserAgentMessage): string {
   if (typeof message.content === "string") {
     return message.content;
   }
