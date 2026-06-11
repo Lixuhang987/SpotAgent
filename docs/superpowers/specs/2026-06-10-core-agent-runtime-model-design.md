@@ -1,7 +1,7 @@
 # Core Agent 运行时模型重构设计
 
-> **状态：设计稿，待实现。**
-> 本文定义 core 运行时从一次性 `runWithMessages(...)` 调用迁移到常驻 `Agent + Op` 模型的目标形态。当前代码事实以 `handAgent.md`、`packages/core/src/runtime/runtime.md`、`apps/agent-server/src/thread/thread.md` 和 `apps/thread-window-web/thread-window-web.md` 为准。
+> **状态：已实现第一阶段，仍保留过渡 bridge。**
+> 本文定义 core 运行时从一次性 `runWithMessages(...)` 调用迁移到常驻 `Agent + Op` 模型的目标形态。当前生产路径已经建立持久 Agent owner、`op.submit(RuntimeOp)`、Agent `rx_event` 和内部 `client_response` Op；ReAct turn 执行仍通过 `ThreadRuntimeOrchestrator` 过渡到 `AgentRuntime.runWithMessages(...)`。当前代码事实以 `handAgent.md`、`packages/core/src/runtime/runtime.md`、`apps/agent-server/src/agent/agent.md`、`apps/agent-server/src/thread/thread.md` 和 `apps/thread-window-web/thread-window-web.md` 为准。
 
 ## 背景
 
@@ -48,7 +48,7 @@ type RuntimeLike = {
    - `rx_event`：Agent 产生、交给 app-server/thread 外层消费的事件流。
    - `agent_status`：Agent 最后已知状态，和 thread status 共享语义。
    - `session`：本次 thread 运行的配置与服务容器。
-2. 将运行期输入统一为 `Op = Interrupt | UserInput`。
+2. 将公开运行期输入统一为 `RuntimeOp = Interrupt | UserInput`；Agent 内部 `Op` 额外允许 app-server 包装的 `client_response`，用于 UI 回执回流。
 3. 将用户输入统一为 `UserInput.items: InputItem[]`，PromptPanel 和 React composer 不再在多个字段之间分散表达文本、图片、选区和 skill action。
 4. app-server 收到 `thread.start` 后加载静态配置与 thread 配置，创建常驻 Agent，并让 Agent 的持续函数消费 `rx_sub`。
 5. ReAct loop 只依赖包装后的 `thread` 端口发事件，不直接暴露持久化、status 更新和 ThreadNotification 复杂度。
@@ -111,10 +111,11 @@ type RuntimeLike = {
 
 ### 运行期输入
 
-`Op` 是运行期输入的唯一语义。建议在 `packages/core/src/protocol/Op.ts` 中定义跨 React、Electron、agent-server 和 core 可复用的 DTO。
+`RuntimeOp` 是公开运行期输入的唯一语义。`packages/core/src/protocol/Op.ts` 同时定义 Agent 内部 `Op = RuntimeOp | ClientResponseOp`，其中 `ClientResponseOp` 只允许 app-server 从 React `ClientResponse` 包装后投递到 Agent `tx_sub`。
 
 ```ts
-export type Op = UserInputOp | InterruptOp;
+export type RuntimeOp = UserInputOp | InterruptOp;
+export type Op = RuntimeOp | ClientResponseOp;
 
 export type UserInputOp = {
   type: "user_input";
@@ -129,6 +130,15 @@ export type InterruptOp = {
   timestamp: string;
   payload: {
     reason: "user" | "system";
+  };
+};
+
+export type ClientResponseOp = {
+  type: "client_response";
+  opId: string;
+  timestamp: string;
+  payload: {
+    response: ClientResponse;
   };
 };
 
@@ -200,7 +210,7 @@ export type ThreadOpCommand = {
   commandId: string;
   timestamp: string;
   payload: {
-    op: Op;
+    op: RuntimeOp;
   };
 };
 ```
@@ -271,7 +281,7 @@ export type SharedAgentStatus = {
 };
 ```
 
-`tx_sub` 是 app-server 唯一可以调用的运行期入口。`rx_event` 是 Agent 内部事件流，app-server 可以用它观察 runtime 事件，但事件落盘、notification 分发和 status 更新仍应优先经 `thread.emit(...)` 完成。
+`tx_sub` 是 app-server 唯一可以调用的 Agent 输入入口：公开用户输入和中断来自 `op.submit(RuntimeOp)`，UI 回执由 app-server 包装成 `client_response` Op。`rx_event` 是 Agent 输出事件流，app-server 从这里消费 `thread.notification` 与 `server.request` 后再做 notification/request 分发、activity 派生和 status 更新。
 
 ### Session 容器
 

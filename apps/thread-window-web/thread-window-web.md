@@ -32,10 +32,10 @@ Web 侧命令和通知类型以 `packages/core/src/protocol/` 为真相，`src/p
 
 当前 Web 包必须覆盖这些协议点：
 
-- 出站 `ThreadCommand`：`thread.start`、`thread.resume`、`thread.list`、`thread.delete`、`op.submit`、`workspace.list`。
+- 出站 `ThreadCommand`：`thread.start`、`thread.resume`、`thread.list`、`thread.delete`、`op.submit(RuntimeOp)`、`workspace.list`。React 只构造 `UserInput | Interrupt`，不构造 app-server 内部的 `client_response` Op。
 - 入站 `ThreadNotification`：消息流、tool 流、状态变化、`thread.listed`、`thread.deleted`、`thread.error`、`workspace.listed`。
 - 入站 `ServerRequest`：`permission.requested` 与 `workspace.requested`。
-- 出站 `ClientResponse`：`permission.answered` 与 `workspace.answered`。
+- 出站 `ClientResponse`：`permission.answered` 与 `workspace.answered`；app-server 会把它们包装为 Agent `client_response` Op。
 
 `workspace.listed` 已在协议守卫和 store 中覆盖：socket 连接成功后发送 `workspace.list`，store 收到后写入 `workspaces`，历史侧栏再按 `ThreadListEntry.workspaceId` 分组。修改 workspace 相关 UI 或协议时，必须同步检查 `src/protocol/threadProtocol.ts`、`src/store/threadWindowStore.ts`、`src/utils/groupThreads.ts` 和对应测试。
 

@@ -108,8 +108,8 @@ describe("ThreadWindow scroll containers", () => {
         disabled: false,
         stopDisabled: false,
         queuedInputs: [
-          { text: "排队的后续问题 1", attachments: [] },
-          { text: "排队的后续问题 2", attachments: [] },
+          { op: { type: "user_input", opId: "queued-1", timestamp: "2026-06-11T00:00:00.000Z", payload: { items: [{ type: "text", id: "queued-text-1", text: "排队的后续问题 1" }] } } },
+          { op: { type: "user_input", opId: "queued-2", timestamp: "2026-06-11T00:00:01.000Z", payload: { items: [{ type: "text", id: "queued-text-2", text: "排队的后续问题 2" }] } } },
         ],
         onSubmit: vi.fn(),
         onStop: vi.fn(),

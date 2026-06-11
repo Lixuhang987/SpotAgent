@@ -5,7 +5,7 @@ import {
   encodeOpSubmit,
   encodeWorkspaceList,
   type InitialPromptPayload,
-  type Op,
+  type RuntimeOp,
   isServerRequest,
   isThreadNotification,
   type ServerRequest,
@@ -96,7 +96,7 @@ export class ThreadSocketClient {
     }));
   }
 
-  submitOp(threadId: string, op: Op): void {
+  submitOp(threadId: string, op: RuntimeOp): void {
     this.sendRaw(encodeOpSubmit({
       threadId,
       commandId: this.nextId(),

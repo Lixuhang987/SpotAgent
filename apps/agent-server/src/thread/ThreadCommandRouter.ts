@@ -7,6 +7,7 @@ import type {
 } from "@handagent/core/storage/index.ts";
 import type { WorkspaceRegistry } from "@handagent/core/workspace/Workspace.ts";
 import type { Agent, AgentManager } from "../agent/AgentManager.ts";
+import { threadIdFromRequestId } from "../agent/AgentRequestBroker.ts";
 import { ThreadNotificationPublisher } from "./ThreadNotificationPublisher.ts";
 import type { ThreadPersistence } from "./ThreadPersistence.ts";
 
@@ -62,15 +63,15 @@ export class ThreadCommandRouter {
     }
   }
 
-  handleResponse(response: ClientResponse, connectionId: string): void {
-    switch (response.type) {
-      case "permission.answered":
-        this.responseHandlers.onPermissionResponse?.(response, connectionId);
-        return;
-      case "workspace.answered":
-        this.responseHandlers.onWorkspaceResponse?.(response, connectionId);
-        return;
-    }
+  async handleResponse(response: ClientResponse, connectionId: string): Promise<void> {
+    void connectionId;
+    const threadId = threadIdFromRequestId(response.requestId);
+    await this.agentManager.submit(threadId, {
+      type: "client_response",
+      opId: response.requestId,
+      timestamp: response.timestamp,
+      payload: { response },
+    });
   }
 
   async interruptThread(threadId: string): Promise<void> {

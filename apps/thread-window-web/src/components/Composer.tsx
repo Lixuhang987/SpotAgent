@@ -67,15 +67,17 @@ export function Composer({
           className="mb-xs max-h-[156px] min-w-0 w-full max-w-[720pt] overflow-y-auto rounded-2xl border border-app-hairline bg-app-surface-elevated/95 px-xs py-xs shadow-[var(--thread-window-floating-shadow)]"
         >
           <div className="space-y-1">
-            {queuedInputs.map((queuedInput, index) => (
+            {queuedInputs.map((queuedInput, index) => {
+              const queuedText = queuedInputPreview(queuedInput);
+              return (
               <div
-                key={`${index}-${queuedInput.text}`}
+                key={`${index}-${queuedText}`}
                 data-queued-composer-item="true"
                 className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-xs rounded-xl px-xs py-1 text-sm text-app-text-muted transition-colors duration-200 hover:bg-app-surface-muted/60"
               >
                 <span className="font-code text-xs text-app-text-muted/70">↳</span>
-                <span className="truncate text-app-text-primary" title={queuedInput.text}>
-                  {queuedInput.text}
+                <span className="truncate text-app-text-primary" title={queuedText}>
+                  {queuedText}
                 </span>
                 <span className="whitespace-nowrap text-xs text-app-text-muted">待发送</span>
                 <button
@@ -95,7 +97,8 @@ export function Composer({
                   </svg>
                 </button>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       ) : null}
@@ -174,4 +177,25 @@ export function Composer({
       </div>
     </form>
   );
+}
+
+function queuedInputPreview(input: QueuedComposerInput): string {
+  const op = input.op;
+  if (op.type === "interrupt") {
+    return "停止当前运行";
+  }
+
+  const parts = op.payload.items.map((item) => {
+    switch (item.type) {
+      case "text":
+      case "text_selection":
+        return item.text;
+      case "skill":
+        return item.prompt;
+      case "image":
+        return "图片附件";
+    }
+  }).filter((part) => part.length > 0);
+
+  return parts.join(" ") || "后续输入";
 }

@@ -39,6 +39,26 @@ describe("Op protocol", () => {
     expect(op.payload.reason).toBe("user");
   });
 
+
+  it("supports client response ops for server request answers", () => {
+    const op: Op = {
+      type: "client_response",
+      opId: "op-3",
+      timestamp: "2026-06-10T00:00:02.000Z",
+      payload: {
+        response: {
+          type: "permission.answered",
+          requestId: "thread-1:req-1",
+          timestamp: "2026-06-10T00:00:02.000Z",
+          payload: { decision: "allow", scope: "thread" },
+        },
+      },
+    };
+
+    expect(op.type).toBe("client_response");
+    expect(op.payload.response.type).toBe("permission.answered");
+  });
+
   it("keeps thread lifecycle commands separate from runtime ops", () => {
     const command: ThreadCommand = {
       type: "thread.start",

@@ -38,7 +38,7 @@ flowchart LR
 - 用户提交 prompt 后，Swift 通过 command bridge 发送 `thread_window.open_initial_prompt`；打开历史和聚焦分别发送 `thread_window.open_history` / `thread_window.focus`。
 - 用户在 Swift Settings 修改主题后，Swift 通过 command bridge 发送 `theme.changed`，Electron 保存当前 host theme 并广播给 ThreadWindow 与 ActivityWindow renderer。
 - React ThreadWindow 接收初始 prompt 后，通过 `/api/thread` 发送 `thread.start`，收到 `thread.started` 后发送首轮 `op.submit(UserInput)`；后续 composer 追问也统一发送 `op.submit(UserInput)`，运行态停止发送 `op.submit(Interrupt)`。
-- React ThreadWindow 负责 `ThreadCommand` / `ClientResponse` 编码、`ThreadNotification` / `ServerRequest` 接收，以及历史、后台 thread 状态缓存、当前右侧展示 thread、消息、请求面板和 composer 状态。
+- React ThreadWindow 负责 `ThreadCommand` / `ClientResponse` 编码、`ThreadNotification` / `ServerRequest` 接收，以及历史、后台 thread 状态缓存、当前右侧展示 thread、消息、请求面板和 composer 状态；`ClientResponse` 到 Agent `client_response` Op 的转换由 app-server 负责。
 - ThreadWindow 左侧历史列表通过 thread 协议读取 `~/.spotAgent/threads/`，用于搜索、预览、恢复和删除持久化 thread。
 
 ### 3. 平台能力反向 IPC

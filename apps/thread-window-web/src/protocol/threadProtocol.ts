@@ -1,5 +1,5 @@
 import type { ClientResponse } from "@handagent/core/protocol/ClientResponse.ts";
-import type { Op, UserInput } from "@handagent/core/protocol/Op.ts";
+import type { InputItem, RuntimeOp, UserInput } from "@handagent/core/protocol/Op.ts";
 import type { ServerRequest } from "@handagent/core/protocol/ServerRequest.ts";
 import type { ThreadCommand } from "@handagent/core/protocol/ThreadCommand.ts";
 import type { ThreadNotification } from "@handagent/core/protocol/ThreadNotification.ts";
@@ -17,7 +17,7 @@ export type {
   WorkspaceAskCandidate,
 } from "@handagent/core/protocol/ThreadProtocolShared.ts";
 export type { ClientResponse } from "@handagent/core/protocol/ClientResponse.ts";
-export type { Op, UserInput } from "@handagent/core/protocol/Op.ts";
+export type { InputItem, RuntimeOp, UserInput } from "@handagent/core/protocol/Op.ts";
 export type { ServerRequest } from "@handagent/core/protocol/ServerRequest.ts";
 export type { ThreadCommand } from "@handagent/core/protocol/ThreadCommand.ts";
 export type { ThreadNotification } from "@handagent/core/protocol/ThreadNotification.ts";
@@ -98,7 +98,7 @@ export function encodeOpSubmit(input: {
   threadId: string;
   commandId: string;
   timestamp: string;
-  op: Op;
+  op: RuntimeOp;
 }): string {
   return encode({
     type: "op.submit",

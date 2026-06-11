@@ -32,7 +32,7 @@ node --experimental-transform-types --experimental-specifier-resolution=node app
 
 1. 构造 `FileThreadStore`、`FilesystemBlobStore`、`FileNetworkLogger`、`FileWorkspaceRegistry`。
 2. 读取 `~/.spotAgent/mcp.json` 并创建 `MCPServerRegistry`。
-3. 创建 `WebSocketPlatformBridge`、`ThreadPermissionBridge`、`ThreadWorkspaceAskBridge`。
+3. 创建 `WebSocketPlatformBridge` 与 `AgentRequestBroker`；permission/workspace ask 先进入 Agent `rx_event`。
 4. 通过 `SettingsBackedToolRegistry` 注册 builtin tools。
 5. 通过 `SettingsBackedLLMClient` 或 `MockLLMClient` 选择 LLM 模式。
 6. 按 thread 缓存 `AgentRuntime`，注入 thread 级 tool registry、permission policy、blob store 和 turn summarizer；mock 模式使用 `MockLLMClient` 且不启用 summarizer。
@@ -49,22 +49,23 @@ flowchart TD
   P["Swift /api/platform socket"] --> D["server/attachPlatformSocketHandlers"]
   D --> PB["bridges/WebSocketPlatformBridge"]
   B --> C{"ClientResponse / ThreadCommand"}
-  C -- "ClientResponse" --> E["bridges/ThreadPermissionBridge<br/>bridges/ThreadWorkspaceAskBridge"]
+  C -- "ClientResponse" --> E["ThreadCommandRouter.handleResponse<br/>wrap client_response Op"]
+  E --> AM
   C -- "ThreadCommand" --> F["thread/ThreadCommandRouter"]
   F --> AM["agent/AgentManager"]
   AM --> G["thread/ThreadRuntimeOrchestrator<br/>Agent 内部 turn 执行器"]
   F --> H["thread/ThreadNotificationPublisher"]
   G --> I["@handagent/core AgentRuntime"]
   I --> J["protocol/MessageTranslator"]
-  J --> H
+  J --> RX["Agent rx_event"]
+  RX --> H
   H --> K["React ThreadWindow"]
   H --> APub["activity/AgentActivityPublisher"]
-  E --> APub
   APub --> AP
   G --> L["thread/ThreadPersistence"]
 ```
 
-`op.submit` 是唯一运行期输入入口，payload 内的 `op` 只能是 `UserInput` 或 `Interrupt`。`thread.start` 只负责创建 thread、解析 action binding 并注册持久 Agent；后续普通输入和停止请求都经 `AgentManager.submit(threadId, op)` 进入对应 Agent 的 `tx_sub`。router 不再因为 thread running 拒绝用户 follow-up；是否排队由 Agent / 内部 turn 执行器处理。
+`op.submit` 是公开运行期输入入口，payload 内的 `op` 只能是 `UserInput` 或 `Interrupt`。`thread.start` 只负责创建 thread、解析 action binding 并注册持久 Agent；后续普通输入和停止请求都经 `AgentManager.submit(threadId, op)` 进入对应 Agent 的 `tx_sub`。React 回传的 `ClientResponse` 不直接触碰 request broker，server 会将其包装为 `client_response` Op 再投递到同一个 Agent `tx_sub`。router 不再因为 thread running 拒绝用户 follow-up；是否排队由 Agent / 内部 turn 执行器处理。
 
 ## 协议主干
 
@@ -73,7 +74,7 @@ flowchart TD
 - `/api/platform` 顶层只接收 `PlatformBridgeMessage`。
 - thread 通知主干统一走 `ThreadNotification`；`thread.snapshot` 是用户打开历史 thread 或初始 prompt 建立 thread 后的状态入口，不是 React 断线恢复入口。
 - activity 状态由 `AgentActivityPublisher` 从 `ThreadNotification` / `ServerRequest` 派生；activity subscriber 发送失败只影响该 subscriber，不影响 `/api/thread` 分发。
-- permission / workspace 的交互式回流统一由 server 发 `ServerRequest`，React 回 `ClientResponse`。
+- permission / workspace 的交互式请求统一由 Agent `rx_event` 产出 `server.request`，app-server 发布为 `ServerRequest`；React 回 `ClientResponse` 后由 app-server 包装成 `client_response` Op。
 - `workspace.listed` 是 `workspace.list` 的连接级响应，不带 `threadId`，只发给发起命令的 `/api/thread` 连接。
 - `op.submit` 是运行期输入 envelope；`input.submit` 与 `turn.interrupt` 不再属于公开 `ThreadCommand`。
 - permission / workspace request-response 都绑定到 thread 当前连接；断线或旧 token 回包不能影响新连接。
@@ -105,7 +106,7 @@ open dist/HandAgentDesktop.app
 
 ## 编辑约束
 
-- 不在 `agent-server` 内定义跨进程 DTO；thread 命令走 `@handagent/core/protocol/ThreadCommand.ts`，thread 通知走 `@handagent/core/protocol/ThreadNotification.ts`，请求回流走 `ServerRequest` / `ClientResponse`，平台帧走 `@handagent/core/protocol/PlatformBridgeMessage.ts`。
+- 不在 `agent-server` 内定义跨进程 DTO；thread 命令走 `@handagent/core/protocol/ThreadCommand.ts`，thread 通知走 `@handagent/core/protocol/ThreadNotification.ts`，请求回流走 `ServerRequest` / `ClientResponse`，Agent 内部事件走 `AgentEvent` / `Op`，平台帧走 `@handagent/core/protocol/PlatformBridgeMessage.ts`。
 - 不 import macOS、Swift、AppKit、SwiftUI 或 browser-only 模块；平台能力一律经 `PlatformAdapter` / `PlatformBridge`。
 - 不在这里实现 UI 状态；ThreadWindow 后台 thread 状态缓存、当前展示 thread、composer、请求面板和消息展示属于 React 前端。
 - 不在这里实现平台原生能力；`/api/platform` 只把 core `RemotePlatformAdapter` 的请求转给 desktop。

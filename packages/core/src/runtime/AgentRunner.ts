@@ -32,7 +32,9 @@ export class AgentRunner {
         continue;
       }
 
-      await this.handleInterrupt(op);
+      if (op.type === "interrupt") {
+        await this.handleInterrupt(op);
+      }
     }
   }
 

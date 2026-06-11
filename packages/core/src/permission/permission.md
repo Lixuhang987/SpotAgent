@@ -1,6 +1,6 @@
 # permission
 
-Tool 调用前的权限策略。runtime 默认 `AllowAllPermissionPolicy`；生产由 agent-server 注入 `FilePermissionPolicy(askResolver = ThreadPermissionBridge.ask)`。
+Tool 调用前的权限策略。runtime 默认 `AllowAllPermissionPolicy`；生产由 agent-server 注入 `FilePermissionPolicy(askResolver = AgentRequestBroker.askPermission)`。
 
 ## 文件
 
@@ -57,7 +57,7 @@ flowchart TD
 
 ## 编辑此目录的约束
 
-- 不要在 policy 内做 UI 询问；UI 必须走 `askResolver` 注入（agent-server 端的 `ThreadPermissionBridge`）。
+- 不要在 policy 内做 UI 询问；UI 必须走 `askResolver` 注入。生产路径由 agent-server 端 `AgentRequestBroker` 把 ask 转成 Agent `server.request` 事件。
 - `threadRules` 的 key 已按 `${threadId}::${argHash}` 隔离；多 thread 共存时不会互相泄漏。`always` 持久化层仍按 `argHash` 全局命中（这是设计意图，不是 bug）。
 - thread 断开时由 agent-server 调用 `clearThreadRules(threadId)` 释放该 thread 的内存规则；新增 thread 生命周期相关清理时需要保持这个调用。
 - `loadSync` 不启 watcher，但每次 `check / listPersistedRules / revoke / remember(always)` 读取持久化规则前都会比较 `permissions.json` 的 `mtimeMs + size`；文件被 Settings 或外部进程改动后，下一次调用会自动重读，写操作不会用旧缓存覆盖外部新增规则。

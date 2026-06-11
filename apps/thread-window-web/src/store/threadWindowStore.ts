@@ -2,7 +2,8 @@ import { produce } from "immer";
 import { create } from "zustand";
 import type {
   InitialPromptPayload,
-  Op,
+  InputItem,
+  RuntimeOp,
   RunStatus,
   ServerRequest,
   ThreadListEntry,
@@ -72,7 +73,7 @@ export type ThreadMessage = {
 };
 
 export type QueuedComposerInput = {
-  op: Op;
+  op: RuntimeOp;
 };
 
 export type PermissionRequestState = {
@@ -119,7 +120,7 @@ export type ThreadWindowState = {
   setWorkspaces(workspaces: Array<{ id: string; name: string; rootPath: string }>): void;
   toggleWorkspaceExpanded(workspaceId: string): void;
   setSearchQuery(query: string): void;
-  queueComposerInput(threadId: string, op: Op): void;
+  queueComposerInput(threadId: string, op: RuntimeOp): void;
   removeQueuedComposerInput(threadId: string, index: number): void;
   markComposerInputDispatchPending(threadId: string): void;
   takeNextQueuedInputForDispatch(threadId: string): QueuedComposerInput | null;
@@ -452,7 +453,7 @@ export const createThreadWindowStore = create<ThreadWindowState>((set) => ({
   },
 }));
 
-function cloneOp(op: Op): Op {
+function cloneOp(op: RuntimeOp): RuntimeOp {
   if (op.type === "interrupt") {
     return {
       type: "interrupt",
@@ -472,7 +473,7 @@ function cloneOp(op: Op): Op {
   };
 }
 
-function cloneInputItem(item: Op["payload"] extends { items: Array<infer T> } ? T : never): any {
+function cloneInputItem(item: InputItem): InputItem {
   switch (item.type) {
     case "text":
       return { type: "text", id: item.id, text: item.text };

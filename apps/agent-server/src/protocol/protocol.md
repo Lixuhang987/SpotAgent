@@ -15,7 +15,7 @@
 - 上游：Agent 内部的 `thread/ThreadRuntimeOrchestrator.ts` 在 runtime event 回调中调用 `toThreadNotification()` 和 `toAuditEvent()`。
 - 下游：React ThreadWindow store 消费 `assistant.delta`、`tool.started`、`tool.finished`、`thread.error` 等 `ThreadNotification`；`ThreadStore` 持久化审计 `ThreadAuditEvent`。
 - 旁路：`thread/ThreadPersistence.ts` 调 `composeUserContent()` 和 `agentMessagesToConversation()`。
-- 不处理：`permission.requested` / `workspace.requested` 由 `bridges/` 构造；`workspace.listed` 由 `thread/ThreadCommandRouter` 构造；`PlatformBridgeMessage` 由 `server/` 与 `bridges/WebSocketPlatformBridge.ts` 处理。
+- 不处理：`permission.requested` / `workspace.requested` 由 `agent/AgentRequestBroker` 包装为 Agent `server.request` event，再由 app-server 从 `rx_event` 发布；`workspace.listed` 由 `thread/ThreadCommandRouter` 构造；`PlatformBridgeMessage` 由 `server/` 与 `bridges/WebSocketPlatformBridge.ts` 处理。
 
 ## 关键机制
 

@@ -1,4 +1,7 @@
-export type Op = UserInputOp | InterruptOp;
+import type { ClientResponse } from "./ClientResponse.ts";
+
+export type RuntimeOp = UserInputOp | InterruptOp;
+export type Op = RuntimeOp | ClientResponseOp;
 
 export type UserInput = {
   items: InputItem[];
@@ -17,6 +20,15 @@ export type InterruptOp = {
   timestamp: string;
   payload: {
     reason: "user" | "system";
+  };
+};
+
+export type ClientResponseOp = {
+  type: "client_response";
+  opId: string;
+  timestamp: string;
+  payload: {
+    response: ClientResponse;
   };
 };
 

@@ -1,12 +1,5 @@
 import type { BrowserWindowConstructorOptions } from "electron";
-import type { HostTheme } from "../protocol/electronShellProtocol.js";
-
-type InitialPromptPayload = {
-  clientRequestId: string;
-  text: string;
-  attachments: unknown[];
-  actionBinding: { pluginId: string; promptName: string } | null;
-};
+import type { HostTheme, InitialPromptPayload } from "../protocol/electronShellProtocol.js";
 
 type ThreadWindowClosedEvent = {
   wasPrepared: boolean;

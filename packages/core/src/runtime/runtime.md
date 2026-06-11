@@ -59,7 +59,7 @@ flowchart TD
 ## Thread 编排边界
 
 - `AgentRuntime` 只负责单次 LLM/tool loop，不直接暴露给 UI，也不直接处理 WebSocket 协议。
-- 新主路径由 `AgentRunner` 持续消费 `Op`，并把 `AgentRuntimeEvent` 交给 thread port 处理持久化与通知。
+- 新主路径由 `AgentRunner` / agent-server 持久 Agent 持续消费 `Op`，并把 `AgentRuntimeEvent` 交给 thread port 处理持久化与通知；跨进程待回执请求由 app-server request broker 作为 Agent `server.request` event 输出。
 - runtime 不负责 agent-server socket 协议翻译、持久化审计事件模型、server 侧中断补帧策略或 desktop 展示状态推断。
 
 ## meta-tool 激活分支
@@ -81,7 +81,7 @@ flowchart TD
 - 带 `stubByDefault` 的 tool 若输入里显式传 `cached=turn|persist`，runtime 会把序列化结果写入注入的 `BlobStore`，并把 tool message content 渲染成 STUB。
 - runtime 不解析持久化 image STUB；agent-server 会在调用 runtime 前把用户主动提交的 image STUB 转成多模态 image part，runtime 只负责把注入的 `BlobStore` 继续透传给 `LLMClient`。
 - `cached=turn` 的 tool message 在本 turn 内保留完整 body；turn 自然结束后 `TurnSummarizer` 异步压缩，下一次 LLM 调用前 `waitForPendingSummaries()` 会等待并应用 summary。
-- `AgentRunner` 通过 thread port 先持久化 `user_input`，然后由 thread port 负责发 `user.message.recorded`；如果该输入唤醒 idle thread，再发 `turn.started`。run 结束后补 `turn.completed` 和 `thread.status.changed`。
+- `AgentRunner` 通过 thread port 先持久化 `user_input`，然后由 thread port 负责发 `user.message.recorded`；如果该输入唤醒 idle thread，再发 `turn.started`。run 结束后补 `turn.completed` 和 `thread.status.changed`。`client_response` Op 属于 app-server request broker 的内部输入，不进入 LLM message history。
 - 单个 tool call 的处理拆在 `handleToolCall` / `resolveToolPermission` / `callTool` / `appendDeniedToolResult` 内：主循环只负责 turn 推进与消息顺序，权限记忆、拒绝回灌、执行计时和错误序列化各自独立。
 - `truncateOutput` 按 UTF-8 字节判长度，但截断时按 JS 字符索引切片（已知潜在 bug，见架构改进）。
 - `runOptions.signal` 被 abort 后，runtime 抛 `AbortError`，停止后续 assistant / tool 事件与消息追加；无法硬取消的 tool 返回后也不会再写入本 run。

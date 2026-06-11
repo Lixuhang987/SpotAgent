@@ -15,7 +15,6 @@ import type { AgentActivityEvent } from "@handagent/core/protocol/AgentActivity.
 import type { FilePermissionPolicy } from "@handagent/core/permission/FilePermissionPolicy.ts";
 import type { MCPClient } from "@handagent/core/mcp/MCPClient.ts";
 import { InMemoryThreadStore } from "@handagent/core/storage/index.ts";
-import { ThreadPermissionBridge } from "../../src/bridges/ThreadPermissionBridge.ts";
 import { AgentActivityPublisher } from "../../src/activity/AgentActivityPublisher.ts";
 import {
   AgentManager,
@@ -26,7 +25,6 @@ import { ThreadPersistence } from "../../src/thread/ThreadPersistence.ts";
 import { ThreadRuntimeOrchestrator } from "../../src/thread/ThreadRuntimeOrchestrator.ts";
 import { ThreadCommandRouter } from "../../src/thread/ThreadCommandRouter.ts";
 import { ThreadNotificationPublisher } from "../../src/thread/ThreadNotificationPublisher.ts";
-import { ThreadWorkspaceAskBridge } from "../../src/bridges/ThreadWorkspaceAskBridge.ts";
 import {
   attachActivitySocketHandlers,
   attachPlatformSocketHandlers,
@@ -85,15 +83,6 @@ function permissionResponse(
   };
 }
 
-function workspaceAskResponse(requestId: string, workspaceId: string): ClientResponse {
-  return {
-    type: "workspace.answered",
-    requestId,
-    timestamp: new Date().toISOString(),
-    payload: { workspaceId },
-  };
-}
-
 async function emitMessage(
   socket: FakeSocket,
   message: ThreadCommand | ClientResponse | PlatformBridgeMessage,
@@ -135,13 +124,9 @@ async function waitForClose(socket: WebSocket, timeoutMs = 250): Promise<boolean
 }
 
 describe("attachThreadSocketHandlers", () => {
-  it("binds every op.submit thread on a socket and clears them all on close", async () => {
+  it("tracks every thread command on a socket and clears owned runs on close", async () => {
     const socket = new FakeSocket();
     const { commandRouter, eventPublisher } = makeHandlerDependencies();
-    const permissionBridge = {
-      bindThread: vi.fn().mockReturnValueOnce(101).mockReturnValueOnce(102),
-      unbindThread: vi.fn().mockReturnValue(true),
-    } as unknown as ThreadPermissionBridge;
     const permissionPolicy = {
       clearThreadRules: vi.fn(),
     } as unknown as FilePermissionPolicy;
@@ -149,247 +134,65 @@ describe("attachThreadSocketHandlers", () => {
     attachThreadSocketHandlers(socket as never, {
       commandRouter,
       eventPublisher,
-      permissionBridge,
       permissionPolicy,
     });
 
     await emitMessage(socket, opSubmit("Thread-A", "first"));
     await emitMessage(socket, opSubmit("Thread-B", "second"));
-
-    expect(permissionBridge.bindThread).toHaveBeenCalledWith(
-      "Thread-A",
-      expect.any(Function),
-    );
-    expect(permissionBridge.bindThread).toHaveBeenCalledWith(
-      "Thread-B",
-      expect.any(Function),
-    );
-
     socket.emit("close");
 
-    expect(permissionBridge.unbindThread).toHaveBeenCalledWith("Thread-A", 101);
-    expect(permissionBridge.unbindThread).toHaveBeenCalledWith("Thread-B", 102);
     expect(commandRouter.interruptThread).toHaveBeenCalledWith("Thread-A");
     expect(commandRouter.interruptThread).toHaveBeenCalledWith("Thread-B");
     expect(permissionPolicy.clearThreadRules).toHaveBeenCalledWith("Thread-A");
     expect(permissionPolicy.clearThreadRules).toHaveBeenCalledWith("Thread-B");
   });
 
-  it("does not clear a thread binding or thread rules when a stale socket closes after reconnect", async () => {
+  it("routes client responses to the command router instead of bridge handlers", async () => {
     const socket = new FakeSocket();
     const { commandRouter, eventPublisher } = makeHandlerDependencies();
-    const permissionBridge = {
-      bindThread: vi.fn().mockReturnValue(101),
-      unbindThread: vi.fn().mockReturnValue(false),
-    } as unknown as ThreadPermissionBridge;
-    const permissionPolicy = {
-      clearThreadRules: vi.fn(),
-    } as unknown as FilePermissionPolicy;
 
     attachThreadSocketHandlers(socket as never, {
       commandRouter,
       eventPublisher,
-      permissionBridge,
-      permissionPolicy,
     });
 
-    await emitMessage(socket, opSubmit("Thread-A", "first"));
-    socket.emit("close");
+    const response = permissionResponse("Thread-A:request-1", "allow");
+    await emitMessage(socket, response);
 
-    expect(permissionBridge.unbindThread).toHaveBeenCalledWith("Thread-A", 101);
-    expect(commandRouter.interruptThread).not.toHaveBeenCalled();
-    expect(permissionPolicy.clearThreadRules).not.toHaveBeenCalled();
-  });
-
-  it("migrates pending permission asks to the rebound socket", async () => {
-    const firstSocket = new FakeSocket();
-    const secondSocket = new FakeSocket();
-    const firstDeps = makeHandlerDependencies();
-    const secondDeps = makeHandlerDependencies();
-    const permissionBridge = new ThreadPermissionBridge();
-    const permissionPolicy = {
-      clearThreadRules: vi.fn(),
-    } as unknown as FilePermissionPolicy;
-
-    attachThreadSocketHandlers(firstSocket as never, {
-      ...firstDeps,
-      permissionBridge,
-      permissionPolicy,
-    });
-    attachThreadSocketHandlers(secondSocket as never, {
-      ...secondDeps,
-      permissionBridge,
-      permissionPolicy,
-    });
-
-    await emitMessage(firstSocket, opSubmit("Thread-A", "first"));
-    const staleAsk = permissionBridge.ask({
-      threadId: "Thread-A",
-      toolName: "file.write",
-      toolCallId: "tool-A",
-      arguments: { path: "a.txt" },
-    });
-    const staleRequest = lastSent<ServerRequest>(firstSocket);
-    if (staleRequest.type !== "permission.requested") throw new Error("type");
-
-    await emitMessage(secondSocket, opSubmit("Thread-A", "reconnect"));
-    await emitMessage(
-      firstSocket,
-      permissionResponse(staleRequest.requestId, "allow"),
-    );
-
-    const staleOutcome = await Promise.race([
-      staleAsk,
-      Promise.resolve("pending"),
-    ]);
-    expect(staleOutcome).toBe("pending");
-
-    firstSocket.emit("close");
-    expect(permissionPolicy.clearThreadRules).not.toHaveBeenCalled();
-    expect(firstDeps.commandRouter.interruptThread).not.toHaveBeenCalled();
-    await emitMessage(
-      secondSocket,
-      permissionResponse(staleRequest.requestId, "allow"),
-    );
-    await expect(staleAsk).resolves.toEqual({ decision: "allow", remember: "thread" });
-
-    const currentAsk = permissionBridge.ask({
-      threadId: "Thread-A",
-      toolName: "file.write",
-      toolCallId: "tool-B",
-      arguments: { path: "b.txt" },
-    });
-    const currentRequest = lastSent<ServerRequest>(secondSocket);
-    if (currentRequest.type !== "permission.requested") throw new Error("type");
-    await emitMessage(
-      secondSocket,
-      permissionResponse(currentRequest.requestId, "allow"),
-    );
-
-    await expect(currentAsk).resolves.toEqual({ decision: "allow", remember: "thread" });
-  });
-
-  it("keeps the same binding token for repeated op.submit commands on one socket", async () => {
-    const socket = new FakeSocket();
-    const deps = makeHandlerDependencies();
-    const permissionBridge = new ThreadPermissionBridge();
-
-    attachThreadSocketHandlers(socket as never, {
-      ...deps,
-      permissionBridge,
-    });
-
-    await emitMessage(socket, opSubmit("Thread-A", "first"));
-    const ask = permissionBridge.ask({
-      threadId: "Thread-A",
-      toolName: "file.write",
-      toolCallId: "tool-A",
-      arguments: { path: "a.txt" },
-    });
-    const request = lastSent<ServerRequest>(socket);
-    if (request.type !== "permission.requested") throw new Error("type");
-
-    await emitMessage(socket, opSubmit("Thread-A", "second"));
-    await emitMessage(socket, permissionResponse(request.requestId, "allow"));
-
-    await expect(ask).resolves.toEqual({ decision: "allow", remember: "thread" });
-  });
-
-  it("replays a pending permission request after thread.resume binds a reconnected socket", async () => {
-    const firstSocket = new FakeSocket();
-    const secondSocket = new FakeSocket();
-    const firstDeps = makeHandlerDependencies();
-    const secondDeps = makeHandlerDependencies();
-    const permissionBridge = new ThreadPermissionBridge();
-
-    attachThreadSocketHandlers(firstSocket as never, {
-      ...firstDeps,
-      permissionBridge,
-    });
-    attachThreadSocketHandlers(secondSocket as never, {
-      ...secondDeps,
-      permissionBridge,
-    });
-
-    await emitMessage(firstSocket, opSubmit("Thread-A", "first"));
-    const ask = permissionBridge.ask({
-      threadId: "Thread-A",
-      toolName: "ocr.read",
-      toolCallId: "tool-A",
-      arguments: { imageBase64: "stub", mimeType: "image/png" },
-    });
-    const request = lastSent<ServerRequest>(firstSocket);
-    if (request.type !== "permission.requested") throw new Error("type");
-
-    await emitMessage(secondSocket, {
-      type: "thread.resume",
-      threadId: "Thread-A",
-      commandId: "resume-1",
-      timestamp: new Date().toISOString(),
-    });
-
-    expect(secondDeps.commandRouter.receive).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "thread.resume", threadId: "Thread-A" }),
+    expect(commandRouter.handleResponse).toHaveBeenCalledWith(
+      response,
       expect.any(String),
     );
-    expect(lastSent<ServerRequest>(secondSocket)).toEqual(request);
-
-    await emitMessage(secondSocket, permissionResponse(request.requestId, "deny"));
-
-    await expect(ask).resolves.toEqual({ decision: "deny", remember: "thread" });
   });
 
-  it("routes workspace request responses through the current socket binding", async () => {
+  it("sends server requests through the thread event publisher after a socket subscribed to a thread", async () => {
     const socket = new FakeSocket();
-    const deps = makeHandlerDependencies();
-    const workspaceAskBridge = new ThreadWorkspaceAskBridge();
+    const { commandRouter, eventPublisher } = makeHandlerDependencies();
 
     attachThreadSocketHandlers(socket as never, {
-      ...deps,
-      workspaceAskBridge,
+      commandRouter,
+      eventPublisher,
     });
 
     await emitMessage(socket, opSubmit("Thread-A", "first"));
-    const ask = workspaceAskBridge.ask({
+    eventPublisher.publish({
+      type: "permission.requested",
+      requestId: "Thread-A:permission-1",
       threadId: "Thread-A",
-      toolCallId: "tool-1",
-      prompt: "请选择 workspace",
-      candidates: [
-        { id: "docs", name: "文档", description: "文档", isDefault: false },
-        { id: "code", name: "代码", description: "代码", isDefault: false },
-      ],
+      timestamp: "2026-06-11T00:00:00.000Z",
+      payload: {
+        toolName: "file.write",
+        toolCallId: "tool-1",
+        arguments: { path: "a.txt" },
+      },
     });
+
     const request = lastSent<ServerRequest>(socket);
-    if (request.type !== "workspace.requested") throw new Error("type");
-
-    await emitMessage(socket, workspaceAskResponse(request.requestId, "docs"));
-
-    await expect(ask).resolves.toEqual({ workspaceId: "docs" });
-  });
-
-  it("routes permission responses for thread ids that contain colons", async () => {
-    const socket = new FakeSocket();
-    const deps = makeHandlerDependencies();
-    const permissionBridge = new ThreadPermissionBridge();
-
-    attachThreadSocketHandlers(socket as never, {
-      ...deps,
-      permissionBridge,
+    expect(request).toMatchObject({
+      type: "permission.requested",
+      requestId: "Thread-A:permission-1",
+      threadId: "Thread-A",
     });
-
-    await emitMessage(socket, opSubmit("workspace:Thread-A", "first"));
-    const ask = permissionBridge.ask({
-      threadId: "workspace:Thread-A",
-      toolName: "file.write",
-      toolCallId: "tool-A",
-      arguments: { path: "a.txt" },
-    });
-    const request = lastSent<ServerRequest>(socket);
-    if (request.type !== "permission.requested") throw new Error("type");
-
-    await emitMessage(socket, permissionResponse(request.requestId, "allow"));
-
-    await expect(ask).resolves.toEqual({ decision: "allow", remember: "thread" });
   });
 
   it("interrupts the active run owned by a socket when that socket closes", async () => {
@@ -465,13 +268,10 @@ describe("attachThreadSocketHandlers", () => {
       eventPublisher,
       () => "2026-05-20T00:00:00.000Z",
     );
-    const permissionBridge = new ThreadPermissionBridge();
-
     await persistence.ensureThread("Thread-A");
     attachThreadSocketHandlers(socket as never, {
       commandRouter,
       eventPublisher,
-      permissionBridge,
     });
 
     await emitMessage(socket, opSubmit("Thread-A", "close me"));

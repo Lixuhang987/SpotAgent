@@ -11,10 +11,11 @@
 
 | 文件 | 职责 |
 |------|------|
-| `Op.ts` | 运行期输入协议：`UserInput` / `Interrupt` 以及 `Text` / `Image` / `Skill` / `TextSelection` 输入项 |
-| `ThreadCommand.ts` | 最小命令协议：`thread.start` / `thread.resume` / `thread.list` / `thread.delete` / `op.submit` / `workspace.list` |
+| `Op.ts` | Agent 输入协议：公开运行期 `UserInput` / `Interrupt`，以及 app-server 内部 `client_response` 回执 Op |
+| `ThreadCommand.ts` | 最小命令协议：`thread.start` / `thread.resume` / `thread.list` / `thread.delete` / `op.submit(RuntimeOp)` / `workspace.list` |
 | `ThreadNotification.ts` | 通知协议：`thread.started` / `thread.snapshot` / `assistant.delta` / `tool.started` / `turn.completed` 等 |
-| `ServerRequest.ts` | 待回执请求：`permission.requested` / `workspace.requested`，按 `threadId` 路由 |
+| `AgentEvent.ts` | Agent 输出事件：`thread.notification` / `server.request`，供 app-server 从 Agent `rx_event` 消费 |
+| `ServerRequest.ts` | 跨进程待回执请求：`permission.requested` / `workspace.requested`，按 `threadId` 路由 |
 | `ClientResponse.ts` | 回执协议：`permission.answered` / `workspace.answered` |
 | `ThreadProtocolShared.ts` | 共享类型：`RunStatus` / `ThreadListEntry` / `WorkspaceAskCandidate` / `ThreadAttachment` |
 | `AgentActivity.ts` | `/api/activity` 轻量活动流：`activity.snapshot` / `activity.changed` |
@@ -36,7 +37,7 @@ flowchart LR
 
 - React ThreadWindow 不直接驱动 `AgentRuntime`，只发命令、收事件。
 - Swift desktop 不处理 thread DTO，只处理 platform bridge DTO。
-- agent-server 负责 socket、订阅路由、持久化、权限 / workspace 回执桥接，以及把 `AgentRuntimeEvent` 归一化为 `ThreadNotification`。
+- agent-server 负责 socket、订阅路由、持久化、Agent request broker，以及把 Agent `rx_event` 中的 notification/request 归一化发布到 `/api/thread`。
 - `/api/activity` 不承载 `ThreadCommand`、`ClientResponse`、`ThreadNotification` 或 `ServerRequest`，只发送 `AgentActivityEvent`。
 - core 只定义协议 DTO 与 runtime 事件，不负责 WebSocket 生命周期或连接分发。
 
@@ -72,7 +73,7 @@ flowchart LR
 - `permission.requested` <-> `permission.answered`
 - `workspace.requested` <-> `workspace.answered`
 
-这两组消息只用于“server 发起问题，等待 UI 回执”的少量交互，不承担普通 thread 流。
+这两组消息只用于“server 发起问题，等待 UI 回执”的少量跨进程交互，不承担普通 thread 流。Agent 内部对应为 `server.request` event 与 `client_response` Op。
 
 ### `AgentActivityEvent`
 
@@ -92,8 +93,9 @@ flowchart LR
 
 ## core 侧消费方式
 
-- 新主路径由 agent-server 的持久 Agent 消费运行期 `Op`，并由内部 turn 执行器编排 `AgentRuntime`；对外只暴露 `ThreadNotification`。
-- `AgentRuntimeEvent` 到 `ThreadNotification` 的归一化由 agent-server thread 层维护，避免 runtime 内部事件直接暴露给 UI。
+- 新主路径由 agent-server 的持久 Agent 消费 `Op`，并由内部 turn 执行器编排 `AgentRuntime`；对外只暴露 `ThreadNotification` / `ServerRequest`。
+- `AgentRuntimeEvent` 到 `ThreadNotification` 的归一化由 agent-server thread 层维护，随后作为 `thread.notification` 进入 Agent `rx_event`，避免 runtime 内部事件直接暴露给 UI。
+- permission/workspace ask resolver 会把待回执请求包装成 `server.request` 进入 Agent `rx_event`；app-server 发布后，React 的 `ClientResponse` 会被包装成 `client_response` Op 投回同一 Agent。
 
 ## Action Binding
 
@@ -109,10 +111,11 @@ plugin action 绑定信息位于 `thread.start.payload.actionBinding`。agent-se
 
 ## 运行期 Op
 
-`Op` 只替代运行期输入，不替代 thread 生命周期：
+`Op` 在 Agent 内部表示可投递给 `tx_sub` 的操作；公开 `op.submit` 只接受运行期输入，不替代 thread 生命周期：
 
 - `UserInput`：`payload.items` 是用户本次主动输入的结构化列表，支持 `text`、`image`、`skill`、`text_selection`。
 - `Interrupt`：表示用户或系统请求中断当前运行。
+- `ClientResponseOp`：app-server 内部 Op，包装 React 回传的 `permission.answered` / `workspace.answered`，不允许 React 通过 `op.submit` 直接提交。
 
 `thread.start` / `thread.resume` / `thread.list` / `thread.delete` / `workspace.list` 仍是独立 `ThreadCommand`。
 

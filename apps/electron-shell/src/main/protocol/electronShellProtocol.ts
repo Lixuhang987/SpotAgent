@@ -3,7 +3,7 @@ import type {
 } from "@handagent/core/protocol/ThreadProtocolShared.ts";
 import type { UserInput } from "@handagent/core/protocol/Op.ts";
 
-type InitialPromptPayload = {
+export type InitialPromptPayload = {
   clientRequestId: string;
   userInput: UserInput;
   actionBinding: ActionBindingPayload | null;

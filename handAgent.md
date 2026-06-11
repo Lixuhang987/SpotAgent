@@ -38,7 +38,7 @@ flowchart TD
   H --> Agt[AgentManager / Agent tx_sub]
   Agt --> I[AgentRuntime.run]
   I --> J[LLMClient.stream]
-  J --> K[转发 delta / tool / request 为单向事件]
+  J --> K[Agent rx_event 输出 notification / request]
   K --> L{返回 toolCalls?}
   L -- 否 --> M[React 渲染 assistant 消息]
   L -- 是 --> N[ToolRegistry.get]
@@ -52,7 +52,7 @@ flowchart TD
 ## 跨层合约
 
 - 初始上下文只来自用户主动输入和主动附件。PromptPanel 的 attachment 只通过 Electron initial prompt command 进入 React；屏幕、剪贴板、App 状态和文件读取都必须走 tool。
-- Thread 主协议只跑在 `/api/thread`：React 发送 `ThreadCommand` / `ClientResponse`，agent-server 发送 `ThreadNotification` / `ServerRequest`。
+- Thread 主协议只跑在 `/api/thread`：React 发送 `ThreadCommand` / `ClientResponse`，agent-server 发送 `ThreadNotification` / `ServerRequest`；app-server 内部会把 `ClientResponse` 包装为 `client_response` Op 投回 Agent `tx_sub`。
 - Activity 轻量状态只跑在 `/api/activity`：agent-server 只发送 `AgentActivityEvent`；新连接先收到 `activity.snapshot`，状态变化时收到 `activity.changed`。该流由 `ThreadNotification` / `ServerRequest` 派生，不承载完整 thread 消息。
 - 主题偏好由 Swift 宿主持久化和解析：用户只在 Swift Settings 中选择 `light` / `dark` / `system`，Swift 将解析后的 `light` 或 `dark` 通过 `theme.changed` command 传给 Electron；Electron main 同步给 ThreadWindow 和 ActivityWindow renderer，React 侧只应用 resolved theme，不持久化偏好。
 - 平台 RPC 只跑在 `/api/platform`：Swift desktop 发送 `platform_bridge_hello`，处理 `channel: "platform"` 的 `platform_request`，并回写 `platform_response`。
@@ -68,7 +68,7 @@ flowchart TD
 - Swift desktop 不持有 thread client，不发送 `ThreadCommand`，不解析 `ThreadNotification`，不订阅 `/api/activity`。
 - Swift 不发送 `thread_window.prepare`；Electron main 是 hidden ThreadWindow 预热的唯一 owner。agent-server 是唯一承载 core runtime 的后台进程，关闭 Electron UI 窗口不停止该进程。
 - React ThreadWindow 是历史、后台 thread 状态缓存、消息、运行态、permission/workspace 请求面板和 composer 的 UI 状态源；右侧当前展示的 thread 由 React `App` 本地 state 编排，不进入 store。
-- agent-server 是组合根和本地桥：负责 socket 路径拆分、thread 生命周期路由、持久 Agent owner、runtime 驱动、持久化封装、permission/workspace 回执桥和 platform bridge 转发；外部运行期输入统一是 `op.submit(UserInput | Interrupt)`。
+- agent-server 是组合根和本地桥：负责 socket 路径拆分、thread 生命周期路由、持久 Agent owner、runtime 驱动、持久化封装、Agent request broker 和 platform bridge 转发；外部运行期输入统一是 `op.submit(UserInput | Interrupt)`，UI 回执在 server 内部抽象为 `client_response` Op。
 - packages/core 只定义跨平台 runtime、tool、platform、protocol、storage、workspace 和 permission 抽象，不实现 UI 或 macOS 原生能力。
 
 ## 阅读顺序建议

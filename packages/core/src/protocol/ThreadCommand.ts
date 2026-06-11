@@ -1,7 +1,7 @@
 import type {
   ActionBindingPayload,
 } from "./ThreadProtocolShared.ts";
-import type { Op } from "./Op.ts";
+import type { RuntimeOp } from "./Op.ts";
 
 export type ThreadCommand =
   | {
@@ -38,7 +38,7 @@ export type ThreadCommand =
       commandId: string;
       timestamp: string;
       payload: {
-        op: Op;
+        op: RuntimeOp;
       };
     }
   | {

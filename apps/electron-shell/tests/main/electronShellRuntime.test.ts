@@ -10,8 +10,9 @@ describe("ElectronShellRuntime", () => {
     const harness = createHarness();
     const payload: InitialPromptPayload = {
       clientRequestId: "request-1",
-      text: "hello",
-      attachments: [],
+      userInput: {
+        items: [{ type: "text", id: "text-1", text: "hello" }],
+      },
       actionBinding: null,
     };
 

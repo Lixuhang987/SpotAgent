@@ -349,8 +349,9 @@ describe("threadWindowStore", () => {
     const store = createThreadWindowStore;
     store.getState().enqueueInitialPrompt({
       clientRequestId: "prompt-1",
-      text: "hello",
-      attachments: [],
+      userInput: {
+        items: [{ type: "text", id: "text-1", text: "hello" }],
+      },
       actionBinding: null,
     });
 

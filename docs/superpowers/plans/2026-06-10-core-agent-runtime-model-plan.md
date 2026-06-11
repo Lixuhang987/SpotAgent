@@ -4,7 +4,7 @@
 
 **Goal:** Replace the app-server's one-shot `runWithMessages(...)` flow with a persistent `Agent + Op` runtime model, where thread lifecycle commands stay separate and all runtime input is normalized through `UserInput` / `Interrupt` ops.
 
-**Architecture:** Keep `thread.start` / `thread.resume` / `thread.list` / `thread.delete` / `workspace.list` as lifecycle commands, but move runtime input to `Op = UserInput | Interrupt`. On the backend, introduce an Agent session owner that loads static config on `thread.start`, exposes `tx_sub` / `rx_event` / `agent_status` / `session`, and wraps persistence/status/notification complexity behind a thread port. On the frontend, PromptPanel, ThreadWindow composer, and Electron initial prompt payloads all produce the same `UserInput.items[]` shape so React and Swift stop handling text/image/selection/skill action as separate ad hoc payloads.
+**Architecture:** Keep `thread.start` / `thread.resume` / `thread.list` / `thread.delete` / `workspace.list` as lifecycle commands, but move public runtime input to `RuntimeOp = UserInput | Interrupt`, while Agent-internal `Op` may also carry `client_response`. On the backend, introduce an Agent session owner that loads static config on `thread.start`, exposes `tx_sub` / `rx_event` / `agent_status` / `session`, and wraps persistence/status/notification complexity behind a thread port. On the frontend, PromptPanel, ThreadWindow composer, and Electron initial prompt payloads all produce the same `UserInput.items[]` shape so React and Swift stop handling text/image/selection/skill action as separate ad hoc payloads.
 
 **Tech Stack:** TypeScript, Vitest, Swift 6, SwiftUI, React, Zustand, Electron preload/main protocol guards, Node WebSocket bridge
 
@@ -84,7 +84,8 @@ Expected: FAIL because `packages/core/src/protocol/Op.ts` and the new protocol g
 
 ```ts
 // packages/core/src/protocol/Op.ts
-export type Op = UserInputOp | InterruptOp;
+export type RuntimeOp = UserInputOp | InterruptOp;
+export type Op = RuntimeOp | ClientResponseOp;
 export type UserInput = { items: InputItem[] };
 export type UserInputOp = { type: "user_input"; opId: string; timestamp: string; payload: UserInput };
 export type InterruptOp = { type: "interrupt"; opId: string; timestamp: string; payload: { reason: "user" | "system" } };
@@ -98,7 +99,7 @@ export type TextSelectionInputItem = { type: "text_selection"; id: string; text:
 ```ts
 // packages/core/src/protocol/ThreadCommand.ts
 import type { ActionBindingPayload } from "./ThreadProtocolShared.ts";
-import type { Op } from "./Op.ts";
+import type { RuntimeOp } from "./Op.ts";
 
 export type ThreadCommand =
   | { type: "thread.start"; commandId: string; timestamp: string; payload: { workspaceId: string | null; actionBinding: ActionBindingPayload | null } }
@@ -106,7 +107,7 @@ export type ThreadCommand =
   | { type: "thread.list"; commandId: string; timestamp: string }
   | { type: "thread.delete"; commandId: string; timestamp: string; payload: { targetThreadId: string } }
   | { type: "workspace.list"; commandId: string; timestamp: string }
-  | { type: "op.submit"; threadId: string; commandId: string; timestamp: string; payload: { op: Op } };
+  | { type: "op.submit"; threadId: string; commandId: string; timestamp: string; payload: { op: RuntimeOp } };
 ```
 
 Keep `packages/core/src/protocol/ThreadProtocolShared.ts` stable; do not move `UserInput` aliases there in this plan.
@@ -121,7 +122,7 @@ export type InitialPromptPayload = {
   actionBinding: ActionBindingPayload | null;
 };
 
-export function encodeOpSubmit(input: { threadId: string; commandId: string; timestamp: string; op: Op }): string {
+export function encodeOpSubmit(input: { threadId: string; commandId: string; timestamp: string; op: RuntimeOp }): string {
   return encode({ type: "op.submit", threadId: input.threadId, commandId: input.commandId, timestamp: input.timestamp, payload: { op: input.op } });
 }
 ```

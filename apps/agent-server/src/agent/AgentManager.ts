@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { AgentEvent } from "@handagent/core/protocol/AgentEvent.ts";
 import type { Op, UserInputOp } from "@handagent/core/protocol/Op.ts";
 import type { ThreadAttachment } from "@handagent/core/protocol/ThreadProtocolShared.ts";
 import type { RunStatus } from "@handagent/core/protocol/ThreadProtocolShared.ts";
@@ -14,7 +15,7 @@ export type SharedAgentStatus = {
 
 export type Agent = {
   tx_sub: AgentTxSub;
-  rx_event: AsyncIterable<unknown>;
+  rx_event: AsyncIterable<AgentEvent>;
   agent_status: SharedAgentStatus;
   session: unknown;
   close(): Promise<void>;

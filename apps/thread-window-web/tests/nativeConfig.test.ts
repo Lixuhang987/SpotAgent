@@ -14,8 +14,9 @@ describe("nativeConfig", () => {
     return window as typeof window & {
       handAgentPendingInitialPrompts?: Array<{
         clientRequestId: string;
-        text: string;
-        attachments: [];
+        userInput: {
+          items: Array<{ type: "text"; id: string; text: string }>;
+        };
         actionBinding: null;
       }>;
     };
@@ -24,14 +25,15 @@ describe("nativeConfig", () => {
   it("flushes initial prompts queued before React installs the receiver", () => {
     nativeWindow().handAgentPendingInitialPrompts = [{
       clientRequestId: "prompt-1",
-      text: "hello",
-      attachments: [],
+      userInput: {
+        items: [{ type: "text", id: "text-1", text: "hello" }],
+      },
       actionBinding: null,
     }];
     const received: string[] = [];
 
     installInitialPromptReceiver((payload) => {
-      received.push(payload.text);
+      received.push(payload.userInput.items[0]?.type === "text" ? payload.userInput.items[0].text : "");
     });
 
     expect(received).toEqual(["hello"]);

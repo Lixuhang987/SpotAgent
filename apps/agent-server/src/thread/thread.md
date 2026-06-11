@@ -10,7 +10,7 @@
 
 | 文件 | 职责 |
 |------|------|
-| `ThreadCommandRouter.ts` | 处理 `ThreadCommand` 路由，保留 `ClientResponse` fallback hooks，调用 `AgentManager` / persistence，并把 notification 推给 publisher |
+| `ThreadCommandRouter.ts` | 处理 `ThreadCommand` 路由，把 `ClientResponse` 包装为 `client_response` Op，调用 `AgentManager` / persistence，并把生命周期 notification 推给 publisher |
 | `ThreadInputQueue.ts` | thread-local FIFO input item 队列；当前生产路径承载 idle user input 的 session 唤醒，类型上为后续 response item / 子 agent 通信预留 |
 | `ThreadNotificationPublisher.ts` | 维护 `connection -> subscribed threadIds` 的分发表；thread 级消息按 `threadId` 定向，非 thread 级 notification 广播 |
 | `ThreadRuntimeOrchestrator.ts` | Agent 内部 ReAct turn 执行器：记录输入、唤醒 runtime、drain queued input、转译通知、处理中断与错误 |
@@ -70,7 +70,7 @@ sequenceDiagram
 ### 连接与通知分发
 
 - `ThreadNotificationPublisher` 维护 `connectionId -> subscribed threadIds`，但不持有 socket；发送函数由 `server/attachThreadSocketHandlers` 注入。
-- Phase 2 起，`ThreadNotificationPublisher` 可接收一个 observer，把每个 `ThreadNotification` 旁路交给 `AgentActivityPublisher`；`ThreadPermissionBridge` / `ThreadWorkspaceAskBridge` 发出的 `ServerRequest` 也会走同一 observer 派生活动状态。observer 发送失败会在 activity 层被隔离，不改变 `/api/thread` 的订阅分发。
+- `ThreadNotificationPublisher` 可接收一个 observer，把每个 `ThreadNotification` / `ServerRequest` 旁路交给 `AgentActivityPublisher`。`ServerRequest` 现在来自 Agent `rx_event` 的 `server.request`，不再由 socket bridge 直接发送。observer 发送失败会在 activity 层被隔离，不改变 `/api/thread` 的订阅分发。
 - 同一条 React `/api/thread` socket 可以同时接收多个 thread 的通知。
 - 带 `threadId` 的 notification / server request 按 thread 定向；不带 `threadId` 的全局 notification 广播给所有连接。
 - 当前协议不承诺显式 unsubscribe；右侧当前展示哪个 thread 是 React 本地页面编排状态，不会单独通知 server。
@@ -99,5 +99,5 @@ sequenceDiagram
 
 - 新增 thread / turn 命令分支优先落在 `ThreadCommandRouter.ts`。
 - runtime event 到 notification / 审计事件的翻译归 `protocol/MessageTranslator.ts`。
-- 需要 request-response 的能力优先判断是否属于 `/api/thread` 的 `ServerRequest` / `ClientResponse`；不要误挂到 `/api/platform`。
+- 需要 request-response 的能力优先判断是否属于 Agent `rx_event(server.request)` / `tx_sub(client_response)`；跨进程呈现仍是 `/api/thread` 的 `ServerRequest` / `ClientResponse`，不要误挂到 `/api/platform`。
 - 本文件只记录当前输入入口 `op.submit` 及其路由语义。

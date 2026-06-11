@@ -61,7 +61,7 @@ plugin action 绑定的外部能力不由 core tools 目录加载私有插件进
 ### 5. 权限阶段
 
 - `AgentRuntime` 在 `tool.call` 前调 `PermissionPolicy.check`，进入 `ask` 时通过 `resolveAsk` 询问。
-- 生产路径由 agent-server 注入 `FilePermissionPolicy(askResolver = ThreadPermissionBridge.ask)`，UI 在 thread 内联气泡。
+- 生产路径由 agent-server 注入 `FilePermissionPolicy(askResolver = AgentRequestBroker.askPermission)`，ask 先进入 Agent `rx_event`，再由 app-server 发布为 ThreadWindow 内联气泡。
 - 三档记忆：once / thread / always；always 持久化到 `~/.spotAgent/permissions.json`。
 
 ### 6. 持久化阶段
@@ -73,8 +73,8 @@ plugin action 绑定的外部能力不由 core tools 目录加载私有插件进
 
 - React ThreadWindow 与 agent-server 走 `/api/thread` WebSocket；Thread 主路径拆为 `ThreadCommand`、`ThreadNotification`、`ServerRequest`、`ClientResponse` 四类消息。
 - Electron StatusBubble 和后续桌宠订阅 `/api/activity` WebSocket，只接收 `AgentActivityEvent` 轻量状态，不接收完整 thread 消息。
-- `ThreadCommand` 只表示 UI 主动提交的命令；运行期输入统一封装为 `op.submit(UserInput | Interrupt)`；`ThreadNotification` 只表示 agent-server 向 UI 推送的结果通知。
-- `ServerRequest` / `ClientResponse` 只覆盖少量“server 提问，UI 回执”的交互，如权限审批与 workspace 选择。
+- `ThreadCommand` 只表示 UI 主动提交的命令；公开运行期输入统一封装为 `op.submit(UserInput | Interrupt)`；app-server 内部会把 `ClientResponse` 包装为 `client_response` Op 投回 Agent。`ThreadNotification` 只表示 agent-server 向 UI 推送的结果通知。
+- `ServerRequest` / `ClientResponse` 只覆盖少量“server 提问，UI 回执”的跨进程交互，如权限审批与 workspace 选择；Agent 内部对应为 `server.request` event 与 `client_response` Op。
 - Swift desktop 不参与 thread 主协议，只通过 `/api/platform` 处理独立 `PlatformBridgeMessage`，并用 `channel: "platform"` 分流。
 - 字段说明详见 [protocol/protocol.md](/Users/mu9/proj/handAgent/packages/core/src/protocol/protocol.md)。
 

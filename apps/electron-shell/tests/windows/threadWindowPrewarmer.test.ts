@@ -75,8 +75,9 @@ describe("ThreadWindowPrewarmer", () => {
 
     await prewarmer.openInitialPrompt({
       clientRequestId: "prompt-1",
-      text: "hello",
-      attachments: [],
+      userInput: {
+        items: [{ type: "text", id: "text-1", text: "hello" }],
+      },
       actionBinding: null,
     });
 
@@ -95,8 +96,9 @@ describe("ThreadWindowPrewarmer", () => {
 
     const opened = host.openInitialPrompt({
       clientRequestId: "prompt-1",
-      text: "hello",
-      attachments: [],
+      userInput: {
+        items: [{ type: "text", id: "text-1", text: "hello" }],
+      },
       actionBinding: null,
     });
     window.webContents.emit("did-finish-load");
@@ -133,8 +135,9 @@ describe("ThreadWindowPrewarmer", () => {
 
     const openingInitialPrompt = host.openInitialPrompt({
       clientRequestId: "prompt-1",
-      text: "hello",
-      attachments: [],
+      userInput: {
+        items: [{ type: "text", id: "text-1", text: "hello" }],
+      },
       actionBinding: null,
     });
     firstWindow.webContents.emit("did-finish-load");
@@ -273,8 +276,9 @@ describe("ThreadWindowPrewarmer", () => {
     expect(closedCount).toBe(1);
     const reopened = prewarmer.openInitialPrompt({
       clientRequestId: "prompt-1",
-      text: "hello",
-      attachments: [],
+      userInput: {
+        items: [{ type: "text", id: "text-1", text: "hello" }],
+      },
       actionBinding: null,
     });
     secondWindow.webContents.emit("did-finish-load");

@@ -153,6 +153,33 @@ describe("ThreadCommandRouter", () => {
     expect(sentOps).toEqual(["interrupt"]);
   });
 
+
+  it("wraps client responses as ops and forwards them to the registered agent", async () => {
+    const manager = new AgentManager();
+    const persistence = new ThreadPersistence(
+      new InMemoryThreadStore(),
+      () => "2026-06-11T00:00:00.000Z",
+    );
+    const thread = await persistence.createThread();
+    const sentOps: string[] = [];
+    manager.register(thread.metadata.id, makeAgent(thread.metadata.id, async (op) => {
+      sentOps.push(`${op.type}:${op.opId}`);
+    }));
+    const router = makeRouter({ manager, persistence });
+
+    await router.handleResponse(
+      {
+        type: "permission.answered",
+        requestId: `${thread.metadata.id}:permission-1`,
+        timestamp: "2026-06-11T00:00:00.000Z",
+        payload: { decision: "allow", scope: "thread" },
+      },
+      "c1",
+    );
+
+    expect(sentOps).toEqual([`client_response:${thread.metadata.id}:permission-1`]);
+  });
+
   it("emits thread.error to the requesting connection when op.submit targets a missing thread", async () => {
     const publisher = new ThreadNotificationPublisher();
     const first: ThreadNotification[] = [];

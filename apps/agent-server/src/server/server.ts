@@ -5,9 +5,10 @@ import { homedir } from "node:os";
 import type { PlatformBridgeMessage } from "@handagent/core/protocol/PlatformBridgeMessage.ts";
 import type { ThreadCommand } from "@handagent/core/protocol/ThreadCommand.ts";
 import type { ClientResponse } from "@handagent/core/protocol/ClientResponse.ts";
-import type { ThreadNotification } from "@handagent/core/protocol/ThreadNotification.ts";
 import type { ServerRequest } from "@handagent/core/protocol/ServerRequest.ts";
+import type { ThreadNotification } from "@handagent/core/protocol/ThreadNotification.ts";
 import type { AgentActivityEvent } from "@handagent/core/protocol/AgentActivity.ts";
+import type { AgentEvent } from "@handagent/core/protocol/AgentEvent.ts";
 import type { Op } from "@handagent/core/protocol/Op.ts";
 import type { MCPClient } from "@handagent/core/mcp/MCPClient.ts";
 import type { MCPServerConfig } from "@handagent/core/mcp/MCPConfig.ts";
@@ -31,12 +32,9 @@ import {
   WebSocketPlatformBridge,
   type BridgeToken,
 } from "../bridges/WebSocketPlatformBridge.ts";
-import {
-  ThreadPermissionBridge,
-  type ThreadBindingToken,
-} from "../bridges/ThreadPermissionBridge.ts";
-import { ThreadWorkspaceAskBridge } from "../bridges/ThreadWorkspaceAskBridge.ts";
 import type { FilePermissionPolicy } from "@handagent/core/permission/FilePermissionPolicy.ts";
+import { AgentEventQueue } from "../agent/AgentEventQueue.ts";
+import { AgentRequestBroker } from "../agent/AgentRequestBroker.ts";
 
 type ThreadSocket = {
   send(data: string): void;
@@ -51,20 +49,15 @@ export function attachThreadSocketHandlers(
   {
     commandRouter,
     eventPublisher,
-    permissionBridge,
     permissionPolicy,
-    workspaceAskBridge,
   }: {
     commandRouter: ThreadCommandRouter;
     eventPublisher: ThreadNotificationPublisher;
-    permissionBridge?: ThreadPermissionBridge;
     permissionPolicy?: FilePermissionPolicy;
-    workspaceAskBridge?: ThreadWorkspaceAskBridge;
   },
 ): void {
   const connectionId = `connection-${++nextConnectionId}`;
-  const boundThreads = new Map<string, ThreadBindingToken>();
-  const workspaceAskBoundThreads = new Map<string, ThreadBindingToken>();
+  const boundThreads = new Set<string>();
   const sendPublished = (outgoing: ThreadNotification | ServerRequest) => {
     socket.send(JSON.stringify(outgoing));
   };
@@ -74,27 +67,8 @@ export function attachThreadSocketHandlers(
     const message = parseSocketMessage(raw);
 
     if (isClientResponse(message)) {
-      switch (message.type) {
-        case "permission.answered":
-          if (permissionBridge) {
-            const token = boundThreads.get(threadIdFromRequestId(message.requestId));
-            if (token !== undefined) {
-              permissionBridge.handleResponse(message, token);
-            }
-          }
-          return;
-        case "workspace.answered":
-          if (workspaceAskBridge) {
-            const token = workspaceAskBoundThreads.get(threadIdFromRequestId(message.requestId));
-            if (token !== undefined) {
-              workspaceAskBridge.handleResponse(message, token);
-            }
-          }
-          return;
-        default:
-          commandRouter.handleResponse(message, connectionId);
-          return;
-      }
+      await commandRouter.handleResponse(message, connectionId);
+      return;
     }
 
     if (isThreadCommand(message)) {
@@ -102,32 +76,8 @@ export function attachThreadSocketHandlers(
         eventPublisher.subscribe(connectionId, message.threadId);
       }
 
-      switch (message.type) {
-        case "op.submit":
-          if (permissionBridge && !boundThreads.has(message.threadId)) {
-            const token = permissionBridge.bindThread(
-              message.threadId,
-              (request) => eventPublisher.publishToConnection(connectionId, request),
-            );
-            boundThreads.set(message.threadId, token);
-          }
-          if (workspaceAskBridge && !workspaceAskBoundThreads.has(message.threadId)) {
-            const token = workspaceAskBridge.bindThread(
-              message.threadId,
-              (request) => eventPublisher.publishToConnection(connectionId, request),
-            );
-            workspaceAskBoundThreads.set(message.threadId, token);
-          }
-          break;
-        case "thread.resume":
-          if (permissionBridge && !boundThreads.has(message.threadId)) {
-            const token = permissionBridge.bindThread(
-              message.threadId,
-              (request) => eventPublisher.publishToConnection(connectionId, request),
-            );
-            boundThreads.set(message.threadId, token);
-          }
-          break;
+      if ("threadId" in message && typeof message.threadId === "string") {
+        boundThreads.add(message.threadId);
       }
 
       await commandRouter.receive(message, connectionId);
@@ -137,18 +87,11 @@ export function attachThreadSocketHandlers(
 
   socket.on("close", () => {
     eventPublisher.detachConnection(connectionId);
-    for (const [threadId, token] of boundThreads) {
-      const unbound = permissionBridge?.unbindThread(threadId, token) ?? false;
-      if (unbound) {
-        void Promise.resolve(commandRouter.interruptThread(threadId)).catch(() => {});
-        clearThreadPermissionRules(permissionPolicy, threadId);
-      }
-    }
-    for (const [threadId, token] of workspaceAskBoundThreads) {
-      workspaceAskBridge?.unbindThread(threadId, token);
+    for (const threadId of boundThreads) {
+      void Promise.resolve(commandRouter.interruptThread(threadId)).catch(() => {});
+      clearThreadPermissionRules(permissionPolicy, threadId);
     }
     boundThreads.clear();
-    workspaceAskBoundThreads.clear();
   });
 }
 
@@ -242,19 +185,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function threadIdFromRequestId(requestId: string): string {
-  const separator = requestId.lastIndexOf(":");
-  return separator === -1 ? requestId : requestId.slice(0, separator);
-}
-
 export async function startServer({
   commandRouter,
   eventPublisher,
   activityPublisher,
   bridge,
-  permissionBridge,
   permissionPolicy,
-  workspaceAskBridge,
   staticFilesDir,
   port = 4317,
 }: {
@@ -262,9 +198,7 @@ export async function startServer({
   eventPublisher: ThreadNotificationPublisher;
   activityPublisher?: AgentActivityPublisher;
   bridge?: WebSocketPlatformBridge;
-  permissionBridge?: ThreadPermissionBridge;
   permissionPolicy?: FilePermissionPolicy;
-  workspaceAskBridge?: ThreadWorkspaceAskBridge;
   staticFilesDir?: string;
   port?: number;
 }) {
@@ -281,9 +215,7 @@ export async function startServer({
     attachThreadSocketHandlers(socket, {
       commandRouter,
       eventPublisher,
-      permissionBridge,
       permissionPolicy,
-      workspaceAskBridge,
     });
   });
 
@@ -393,12 +325,12 @@ export async function startDefaultServer(port = 4317) {
   await workspaceRegistry.getDefault();
 
   const platformBridge = new WebSocketPlatformBridge();
-  const workspaceAskBridge = new ThreadWorkspaceAskBridge();
+  const requestBroker = new AgentRequestBroker();
   const platform = new RemotePlatformAdapter({ bridge: platformBridge });
   const toolRegistry = new SettingsBackedToolRegistry({
     platform,
     workspaceRegistry,
-    workspaceAskResolver: workspaceAskBridge.ask,
+    workspaceAskResolver: requestBroker.askWorkspace,
   });
   await toolRegistry.refresh();
   const llmMode = resolveLLMMode();
@@ -431,10 +363,9 @@ export async function startDefaultServer(port = 4317) {
     },
   );
 
-  const permissionBridge = new ThreadPermissionBridge();
   const permissionPolicy = new FilePermissionPolicy({
     filePath: paths.permissionsPath,
-    askResolver: permissionBridge.ask,
+    askResolver: requestBroker.askPermission,
   });
 
   const llmClient = llmMode === "mock"
@@ -496,15 +427,23 @@ export async function startDefaultServer(port = 4317) {
   const agentManager = new AgentManager();
   const createAgent = (threadId: string): Agent => {
     const agentStatus = createSharedAgentStatus();
+    const eventQueue = new AgentEventQueue<AgentEvent>();
+    const pumpDone = pumpAgentEvents(eventQueue, eventPublisher, agentStatus);
     const publishRuntimeEvent = (event: ThreadNotification) => {
-      observeAgentStatus(agentStatus, event);
-      eventPublisher.publish(event);
+      eventQueue.push(wrapThreadNotificationEvent(event));
     };
+    requestBroker.bindThread(threadId, (event) => eventQueue.push(event));
 
     return {
       tx_sub: {
         async send(op: Op) {
+          if (op.type === "client_response") {
+            requestBroker.handleOp(op);
+            return;
+          }
+
           if (op.type === "interrupt") {
+            requestBroker.cancelPendingForThread(threadId);
             await orchestrator.interruptAndWait(threadId, publishRuntimeEvent);
             return;
           }
@@ -521,11 +460,15 @@ export async function startDefaultServer(port = 4317) {
           );
         },
       },
-      rx_event: (async function* emptyRuntimeEventStream() {})(),
+      rx_event: eventQueue,
       agent_status: agentStatus,
       session: { threadId },
       async close() {
+        requestBroker.cancelPendingForThread(threadId);
         await orchestrator.interruptAndWait(threadId, publishRuntimeEvent);
+        requestBroker.unbindThread(threadId);
+        eventQueue.close();
+        await pumpDone;
       },
     };
   };
@@ -549,12 +492,38 @@ export async function startDefaultServer(port = 4317) {
     eventPublisher,
     activityPublisher,
     bridge: platformBridge,
-    permissionBridge,
     permissionPolicy,
-    workspaceAskBridge,
     staticFilesDir: resolveThreadWindowWebDistDir(),
     port,
   });
+}
+
+async function pumpAgentEvents(
+  events: AsyncIterable<AgentEvent>,
+  publisher: ThreadNotificationPublisher,
+  agentStatus: ReturnType<typeof createSharedAgentStatus>,
+): Promise<void> {
+  for await (const event of events) {
+    switch (event.type) {
+      case "thread.notification":
+        observeAgentStatus(agentStatus, event.payload);
+        publisher.publish(event.payload);
+        break;
+      case "server.request":
+        publisher.publish(event.payload);
+        break;
+    }
+  }
+}
+
+function wrapThreadNotificationEvent(event: ThreadNotification): AgentEvent {
+  return {
+    type: "thread.notification",
+    eventId: `agent-event-${event.notificationId}`,
+    ...("threadId" in event ? { threadId: event.threadId } : {}),
+    timestamp: event.timestamp,
+    payload: event,
+  };
 }
 
 function observeAgentStatus(
@@ -764,33 +733,6 @@ function mimeTypeForExtension(extension: string): string {
       return "image/webp";
     default:
       return "application/octet-stream";
-  }
-}
-
-function maybeUnbindThreadOwner(
-  threadId: string,
-  boundThreads: Map<string, ThreadBindingToken>,
-  workspaceAskBoundThreads: Map<string, ThreadBindingToken>,
-  permissionBridge: ThreadPermissionBridge | undefined,
-  permissionPolicy: FilePermissionPolicy | undefined,
-  workspaceAskBridge: ThreadWorkspaceAskBridge | undefined,
-  commandRouter: ThreadCommandRouter,
-  _connectionId: string,
-): void {
-  const permissionToken = boundThreads.get(threadId);
-  if (permissionToken !== undefined) {
-    const unbound = permissionBridge?.unbindThread(threadId, permissionToken) ?? false;
-    if (unbound) {
-      commandRouter.interruptThread(threadId);
-      clearThreadPermissionRules(permissionPolicy, threadId);
-    }
-    boundThreads.delete(threadId);
-  }
-
-  const workspaceToken = workspaceAskBoundThreads.get(threadId);
-  if (workspaceToken !== undefined) {
-    workspaceAskBridge?.unbindThread(threadId, workspaceToken);
-    workspaceAskBoundThreads.delete(threadId);
   }
 }
 
